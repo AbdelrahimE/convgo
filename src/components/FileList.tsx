@@ -177,11 +177,13 @@ export function FileList() {
     try {
       const encodedFileName = encodeURIComponent(newFileName.trim());
       
-      console.log('Attempting to rename file:', {
+      console.group('File Rename Operation');
+      console.log('Request Details:', {
         fileId: file.id,
         oldName: file.filename,
         newName: newFileName.trim(),
-        encodedName: encodedFileName
+        encodedName: encodedFileName,
+        userId: user?.id
       });
 
       const updates = {
@@ -190,7 +192,21 @@ export function FileList() {
         updated_at: new Date().toISOString()
       };
 
-      const { data: updatedFile, error: updateError } = await supabase
+      console.log('Update Payload:', {
+        updates,
+        conditions: {
+          id: file.id,
+          profile_id: user?.id
+        }
+      });
+
+      const session = supabase.auth.session();
+      console.log('Request Headers:', {
+        authorization: `Bearer ${session?.access_token}`,
+        'content-type': 'application/json',
+      });
+
+      const { data: updatedFile, error: updateError, status, statusText } = await supabase
         .from('files')
         .update(updates)
         .match({
@@ -200,18 +216,31 @@ export function FileList() {
         .select()
         .maybeSingle();
 
+      console.log('Supabase Response:', {
+        status,
+        statusText,
+        error: updateError,
+        data: updatedFile
+      });
+
       if (updateError) {
-        console.error('Error updating file:', updateError);
+        console.error('Update Error Details:', {
+          message: updateError.message,
+          details: updateError.details,
+          hint: updateError.hint,
+          code: updateError.code
+        });
         throw updateError;
       }
 
       if (!updatedFile) {
+        console.error('No file returned after update');
         throw new Error('Failed to update file - file not found or permission denied');
       }
 
-      console.log('File renamed successfully:', {
-        updates,
-        response: updatedFile
+      console.log('Update Success:', {
+        before: file,
+        after: updatedFile
       });
 
       setFiles(prevFiles => 
@@ -229,13 +258,22 @@ export function FileList() {
       });
 
     } catch (error: any) {
-      console.error('Error in handleSaveRename:', error);
+      console.error('Error Stack:', error.stack);
+      console.error('Full Error Object:', {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
+      
       toast({
         variant: "destructive",
         title: "خطأ",
         description: error.message || "فشل في تغيير اسم الملف"
       });
     } finally {
+      console.groupEnd();
       handleCancelRename();
     }
   };
