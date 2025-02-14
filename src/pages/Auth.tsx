@@ -109,7 +109,7 @@ export default function Auth() {
           <CardContent>
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <Label htmlFor="reset-email" className="text-left">Email</Label>
+                <Label htmlFor="reset-email" className="text-left block py-[5px]">Email</Label>
                 <Input id="reset-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
               </div>
               <div className="flex gap-4">
