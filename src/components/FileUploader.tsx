@@ -56,14 +56,23 @@ export function FileUploader() {
       const fileExt = file.name.split('.').pop();
       const filePath = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
+      // Start a fake progress animation
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return prev;
+          }
+          return prev + 10;
+        });
+      }, 100);
+
       const { error: uploadError } = await supabase.storage
         .from('files')
-        .upload(filePath, file, {
-          onUploadProgress: (progress) => {
-            const percent = (progress.loaded / progress.total) * 100;
-            setUploadProgress(percent);
-          }
-        });
+        .upload(filePath, file);
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
 
       if (uploadError) throw uploadError;
 
