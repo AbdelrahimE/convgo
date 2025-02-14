@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 const countryCodes = [{
   code: '+93',
   country: 'AF',
@@ -741,7 +742,7 @@ const countryCodes = [{
 }, {
   code: '+1',
   country: 'LC',
-  flag: '🇱🇨',
+  flag: '��🇨',
   name: 'Saint Lucia'
 }, {
   code: '+1',
@@ -989,12 +990,10 @@ const countryCodes = [{
   flag: '🇿🇼',
   name: 'Zimbabwe'
 }].sort((a, b) => a.name.localeCompare(b.name));
+
 export default function Auth() {
-  // Initialize all state variables at the top of the component
   const navigate = useNavigate();
-  const {
-    toast
-  } = useToast();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1004,18 +1003,25 @@ export default function Auth() {
   const [selectedCountry, setSelectedCountry] = useState('US+1');
   const [showResetPassword, setShowResetPassword] = useState(false);
 
-  // Extract country code after state initialization
   const countryCode = selectedCountry.split('+')[1];
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    console.log('Starting sign up process...'); // Debug log
+
     try {
       if (fullName.length < 3) {
         throw new Error('Full name must be at least 3 characters long');
       }
-      const {
-        error: signUpError
-      } = await supabase.auth.signUp({
+
+      if (password.length < 6) {
+        throw new Error('Password must be at least 6 characters long');
+      }
+
+      console.log('Attempting to sign up with email:', email); // Debug log
+
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -1026,12 +1032,33 @@ export default function Auth() {
           }
         }
       });
-      if (signUpError) throw signUpError;
-      toast({
-        title: "Success!",
-        description: "Please check your email to confirm your account."
-      });
+
+      console.log('Sign up response:', { data, error: signUpError }); // Debug log
+
+      if (signUpError) {
+        if (signUpError.message.includes('User already registered')) {
+          throw new Error('An account with this email already exists. Please sign in instead.');
+        }
+        throw signUpError;
+      }
+
+      // Check if the sign-up was successful
+      if (data?.user) {
+        toast({
+          title: "Success!",
+          description: "Please check your email to confirm your account."
+        });
+        // Optional: Clear the form
+        setEmail('');
+        setPassword('');
+        setFullName('');
+        setBusinessName('');
+        setPhoneNumber('');
+      } else {
+        throw new Error('Failed to create account. Please try again.');
+      }
     } catch (error: any) {
+      console.error('Sign up error:', error); // Debug log
       toast({
         variant: "destructive",
         title: "Error",
@@ -1041,6 +1068,7 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -1063,6 +1091,7 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -1089,9 +1118,9 @@ export default function Auth() {
     }
   };
 
-  // Render reset password form if showResetPassword is true
   if (showResetPassword) {
-    return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
+    return (
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
         <Card className="w-full max-w-md">
           <CardHeader className="text-left">
             <CardTitle>Reset Your Password</CardTitle>
@@ -1114,21 +1143,22 @@ export default function Auth() {
             </form>
           </CardContent>
         </Card>
-      </div>;
+      </div>
+    );
   }
 
-  // Main auth form
-  return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
+  return (
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-left">
-          <CardTitle>AI Support Assistant</CardTitle>
+        <CardHeader className="text-center">
+          <CardTitle>Welcome</CardTitle>
           <CardDescription>Sign in to your account or create a new one</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin" className="text-left">Sign In</TabsTrigger>
-              <TabsTrigger value="signup" className="text-left">Sign Up</TabsTrigger>
+              <TabsTrigger value="signin">Sign In</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
@@ -1141,7 +1171,9 @@ export default function Auth() {
                   <Label htmlFor="signin-password" className="text-left block py-[5px]">Password</Label>
                   <Input id="signin-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
                 </div>
-                <Button type="button" variant="link" onClick={() => setShowResetPassword(true)} className="px-0 justify-start w-auto h-auto text-left my-0 mx-0 py-0">Can’t access your account?</Button>
+                <Button type="button" variant="link" onClick={() => setShowResetPassword(true)} className="px-0 justify-start w-auto h-auto text-left my-0 mx-0 py-0">
+                  Can't access your account?
+                </Button>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? 'Signing in...' : 'Sign In'}
                 </Button>
@@ -1153,28 +1185,6 @@ export default function Auth() {
                 <div>
                   <Label htmlFor="signup-email" className="text-left block py-[5px]">Email</Label>
                   <Input id="signup-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
-                </div>
-                <div className="relative">
-                  <Label htmlFor="phone-number" className="text-left block py-[5px]">Phone Number</Label>
-                  <div className="flex gap-2">
-                    <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue>
-                          {countryCodes.find(c => `${c.country}${c.code}` === selectedCountry)?.flag} +{countryCode}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[300px] overflow-y-auto bg-white">
-                        {countryCodes.map(country => <SelectItem key={`${country.country}${country.code}`} value={`${country.country}${country.code}`} className="flex items-center gap-2">
-                            <span className="flex items-center gap-2">
-                              <span>{country.flag}</span>
-                              <span>{country.code}</span>
-                              <span className="text-gray-500 text-sm">({country.name})</span>
-                            </span>
-                          </SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Input id="phone-number" type="tel" placeholder="Enter phone number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required className="flex-1" />
-                  </div>
                 </div>
                 <div>
                   <Label htmlFor="signup-password" className="text-left block py-[5px]">Password</Label>
@@ -1188,6 +1198,30 @@ export default function Auth() {
                   <Label htmlFor="businessName" className="text-left block py-[5px]">Business Name</Label>
                   <Input id="businessName" type="text" placeholder="Acme Inc" value={businessName} onChange={e => setBusinessName(e.target.value)} required />
                 </div>
+                <div className="relative">
+                  <Label htmlFor="phone-number" className="text-left block py-[5px]">Phone Number</Label>
+                  <div className="flex gap-2">
+                    <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue>
+                          {countryCodes.find(c => `${c.country}${c.code}` === selectedCountry)?.flag} +{countryCode}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px] overflow-y-auto bg-white">
+                        {countryCodes.map(country => (
+                          <SelectItem key={country.country} value={`${country.country}${country.code}`}>
+                            <span className="flex items-center gap-2">
+                              <span>{country.flag}</span>
+                              <span>{country.code}</span>
+                              <span className="text-gray-500 text-sm">({country.name})</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input id="phone-number" type="tel" placeholder="Enter phone number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required />
+                  </div>
+                </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? 'Signing up...' : 'Sign Up'}
                 </Button>
@@ -1196,5 +1230,6 @@ export default function Auth() {
           </Tabs>
         </CardContent>
       </Card>
-    </div>;
+    </div>
+  );
 }
