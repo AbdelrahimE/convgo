@@ -119,7 +119,7 @@ export default function Auth() {
           <CardContent>
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <Label htmlFor="reset-email">Email</Label>
+                <Label htmlFor="reset-email" className="text-left">Email</Label>
                 <Input
                   id="reset-email"
                   type="email"
@@ -159,14 +159,14 @@ export default function Auth() {
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              <TabsTrigger value="signin" className="text-left">Sign In</TabsTrigger>
+              <TabsTrigger value="signup" className="text-left">Sign Up</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div>
-                  <Label htmlFor="signin-email">Email</Label>
+                  <Label htmlFor="signin-email" className="text-left block">Email</Label>
                   <Input
                     id="signin-email"
                     type="email"
@@ -177,7 +177,7 @@ export default function Auth() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="signin-password">Password</Label>
+                  <Label htmlFor="signin-password" className="text-left block">Password</Label>
                   <Input
                     id="signin-password"
                     type="password"
@@ -190,7 +190,7 @@ export default function Auth() {
                   type="button" 
                   variant="link" 
                   onClick={() => setShowResetPassword(true)}
-                  className="px-0"
+                  className="px-0 justify-start w-auto h-auto text-left"
                 >
                   Forgot password?
                 </Button>
@@ -203,7 +203,7 @@ export default function Auth() {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div>
-                  <Label htmlFor="signup-email">Email</Label>
+                  <Label htmlFor="signup-email" className="text-left block">Email</Label>
                   <Input
                     id="signup-email"
                     type="email"
@@ -214,7 +214,7 @@ export default function Auth() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="signup-password">Password</Label>
+                  <Label htmlFor="signup-password" className="text-left block">Password</Label>
                   <Input
                     id="signup-password"
                     type="password"
@@ -224,7 +224,7 @@ export default function Auth() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="fullName">Full Name</Label>
+                  <Label htmlFor="fullName" className="text-left block">Full Name</Label>
                   <Input
                     id="fullName"
                     type="text"
@@ -235,7 +235,7 @@ export default function Auth() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="businessName">Business Name</Label>
+                  <Label htmlFor="businessName" className="text-left block">Business Name</Label>
                   <Input
                     id="businessName"
                     type="text"
