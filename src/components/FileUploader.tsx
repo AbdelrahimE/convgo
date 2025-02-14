@@ -46,14 +46,28 @@ export function FileUploader({ onUploadStart, onUploadEnd, onSuccess, onError }:
       const fileExt = file.name.split('.').pop();
       const filePath = `${crypto.randomUUID()}.${fileExt}`;
 
+      // First, get the current user's ID
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        throw new Error('Authentication required');
+      }
+
+      // Create a custom upload handler to track progress
+      const upload = new XMLHttpRequest();
+      
+      upload.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = (event.loaded / event.total) * 100;
+          setUploadProgress(progress);
+        }
+      };
+
       const { error: uploadError } = await supabase.storage
         .from('user_files')
         .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: false,
-          onUploadProgress: (progress) => {
-            setUploadProgress((progress.loaded / progress.total) * 100);
-          },
+          upsert: false
         });
 
       if (uploadError) throw uploadError;
@@ -64,6 +78,7 @@ export function FileUploader({ onUploadStart, onUploadEnd, onSuccess, onError }:
         mime_type: file.type,
         size_bytes: file.size,
         path: filePath,
+        profile_id: user.id
       });
 
       if (dbError) throw dbError;
