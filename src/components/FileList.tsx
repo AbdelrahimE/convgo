@@ -13,13 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +53,7 @@ export function FileList() {
       const { data, error } = await supabase
         .from('files')
         .select('*')
+        .eq('profile_id', user?.id)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -80,6 +75,12 @@ export function FileList() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (user) {
+      fetchFiles();
+    }
+  }, [user]);
 
   const handleDelete = async (id: string, path: string) => {
     try {
@@ -166,14 +167,6 @@ export function FileList() {
     });
     setFilteredFiles(sorted);
   };
-
-  useEffect(() => {
-    fetchFiles();
-  }, []);
-
-  if (isLoading) {
-    return <div className="text-center py-8">Loading files...</div>;
-  }
 
   const renderListView = () => (
     <motion.div 
@@ -352,7 +345,13 @@ export function FileList() {
         </div>
       </div>
 
-      {viewMode === "list" ? renderListView() : renderGridView()}
+      {isLoading ? (
+        <div className="text-center py-8">Loading files...</div>
+      ) : viewMode === "list" ? (
+        renderListView()
+      ) : (
+        renderGridView()
+      )}
 
       <Dialog 
         open={!!previewFile} 
