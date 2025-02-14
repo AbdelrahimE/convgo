@@ -9,50 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      files: {
-        Row: {
-          created_at: string | null
-          filename: string
-          id: string
-          mime_type: string
-          original_name: string
-          path: string
-          profile_id: string
-          size_bytes: number
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          filename: string
-          id?: string
-          mime_type: string
-          original_name: string
-          path: string
-          profile_id: string
-          size_bytes: number
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          filename?: string
-          id?: string
-          mime_type?: string
-          original_name?: string
-          path?: string
-          profile_id?: string
-          size_bytes?: number
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "files_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -61,7 +17,6 @@ export type Database = {
           full_name: string | null
           id: string
           is_active: boolean | null
-          storage_limit_mb: number
           updated_at: string | null
           webhook_url: string | null
         }
@@ -72,7 +27,6 @@ export type Database = {
           full_name?: string | null
           id: string
           is_active?: boolean | null
-          storage_limit_mb?: number
           updated_at?: string | null
           webhook_url?: string | null
         }
@@ -83,7 +37,6 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_active?: boolean | null
-          storage_limit_mb?: number
           updated_at?: string | null
           webhook_url?: string | null
         }

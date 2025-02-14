@@ -4,7 +4,6 @@ import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider } from '@/contexts/AuthContext';
 import Auth from '@/pages/Auth';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import FileManagement from '@/pages/FileManagement';
 import './App.css';
 
 function App() {
@@ -26,14 +25,6 @@ function App() {
             element={
               <ProtectedRoute>
                 <div>Dashboard (coming soon)</div>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/files"
-            element={
-              <ProtectedRoute>
-                <FileManagement />
               </ProtectedRoute>
             }
           />
