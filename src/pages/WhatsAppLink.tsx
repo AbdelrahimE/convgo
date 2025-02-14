@@ -58,9 +58,10 @@ const WhatsAppLink = () => {
       socket.disconnect();
     }
 
+    // Updated socket connection configuration to match Ultramsg's specification
     const newSocket = io('https://api.ultramsg.com', {
       transports: ['websocket'],
-      path: '/socket.io',
+      path: `/${instanceId}/socket.io`, // This was the key change needed
       auth: {
         instance_id: instanceId,
         token: token
@@ -76,6 +77,10 @@ const WhatsAppLink = () => {
       setStatus('Connection error');
       toast.error('Failed to connect to WhatsApp server');
       console.error('Connection error:', err);
+    });
+
+    newSocket.on('disconnect', () => {
+      newSocket.disconnect();
     });
 
     newSocket.on('status', (results) => {
