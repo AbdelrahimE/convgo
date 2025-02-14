@@ -148,7 +148,7 @@ export default function Auth() {
                   <Label htmlFor="signin-password" className="text-left block py-[5px]">Password</Label>
                   <Input id="signin-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
                 </div>
-                <Button type="button" variant="link" onClick={() => setShowResetPassword(true)} className="px-0 justify-start w-auto h-auto text-left my-0 mx-0 py-px">
+                <Button type="button" variant="link" onClick={() => setShowResetPassword(true)} className="px-0 justify-start w-auto h-auto text-left my-0 mx-0 py-0">
                   Forgot password?
                 </Button>
                 <Button type="submit" className="w-full" disabled={loading}>
