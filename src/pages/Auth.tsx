@@ -218,8 +218,8 @@ export default function Auth() {
   const [fullName, setFullName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [countryCode, setCountryCode] = useState('+1');
-  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState('US+1'); // Default to US
+  const countryCode = selectedCountry.split('+')[1];
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -237,7 +237,7 @@ export default function Auth() {
           data: {
             full_name: fullName,
             business_name: businessName,
-            phone: `${countryCode}${phoneNumber}`
+            phone: `+${countryCode}${phoneNumber}`
           },
         },
       });
@@ -413,22 +413,26 @@ export default function Auth() {
                 <div className="relative">
                   <Label htmlFor="phone-number" className="text-left block py-[5px]">Phone Number</Label>
                   <div className="flex gap-2">
-                    <Select value={countryCode} onValueChange={setCountryCode}>
+                    <Select 
+                      value={selectedCountry} 
+                      onValueChange={setSelectedCountry}
+                    >
                       <SelectTrigger className="w-[140px]">
                         <SelectValue>
-                          {countryCodes.find(c => c.code === countryCode)?.flag} {countryCode}
+                          {countryCodes.find(c => `${c.country}${c.code}` === selectedCountry)?.flag} +{countryCode}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent className="max-h-[300px] overflow-y-auto bg-white">
                         {countryCodes.map((country) => (
                           <SelectItem 
-                            key={`${country.code}-${country.country}`} 
-                            value={country.code}
+                            key={`${country.country}${country.code}`}
+                            value={`${country.country}${country.code}`}
                             className="flex items-center gap-2"
                           >
                             <span className="flex items-center gap-2">
                               <span>{country.flag}</span>
                               <span>{country.code}</span>
+                              <span className="text-gray-500 text-sm">({country.name})</span>
                             </span>
                           </SelectItem>
                         ))}
