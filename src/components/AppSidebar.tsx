@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "react-router-dom";
-import { FileText, Home, LogOut } from "lucide-react";
+import { FileText, Home, LogOut, MessageCircle } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -15,7 +15,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarProvider,
 } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +24,7 @@ const FULL_NAME_MAX_LENGTH = 25;
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Files', href: '/files', icon: FileText },
+  { name: 'WhatsApp', href: '/whatsapp', icon: MessageCircle },
 ];
 
 function getInitials(name: string | null): string {

@@ -8,6 +8,7 @@ import FileManagement from '@/pages/FileManagement';
 import { AppSidebar } from '@/components/AppSidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useLocation } from 'react-router-dom';
+import WhatsAppLink from '@/pages/WhatsAppLink';
 import './App.css';
 
 function AppContent() {
@@ -42,6 +43,14 @@ function AppContent() {
               element={
                 <ProtectedRoute>
                   <FileManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/whatsapp"
+              element={
+                <ProtectedRoute>
+                  <WhatsAppLink />
                 </ProtectedRoute>
               }
             />
