@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,12 +15,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { motion, AnimatePresence } from "framer-motion";
 
 type FileItem = {
@@ -43,7 +38,6 @@ export function FileList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
-  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -110,11 +104,6 @@ export function FileList() {
         description: "Failed to delete file"
       });
     }
-  };
-
-  const handlePreview = (file: FileItem | null) => {
-    if (!file) return;
-    setPreviewFile(file);
   };
 
   const getFileIcon = (mimeType: string | null) => {
@@ -229,13 +218,10 @@ export function FileList() {
                     className="border-b transition-colors hover:bg-muted/50"
                   >
                     <TableCell className="font-medium">
-                      <button
-                        onClick={() => handlePreview(file)}
-                        className="flex items-center gap-2 hover:text-primary transition-colors"
-                      >
+                      <div className="flex items-center gap-2">
                         {getFileIcon(file.mime_type)}
                         <span className="truncate">{file.filename}</span>
-                      </button>
+                      </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <span className="truncate">{file.mime_type}</span>
@@ -282,10 +268,7 @@ export function FileList() {
             whileHover={{ scale: 1.02 }}
             className="p-4 border rounded-lg hover:border-primary transition-all duration-200"
           >
-            <button
-              onClick={() => handlePreview(file)}
-              className="w-full text-left"
-            >
+            <div className="w-full text-left">
               <div className="flex flex-col items-center gap-2">
                 {getFileIcon(file.mime_type)}
                 <p className="text-sm font-medium truncate w-full text-center">
@@ -295,16 +278,13 @@ export function FileList() {
                   {formatFileSize(file.size_bytes)}
                 </p>
               </div>
-            </button>
+            </div>
             <div className="mt-4 flex justify-center">
               <motion.div whileHover={{ scale: 1.1 }}>
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(file.id, file.path);
-                  }}
+                  onClick={() => handleDelete(file.id, file.path)}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -352,35 +332,6 @@ export function FileList() {
       ) : (
         renderGridView()
       )}
-
-      <Dialog 
-        open={!!previewFile} 
-        onOpenChange={(open) => !open && setPreviewFile(null)}
-      >
-        {previewFile && (
-          <DialogContent className="sm:max-w-[800px]">
-            <DialogHeader>
-              <DialogTitle>{previewFile.filename}</DialogTitle>
-            </DialogHeader>
-            <div className="mt-4">
-              {previewFile.mime_type.startsWith('image/') ? (
-                <img
-                  src={supabase.storage.from('files').getPublicUrl(previewFile.path).data.publicUrl}
-                  alt={previewFile.filename}
-                  className="max-w-full h-auto"
-                />
-              ) : (
-                <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-center">Preview not available for this file type</p>
-                  <p className="text-center text-sm text-muted-foreground mt-2">
-                    {previewFile.mime_type}
-                  </p>
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        )}
-      </Dialog>
     </div>
   );
 }
