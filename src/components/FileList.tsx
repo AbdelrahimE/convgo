@@ -181,16 +181,20 @@ export function FileList() {
         newName: newFileName.trim()
       });
 
-      // First verify we can fetch the file
+      // First verify we can fetch the file using maybeSingle() instead of single()
       const { data: existingFile, error: fetchError } = await supabase
         .from('files')
         .select('*')
         .eq('id', file.id)
-        .single();
+        .maybeSingle();
 
       if (fetchError) {
         console.error('Error fetching file:', fetchError);
         throw fetchError;
+      }
+
+      if (!existingFile) {
+        throw new Error('File not found');
       }
 
       // Then perform the update
@@ -201,12 +205,17 @@ export function FileList() {
           original_name: newFileName.trim()
         })
         .eq('id', file.id)
+        .eq('profile_id', user?.id) // Add this to ensure user owns the file
         .select()
-        .single();
+        .maybeSingle();
 
       if (updateError) {
         console.error('Error updating file:', updateError);
         throw updateError;
+      }
+
+      if (!updatedFile) {
+        throw new Error('Failed to update file - file not found or permission denied');
       }
 
       console.log('File renamed successfully:', {
