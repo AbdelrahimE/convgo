@@ -160,19 +160,19 @@ export default function Auth() {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div>
-                  <Label htmlFor="signup-email" className="text-left block">Email</Label>
+                  <Label htmlFor="signup-email" className="text-left block py-[5px]">Email</Label>
                   <Input id="signup-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
                 </div>
                 <div>
-                  <Label htmlFor="signup-password" className="text-left block">Password</Label>
+                  <Label htmlFor="signup-password" className="text-left block py-[5px]">Password</Label>
                   <Input id="signup-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
                 </div>
                 <div>
-                  <Label htmlFor="fullName" className="text-left block">Full Name</Label>
+                  <Label htmlFor="fullName" className="text-left block py-[5px]">Full Name</Label>
                   <Input id="fullName" type="text" placeholder="John Doe" value={fullName} onChange={e => setFullName(e.target.value)} required />
                 </div>
                 <div>
-                  <Label htmlFor="businessName" className="text-left block">Business Name</Label>
+                  <Label htmlFor="businessName" className="text-left block py-[5px]">Business Name</Label>
                   <Input id="businessName" type="text" placeholder="Acme Inc" value={businessName} onChange={e => setBusinessName(e.target.value)} required />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
