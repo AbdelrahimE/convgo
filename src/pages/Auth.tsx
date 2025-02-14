@@ -410,16 +410,22 @@ export default function Auth() {
                     required
                   />
                 </div>
-                <div>
+                <div className="relative">
                   <Label htmlFor="phone-number" className="text-left block py-[5px]">Phone Number</Label>
                   <div className="flex gap-2">
                     <Select value={countryCode} onValueChange={setCountryCode}>
                       <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="Select code" />
+                        <SelectValue>
+                          {countryCodes.find(c => c.code === countryCode)?.flag} {countryCode}
+                        </SelectValue>
                       </SelectTrigger>
-                      <SelectContent className="max-h-[300px]">
+                      <SelectContent className="max-h-[300px] overflow-y-auto bg-white">
                         {countryCodes.map((country) => (
-                          <SelectItem key={country.code} value={country.code}>
+                          <SelectItem 
+                            key={`${country.code}-${country.country}`} 
+                            value={country.code}
+                            className="flex items-center gap-2"
+                          >
                             <span className="flex items-center gap-2">
                               <span>{country.flag}</span>
                               <span>{country.code}</span>
