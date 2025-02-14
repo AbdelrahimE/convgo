@@ -889,7 +889,7 @@ const countryCodes = [{
   code: '+228',
   country: 'TG',
   flag: '🇹🇬',
-� name: 'Togo'
+  name: 'Togo'
 }, {
   code: '+676',
   country: 'TO',
