@@ -43,15 +43,26 @@ export function FileList() {
 
   const fetchFiles = async () => {
     try {
-      console.log('Fetching files, current user:', user);
+      console.log('Fetching files for user:', user?.id);
+      if (!user) {
+        console.log('No user found, skipping fetch');
+        setIsLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('files')
         .select('*')
-        .eq('profile_id', user?.id)
+        .eq('profile_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching files:', error);
+        toast({
+          variant: "destructive",
+          title: "Error fetching files",
+          description: error.message
+        });
         throw error;
       }
       
@@ -63,7 +74,7 @@ export function FileList() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to fetch files"
+        description: "Failed to fetch files. Please try refreshing the page."
       });
     } finally {
       setIsLoading(false);
@@ -71,6 +82,7 @@ export function FileList() {
   };
 
   useEffect(() => {
+    console.log('FileList mounted, user:', user);
     if (user) {
       fetchFiles();
     }
@@ -327,6 +339,8 @@ export function FileList() {
 
       {isLoading ? (
         <div className="text-center py-8">Loading files...</div>
+      ) : !user ? (
+        <div className="text-center py-8">Please sign in to view your files</div>
       ) : viewMode === "list" ? (
         renderListView()
       ) : (
