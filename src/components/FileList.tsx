@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -104,11 +103,13 @@ export function FileList() {
     }
   };
 
-  const handlePreview = async (file: FileItem) => {
+  const handlePreview = (file: FileItem | null) => {
+    if (!file) return;
     setPreviewFile(file);
   };
 
-  const getFileIcon = (mimeType: string) => {
+  const getFileIcon = (mimeType: string | null) => {
+    if (!mimeType) return <FileIcon className="h-6 w-6" />;
     if (mimeType.startsWith('image/')) return <FileImage className="h-6 w-6" />;
     if (mimeType.includes('pdf')) return <FileText className="h-6 w-6" />;
     return <FileIcon className="h-6 w-6" />;
@@ -310,28 +311,33 @@ export function FileList() {
 
       {viewMode === "list" ? renderListView() : renderGridView()}
 
-      <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-        <DialogContent className="sm:max-w-[800px]">
-          <DialogHeader>
-            <DialogTitle>{previewFile?.filename}</DialogTitle>
-          </DialogHeader>
-          <div className="mt-4">
-            {previewFile?.mime_type.startsWith('image/') ? (
-              <img
-                src={supabase.storage.from('files').getPublicUrl(previewFile.path).data.publicUrl}
-                alt={previewFile.filename}
-                className="max-w-full h-auto"
-              />
-            ) : (
-              <div className="p-4 bg-muted rounded-lg">
-                <p className="text-center">Preview not available for this file type</p>
-                <p className="text-center text-sm text-muted-foreground mt-2">
-                  {previewFile.mime_type}
-                </p>
-              </div>
-            )}
-          </div>
-        </DialogContent>
+      <Dialog 
+        open={!!previewFile} 
+        onOpenChange={(open) => !open && setPreviewFile(null)}
+      >
+        {previewFile && (
+          <DialogContent className="sm:max-w-[800px]">
+            <DialogHeader>
+              <DialogTitle>{previewFile.filename}</DialogTitle>
+            </DialogHeader>
+            <div className="mt-4">
+              {previewFile.mime_type.startsWith('image/') ? (
+                <img
+                  src={supabase.storage.from('files').getPublicUrl(previewFile.path).data.publicUrl}
+                  alt={previewFile.filename}
+                  className="max-w-full h-auto"
+                />
+              ) : (
+                <div className="p-4 bg-muted rounded-lg">
+                  <p className="text-center">Preview not available for this file type</p>
+                  <p className="text-center text-sm text-muted-foreground mt-2">
+                    {previewFile.mime_type}
+                  </p>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        )}
       </Dialog>
     </div>
   );
