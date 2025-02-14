@@ -175,16 +175,46 @@ export function FileList() {
     }
 
     try {
-      const { error } = await supabase
+      console.log('Attempting to rename file:', {
+        fileId: file.id,
+        oldName: file.filename,
+        newName: newFileName.trim()
+      });
+
+      // First verify we can fetch the file
+      const { data: existingFile, error: fetchError } = await supabase
+        .from('files')
+        .select('*')
+        .eq('id', file.id)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching file:', fetchError);
+        throw fetchError;
+      }
+
+      // Then perform the update
+      const { data: updatedFile, error: updateError } = await supabase
         .from('files')
         .update({ 
           filename: newFileName.trim(),
           original_name: newFileName.trim()
         })
-        .eq('id', file.id);
+        .eq('id', file.id)
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (updateError) {
+        console.error('Error updating file:', updateError);
+        throw updateError;
+      }
 
+      console.log('File renamed successfully:', {
+        before: existingFile,
+        after: updatedFile
+      });
+
+      // Update local state
       const updatedFiles = files.map(f => 
         f.id === file.id ? { 
           ...f, 
@@ -202,16 +232,21 @@ export function FileList() {
         } : f
       ));
 
+      // Show success notification
       toast({
-        title: "Success",
-        description: "File renamed successfully"
+        title: "File renamed",
+        description: `Successfully renamed file to "${newFileName.trim()}"`,
+        variant: "default"
       });
+
+      // Refresh the file list to ensure we have the latest data
+      fetchFiles();
     } catch (error: any) {
-      console.error('Error renaming file:', error);
+      console.error('Error in handleSaveRename:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to rename file"
+        description: error.message || "Failed to rename file"
       });
     } finally {
       handleCancelRename();
