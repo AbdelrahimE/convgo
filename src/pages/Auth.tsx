@@ -219,6 +219,7 @@ export default function Auth() {
   const [businessName, setBusinessName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('US+1'); // Default to US
+  const [showResetPassword, setShowResetPassword] = useState(false); // Added back
   const countryCode = selectedCountry.split('+')[1];
 
   const handleSignUp = async (e: React.FormEvent) => {
