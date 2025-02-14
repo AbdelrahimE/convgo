@@ -175,20 +175,30 @@ export function FileList() {
     }
 
     try {
-      const encodedFileName = encodeURIComponent(newFileName.trim());
+      const { data: existingFile, error: checkError } = await supabase
+        .from('files')
+        .select('id')
+        .eq('id', file.id)
+        .eq('profile_id', user?.id)
+        .single();
+
+      if (checkError || !existingFile) {
+        throw new Error('File not found or access denied');
+      }
+
+      const sanitizedFileName = newFileName.trim();
       
       console.group('File Rename Operation');
       console.log('Request Details:', {
         fileId: file.id,
         oldName: file.filename,
-        newName: newFileName.trim(),
-        encodedName: encodedFileName,
+        newName: sanitizedFileName,
         userId: user?.id
       });
 
       const updates = {
-        filename: newFileName.trim(),
-        original_name: newFileName.trim(),
+        filename: sanitizedFileName,
+        original_name: sanitizedFileName,
         updated_at: new Date().toISOString()
       };
 
@@ -201,24 +211,16 @@ export function FileList() {
       });
 
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('Request Headers:', {
-        authorization: `Bearer ${session?.access_token}`,
-        'content-type': 'application/json',
-      });
-
-      const { data: updatedFile, error: updateError, status, statusText } = await supabase
+      
+      const { data: updatedFile, error: updateError } = await supabase
         .from('files')
         .update(updates)
-        .match({
-          id: file.id,
-          profile_id: user?.id
-        })
+        .eq('id', file.id)
+        .eq('profile_id', user?.id)
         .select()
-        .maybeSingle();
+        .single();
 
       console.log('Supabase Response:', {
-        status,
-        statusText,
         error: updateError,
         data: updatedFile
       });
@@ -234,8 +236,7 @@ export function FileList() {
       }
 
       if (!updatedFile) {
-        console.error('No file returned after update');
-        throw new Error('Failed to update file - file not found or permission denied');
+        throw new Error('Failed to update file - no response data');
       }
 
       console.log('Update Success:', {
@@ -243,28 +244,29 @@ export function FileList() {
         after: updatedFile
       });
 
+      const updatedFileData = { ...file, ...updates };
       setFiles(prevFiles => 
-        prevFiles.map(f => f.id === file.id ? { ...f, ...updates } : f)
+        prevFiles.map(f => f.id === file.id ? updatedFileData : f)
       );
       
       setFilteredFiles(prevFiles => 
-        prevFiles.map(f => f.id === file.id ? { ...f, ...updates } : f)
+        prevFiles.map(f => f.id === file.id ? updatedFileData : f)
       );
 
       toast({
         title: "تم تغيير اسم الملف",
-        description: `تم تغيير اسم الملف إلى "${newFileName.trim()}"`,
+        description: `تم تغيير اسم الملف إلى "${sanitizedFileName}"`,
         variant: "default"
       });
 
     } catch (error: any) {
-      console.error('Error Stack:', error.stack);
       console.error('Full Error Object:', {
         name: error.name,
         message: error.message,
         code: error.code,
         details: error.details,
-        hint: error.hint
+        hint: error.hint,
+        stack: error.stack
       });
       
       toast({
