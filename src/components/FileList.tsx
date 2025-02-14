@@ -200,7 +200,7 @@ export function FileList() {
         }
       });
 
-      const session = supabase.auth.session();
+      const { data: { session } } = await supabase.auth.getSession();
       console.log('Request Headers:', {
         authorization: `Bearer ${session?.access_token}`,
         'content-type': 'application/json',
