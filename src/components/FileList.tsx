@@ -1,6 +1,5 @@
-
 import { useEffect, useState } from "react";
-import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon } from "lucide-react";
+import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Pencil, Check, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +37,8 @@ export function FileList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [editingFileId, setEditingFileId] = useState<string | null>(null);
+  const [newFileName, setNewFileName] = useState("");
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -157,6 +158,53 @@ export function FileList() {
     setFilteredFiles(sorted);
   };
 
+  const handleStartRename = (file: FileItem) => {
+    setEditingFileId(file.id);
+    setNewFileName(file.filename);
+  };
+
+  const handleCancelRename = () => {
+    setEditingFileId(null);
+    setNewFileName("");
+  };
+
+  const handleSaveRename = async (file: FileItem) => {
+    if (!newFileName.trim() || newFileName === file.filename) {
+      handleCancelRename();
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('files')
+        .update({ filename: newFileName.trim() })
+        .eq('id', file.id);
+
+      if (error) throw error;
+
+      setFiles(files.map(f => 
+        f.id === file.id ? { ...f, filename: newFileName.trim() } : f
+      ));
+      setFilteredFiles(filteredFiles.map(f => 
+        f.id === file.id ? { ...f, filename: newFileName.trim() } : f
+      ));
+
+      toast({
+        title: "Success",
+        description: "File renamed successfully"
+      });
+    } catch (error: any) {
+      console.error('Error renaming file:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to rename file"
+      });
+    } finally {
+      handleCancelRename();
+    }
+  };
+
   const renderListView = () => (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -191,7 +239,7 @@ export function FileList() {
               >
                 Date {sortField === "created_at" && (sortOrder === "asc" ? "↑" : "↓")}
               </TableHead>
-              <TableHead className="text-right min-w-[100px]">Actions</TableHead>
+              <TableHead className="text-right min-w-[140px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -220,7 +268,20 @@ export function FileList() {
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         {getFileIcon(file.mime_type)}
-                        <span className="truncate">{file.filename}</span>
+                        {editingFileId === file.id ? (
+                          <Input
+                            value={newFileName}
+                            onChange={(e) => setNewFileName(e.target.value)}
+                            className="max-w-[200px]"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveRename(file);
+                              if (e.key === 'Escape') handleCancelRename();
+                            }}
+                          />
+                        ) : (
+                          <span className="truncate">{file.filename}</span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
@@ -233,14 +294,45 @@ export function FileList() {
                       {formatDate(file.created_at)}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(file.id, file.path)}
-                        className="transition-all hover:scale-105"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        {editingFileId === file.id ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleSaveRename(file)}
+                              className="transition-all hover:scale-105"
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleCancelRename}
+                              className="transition-all hover:scale-105"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleStartRename(file)}
+                            className="transition-all hover:scale-105"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(file.id, file.path)}
+                          className="transition-all hover:scale-105"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </motion.tr>
                 ))
@@ -271,15 +363,60 @@ export function FileList() {
             <div className="w-full text-left">
               <div className="flex flex-col items-center gap-2">
                 {getFileIcon(file.mime_type)}
-                <p className="text-sm font-medium truncate w-full text-center">
-                  {file.filename}
-                </p>
+                {editingFileId === file.id ? (
+                  <Input
+                    value={newFileName}
+                    onChange={(e) => setNewFileName(e.target.value)}
+                    className="max-w-[200px]"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveRename(file);
+                      if (e.key === 'Escape') handleCancelRename();
+                    }}
+                  />
+                ) : (
+                  <p className="text-sm font-medium truncate w-full text-center">
+                    {file.filename}
+                  </p>
+                )}
                 <p className="text-xs text-gray-500">
                   {formatFileSize(file.size_bytes)}
                 </p>
               </div>
             </div>
-            <div className="mt-4 flex justify-center">
+            <div className="mt-4 flex justify-center gap-2">
+              {editingFileId === file.id ? (
+                <>
+                  <motion.div whileHover={{ scale: 1.1 }}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSaveRename(file)}
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                  </motion.div>
+                  <motion.div whileHover={{ scale: 1.1 }}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelRename}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </motion.div>
+                </>
+              ) : (
+                <motion.div whileHover={{ scale: 1.1 }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleStartRename(file)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </motion.div>
+              )}
               <motion.div whileHover={{ scale: 1.1 }}>
                 <Button
                   variant="destructive"
