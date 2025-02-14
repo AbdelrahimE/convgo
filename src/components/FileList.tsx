@@ -55,15 +55,22 @@ export function FileList() {
 
   const fetchFiles = async () => {
     try {
+      console.log('Fetching files, current user:', user);
       const { data, error } = await supabase
         .from('files')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching files:', error);
+        throw error;
+      }
+      
+      console.log('Fetched files:', data);
       setFiles(data || []);
       setFilteredFiles(data || []);
     } catch (error: any) {
+      console.error('Error in fetchFiles:', error);
       toast({
         variant: "destructive",
         title: "Error",
