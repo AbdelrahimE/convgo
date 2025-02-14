@@ -1013,9 +1013,20 @@ export default function Auth() {
       if (fullName.length < 3) {
         throw new Error('Full name must be at least 3 characters long');
       }
-      const {
-        error: signUpError
-      } = await supabase.auth.signUp({
+
+      // First check if user exists
+      const { data: { user: existingUser } } = await supabase.auth.getUser();
+      
+      if (existingUser) {
+        toast({
+          variant: "destructive",
+          title: "Account exists",
+          description: "An account with this email already exists. Please sign in instead."
+        });
+        return;
+      }
+
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -1026,7 +1037,14 @@ export default function Auth() {
           }
         }
       });
-      if (signUpError) throw signUpError;
+
+      if (signUpError) {
+        if (signUpError.message.includes('already registered')) {
+          throw new Error('An account with this email already exists. Please sign in instead.');
+        }
+        throw signUpError;
+      }
+
       toast({
         title: "Success!",
         description: "Please check your email to confirm your account."
@@ -1118,83 +1136,4 @@ export default function Auth() {
   }
 
   // Main auth form
-  return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-left">
-          <CardTitle>AI Support Assistant</CardTitle>
-          <CardDescription>Sign in to your account or create a new one</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin" className="text-left">Sign In</TabsTrigger>
-              <TabsTrigger value="signup" className="text-left">Sign Up</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div>
-                  <Label htmlFor="signin-email" className="text-left block py-[5px]">Email</Label>
-                  <Input id="signin-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
-                </div>
-                <div>
-                  <Label htmlFor="signin-password" className="text-left block py-[5px]">Password</Label>
-                  <Input id="signin-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-                </div>
-                <Button type="button" variant="link" onClick={() => setShowResetPassword(true)} className="px-0 justify-start w-auto h-auto text-left my-0 mx-0 py-0">Can’t access your account?</Button>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div>
-                  <Label htmlFor="signup-email" className="text-left block py-[5px]">Email</Label>
-                  <Input id="signup-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
-                </div>
-                <div className="relative">
-                  <Label htmlFor="phone-number" className="text-left block py-[5px]">Phone Number</Label>
-                  <div className="flex gap-2">
-                    <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue>
-                          {countryCodes.find(c => `${c.country}${c.code}` === selectedCountry)?.flag} +{countryCode}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[300px] overflow-y-auto bg-white">
-                        {countryCodes.map(country => <SelectItem key={`${country.country}${country.code}`} value={`${country.country}${country.code}`} className="flex items-center gap-2">
-                            <span className="flex items-center gap-2">
-                              <span>{country.flag}</span>
-                              <span>{country.code}</span>
-                              <span className="text-gray-500 text-sm">({country.name})</span>
-                            </span>
-                          </SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Input id="phone-number" type="tel" placeholder="Enter phone number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required className="flex-1" />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="signup-password" className="text-left block py-[5px]">Password</Label>
-                  <Input id="signup-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-                </div>
-                <div>
-                  <Label htmlFor="fullName" className="text-left block py-[5px]">Full Name</Label>
-                  <Input id="fullName" type="text" placeholder="John Doe" value={fullName} onChange={e => setFullName(e.target.value)} required />
-                </div>
-                <div>
-                  <Label htmlFor="businessName" className="text-left block py-[5px]">Business Name</Label>
-                  <Input id="businessName" type="text" placeholder="Acme Inc" value={businessName} onChange={e => setBusinessName(e.target.value)} required />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Signing up...' : 'Sign Up'}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-    </div>;
-}
+  return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8
