@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -231,10 +232,10 @@ export default function Auth() {
                           {countryCodes.find(c => `${c.country}${c.code}` === selectedCountry)?.flag} +{countryCode}
                         </SelectValue>
                       </SelectTrigger>
-                      <SelectContent className="max-h-[300px] overflow-y-auto bg-white">
-                        <div className="sticky top-0 p-2 bg-white border-b">
-                          <div className="relative">
-                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <SelectContent className="max-h-[300px] overflow-y-auto">
+                        <div className="sticky top-0 z-[51] bg-white border-b">
+                          <div className="relative p-2">
+                            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <Input
                               placeholder="Search countries..."
                               value={searchQuery}
@@ -243,19 +244,21 @@ export default function Auth() {
                             />
                           </div>
                         </div>
-                        {filteredCountries.map((country) => (
-                          <SelectItem 
-                            key={`${country.country}${country.code}`}
-                            value={`${country.country}${country.code}`}
-                            className="flex items-center gap-2"
-                          >
-                            <span className="flex items-center gap-2">
-                              <span>{country.flag}</span>
-                              <span>{country.code}</span>
-                              <span className="text-gray-500 text-sm">({country.name})</span>
-                            </span>
-                          </SelectItem>
-                        ))}
+                        <div className="pt-1 pb-2">
+                          {filteredCountries.map((country) => (
+                            <SelectItem 
+                              key={`${country.country}${country.code}`}
+                              value={`${country.country}${country.code}`}
+                              className="flex items-center gap-2"
+                            >
+                              <span className="flex items-center gap-2">
+                                <span>{country.flag}</span>
+                                <span>{country.code}</span>
+                                <span className="text-gray-500 text-sm">({country.name})</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </div>
                       </SelectContent>
                     </Select>
                     <Input
