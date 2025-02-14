@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search } from 'lucide-react';
 import { countryCodes } from '@/data/countryCodes';
+
 export default function Auth() {
   const navigate = useNavigate();
   const {
@@ -25,7 +26,12 @@ export default function Auth() {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const countryCode = selectedCountry.split('+')[1];
-  const filteredCountries = countryCodes.filter(country => country.name.toLowerCase().includes(searchQuery.toLowerCase()) || country.code.includes(searchQuery));
+  const filteredCountries = countryCodes.filter(country => 
+    country.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    country.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    country.country.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -61,6 +67,7 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -83,6 +90,7 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -108,6 +116,7 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
   if (showResetPassword) {
     return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
         <Card className="w-full max-w-md">
@@ -134,6 +143,7 @@ export default function Auth() {
         </Card>
       </div>;
   }
+
   return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
       <Card className="w-full max-w-md">
         <CardHeader className="text-left">
@@ -173,31 +183,60 @@ export default function Auth() {
                 <div className="relative">
                   <Label htmlFor="phone-number" className="text-left block py-[5px]">Phone Number</Label>
                   <div className="flex gap-2">
-                    <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+                    <Select 
+                      value={selectedCountry} 
+                      onValueChange={setSelectedCountry}
+                    >
                       <SelectTrigger className="w-[140px]">
                         <SelectValue>
                           {countryCodes.find(c => `${c.country}${c.code}` === selectedCountry)?.flag} +{countryCode}
                         </SelectValue>
                       </SelectTrigger>
-                      <SelectContent className="max-h-[300px] overflow-y-auto">
-                        <div className="sticky top-0 z-[51] bg-white border-b">
+                      <SelectContent 
+                        className="max-h-[300px]"
+                        ref={(ref) => {
+                          if (ref) {
+                            ref.style.overscrollBehavior = 'contain';
+                          }
+                        }}
+                      >
+                        <div className="sticky top-0 z-[51] bg-white border-b shadow-sm">
                           <div className="relative p-2">
-                            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                            <Input placeholder="Search countries..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-8" />
+                            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                            <Input
+                              placeholder="Search countries..."
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              className="pl-8"
+                            />
                           </div>
                         </div>
-                        <div className="pt-1 pb-2">
-                          {filteredCountries.map(country => <SelectItem key={`${country.country}${country.code}`} value={`${country.country}${country.code}`} className="flex items-center gap-2">
-                              <span className="flex items-center gap-2">
-                                <span>{country.flag}</span>
-                                <span>{country.code}</span>
-                                <span className="text-gray-500 text-sm">({country.name})</span>
+                        <div className="pt-1 pb-2 overflow-y-auto">
+                          {filteredCountries.map((country) => (
+                            <SelectItem 
+                              key={`${country.country}${country.code}`}
+                              value={`${country.country}${country.code}`}
+                              className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-accent focus:bg-accent"
+                            >
+                              <span className="flex items-center gap-2 min-w-0">
+                                <span className="flex-shrink-0">{country.flag}</span>
+                                <span className="flex-shrink-0">{country.code}</span>
+                                <span className="text-gray-500 text-sm truncate">({country.name})</span>
                               </span>
-                            </SelectItem>)}
+                            </SelectItem>
+                          ))}
                         </div>
                       </SelectContent>
                     </Select>
-                    <Input id="phone-number" type="tel" placeholder="Enter phone number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required className="flex-1" />
+                    <Input
+                      id="phone-number"
+                      type="tel"
+                      placeholder="Enter phone number"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      required
+                      className="flex-1"
+                    />
                   </div>
                 </div>
                 <div>
