@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectViewport } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search } from 'lucide-react';
 import { countryCodes } from '@/data/countryCodes';
 
@@ -188,7 +188,7 @@ export default function Auth() {
                           {countryCodes.find(c => `${c.country}${c.code}` === selectedCountry)?.flag} +{countryCode}
                         </SelectValue>
                       </SelectTrigger>
-                      <SelectContent position="popper" sideOffset={5}>
+                      <SelectContent position="popper" sideOffset={5} className="h-[300px] overflow-y-auto">
                         <div className="sticky top-0 z-[51] bg-popover px-2 pb-2">
                           <div className="relative">
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
@@ -200,7 +200,7 @@ export default function Auth() {
                             />
                           </div>
                         </div>
-                        <SelectViewport className="p-0">
+                        <div className="p-1">
                           {filteredCountries.map((country) => (
                             <SelectItem 
                               key={`${country.country}${country.code}`}
@@ -214,7 +214,7 @@ export default function Auth() {
                               </div>
                             </SelectItem>
                           ))}
-                        </SelectViewport>
+                        </div>
                       </SelectContent>
                     </Select>
                     <Input
