@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,9 +14,7 @@ import { countryCodes } from '@/data/countryCodes';
 
 export default function Auth() {
   const navigate = useNavigate();
-  const {
-    toast
-  } = useToast();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,9 +38,7 @@ export default function Auth() {
       if (fullName.length < 3) {
         throw new Error('Full name must be at least 3 characters long');
       }
-      const {
-        error: signUpError
-      } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -72,9 +69,7 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
-      const {
-        error: signInError
-      } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password
       });
@@ -95,9 +90,7 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
-      const {
-        error
-      } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/reset-password`
       });
       if (error) throw error;
@@ -118,7 +111,8 @@ export default function Auth() {
   };
 
   if (showResetPassword) {
-    return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
+    return (
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
         <Card className="w-full max-w-md">
           <CardHeader className="text-left">
             <CardTitle>Reset Your Password</CardTitle>
@@ -141,10 +135,12 @@ export default function Auth() {
             </form>
           </CardContent>
         </Card>
-      </div>;
+      </div>
+    );
   }
 
-  return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
+  return (
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
       <Card className="w-full max-w-md">
         <CardHeader className="text-left">
           <CardTitle>AI Support Assistant</CardTitle>
@@ -192,14 +188,7 @@ export default function Auth() {
                           {countryCodes.find(c => `${c.country}${c.code}` === selectedCountry)?.flag} +{countryCode}
                         </SelectValue>
                       </SelectTrigger>
-                      <SelectContent 
-                        className="max-h-[300px]"
-                        ref={(ref) => {
-                          if (ref) {
-                            ref.style.overscrollBehavior = 'contain';
-                          }
-                        }}
-                      >
+                      <SelectContent className="h-[300px]">
                         <div className="sticky top-0 z-[51] bg-white border-b shadow-sm">
                           <div className="relative p-2">
                             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
@@ -211,21 +200,19 @@ export default function Auth() {
                             />
                           </div>
                         </div>
-                        <div className="pt-1 pb-2 overflow-y-auto">
-                          {filteredCountries.map((country) => (
-                            <SelectItem 
-                              key={`${country.country}${country.code}`}
-                              value={`${country.country}${country.code}`}
-                              className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-accent focus:bg-accent"
-                            >
-                              <span className="flex items-center gap-2 min-w-0">
-                                <span className="flex-shrink-0">{country.flag}</span>
-                                <span className="flex-shrink-0">{country.code}</span>
-                                <span className="text-gray-500 text-sm truncate">({country.name})</span>
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </div>
+                        {filteredCountries.map((country) => (
+                          <SelectItem 
+                            key={`${country.country}${country.code}`}
+                            value={`${country.country}${country.code}`}
+                            className="px-4 py-2 cursor-pointer hover:bg-accent focus:bg-accent"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span>{country.flag}</span>
+                              <span>{country.code}</span>
+                              <span className="text-gray-500 text-sm">({country.name})</span>
+                            </span>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <Input
@@ -259,5 +246,6 @@ export default function Auth() {
           </Tabs>
         </CardContent>
       </Card>
-    </div>;
+    </div>
+  );
 }
