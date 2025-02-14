@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Progress } from "@/components/ui/progress";
+import { motion } from "framer-motion";
 
 export function FileUploader() {
   const [isUploading, setIsUploading] = useState(false);
@@ -136,9 +136,11 @@ export function FileUploader() {
   };
 
   return (
-    <div
-      className={`relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg transition-colors
-        ${dragActive ? 'border-primary bg-primary/10' : 'border-gray-300 hover:border-primary'}
+    <motion.div
+      whileHover={{ scale: dragActive ? 1 : 1.01 }}
+      transition={{ duration: 0.2 }}
+      className={`relative flex flex-col items-center justify-center w-full h-32 sm:h-40 md:h-48 border-2 border-dashed rounded-lg transition-all duration-200
+        ${dragActive ? 'border-primary bg-primary/10 scale-102' : 'border-gray-300 hover:border-primary'}
       `}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -158,23 +160,32 @@ export function FileUploader() {
         className="flex flex-col items-center justify-center w-full h-full cursor-pointer"
       >
         <div className="flex flex-col items-center justify-center pt-5 pb-6">
-          <Upload className={`w-8 h-8 mb-2 ${isUploading ? 'text-primary animate-pulse' : ''}`} />
-          <p className="mb-2 text-sm text-gray-500">
+          <motion.div
+            animate={isUploading ? { rotate: 360 } : {}}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+          >
+            <Upload className={`w-8 h-8 mb-2 sm:w-10 sm:h-10 md:w-12 md:h-12 ${isUploading ? 'text-primary' : ''}`} />
+          </motion.div>
+          <p className="mb-2 text-sm sm:text-base md:text-lg text-gray-500 text-center px-4">
             {dragActive
               ? "Drop the file here"
               : isUploading
               ? "Uploading..."
               : "Drag & drop or click to upload"}
           </p>
-          <p className="text-xs text-gray-500">PDF, DOC, DOCX, TXT, CSV (max 10MB)</p>
+          <p className="text-xs sm:text-sm text-gray-500 text-center">PDF, DOC, DOCX, TXT, CSV (max 10MB)</p>
         </div>
       </label>
 
       {isUploading && (
-        <div className="absolute bottom-0 left-0 w-full px-4 pb-4">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="absolute bottom-0 left-0 w-full px-4 pb-4"
+        >
           <Progress value={uploadProgress} className="h-1" />
-        </div>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }

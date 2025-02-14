@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { motion, AnimatePresence } from "framer-motion";
 
 type FileItem = {
   id: string;
@@ -168,116 +169,151 @@ export function FileList() {
   }
 
   const renderListView = () => (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead 
-              className="w-[40%] cursor-pointer"
-              onClick={() => handleSort("filename")}
-            >
-              Name {sortField === "filename" && (sortOrder === "asc" ? "↑" : "↓")}
-            </TableHead>
-            <TableHead 
-              className="hidden md:table-cell cursor-pointer"
-              onClick={() => handleSort("mime_type")}
-            >
-              Type {sortField === "mime_type" && (sortOrder === "asc" ? "↑" : "↓")}
-            </TableHead>
-            <TableHead 
-              className="hidden sm:table-cell cursor-pointer"
-              onClick={() => handleSort("size_bytes")}
-            >
-              Size {sortField === "size_bytes" && (sortOrder === "asc" ? "↑" : "↓")}
-            </TableHead>
-            <TableHead 
-              className="hidden lg:table-cell cursor-pointer"
-              onClick={() => handleSort("created_at")}
-            >
-              Date {sortField === "created_at" && (sortOrder === "asc" ? "↑" : "↓")}
-            </TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filteredFiles.length === 0 ? (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="rounded-md border overflow-hidden"
+    >
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={5} className="text-center">
-                No files found
-              </TableCell>
+              <TableHead 
+                className="w-[40%] cursor-pointer min-w-[200px]"
+                onClick={() => handleSort("filename")}
+              >
+                Name {sortField === "filename" && (sortOrder === "asc" ? "↑" : "↓")}
+              </TableHead>
+              <TableHead 
+                className="hidden md:table-cell cursor-pointer min-w-[150px]"
+                onClick={() => handleSort("mime_type")}
+              >
+                Type {sortField === "mime_type" && (sortOrder === "asc" ? "↑" : "↓")}
+              </TableHead>
+              <TableHead 
+                className="hidden sm:table-cell cursor-pointer min-w-[100px]"
+                onClick={() => handleSort("size_bytes")}
+              >
+                Size {sortField === "size_bytes" && (sortOrder === "asc" ? "↑" : "↓")}
+              </TableHead>
+              <TableHead 
+                className="hidden lg:table-cell cursor-pointer min-w-[120px]"
+                onClick={() => handleSort("created_at")}
+              >
+                Date {sortField === "created_at" && (sortOrder === "asc" ? "↑" : "↓")}
+              </TableHead>
+              <TableHead className="text-right min-w-[100px]">Actions</TableHead>
             </TableRow>
-          ) : (
-            filteredFiles.map((file) => (
-              <TableRow key={file.id}>
-                <TableCell className="font-medium">
-                  <button
-                    onClick={() => handlePreview(file)}
-                    className="flex items-center gap-2 hover:text-primary"
+          </TableHeader>
+          <TableBody>
+            <AnimatePresence>
+              {filteredFiles.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8">
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                    >
+                      No files found
+                    </motion.div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredFiles.map((file) => (
+                  <motion.tr
+                    key={file.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="border-b transition-colors hover:bg-muted/50"
                   >
-                    {getFileIcon(file.mime_type)}
-                    {file.filename}
-                  </button>
-                </TableCell>
-                <TableCell className="hidden md:table-cell">{file.mime_type}</TableCell>
-                <TableCell className="hidden sm:table-cell">
-                  {formatFileSize(file.size_bytes)}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell">
-                  {formatDate(file.created_at)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDelete(file.id, file.path)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </div>
+                    <TableCell className="font-medium">
+                      <button
+                        onClick={() => handlePreview(file)}
+                        className="flex items-center gap-2 hover:text-primary transition-colors"
+                      >
+                        {getFileIcon(file.mime_type)}
+                        <span className="truncate">{file.filename}</span>
+                      </button>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <span className="truncate">{file.mime_type}</span>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      {formatFileSize(file.size_bytes)}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      {formatDate(file.created_at)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDelete(file.id, file.path)}
+                        className="transition-all hover:scale-105"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </motion.tr>
+                ))
+              )}
+            </AnimatePresence>
+          </TableBody>
+        </Table>
+      </div>
+    </motion.div>
   );
 
   const renderGridView = () => (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      {filteredFiles.map((file) => (
-        <div
-          key={file.id}
-          className="p-4 border rounded-lg hover:border-primary transition-colors"
-        >
-          <button
-            onClick={() => handlePreview(file)}
-            className="w-full text-left"
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+    >
+      <AnimatePresence>
+        {filteredFiles.map((file) => (
+          <motion.div
+            key={file.id}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            whileHover={{ scale: 1.02 }}
+            className="p-4 border rounded-lg hover:border-primary transition-all duration-200"
           >
-            <div className="flex flex-col items-center gap-2">
-              {getFileIcon(file.mime_type)}
-              <p className="text-sm font-medium truncate w-full text-center">
-                {file.filename}
-              </p>
-              <p className="text-xs text-gray-500">
-                {formatFileSize(file.size_bytes)}
-              </p>
-            </div>
-          </button>
-          <div className="mt-4 flex justify-center">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(file.id, file.path);
-              }}
+            <button
+              onClick={() => handlePreview(file)}
+              className="w-full text-left"
             >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      ))}
-    </div>
+              <div className="flex flex-col items-center gap-2">
+                {getFileIcon(file.mime_type)}
+                <p className="text-sm font-medium truncate w-full text-center">
+                  {file.filename}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {formatFileSize(file.size_bytes)}
+                </p>
+              </div>
+            </button>
+            <div className="mt-4 flex justify-center">
+              <motion.div whileHover={{ scale: 1.1 }}>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(file.id, file.path);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </motion.div>
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </motion.div>
   );
 
   return (
