@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectViewport } from '@/components/ui/select';
 import { Search } from 'lucide-react';
 import { countryCodes } from '@/data/countryCodes';
 
@@ -188,10 +188,10 @@ export default function Auth() {
                           {countryCodes.find(c => `${c.country}${c.code}` === selectedCountry)?.flag} +{countryCode}
                         </SelectValue>
                       </SelectTrigger>
-                      <SelectContent className="h-[300px]">
-                        <div className="sticky top-0 z-[51] bg-white border-b shadow-sm">
-                          <div className="relative p-2">
-                            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                      <SelectContent position="popper" sideOffset={5}>
+                        <div className="sticky top-0 z-[51] bg-popover px-2 pb-2">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                             <Input
                               placeholder="Search countries..."
                               value={searchQuery}
@@ -200,19 +200,21 @@ export default function Auth() {
                             />
                           </div>
                         </div>
-                        {filteredCountries.map((country) => (
-                          <SelectItem 
-                            key={`${country.country}${country.code}`}
-                            value={`${country.country}${country.code}`}
-                            className="px-4 py-2 cursor-pointer hover:bg-accent focus:bg-accent"
-                          >
-                            <span className="flex items-center gap-2">
-                              <span>{country.flag}</span>
-                              <span>{country.code}</span>
-                              <span className="text-gray-500 text-sm">({country.name})</span>
-                            </span>
-                          </SelectItem>
-                        ))}
+                        <SelectViewport className="p-0">
+                          {filteredCountries.map((country) => (
+                            <SelectItem 
+                              key={`${country.country}${country.code}`}
+                              value={`${country.country}${country.code}`}
+                              className="px-4 py-2 cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span>{country.flag}</span>
+                                <span>{country.code}</span>
+                                <span className="text-gray-500 text-sm">({country.name})</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectViewport>
                       </SelectContent>
                     </Select>
                     <Input
