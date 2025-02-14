@@ -210,6 +210,7 @@ const countryCodes = [
 ].sort((a, b) => a.name.localeCompare(b.name));
 
 export default function Auth() {
+  // Initialize all state variables at the top of the component
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -218,8 +219,10 @@ export default function Auth() {
   const [fullName, setFullName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [selectedCountry, setSelectedCountry] = useState('US+1'); // Default to US
-  const [showResetPassword, setShowResetPassword] = useState(false); // Added back
+  const [selectedCountry, setSelectedCountry] = useState('US+1');
+  const [showResetPassword, setShowResetPassword] = useState(false);
+
+  // Extract country code after state initialization
   const countryCode = selectedCountry.split('+')[1];
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -306,6 +309,7 @@ export default function Auth() {
     }
   };
 
+  // Render reset password form if showResetPassword is true
   if (showResetPassword) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -347,6 +351,7 @@ export default function Auth() {
     );
   }
 
+  // Main auth form
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
