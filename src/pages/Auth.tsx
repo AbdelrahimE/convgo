@@ -1094,7 +1094,7 @@ export default function Auth() {
     return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
         <Card className="w-full max-w-md">
           <CardHeader className="text-left">
-            <CardTitle>Reset Password</CardTitle>
+            <CardTitle>Reset Your Password</CardTitle>
             <CardDescription>Enter your email to receive a password reset link</CardDescription>
           </CardHeader>
           <CardContent>
