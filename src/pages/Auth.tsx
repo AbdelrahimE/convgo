@@ -112,7 +112,7 @@ export default function Auth() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <Card className="w-full max-w-md">
-          <CardHeader>
+          <CardHeader className="text-left">
             <CardTitle>Reset Password</CardTitle>
             <CardDescription>Enter your email to receive a password reset link</CardDescription>
           </CardHeader>
@@ -152,9 +152,9 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-center">AI Support Assistant</CardTitle>
-          <CardDescription className="text-center">Sign in to your account or create a new one</CardDescription>
+        <CardHeader className="text-left">
+          <CardTitle>AI Support Assistant</CardTitle>
+          <CardDescription>Sign in to your account or create a new one</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
