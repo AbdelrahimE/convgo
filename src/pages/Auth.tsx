@@ -7,58 +7,77 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const countryCodes = [
+  { code: '+93', country: 'AF', flag: '🇦🇫', name: 'Afghanistan' },
+  { code: '+355', country: 'AL', flag: '🇦🇱', name: 'Albania' },
+  { code: '+213', country: 'DZ', flag: '🇩🇿', name: 'Algeria' },
+  { code: '+1', country: 'US', flag: '🇺🇸', name: 'United States' },
+  { code: '+44', country: 'GB', flag: '🇬🇧', name: 'United Kingdom' },
+  { code: '+91', country: 'IN', flag: '🇮🇳', name: 'India' },
+  { code: '+86', country: 'CN', flag: '🇨🇳', name: 'China' },
+  { code: '+81', country: 'JP', flag: '🇯🇵', name: 'Japan' },
+  { code: '+49', country: 'DE', flag: '🇩🇪', name: 'Germany' },
+  { code: '+33', country: 'FR', flag: '🇫🇷', name: 'France' },
+].sort((a, b) => a.name.localeCompare(b.name));
+
 export default function Auth() {
   const navigate = useNavigate();
-  const {
-    toast
-  } = useToast();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [countryCode, setCountryCode] = useState('+1');
   const [showResetPassword, setShowResetPassword] = useState(false);
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    
     try {
       if (fullName.length < 3) {
         throw new Error('Full name must be at least 3 characters long');
       }
-      const {
-        error: signUpError
-      } = await supabase.auth.signUp({
+
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             full_name: fullName,
-            business_name: businessName
-          }
-        }
+            business_name: businessName,
+            phone: `${countryCode}${phoneNumber}`
+          },
+        },
       });
+
       if (signUpError) throw signUpError;
+
       toast({
         title: "Success!",
-        description: "Please check your email to confirm your account."
+        description: "Please check your email to confirm your account.",
       });
+
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message
+        description: error.message,
       });
     } finally {
       setLoading(false);
     }
   };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const {
-        error: signInError
-      } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password
       });
@@ -74,13 +93,12 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const {
-        error
-      } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/reset-password`
       });
       if (error) throw error;
@@ -99,8 +117,10 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
   if (showResetPassword) {
-    return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <Card className="w-full max-w-md">
           <CardHeader className="text-left">
             <CardTitle>Reset Password</CardTitle>
@@ -110,22 +130,37 @@ export default function Auth() {
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
                 <Label htmlFor="reset-email" className="text-left block py-[5px]">Email</Label>
-                <Input id="reset-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                <Input
+                  id="reset-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
               </div>
               <div className="flex gap-4">
                 <Button type="submit" className="flex-1" disabled={loading}>
                   {loading ? 'Sending...' : 'Send Reset Link'}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setShowResetPassword(false)} className="flex-1">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowResetPassword(false)}
+                  className="flex-1"
+                >
                   Back to Login
                 </Button>
               </div>
             </form>
           </CardContent>
         </Card>
-      </div>;
+      </div>
+    );
   }
-  return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-left">
           <CardTitle>AI Support Assistant</CardTitle>
@@ -142,13 +177,31 @@ export default function Auth() {
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div>
                   <Label htmlFor="signin-email" className="text-left block py-[5px]">Email</Label>
-                  <Input id="signin-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                  <Input
+                    id="signin-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
                 </div>
                 <div>
                   <Label htmlFor="signin-password" className="text-left block py-[5px]">Password</Label>
-                  <Input id="signin-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+                  <Input
+                    id="signin-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
                 </div>
-                <Button type="button" variant="link" onClick={() => setShowResetPassword(true)} className="px-0 justify-start w-auto h-auto text-left my-0 mx-0 py-0">
+                <Button 
+                  type="button" 
+                  variant="link" 
+                  onClick={() => setShowResetPassword(true)}
+                  className="px-0 justify-start w-auto h-auto text-left my-0 mx-0 py-0"
+                >
                   Forgot password?
                 </Button>
                 <Button type="submit" className="w-full" disabled={loading}>
@@ -161,19 +214,75 @@ export default function Auth() {
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div>
                   <Label htmlFor="signup-email" className="text-left block py-[5px]">Email</Label>
-                  <Input id="signup-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone-number" className="text-left block py-[5px]">Phone Number</Label>
+                  <div className="flex gap-2">
+                    <Select value={countryCode} onValueChange={setCountryCode}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Select code" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {countryCodes.map((country) => (
+                          <SelectItem key={country.code} value={country.code}>
+                            <span className="flex items-center gap-2">
+                              <span>{country.flag}</span>
+                              <span>{country.code}</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      id="phone-number"
+                      type="tel"
+                      placeholder="Enter phone number"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      required
+                      className="flex-1"
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="signup-password" className="text-left block py-[5px]">Password</Label>
-                  <Input id="signup-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
                 </div>
                 <div>
                   <Label htmlFor="fullName" className="text-left block py-[5px]">Full Name</Label>
-                  <Input id="fullName" type="text" placeholder="John Doe" value={fullName} onChange={e => setFullName(e.target.value)} required />
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder="John Doe"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                  />
                 </div>
                 <div>
                   <Label htmlFor="businessName" className="text-left block py-[5px]">Business Name</Label>
-                  <Input id="businessName" type="text" placeholder="Acme Inc" value={businessName} onChange={e => setBusinessName(e.target.value)} required />
+                  <Input
+                    id="businessName"
+                    type="text"
+                    placeholder="Acme Inc"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    required
+                  />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? 'Signing up...' : 'Sign Up'}
@@ -183,5 +292,6 @@ export default function Auth() {
           </Tabs>
         </CardContent>
       </Card>
-    </div>;
+    </div>
+  );
 }
