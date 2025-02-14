@@ -177,16 +177,29 @@ export function FileList() {
     try {
       const { error } = await supabase
         .from('files')
-        .update({ filename: newFileName.trim() })
+        .update({ 
+          filename: newFileName.trim(),
+          original_name: newFileName.trim()
+        })
         .eq('id', file.id);
 
       if (error) throw error;
 
-      setFiles(files.map(f => 
-        f.id === file.id ? { ...f, filename: newFileName.trim() } : f
-      ));
+      const updatedFiles = files.map(f => 
+        f.id === file.id ? { 
+          ...f, 
+          filename: newFileName.trim(),
+          original_name: newFileName.trim()
+        } : f
+      );
+      
+      setFiles(updatedFiles);
       setFilteredFiles(filteredFiles.map(f => 
-        f.id === file.id ? { ...f, filename: newFileName.trim() } : f
+        f.id === file.id ? { 
+          ...f, 
+          filename: newFileName.trim(),
+          original_name: newFileName.trim()
+        } : f
       ));
 
       toast({
