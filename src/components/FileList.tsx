@@ -175,37 +175,28 @@ export function FileList() {
     }
 
     try {
+      const encodedFileName = encodeURIComponent(newFileName.trim());
+      
       console.log('Attempting to rename file:', {
         fileId: file.id,
         oldName: file.filename,
-        newName: newFileName.trim()
+        newName: newFileName.trim(),
+        encodedName: encodedFileName
       });
 
-      // First verify we can fetch the file using maybeSingle() instead of single()
-      const { data: existingFile, error: fetchError } = await supabase
-        .from('files')
-        .select('*')
-        .eq('id', file.id)
-        .maybeSingle();
+      const updates = {
+        filename: newFileName.trim(),
+        original_name: newFileName.trim(),
+        updated_at: new Date().toISOString()
+      };
 
-      if (fetchError) {
-        console.error('Error fetching file:', fetchError);
-        throw fetchError;
-      }
-
-      if (!existingFile) {
-        throw new Error('File not found');
-      }
-
-      // Then perform the update
       const { data: updatedFile, error: updateError } = await supabase
         .from('files')
-        .update({ 
-          filename: newFileName.trim(),
-          original_name: newFileName.trim()
+        .update(updates)
+        .match({
+          id: file.id,
+          profile_id: user?.id
         })
-        .eq('id', file.id)
-        .eq('profile_id', user?.id) // Add this to ensure user owns the file
         .select()
         .maybeSingle();
 
@@ -219,43 +210,30 @@ export function FileList() {
       }
 
       console.log('File renamed successfully:', {
-        before: existingFile,
-        after: updatedFile
+        updates,
+        response: updatedFile
       });
 
-      // Update local state
-      const updatedFiles = files.map(f => 
-        f.id === file.id ? { 
-          ...f, 
-          filename: newFileName.trim(),
-          original_name: newFileName.trim()
-        } : f
+      setFiles(prevFiles => 
+        prevFiles.map(f => f.id === file.id ? { ...f, ...updates } : f)
       );
       
-      setFiles(updatedFiles);
-      setFilteredFiles(filteredFiles.map(f => 
-        f.id === file.id ? { 
-          ...f, 
-          filename: newFileName.trim(),
-          original_name: newFileName.trim()
-        } : f
-      ));
+      setFilteredFiles(prevFiles => 
+        prevFiles.map(f => f.id === file.id ? { ...f, ...updates } : f)
+      );
 
-      // Show success notification
       toast({
-        title: "File renamed",
-        description: `Successfully renamed file to "${newFileName.trim()}"`,
+        title: "تم تغيير اسم الملف",
+        description: `تم تغيير اسم الملف إلى "${newFileName.trim()}"`,
         variant: "default"
       });
 
-      // Refresh the file list to ensure we have the latest data
-      fetchFiles();
     } catch (error: any) {
       console.error('Error in handleSaveRename:', error);
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "Failed to rename file"
+        title: "خطأ",
+        description: error.message || "فشل في تغيير اسم الملف"
       });
     } finally {
       handleCancelRename();
