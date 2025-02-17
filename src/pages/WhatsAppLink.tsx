@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,9 +12,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
 
 const WhatsAppLink = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [status, setStatus] = useState('Not connected');
   const [substatus, setSubstatus] = useState('');
   const [qrCode, setQrCode] = useState('');
@@ -23,27 +23,28 @@ const WhatsAppLink = () => {
   const [isConfigured, setIsConfigured] = useState(false);
   const [currentInstanceId, setCurrentInstanceId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      fetchInstance();
+    if (!authLoading) {
+      if (user) {
+        fetchInstance();
+      } else {
+        setInitialLoading(false);
+      }
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   const fetchInstance = async () => {
     try {
+      setInitialLoading(true);
       const { data, error } = await supabase
         .from('whatsapp_instances')
         .select('*')
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        if (error.code !== 'PGRST116') { // Not found error
-          throw error;
-        }
-        return;
-      }
+      if (error) throw error;
 
       if (data) {
         setInstanceName(data.instance_name);
@@ -54,6 +55,8 @@ const WhatsAppLink = () => {
     } catch (error) {
       console.error('Error fetching WhatsApp instance:', error);
       toast.error('Failed to fetch WhatsApp instance');
+    } finally {
+      setInitialLoading(false);
     }
   };
 
@@ -127,7 +130,6 @@ const WhatsAppLink = () => {
       
       toast.success('WhatsApp instance created successfully');
       
-      // Start polling for status immediately
       await checkInstanceStatus(instanceName);
       
     } catch (error: any) {
@@ -182,14 +184,43 @@ const WhatsAppLink = () => {
   };
 
   useEffect(() => {
-    if (isConfigured && instanceName) {
+    if (isConfigured && instanceName && !initialLoading) {
       const interval = setInterval(() => {
         checkInstanceStatus(instanceName);
       }, 3000);
 
       return () => clearInterval(interval);
     }
-  }, [isConfigured, instanceName]);
+  }, [isConfigured, instanceName, initialLoading]);
+
+  if (authLoading || initialLoading) {
+    return (
+      <div className="container mx-auto max-w-2xl py-8">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-center space-x-2">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <p>Loading...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="container mx-auto max-w-2xl py-8">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-center text-muted-foreground">
+              Please log in to access WhatsApp linking.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto max-w-2xl py-8">
@@ -216,7 +247,14 @@ const WhatsAppLink = () => {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Creating Instance...' : 'Create Instance'}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating Instance...
+                  </>
+                ) : (
+                  'Create Instance'
+                )}
               </Button>
             </form>
           ) : (
