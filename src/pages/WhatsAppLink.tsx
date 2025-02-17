@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -128,9 +127,7 @@ const WhatsAppLink = () => {
       const qrCodeData = data.qrcode?.base64 || data.qrcode;
       if (qrCodeData) {
         console.log('Received QR code data');
-        // Remove data:image/png;base64, prefix if it exists
-        const cleanQrCode = qrCodeData.replace(/^data:image\/png;base64,/, '');
-        setQrCode(cleanQrCode);
+        setQrCode(qrCodeData);
         setSubstatus('Please scan the QR code with WhatsApp');
       } else {
         console.error('No QR code received in response');
