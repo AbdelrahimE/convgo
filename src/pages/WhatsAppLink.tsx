@@ -285,7 +285,7 @@ const WhatsAppLink = () => {
               {qrCode && status !== 'Connected' && (
                 <div className="flex justify-center p-4 bg-white rounded-lg">
                   <img 
-                    src={`data:image/png;base64,${qrCode}`}
+                    src={qrCode}
                     alt="WhatsApp QR Code" 
                     className="max-w-full h-auto"
                   />
