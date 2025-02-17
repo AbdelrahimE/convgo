@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -59,11 +58,14 @@ const WhatsAppLink = () => {
 
   const checkInstanceStatus = async (name: string) => {
     try {
+      console.log('Checking instance status for:', name);
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-status', {
         body: { instanceName: name }
       });
       
       if (error) throw error;
+      
+      console.log('Status check response:', data);
       
       if (data.instance) {
         setStatus(data.instance.state || 'DISCONNECTED');
@@ -123,8 +125,24 @@ const WhatsAppLink = () => {
 
       toast.success('WhatsApp instance created successfully');
       
-      // Start polling for QR code and status
+      // Immediately check for QR code
       await checkInstanceStatus(instanceName);
+      
+      // Start periodic status checks with a shorter initial interval
+      let attempts = 0;
+      const maxAttempts = 5;
+      const checkQRCode = async () => {
+        if (attempts >= maxAttempts) return;
+        
+        await checkInstanceStatus(instanceName);
+        attempts++;
+        
+        if (!qrCode) {
+          setTimeout(checkQRCode, 2000); // Check every 2 seconds initially
+        }
+      };
+      
+      checkQRCode();
     } catch (error: any) {
       console.error('Error creating WhatsApp instance:', error);
       const errorMessage = error.message || 'Unknown error occurred';
