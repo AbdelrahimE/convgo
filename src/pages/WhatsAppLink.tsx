@@ -72,19 +72,36 @@ const WhatsAppLink = () => {
       
       console.log('Status check response:', data);
       
-      if (data.instance) {
-        const state = data.instance.state;
-        setStatus(state || 'Not connected');
-        setSubstatus(state === 'CONNECTED' ? 'WhatsApp connected successfully!' : 'Waiting for connection...');
+      if (data) {
+        const state = data.state;
         
-        if (state === 'CONNECTED' && currentInstanceId) {
-          await supabase
-            .from('whatsapp_instances')
-            .update({ 
-              status: 'CONNECTED',
-              last_connected: new Date().toISOString()
-            })
-            .eq('id', currentInstanceId);
+        // Handle different states from Evolution API
+        switch(state) {
+          case 'open':
+            setStatus('Connected');
+            setSubstatus('WhatsApp connected successfully!');
+            setQrCode(''); // Clear QR code when connected
+            if (currentInstanceId) {
+              await supabase
+                .from('whatsapp_instances')
+                .update({ 
+                  status: 'CONNECTED',
+                  last_connected: new Date().toISOString()
+                })
+                .eq('id', currentInstanceId);
+            }
+            break;
+          case 'connecting':
+            setStatus('Connecting');
+            setSubstatus('Connecting to WhatsApp...');
+            break;
+          case 'close':
+            setStatus('Not connected');
+            setSubstatus(data.statusReason || 'Waiting for connection...');
+            break;
+          default:
+            setStatus('Not connected');
+            setSubstatus('Unknown connection state');
         }
       }
     } catch (error) {
@@ -262,7 +279,7 @@ const WhatsAppLink = () => {
                 <p className="text-lg font-medium">{status}</p>
                 {substatus && <p className="text-sm text-muted-foreground">{substatus}</p>}
               </div>
-              {qrCode && (
+              {qrCode && status !== 'Connected' && (
                 <div className="flex justify-center p-4 bg-white rounded-lg">
                   <img 
                     src={qrCode}
@@ -271,7 +288,7 @@ const WhatsAppLink = () => {
                   />
                 </div>
               )}
-              {!qrCode && status !== 'CONNECTED' && (
+              {!qrCode && status !== 'Connected' && (
                 <div className="text-center p-4">
                   <p className="text-muted-foreground">QR code will appear here when ready</p>
                 </div>
