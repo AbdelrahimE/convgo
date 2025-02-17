@@ -128,7 +128,9 @@ const WhatsAppLink = () => {
       const qrCodeData = data.qrcode?.base64 || data.qrcode;
       if (qrCodeData) {
         console.log('Received QR code data');
-        setQrCode(qrCodeData);
+        // Remove data:image/png;base64, prefix if it exists
+        const cleanQrCode = qrCodeData.replace(/^data:image\/png;base64,/, '');
+        setQrCode(cleanQrCode);
         setSubstatus('Please scan the QR code with WhatsApp');
       } else {
         console.error('No QR code received in response');
