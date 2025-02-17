@@ -18,8 +18,7 @@ serve(async (req) => {
 
     console.log(`Checking status for instance: ${instanceName}`);
 
-    // Updated to use Evolution API's connection state endpoint
-    const response = await fetch(`https://api.convgo.com/instance/connectionState/${instanceName}`, {
+    const response = await fetch(`https://api.convgo.com/instance/info/${instanceName}`, {
       method: 'GET',
       headers: {
         'apikey': apiKey,
@@ -31,8 +30,18 @@ serve(async (req) => {
     const data = await response.json();
     console.log('API response data:', JSON.stringify(data, null, 2));
 
-    // Return the exact Evolution API response structure
-    return new Response(JSON.stringify(data), {
+    // Map Evolution API status to our expected states
+    let state = 'close';
+    if (data.instance?.status === 'CONNECTED') {
+      state = 'open';
+    } else if (data.instance?.status === 'STARTING') {
+      state = 'connecting';
+    }
+
+    return new Response(JSON.stringify({
+      state,
+      statusReason: data.instance?.status
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     });

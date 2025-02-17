@@ -75,7 +75,6 @@ const WhatsAppLink = () => {
       if (data) {
         const state = data.state;
         
-        // Handle different states from Evolution API
         switch(state) {
           case 'open':
             setStatus('Connected');
@@ -97,7 +96,7 @@ const WhatsAppLink = () => {
             break;
           case 'close':
             setStatus('Not connected');
-            setSubstatus(data.statusReason || 'Waiting for connection...');
+            setSubstatus(data.statusReason || 'Waiting for QR code scan...');
             break;
           default:
             setStatus('Not connected');
@@ -125,8 +124,8 @@ const WhatsAppLink = () => {
       
       console.log('Instance creation response:', data);
 
-      // Immediately set the QR code from the creation response
-      if (data.qrcode && data.qrcode.base64) {
+      // Set QR code from instance creation response
+      if (data.qrcode?.base64) {
         setQrCode(data.qrcode.base64);
         setSubstatus('Please scan the QR code with WhatsApp');
       }
@@ -282,15 +281,10 @@ const WhatsAppLink = () => {
               {qrCode && status !== 'Connected' && (
                 <div className="flex justify-center p-4 bg-white rounded-lg">
                   <img 
-                    src={qrCode}
+                    src={`data:image/png;base64,${qrCode}`}
                     alt="WhatsApp QR Code" 
                     className="max-w-full h-auto"
                   />
-                </div>
-              )}
-              {!qrCode && status !== 'Connected' && (
-                <div className="text-center p-4">
-                  <p className="text-muted-foreground">QR code will appear here when ready</p>
                 </div>
               )}
               <Button 
