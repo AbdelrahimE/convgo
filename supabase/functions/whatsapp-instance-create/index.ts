@@ -22,10 +22,12 @@ serve(async (req) => {
 
     const apiKey = Deno.env.get('EVOLUTION_API_KEY');
     if (!apiKey) {
+      console.error('Evolution API key not found in environment variables');
       throw new Error('Evolution API key not configured');
     }
 
-    console.log('Creating WhatsApp instance:', instanceName); // Debug log
+    console.log('Creating WhatsApp instance:', instanceName);
+    console.log('API Key length:', apiKey.length); // Debug log (length only, not the actual key)
 
     const response = await fetch('https://api.convgo.com/instance/create', {
       method: 'POST',
@@ -42,10 +44,11 @@ serve(async (req) => {
     });
 
     const data = await response.json();
-    console.log('Evolution API response:', data); // Debug log
+    console.log('Evolution API status:', response.status);
+    console.log('Evolution API response:', JSON.stringify(data, null, 2));
 
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to create instance');
+      throw new Error(`API Error: ${response.status} - ${data.message || JSON.stringify(data)}`);
     }
 
     return new Response(JSON.stringify(data), {
@@ -53,11 +56,16 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    console.error('Error in Edge Function:', error); // Debug log
-    return new Response(JSON.stringify({ 
+    console.error('Error in Edge Function:', error);
+    
+    // Create a detailed error response
+    const errorResponse = {
       error: error.message,
-      details: error.stack
-    }), {
+      details: error.stack,
+      timestamp: new Date().toISOString()
+    };
+
+    return new Response(JSON.stringify(errorResponse), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
     });

@@ -77,7 +77,7 @@ const WhatsAppLink = () => {
 
   const createInstance = async (instanceName: string) => {
     try {
-      console.log('Calling createInstance with:', instanceName); // Debug log
+      console.log('Calling createInstance with:', instanceName);
 
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-create', {
         body: { instanceName },
@@ -86,9 +86,12 @@ const WhatsAppLink = () => {
         }
       });
 
-      console.log('Response from Edge Function:', { data, error }); // Debug log
+      console.log('Response from Edge Function:', { data, error });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Edge Function error:', error);
+        throw new Error(error.message || 'Failed to create instance');
+      }
       
       // Store instance in database
       const { data: instanceData, error: dbError } = await supabase
@@ -102,7 +105,7 @@ const WhatsAppLink = () => {
         .single();
 
       if (dbError) {
-        console.error('Database error:', dbError); // Debug log
+        console.error('Database error:', dbError);
         throw dbError;
       }
 
@@ -118,13 +121,14 @@ const WhatsAppLink = () => {
           details: data
         });
 
-      toast.success('WhatsApp instance created');
+      toast.success('WhatsApp instance created successfully');
       
       // Start polling for QR code and status
       await checkInstanceStatus(instanceName);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating WhatsApp instance:', error);
-      toast.error(`Failed to create WhatsApp instance: ${error.message}`);
+      const errorMessage = error.message || 'Unknown error occurred';
+      toast.error(`Failed to create WhatsApp instance: ${errorMessage}`);
     }
   };
 
