@@ -125,20 +125,38 @@ const WhatsAppLink = () => {
 
       toast.success('WhatsApp instance created successfully');
       
-      // Immediately check for QR code
+      // Wait for 3 seconds before first status check
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Initial status check
       await checkInstanceStatus(instanceName);
       
-      // Start periodic status checks with a shorter initial interval
+      // Start polling with increasing intervals
       let attempts = 0;
-      const maxAttempts = 5;
+      const maxAttempts = 10;
       const checkQRCode = async () => {
-        if (attempts >= maxAttempts) return;
+        if (attempts >= maxAttempts) {
+          console.log('Max polling attempts reached');
+          return;
+        }
         
-        await checkInstanceStatus(instanceName);
-        attempts++;
-        
-        if (!qrCode) {
-          setTimeout(checkQRCode, 2000); // Check every 2 seconds initially
+        try {
+          console.log(`Polling attempt ${attempts + 1}/${maxAttempts}`);
+          await checkInstanceStatus(instanceName);
+          
+          attempts++;
+          
+          if (!qrCode) {
+            // Increase delay with each attempt (2s, 3s, 4s, etc.)
+            const delay = (2 + attempts) * 1000;
+            setTimeout(checkQRCode, delay);
+          }
+        } catch (error) {
+          console.error('Error in polling:', error);
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(checkQRCode, 2000);
+          }
         }
       };
       

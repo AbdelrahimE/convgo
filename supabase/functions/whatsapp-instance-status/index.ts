@@ -15,22 +15,41 @@ serve(async (req) => {
       throw new Error('Evolution API key not configured');
     }
 
+    console.log(`Checking status for instance: ${instanceName}`);
+
     const response = await fetch(`https://api.convgo.com/instance/info/${instanceName}`, {
+      method: 'GET',
       headers: {
-        'apikey': apiKey
+        'apikey': apiKey,
+        'Content-Type': 'application/json'
       }
     });
 
     const data = await response.json();
+    console.log('Evolution API response:', data);
+
+    if (!response.ok) {
+      return new Response(JSON.stringify({
+        error: 'Instance not ready',
+        details: data
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: response.status
+      });
+    }
 
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('Error in status check:', error);
+    return new Response(JSON.stringify({
+      error: error.message,
+      timestamp: new Date().toISOString()
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
+      status: 500,
     });
   }
 });
