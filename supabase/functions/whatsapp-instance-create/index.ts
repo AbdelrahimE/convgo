@@ -27,7 +27,7 @@ serve(async (req) => {
     }
 
     console.log('Creating WhatsApp instance:', instanceName);
-    console.log('API Key length:', apiKey.length); // Debug log (length only, not the actual key)
+    console.log('API Key length:', apiKey.length);
 
     const response = await fetch('https://api.convgo.com/instance/create', {
       method: 'POST',
@@ -38,8 +38,7 @@ serve(async (req) => {
       body: JSON.stringify({
         instanceName,
         qrcode: true,
-        number: '',
-        token: ''
+        integration: 'WHATSAPP-BAILEYS' // Added the required integration parameter
       })
     });
 
@@ -58,7 +57,6 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in Edge Function:', error);
     
-    // Create a detailed error response
     const errorResponse = {
       error: error.message,
       details: error.stack,
