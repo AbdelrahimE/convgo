@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -74,24 +75,16 @@ const WhatsAppLink = () => {
       if (data.instance) {
         const state = data.instance.state;
         setStatus(state || 'Not connected');
+        setSubstatus(state === 'CONNECTED' ? 'WhatsApp connected successfully!' : 'Waiting for connection...');
         
-        if (data.instance.qrcode) {
-          setQrCode(data.instance.qrcode);
-          setSubstatus('Please scan the QR code with WhatsApp');
-        } else if (state === 'CONNECTED' || state === 'connecting') {
-          setSubstatus(state === 'CONNECTED' ? 'WhatsApp connected successfully!' : 'Connecting to WhatsApp...');
-          setQrCode('');
-          if (currentInstanceId && state === 'CONNECTED') {
-            await supabase
-              .from('whatsapp_instances')
-              .update({ 
-                status: 'CONNECTED',
-                last_connected: new Date().toISOString()
-              })
-              .eq('id', currentInstanceId);
-          }
-        } else {
-          setSubstatus(data.instance.statusReason || 'Waiting for connection...');
+        if (state === 'CONNECTED' && currentInstanceId) {
+          await supabase
+            .from('whatsapp_instances')
+            .update({ 
+              status: 'CONNECTED',
+              last_connected: new Date().toISOString()
+            })
+            .eq('id', currentInstanceId);
         }
       }
     } catch (error) {
@@ -113,6 +106,14 @@ const WhatsAppLink = () => {
 
       if (error) throw error;
       
+      console.log('Instance creation response:', data);
+
+      // Immediately set the QR code from the creation response
+      if (data.qrcode && data.qrcode.base64) {
+        setQrCode(data.qrcode.base64);
+        setSubstatus('Please scan the QR code with WhatsApp');
+      }
+      
       const { data: instanceData, error: dbError } = await supabase
         .from('whatsapp_instances')
         .insert({
@@ -129,8 +130,6 @@ const WhatsAppLink = () => {
       setIsConfigured(true);
       
       toast.success('WhatsApp instance created successfully');
-      
-      await checkInstanceStatus(instanceName);
       
     } catch (error: any) {
       console.error('Error creating WhatsApp instance:', error);
@@ -266,7 +265,7 @@ const WhatsAppLink = () => {
               {qrCode && (
                 <div className="flex justify-center p-4 bg-white rounded-lg">
                   <img 
-                    src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
+                    src={qrCode}
                     alt="WhatsApp QR Code" 
                     className="max-w-full h-auto"
                   />
