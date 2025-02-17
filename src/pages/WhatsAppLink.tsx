@@ -73,12 +73,12 @@ const WhatsAppLink = () => {
         setStatus(state || 'Not connected');
         
         if (data.instance.qrcode) {
-          setQrCode(data.instance.qrcode); // Use the full base64 string
+          setQrCode(data.instance.qrcode);
           setSubstatus('Please scan the QR code with WhatsApp');
-        } else if (state === 'CONNECTED' || state === 'open') {
-          setSubstatus('WhatsApp connected successfully!');
+        } else if (state === 'CONNECTED' || state === 'connecting') {
+          setSubstatus(state === 'CONNECTED' ? 'WhatsApp connected successfully!' : 'Connecting to WhatsApp...');
           setQrCode('');
-          if (currentInstanceId) {
+          if (currentInstanceId && state === 'CONNECTED') {
             await supabase
               .from('whatsapp_instances')
               .update({ 
@@ -125,38 +125,10 @@ const WhatsAppLink = () => {
       setCurrentInstanceId(instanceData.id);
       setIsConfigured(true);
       
-      // Log connection attempt (if it fails, don't throw error)
-      try {
-        await supabase
-          .from('whatsapp_connection_logs')
-          .insert({
-            instance_id: instanceData.id,
-            status: 'CREATED',
-            details: data
-          });
-      } catch (logError) {
-        console.warn('Failed to log connection attempt:', logError);
-      }
-
       toast.success('WhatsApp instance created successfully');
       
-      // Start checking for QR code
-      const checkQRCode = async () => {
-        try {
-          await checkInstanceStatus(instanceName);
-          
-          // Schedule next check if not connected
-          if (status !== 'CONNECTED' && status !== 'open') {
-            setTimeout(checkQRCode, 3000);
-          }
-        } catch (error) {
-          console.error('Error in QR code check:', error);
-          setTimeout(checkQRCode, 3000);
-        }
-      };
-      
-      // Start checking immediately
-      checkQRCode();
+      // Start polling for status immediately
+      await checkInstanceStatus(instanceName);
       
     } catch (error: any) {
       console.error('Error creating WhatsApp instance:', error);
@@ -262,7 +234,7 @@ const WhatsAppLink = () => {
                   />
                 </div>
               )}
-              {!qrCode && status !== 'CONNECTED' && status !== 'open' && (
+              {!qrCode && status !== 'CONNECTED' && (
                 <div className="text-center p-4">
                   <p className="text-muted-foreground">QR code will appear here when ready</p>
                 </div>

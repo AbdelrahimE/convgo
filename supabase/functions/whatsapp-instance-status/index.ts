@@ -30,18 +30,17 @@ serve(async (req) => {
     const data = await response.json();
     console.log('API response data:', JSON.stringify(data, null, 2));
 
-    // Even if response is not ok, we still want to process the data
-    // as the Evolution API might return useful information
+    // Return exact data structure from API
     return new Response(JSON.stringify({
       instance: {
         state: data.instance?.status || 'UNKNOWN',
-        qrcode: data.qrcode?.base64 || null, // Don't split the base64 string
+        qrcode: data.qrcode?.base64 || null,
         instanceId: data.instance?.instanceId,
         statusReason: data.instance?.status
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200 // Always return 200 if we can process the response
+      status: 200
     });
 
   } catch (error) {
@@ -51,7 +50,7 @@ serve(async (req) => {
       timestamp: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200 // Return 200 even for errors to prevent frontend issues
+      status: 200
     });
   }
 });
