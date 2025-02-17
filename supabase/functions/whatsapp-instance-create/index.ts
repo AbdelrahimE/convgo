@@ -9,25 +9,29 @@ serve(async (req) => {
   }
 
   try {
-    // Parse the request body only for POST requests
-    let instanceName = '';
-    if (req.method === 'POST') {
-      const body = await req.json();
-      instanceName = body.instanceName;
+    if (req.method !== 'POST') {
+      throw new Error('Method not allowed');
     }
 
-    if (!instanceName) {
-      throw new Error('Instance name is required');
+    const body = await req.json();
+    const { instanceName } = body;
+
+    if (!instanceName || typeof instanceName !== 'string') {
+      throw new Error('Instance name is required and must be a string');
     }
 
     const apiKey = Deno.env.get('EVOLUTION_API_KEY');
     if (!apiKey) {
-      console.error('Evolution API key not found in environment variables');
       throw new Error('Evolution API key not configured');
     }
 
-    console.log('Creating WhatsApp instance:', instanceName);
-    console.log('API Key length:', apiKey.length);
+    console.log('Request to Evolution API:');
+    console.log('URL:', 'https://api.convgo.com/instance/create');
+    console.log('Body:', JSON.stringify({
+      instanceName,
+      qrcode: true,
+      integration: 'WHATSAPP-BAILEYS'
+    }, null, 2));
 
     const response = await fetch('https://api.convgo.com/instance/create', {
       method: 'POST',
@@ -38,17 +42,18 @@ serve(async (req) => {
       body: JSON.stringify({
         instanceName,
         qrcode: true,
-        integration: 'WHATSAPP-BAILEYS' // Added the required integration parameter
+        integration: 'WHATSAPP-BAILEYS'
       })
     });
 
     const data = await response.json();
-    console.log('Evolution API status:', response.status);
-    console.log('Evolution API response:', JSON.stringify(data, null, 2));
-
+    
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status} - ${data.message || JSON.stringify(data)}`);
+      console.error('Evolution API error response:', data);
+      throw new Error(`API Error: ${response.status} - ${JSON.stringify(data)}`);
     }
+
+    console.log('Evolution API success response:', data);
 
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -57,13 +62,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in Edge Function:', error);
     
-    const errorResponse = {
+    return new Response(JSON.stringify({
       error: error.message,
-      details: error.stack,
       timestamp: new Date().toISOString()
-    };
-
-    return new Response(JSON.stringify(errorResponse), {
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
     });

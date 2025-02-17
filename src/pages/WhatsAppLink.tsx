@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,6 +22,7 @@ const WhatsAppLink = () => {
   const [instanceName, setInstanceName] = useState('');
   const [isConfigured, setIsConfigured] = useState(false);
   const [currentInstanceId, setCurrentInstanceId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -77,13 +79,11 @@ const WhatsAppLink = () => {
 
   const createInstance = async (instanceName: string) => {
     try {
-      console.log('Calling createInstance with:', instanceName);
+      setIsLoading(true);
+      console.log('Creating WhatsApp instance with name:', instanceName);
 
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-create', {
-        body: { instanceName },
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        body: { instanceName }
       });
 
       console.log('Response from Edge Function:', { data, error });
@@ -129,6 +129,8 @@ const WhatsAppLink = () => {
       console.error('Error creating WhatsApp instance:', error);
       const errorMessage = error.message || 'Unknown error occurred';
       toast.error(`Failed to create WhatsApp instance: ${errorMessage}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -209,8 +211,8 @@ const WhatsAppLink = () => {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full">
-                Create Instance
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Creating Instance...' : 'Create Instance'}
               </Button>
             </form>
           ) : (
