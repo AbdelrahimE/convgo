@@ -17,8 +17,8 @@ serve(async (req) => {
 
     console.log(`Checking status for instance: ${instanceName}`);
 
-    // First, check if instance exists
-    const infoResponse = await fetch(`https://api.convgo.com/instance/info/${instanceName}`, {
+    // First, try to get connection state
+    const connectionResponse = await fetch(`https://api.convgo.com/instance/connectionState/${instanceName}`, {
       method: 'GET',
       headers: {
         'apikey': apiKey,
@@ -26,41 +26,22 @@ serve(async (req) => {
       }
     });
 
-    if (!infoResponse.ok) {
-      if (infoResponse.status === 404) {
-        console.log('Instance not found, checking connection status');
-        
-        // If instance not found, try to get connection status
-        const statusResponse = await fetch(`https://api.convgo.com/instance/connectionState/${instanceName}`, {
-          method: 'GET',
-          headers: {
-            'apikey': apiKey,
-            'Content-Type': 'application/json'
-          }
-        });
+    console.log('Connection response status:', connectionResponse.status);
+    const connectionData = await connectionResponse.json();
+    console.log('Connection response data:', connectionData);
 
-        const statusData = await statusResponse.json();
-        console.log('Connection status response:', statusData);
-
-        return new Response(JSON.stringify({
-          instance: {
-            state: statusData.state || 'STARTING',
-            qrcode: null
-          }
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200
-        });
-      }
-
-      throw new Error(`Failed to get instance info: ${infoResponse.statusText}`);
+    if (!connectionResponse.ok) {
+      return new Response(JSON.stringify({
+        error: 'Connection check failed',
+        details: connectionData
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: connectionResponse.status
+      });
     }
 
-    const data = await infoResponse.json();
-    console.log('Instance info response:', data);
-
-    // Get QR code if instance exists but not connected
-    if (data.instance && data.instance.state !== 'CONNECTED') {
+    // If not connected, try to get QR code
+    if (connectionData.state !== 'open') {
       const qrResponse = await fetch(`https://api.convgo.com/instance/qrcode/${instanceName}`, {
         method: 'GET',
         headers: {
@@ -69,18 +50,34 @@ serve(async (req) => {
         }
       });
 
-      if (qrResponse.ok) {
-        const qrData = await qrResponse.json();
-        if (qrData.qrcode) {
-          data.instance.qrcode = qrData.qrcode;
+      console.log('QR response status:', qrResponse.status);
+      const qrData = await qrResponse.json();
+      console.log('QR response data:', qrData);
+
+      return new Response(JSON.stringify({
+        instance: {
+          state: connectionData.state,
+          qrcode: qrData.qrcode,
+          statusReason: connectionData.statusReason
         }
-      }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      });
     }
 
-    return new Response(JSON.stringify(data), {
+    // If connected, return connection state
+    return new Response(JSON.stringify({
+      instance: {
+        state: connectionData.state,
+        qrcode: null,
+        statusReason: connectionData.statusReason
+      }
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
+      status: 200
     });
+
   } catch (error) {
     console.error('Error in status check:', error);
     return new Response(JSON.stringify({

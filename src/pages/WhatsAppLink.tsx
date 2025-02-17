@@ -68,19 +68,15 @@ const WhatsAppLink = () => {
       console.log('Status check response:', data);
       
       if (data.instance) {
-        setStatus(data.instance.state || 'Not connected');
+        const state = data.instance.state;
+        setStatus(state || 'Not connected');
+        
         if (data.instance.qrcode) {
           setQrCode(data.instance.qrcode);
-        }
-        
-        // Update substatus based on state
-        if (data.instance.state === 'STARTING') {
-          setSubstatus('Instance is starting up...');
-        } else if (!data.instance.qrcode && data.instance.state !== 'CONNECTED') {
-          setSubstatus('Waiting for QR code...');
-        } else if (data.instance.state === 'CONNECTED') {
+          setSubstatus('Please scan the QR code with WhatsApp');
+        } else if (state === 'open') {
           setSubstatus('WhatsApp connected successfully!');
-          // Update instance status in database
+          setQrCode('');
           if (currentInstanceId) {
             await supabase
               .from('whatsapp_instances')
@@ -90,6 +86,8 @@ const WhatsAppLink = () => {
               })
               .eq('id', currentInstanceId);
           }
+        } else {
+          setSubstatus(data.instance.statusReason || 'Waiting for connection...');
         }
       }
     } catch (error) {
@@ -111,7 +109,6 @@ const WhatsAppLink = () => {
 
       if (error) throw error;
       
-      // Store instance in database
       const { data: instanceData, error: dbError } = await supabase
         .from('whatsapp_instances')
         .insert({
@@ -128,7 +125,6 @@ const WhatsAppLink = () => {
       setIsConfigured(true);
       
       try {
-        // Log connection attempt
         await supabase
           .from('whatsapp_connection_logs')
           .insert({
@@ -137,13 +133,11 @@ const WhatsAppLink = () => {
             details: data
           });
       } catch (logError) {
-        // Don't throw if logging fails
         console.warn('Failed to log connection attempt:', logError);
       }
 
       toast.success('WhatsApp instance created successfully');
       
-      // Initial delay before first status check
       await new Promise(resolve => setTimeout(resolve, 8000));
       
       let attempts = 0;
@@ -162,9 +156,8 @@ const WhatsAppLink = () => {
           await checkInstanceStatus(instanceName);
           attempts++;
           
-          // Continue polling if no QR code and not connected
           if (!qrCode && status !== 'CONNECTED') {
-            const delay = baseDelay + (attempts * 1000); // Increase delay gradually
+            const delay = baseDelay + (attempts * 1000);
             console.log(`Scheduling next check in ${delay}ms`);
             setTimeout(checkQRCode, delay);
           }
@@ -202,14 +195,12 @@ const WhatsAppLink = () => {
   const handleReset = async () => {
     try {
       if (currentInstanceId) {
-        // Delete instance from Evolution API
         const { error } = await supabase.functions.invoke('whatsapp-instance-delete', {
           body: { instanceName }
         });
 
         if (error) throw error;
 
-        // Delete from database
         const { error: dbError } = await supabase
           .from('whatsapp_instances')
           .delete()
@@ -235,7 +226,7 @@ const WhatsAppLink = () => {
     if (isConfigured && instanceName) {
       const interval = setInterval(() => {
         checkInstanceStatus(instanceName);
-      }, 5000); // Poll every 5 seconds
+      }, 5000);
 
       return () => clearInterval(interval);
     }
