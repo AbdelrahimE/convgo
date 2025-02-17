@@ -58,31 +58,52 @@ const WhatsAppLink = () => {
 
   const checkInstanceStatus = async (name: string) => {
     try {
-      console.log('التحقق من حالة المثيل:', name);
+      console.log('Checking instance status:', name);
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-status', {
         body: { instanceName: name }
       });
       
       if (error) throw error;
       
-      console.log('استجابة التحقق من الحالة:', data);
+      console.log('Status check response:', data);
       
       if (data.instance) {
-        setStatus(data.instance.state || 'غير متصل');
+        setStatus(data.instance.state || 'Not connected');
         if (data.instance.qrcode) {
           setQrCode(data.instance.qrcode);
         }
+        
+        // Update substatus based on state
+        if (data.instance.state === 'STARTING') {
+          setSubstatus('Instance is starting up...');
+        } else if (!data.instance.qrcode && data.instance.state !== 'CONNECTED') {
+          setSubstatus('Waiting for QR code...');
+        } else if (data.instance.state === 'CONNECTED') {
+          setSubstatus('WhatsApp connected successfully!');
+          // Update instance status in database
+          if (currentInstanceId) {
+            await supabase
+              .from('whatsapp_instances')
+              .update({ 
+                status: 'CONNECTED',
+                last_connected: new Date().toISOString()
+              })
+              .eq('id', currentInstanceId);
+          }
+        }
       }
     } catch (error) {
-      console.error('خطأ في التحقق من الحالة:', error);
-      setStatus('خطأ في التحقق من الحالة');
+      console.error('Status check error:', error);
+      setStatus('Error checking status');
+      setSubstatus(error.message);
     }
   };
 
   const createInstance = async (instanceName: string) => {
     try {
       setIsLoading(true);
-      console.log('إنشاء مثيل واتساب باسم:', instanceName);
+      setStatus('Creating instance...');
+      setSubstatus('Please wait...');
 
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-create', {
         body: { instanceName }
@@ -106,52 +127,62 @@ const WhatsAppLink = () => {
       setCurrentInstanceId(instanceData.id);
       setIsConfigured(true);
       
-      // Log connection attempt
-      await supabase
-        .from('whatsapp_connection_logs')
-        .insert({
-          instance_id: instanceData.id,
-          status: 'CREATED',
-          details: data
-        });
+      try {
+        // Log connection attempt
+        await supabase
+          .from('whatsapp_connection_logs')
+          .insert({
+            instance_id: instanceData.id,
+            status: 'CREATED',
+            details: data
+          });
+      } catch (logError) {
+        // Don't throw if logging fails
+        console.warn('Failed to log connection attempt:', logError);
+      }
 
-      toast.success('تم إنشاء مثيل واتساب بنجاح');
+      toast.success('WhatsApp instance created successfully');
       
-      // Wait for 5 seconds before first status check
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Initial delay before first status check
+      await new Promise(resolve => setTimeout(resolve, 8000));
       
       let attempts = 0;
-      const maxAttempts = 15; // Increased max attempts
-      const initialDelay = 3000; // 3 seconds initial delay
+      const maxAttempts = 20;
+      const baseDelay = 5000; // 5 seconds base delay
       
       const checkQRCode = async () => {
         if (attempts >= maxAttempts) {
-          console.log('تم الوصول إلى الحد الأقصى من المحاولات');
+          setStatus('Failed to get QR code');
+          setSubstatus('Please try again');
           return;
         }
         
         try {
-          console.log(`محاولة ${attempts + 1} من ${maxAttempts}`);
+          console.log(`Attempt ${attempts + 1}/${maxAttempts}`);
           await checkInstanceStatus(instanceName);
           attempts++;
           
-          if (!qrCode) {
-            const delay = initialDelay + (attempts * 1000); // Increase delay gradually
+          // Continue polling if no QR code and not connected
+          if (!qrCode && status !== 'CONNECTED') {
+            const delay = baseDelay + (attempts * 1000); // Increase delay gradually
+            console.log(`Scheduling next check in ${delay}ms`);
             setTimeout(checkQRCode, delay);
           }
         } catch (error) {
-          console.error('خطأ في التحقق:', error);
+          console.error('Error in polling:', error);
           attempts++;
           if (attempts < maxAttempts) {
-            setTimeout(checkQRCode, initialDelay);
+            setTimeout(checkQRCode, baseDelay);
           }
         }
       };
       
       checkQRCode();
     } catch (error: any) {
-      console.error('خطأ في إنشاء مثيل واتساب:', error);
-      toast.error(`فشل إنشاء مثيل واتساب: ${error.message}`);
+      console.error('Error creating WhatsApp instance:', error);
+      toast.error(`Failed to create WhatsApp instance: ${error.message}`);
+      setStatus('Error');
+      setSubstatus(error.message);
     } finally {
       setIsLoading(false);
     }
