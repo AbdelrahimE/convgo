@@ -25,13 +25,7 @@ serve(async (req) => {
       throw new Error('Evolution API key not configured');
     }
 
-    console.log('Request to Evolution API:');
-    console.log('URL:', 'https://api.convgo.com/instance/create');
-    console.log('Body:', JSON.stringify({
-      instanceName,
-      qrcode: true,
-      integration: 'WHATSAPP-BAILEYS'
-    }, null, 2));
+    console.log('Creating instance with name:', instanceName);
 
     const response = await fetch('https://api.convgo.com/instance/create', {
       method: 'POST',
@@ -55,7 +49,15 @@ serve(async (req) => {
 
     console.log('Evolution API success response:', data);
 
-    return new Response(JSON.stringify(data), {
+    // Ensure we're returning the QR code in the expected format
+    const responseData = {
+      ...data,
+      qrcode: {
+        base64: data.qrcode?.base64 || data.qrcode
+      }
+    };
+
+    return new Response(JSON.stringify(responseData), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });

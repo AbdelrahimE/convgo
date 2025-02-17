@@ -124,10 +124,15 @@ const WhatsAppLink = () => {
       
       console.log('Instance creation response:', data);
 
-      // Set QR code from instance creation response
-      if (data.qrcode?.base64) {
-        setQrCode(data.qrcode.base64);
+      // Handle QR code from response
+      const qrCodeData = data.qrcode?.base64 || data.qrcode;
+      if (qrCodeData) {
+        console.log('Received QR code data');
+        setQrCode(qrCodeData);
         setSubstatus('Please scan the QR code with WhatsApp');
+      } else {
+        console.error('No QR code received in response');
+        throw new Error('No QR code received from server');
       }
       
       const { data: instanceData, error: dbError } = await supabase
