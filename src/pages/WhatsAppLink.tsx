@@ -62,9 +62,11 @@ const WhatsAppLink = () => {
 
   const checkInstanceStatus = async (name: string) => {
     try {
-      console.log('Checking instance status:', name);
+      console.log('Checking instance status for:', name);
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-status', {
-        body: { instanceName: name }
+        body: { 
+          instanceName: name.trim()
+        }
       });
       
       if (error) throw error;
@@ -73,9 +75,13 @@ const WhatsAppLink = () => {
       
       if (data) {
         const state = data.state;
+        const statusReason = data.statusReason;
+        
+        console.log('State:', state, 'Status Reason:', statusReason);
         
         switch(state) {
           case 'open':
+          case 'CONNECTED':
             setStatus('Connected');
             setSubstatus('WhatsApp connected successfully!');
             setQrCode(''); // Clear QR code when connected
@@ -90,19 +96,21 @@ const WhatsAppLink = () => {
             }
             break;
           case 'connecting':
+          case 'STARTING':
             setStatus('Connecting');
             setSubstatus('Connecting to WhatsApp...');
             break;
           case 'close':
+          case 'DISCONNECTED':
             setStatus('Not connected');
-            setSubstatus(data.statusReason || 'Waiting for QR code scan...');
+            setSubstatus(statusReason || 'Waiting for QR code scan...');
             break;
           default:
             setStatus('Not connected');
-            setSubstatus('Unknown connection state');
+            setSubstatus(`Unknown connection state: ${state}`);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Status check error:', error);
       setStatus('Error checking status');
       setSubstatus(error.message);

@@ -16,9 +16,13 @@ serve(async (req) => {
       throw new Error('Evolution API key not configured');
     }
 
+    if (!instanceName) {
+      throw new Error('Instance name is required');
+    }
+
     console.log(`Checking status for instance: ${instanceName}`);
 
-    const response = await fetch(`https://api.convgo.com/instance/info/${instanceName}`, {
+    const response = await fetch(`https://api.convgo.com/instance/info/${instanceName.trim()}`, {
       method: 'GET',
       headers: {
         'apikey': apiKey,
@@ -32,15 +36,18 @@ serve(async (req) => {
 
     // Map Evolution API status to our expected states
     let state = 'close';
-    if (data.instance?.status === 'CONNECTED') {
+    let statusReason = data.instance?.status || 'Unknown';
+
+    if (data.instance?.status === 'CONNECTED' || data.instance?.status === 'open') {
       state = 'open';
-    } else if (data.instance?.status === 'STARTING') {
+    } else if (data.instance?.status === 'STARTING' || data.instance?.status === 'connecting') {
       state = 'connecting';
     }
 
     return new Response(JSON.stringify({
       state,
-      statusReason: data.instance?.status
+      statusReason,
+      rawResponse: data // Include raw response for debugging
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
