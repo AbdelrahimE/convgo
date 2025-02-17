@@ -77,9 +77,16 @@ const WhatsAppLink = () => {
 
   const createInstance = async (instanceName: string) => {
     try {
+      console.log('Calling createInstance with:', instanceName); // Debug log
+
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-create', {
-        body: { instanceName }
+        body: { instanceName },
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
+
+      console.log('Response from Edge Function:', { data, error }); // Debug log
 
       if (error) throw error;
       
@@ -94,7 +101,10 @@ const WhatsAppLink = () => {
         .select()
         .single();
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error('Database error:', dbError); // Debug log
+        throw dbError;
+      }
 
       setCurrentInstanceId(instanceData.id);
       setIsConfigured(true);
@@ -114,7 +124,7 @@ const WhatsAppLink = () => {
       await checkInstanceStatus(instanceName);
     } catch (error) {
       console.error('Error creating WhatsApp instance:', error);
-      toast.error('Failed to create WhatsApp instance');
+      toast.error(`Failed to create WhatsApp instance: ${error.message}`);
     }
   };
 
