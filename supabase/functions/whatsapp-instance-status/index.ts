@@ -12,10 +12,10 @@ serve(async (req) => {
     const apiKey = Deno.env.get('EVOLUTION_API_KEY');
 
     if (!apiKey) {
-      throw new Error('Evolution API key not configured');
+      throw new Error('مفتاح API غير مكوّن');
     }
 
-    console.log(`Checking status for instance: ${instanceName}`);
+    console.log(`التحقق من حالة المثيل: ${instanceName}`);
 
     const response = await fetch(`https://api.convgo.com/instance/info/${instanceName}`, {
       method: 'GET',
@@ -26,11 +26,23 @@ serve(async (req) => {
     });
 
     const data = await response.json();
-    console.log('Evolution API response:', data);
+    console.log('استجابة API:', data);
+
+    // If instance is not found, return a specific response
+    if (response.status === 404) {
+      return new Response(JSON.stringify({
+        error: 'المثيل غير جاهز بعد',
+        retryAfter: 2,
+        details: data
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 202 // Accepted but processing
+      });
+    }
 
     if (!response.ok) {
       return new Response(JSON.stringify({
-        error: 'Instance not ready',
+        error: 'خطأ في الحصول على حالة المثيل',
         details: data
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -43,7 +55,7 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    console.error('Error in status check:', error);
+    console.error('خطأ في التحقق من الحالة:', error);
     return new Response(JSON.stringify({
       error: error.message,
       timestamp: new Date().toISOString()

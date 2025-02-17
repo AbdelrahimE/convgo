@@ -58,42 +58,37 @@ const WhatsAppLink = () => {
 
   const checkInstanceStatus = async (name: string) => {
     try {
-      console.log('Checking instance status for:', name);
+      console.log('التحقق من حالة المثيل:', name);
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-status', {
         body: { instanceName: name }
       });
       
       if (error) throw error;
       
-      console.log('Status check response:', data);
+      console.log('استجابة التحقق من الحالة:', data);
       
       if (data.instance) {
-        setStatus(data.instance.state || 'DISCONNECTED');
+        setStatus(data.instance.state || 'غير متصل');
         if (data.instance.qrcode) {
           setQrCode(data.instance.qrcode);
         }
       }
     } catch (error) {
-      console.error('Error checking instance status:', error);
-      setStatus('Error checking status');
+      console.error('خطأ في التحقق من الحالة:', error);
+      setStatus('خطأ في التحقق من الحالة');
     }
   };
 
   const createInstance = async (instanceName: string) => {
     try {
       setIsLoading(true);
-      console.log('Creating WhatsApp instance with name:', instanceName);
+      console.log('إنشاء مثيل واتساب باسم:', instanceName);
 
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-create', {
         body: { instanceName }
       });
 
-      console.log('Response from Edge Function:', { data, error });
-
-      if (error) {
-        console.error('Edge Function error:', error);
-        throw new Error(error.message || 'Failed to create instance');
-      }
+      if (error) throw error;
       
       // Store instance in database
       const { data: instanceData, error: dbError } = await supabase
@@ -106,10 +101,7 @@ const WhatsAppLink = () => {
         .select()
         .single();
 
-      if (dbError) {
-        console.error('Database error:', dbError);
-        throw dbError;
-      }
+      if (dbError) throw dbError;
 
       setCurrentInstanceId(instanceData.id);
       setIsConfigured(true);
@@ -123,48 +115,43 @@ const WhatsAppLink = () => {
           details: data
         });
 
-      toast.success('WhatsApp instance created successfully');
+      toast.success('تم إنشاء مثيل واتساب بنجاح');
       
-      // Wait for 3 seconds before first status check
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Wait for 5 seconds before first status check
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
-      // Initial status check
-      await checkInstanceStatus(instanceName);
-      
-      // Start polling with increasing intervals
       let attempts = 0;
-      const maxAttempts = 10;
+      const maxAttempts = 15; // Increased max attempts
+      const initialDelay = 3000; // 3 seconds initial delay
+      
       const checkQRCode = async () => {
         if (attempts >= maxAttempts) {
-          console.log('Max polling attempts reached');
+          console.log('تم الوصول إلى الحد الأقصى من المحاولات');
           return;
         }
         
         try {
-          console.log(`Polling attempt ${attempts + 1}/${maxAttempts}`);
+          console.log(`محاولة ${attempts + 1} من ${maxAttempts}`);
           await checkInstanceStatus(instanceName);
-          
           attempts++;
           
           if (!qrCode) {
-            // Increase delay with each attempt (2s, 3s, 4s, etc.)
-            const delay = (2 + attempts) * 1000;
+            const delay = initialDelay + (attempts * 1000); // Increase delay gradually
             setTimeout(checkQRCode, delay);
           }
         } catch (error) {
-          console.error('Error in polling:', error);
+          console.error('خطأ في التحقق:', error);
           attempts++;
           if (attempts < maxAttempts) {
-            setTimeout(checkQRCode, 2000);
+            setTimeout(checkQRCode, initialDelay);
           }
         }
       };
       
       checkQRCode();
     } catch (error: any) {
-      console.error('Error creating WhatsApp instance:', error);
-      const errorMessage = error.message || 'Unknown error occurred';
-      toast.error(`Failed to create WhatsApp instance: ${errorMessage}`);
+      console.error('خطأ في إنشاء مثيل واتساب:', error);
+      toast.error(`فشل إنشاء مثيل واتساب: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
