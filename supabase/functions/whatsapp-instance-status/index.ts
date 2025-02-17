@@ -17,8 +17,8 @@ serve(async (req) => {
 
     console.log(`Checking status for instance: ${instanceName}`);
 
-    // First, try to get connection state
-    const connectionResponse = await fetch(`https://api.convgo.com/instance/connectionState/${instanceName}`, {
+    // Get instance info which includes both status and QR code
+    const response = await fetch(`https://api.convgo.com/instance/info/${instanceName}`, {
       method: 'GET',
       headers: {
         'apikey': apiKey,
@@ -26,52 +26,27 @@ serve(async (req) => {
       }
     });
 
-    console.log('Connection response status:', connectionResponse.status);
-    const connectionData = await connectionResponse.json();
-    console.log('Connection response data:', connectionData);
+    console.log('API response status:', response.status);
+    const data = await response.json();
+    console.log('API response data:', data);
 
-    if (!connectionResponse.ok) {
+    if (!response.ok) {
       return new Response(JSON.stringify({
-        error: 'Connection check failed',
-        details: connectionData
+        error: 'Instance check failed',
+        details: data
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: connectionResponse.status
+        status: response.status
       });
     }
 
-    // If not connected, try to get QR code
-    if (connectionData.state !== 'open') {
-      const qrResponse = await fetch(`https://api.convgo.com/instance/qrcode/${instanceName}`, {
-        method: 'GET',
-        headers: {
-          'apikey': apiKey,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      console.log('QR response status:', qrResponse.status);
-      const qrData = await qrResponse.json();
-      console.log('QR response data:', qrData);
-
-      return new Response(JSON.stringify({
-        instance: {
-          state: connectionData.state,
-          qrcode: qrData.qrcode,
-          statusReason: connectionData.statusReason
-        }
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
-      });
-    }
-
-    // If connected, return connection state
+    // Return a formatted response that matches what our frontend expects
     return new Response(JSON.stringify({
       instance: {
-        state: connectionData.state,
-        qrcode: null,
-        statusReason: connectionData.statusReason
+        state: data.instance.status,
+        qrcode: data.qrcode?.base64?.split(',')[1] || null, // Extract base64 content after the comma
+        instanceId: data.instance.instanceId,
+        statusReason: data.instance.status
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

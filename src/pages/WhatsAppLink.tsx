@@ -74,7 +74,7 @@ const WhatsAppLink = () => {
         if (data.instance.qrcode) {
           setQrCode(data.instance.qrcode);
           setSubstatus('Please scan the QR code with WhatsApp');
-        } else if (state === 'open') {
+        } else if (state === 'CONNECTED') {
           setSubstatus('WhatsApp connected successfully!');
           setQrCode('');
           if (currentInstanceId) {
@@ -138,11 +138,11 @@ const WhatsAppLink = () => {
 
       toast.success('WhatsApp instance created successfully');
       
-      await new Promise(resolve => setTimeout(resolve, 8000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
       let attempts = 0;
       const maxAttempts = 20;
-      const baseDelay = 5000; // 5 seconds base delay
+      const baseDelay = 3000; // 3 seconds base delay
       
       const checkQRCode = async () => {
         if (attempts >= maxAttempts) {
@@ -157,7 +157,7 @@ const WhatsAppLink = () => {
           attempts++;
           
           if (!qrCode && status !== 'CONNECTED') {
-            const delay = baseDelay + (attempts * 1000);
+            const delay = baseDelay;
             console.log(`Scheduling next check in ${delay}ms`);
             setTimeout(checkQRCode, delay);
           }
