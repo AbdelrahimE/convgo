@@ -1,6 +1,5 @@
 
 import React, { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,134 +19,177 @@ const WhatsAppLink = () => {
   const [status, setStatus] = useState('Not connected');
   const [substatus, setSubstatus] = useState('');
   const [qrCode, setQrCode] = useState('');
-  const [instanceId, setInstanceId] = useState('');
-  const [token, setToken] = useState('');
+  const [instanceName, setInstanceName] = useState('');
   const [isConfigured, setIsConfigured] = useState(false);
-  const [socket, setSocket] = useState<any>(null);
+  const [currentInstanceId, setCurrentInstanceId] = useState<string | null>(null);
 
-  // Fetch existing configuration
+  // Fetch existing instance
   useEffect(() => {
     if (user) {
-      fetchConfig();
+      fetchInstance();
     }
   }, [user]);
 
-  const fetchConfig = async () => {
+  const fetchInstance = async () => {
     try {
       const { data, error } = await supabase
         .from('whatsapp_instances')
-        .select('instance_id, token')
+        .select('*')
         .eq('user_id', user?.id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code !== 'PGRST116') { // Not found error
+          throw error;
+        }
+        return;
+      }
 
       if (data) {
-        setInstanceId(data.instance_id);
-        setToken(data.token);
+        setInstanceName(data.instance_name);
         setIsConfigured(true);
-        initializeSocket(data.instance_id, data.token);
+        setCurrentInstanceId(data.id);
+        await checkInstanceStatus(data.instance_name);
       }
     } catch (error) {
-      console.error('Error fetching WhatsApp config:', error);
+      console.error('Error fetching WhatsApp instance:', error);
+      toast.error('Failed to fetch WhatsApp instance');
     }
   };
 
-  const initializeSocket = (instanceId: string, token: string) => {
-    if (socket) {
-      socket.disconnect();
-    }
-
-    // Updated socket connection configuration to match Ultramsg's specification
-    const newSocket = io('https://api.ultramsg.com', {
-      transports: ['websocket'],
-      path: `/${instanceId}/socket.io`, // This was the key change needed
-      auth: {
-        instance_id: instanceId,
-        token: token
-      }
-    });
-
-    newSocket.on('connect', () => {
-      setStatus('Connected to server');
-      toast.success('Connected to WhatsApp server');
-    });
-
-    newSocket.on('connect_error', (err) => {
-      setStatus('Connection error');
-      toast.error('Failed to connect to WhatsApp server');
-      console.error('Connection error:', err);
-    });
-
-    newSocket.on('disconnect', () => {
-      newSocket.disconnect();
-    });
-
-    newSocket.on('status', (results) => {
-      if (results?.status?.accountStatus) {
-        const { status, substatus, qrCodeImage } = results.status.accountStatus;
-        
-        if (status) setStatus(status);
-        if (substatus) setSubstatus(substatus);
-        if (qrCodeImage) {
-          setQrCode(qrCodeImage);
-        } else {
-          setQrCode('');
+  const checkInstanceStatus = async (name: string) => {
+    try {
+      const response = await fetch(`https://api.convgo.com/instance/info/${name}`, {
+        headers: {
+          'apikey': process.env.EVOLUTION_API_KEY as string
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.instance) {
+        setStatus(data.instance.state || 'DISCONNECTED');
+        if (data.instance.qrcode) {
+          setQrCode(data.instance.qrcode);
         }
       }
-    });
+    } catch (error) {
+      console.error('Error checking instance status:', error);
+      setStatus('Error checking status');
+    }
+  };
 
-    setSocket(newSocket);
+  const createInstance = async (instanceName: string) => {
+    try {
+      const response = await fetch('https://api.convgo.com/instance/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.EVOLUTION_API_KEY as string
+        },
+        body: JSON.stringify({
+          instanceName,
+          qrcode: true,
+          number: '',
+          token: ''
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to create instance');
+      }
+
+      // Store instance in database
+      const { data: instanceData, error: dbError } = await supabase
+        .from('whatsapp_instances')
+        .insert({
+          user_id: user?.id,
+          instance_name: instanceName,
+          status: 'CREATED'
+        })
+        .select()
+        .single();
+
+      if (dbError) throw dbError;
+
+      setCurrentInstanceId(instanceData.id);
+      setIsConfigured(true);
+      
+      // Log connection attempt
+      await supabase
+        .from('whatsapp_connection_logs')
+        .insert({
+          instance_id: instanceData.id,
+          status: 'CREATED',
+          details: data
+        });
+
+      toast.success('WhatsApp instance created');
+      
+      // Start polling for QR code and status
+      await checkInstanceStatus(instanceName);
+    } catch (error) {
+      console.error('Error creating WhatsApp instance:', error);
+      toast.error('Failed to create WhatsApp instance');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    try {
-      const { error } = await supabase
-        .from('whatsapp_instances')
-        .upsert({
-          user_id: user?.id,
-          instance_id: instanceId,
-          token: token
-        });
-
-      if (error) throw error;
-
-      setIsConfigured(true);
-      initializeSocket(instanceId, token);
-      toast.success('WhatsApp configuration saved');
-    } catch (error) {
-      console.error('Error saving WhatsApp config:', error);
-      toast.error('Failed to save WhatsApp configuration');
+    if (!instanceName.trim()) {
+      toast.error('Please enter an instance name');
+      return;
     }
+
+    await createInstance(instanceName);
   };
 
   const handleReset = async () => {
     try {
-      if (socket) {
-        socket.disconnect();
+      if (currentInstanceId) {
+        // Delete instance from Evolution API
+        await fetch(`https://api.convgo.com/instance/delete/${instanceName}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': process.env.EVOLUTION_API_KEY as string
+          }
+        });
+
+        // Delete from database
+        const { error } = await supabase
+          .from('whatsapp_instances')
+          .delete()
+          .eq('id', currentInstanceId);
+
+        if (error) throw error;
       }
 
-      const { error } = await supabase
-        .from('whatsapp_instances')
-        .delete()
-        .eq('user_id', user?.id);
-
-      if (error) throw error;
-
-      setInstanceId('');
-      setToken('');
+      setInstanceName('');
       setIsConfigured(false);
       setStatus('Not connected');
       setSubstatus('');
       setQrCode('');
-      toast.success('WhatsApp configuration reset');
+      setCurrentInstanceId(null);
+      toast.success('WhatsApp instance reset');
     } catch (error) {
-      console.error('Error resetting WhatsApp config:', error);
-      toast.error('Failed to reset WhatsApp configuration');
+      console.error('Error resetting WhatsApp instance:', error);
+      toast.error('Failed to reset WhatsApp instance');
     }
   };
+
+  // Poll for status updates
+  useEffect(() => {
+    if (isConfigured && instanceName) {
+      const interval = setInterval(() => {
+        checkInstanceStatus(instanceName);
+      }, 5000); // Poll every 5 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [isConfigured, instanceName]);
 
   return (
     <div className="container mx-auto max-w-2xl py-8">
@@ -157,35 +199,24 @@ const WhatsAppLink = () => {
           <CardDescription>
             {isConfigured 
               ? 'Scan the QR code with your WhatsApp to connect your account'
-              : 'Enter your Ultramsg instance credentials to get started'}
+              : 'Enter a name for your WhatsApp instance to get started'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!isConfigured ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="instanceId">Instance ID</Label>
+                <Label htmlFor="instanceName">Instance Name</Label>
                 <Input
-                  id="instanceId"
-                  value={instanceId}
-                  onChange={(e) => setInstanceId(e.target.value)}
-                  placeholder="Enter your Ultramsg instance ID"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="token">Token</Label>
-                <Input
-                  id="token"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  type="password"
-                  placeholder="Enter your Ultramsg token"
+                  id="instanceName"
+                  value={instanceName}
+                  onChange={(e) => setInstanceName(e.target.value)}
+                  placeholder="Enter a name for your WhatsApp instance"
                   required
                 />
               </div>
               <Button type="submit" className="w-full">
-                Save Configuration
+                Create Instance
               </Button>
             </form>
           ) : (
@@ -197,13 +228,13 @@ const WhatsAppLink = () => {
               {qrCode && (
                 <div className="flex justify-center p-4 bg-white rounded-lg">
                   <img 
-                    src={qrCode} 
+                    src={`data:image/png;base64,${qrCode}`}
                     alt="WhatsApp QR Code" 
                     className="max-w-full h-auto"
                   />
                 </div>
               )}
-              {!qrCode && status !== 'Connecting...' && (
+              {!qrCode && status !== 'CONNECTED' && (
                 <div className="text-center p-4">
                   <p className="text-muted-foreground">QR code will appear here when ready</p>
                 </div>
@@ -213,7 +244,7 @@ const WhatsAppLink = () => {
                 onClick={handleReset}
                 className="w-full"
               >
-                Reset Configuration
+                Reset Instance
               </Button>
             </>
           )}
