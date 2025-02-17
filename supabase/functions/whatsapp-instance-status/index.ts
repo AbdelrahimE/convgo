@@ -20,9 +20,9 @@ serve(async (req) => {
       throw new Error('Instance name is required');
     }
 
-    console.log(`Checking status for instance: ${instanceName}`);
+    console.log(`Checking connection state for instance: ${instanceName}`);
 
-    const response = await fetch(`https://api.convgo.com/instance/info/${instanceName.trim()}`, {
+    const response = await fetch(`https://api.convgo.com/instance/connectionState/${instanceName.trim()}`, {
       method: 'GET',
       headers: {
         'apikey': apiKey,
@@ -34,13 +34,13 @@ serve(async (req) => {
     const data = await response.json();
     console.log('API response data:', JSON.stringify(data, null, 2));
 
-    // Map Evolution API status to our expected states
+    // Map Evolution API connection state to our expected states
     let state = 'close';
-    let statusReason = data.instance?.status || 'Unknown';
+    let statusReason = data.state || 'Unknown';
 
-    if (data.instance?.status === 'CONNECTED' || data.instance?.status === 'open') {
+    if (data.state === 'connected' || data.state === 'open') {
       state = 'open';
-    } else if (data.instance?.status === 'STARTING' || data.instance?.status === 'connecting') {
+    } else if (data.state === 'connecting' || data.state === 'starting') {
       state = 'connecting';
     }
 
