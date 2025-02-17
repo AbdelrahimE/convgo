@@ -18,7 +18,8 @@ serve(async (req) => {
 
     console.log(`Checking status for instance: ${instanceName}`);
 
-    const response = await fetch(`https://api.convgo.com/instance/info/${instanceName}`, {
+    // Updated to use Evolution API's connection state endpoint
+    const response = await fetch(`https://api.convgo.com/instance/connectionState/${instanceName}`, {
       method: 'GET',
       headers: {
         'apikey': apiKey,
@@ -30,15 +31,8 @@ serve(async (req) => {
     const data = await response.json();
     console.log('API response data:', JSON.stringify(data, null, 2));
 
-    // Return exact data structure from API
-    return new Response(JSON.stringify({
-      instance: {
-        state: data.instance?.status || 'UNKNOWN',
-        qrcode: data.qrcode?.base64 || null,
-        instanceId: data.instance?.instanceId,
-        statusReason: data.instance?.status
-      }
-    }), {
+    // Return the exact Evolution API response structure
+    return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     });
@@ -50,7 +44,7 @@ serve(async (req) => {
       timestamp: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200
+      status: 500
     });
   }
 });
