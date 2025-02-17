@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,7 +22,6 @@ const WhatsAppLink = () => {
   const [isConfigured, setIsConfigured] = useState(false);
   const [currentInstanceId, setCurrentInstanceId] = useState<string | null>(null);
 
-  // Fetch existing instance
   useEffect(() => {
     if (user) {
       fetchInstance();
@@ -59,13 +57,11 @@ const WhatsAppLink = () => {
 
   const checkInstanceStatus = async (name: string) => {
     try {
-      const response = await fetch(`https://api.convgo.com/instance/info/${name}`, {
-        headers: {
-          'apikey': process.env.EVOLUTION_API_KEY as string
-        }
+      const { data, error } = await supabase.functions.invoke('whatsapp-instance-status', {
+        body: { instanceName: name }
       });
       
-      const data = await response.json();
+      if (error) throw error;
       
       if (data.instance) {
         setStatus(data.instance.state || 'DISCONNECTED');
@@ -81,26 +77,12 @@ const WhatsAppLink = () => {
 
   const createInstance = async (instanceName: string) => {
     try {
-      const response = await fetch('https://api.convgo.com/instance/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': process.env.EVOLUTION_API_KEY as string
-        },
-        body: JSON.stringify({
-          instanceName,
-          qrcode: true,
-          number: '',
-          token: ''
-        })
+      const { data, error } = await supabase.functions.invoke('whatsapp-instance-create', {
+        body: { instanceName }
       });
 
-      const data = await response.json();
+      if (error) throw error;
       
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to create instance');
-      }
-
       // Store instance in database
       const { data: instanceData, error: dbError } = await supabase
         .from('whatsapp_instances')
@@ -151,20 +133,19 @@ const WhatsAppLink = () => {
     try {
       if (currentInstanceId) {
         // Delete instance from Evolution API
-        await fetch(`https://api.convgo.com/instance/delete/${instanceName}`, {
-          method: 'DELETE',
-          headers: {
-            'apikey': process.env.EVOLUTION_API_KEY as string
-          }
+        const { error } = await supabase.functions.invoke('whatsapp-instance-delete', {
+          body: { instanceName }
         });
 
+        if (error) throw error;
+
         // Delete from database
-        const { error } = await supabase
+        const { error: dbError } = await supabase
           .from('whatsapp_instances')
           .delete()
           .eq('id', currentInstanceId);
 
-        if (error) throw error;
+        if (dbError) throw dbError;
       }
 
       setInstanceName('');
@@ -180,7 +161,6 @@ const WhatsAppLink = () => {
     }
   };
 
-  // Poll for status updates
   useEffect(() => {
     if (isConfigured && instanceName) {
       const interval = setInterval(() => {
