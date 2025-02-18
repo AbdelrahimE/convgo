@@ -34,18 +34,38 @@ serve(async (req) => {
     const data = await response.json();
     console.log('Response from Evolution API:', data);
 
-    // The QR code is in the 'code' field according to the API response
-    if (!data.code) {
+    // Check for QR code in various formats and ensure it's properly formatted
+    let qrCode = null;
+    
+    if (data.base64 && data.base64.startsWith('data:image/')) {
+      qrCode = data.base64;
+    } else if (data.qrcode?.base64) {
+      qrCode = data.qrcode.base64.startsWith('data:image/') 
+        ? data.qrcode.base64 
+        : `data:image/png;base64,${data.qrcode.base64}`;
+    } else if (data.qrcode?.code) {
+      qrCode = `data:image/png;base64,${data.qrcode.code}`;
+    } else if (data.code) {
+      qrCode = `data:image/png;base64,${data.code}`;
+    }
+
+    if (!qrCode) {
       throw new Error('No QR code received from server');
     }
 
-    return new Response(JSON.stringify({ qrcode: data.code }), {
+    return new Response(JSON.stringify({ 
+      base64: qrCode,
+      status: 'success'
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
   } catch (error) {
     console.error('Error in connect function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      status: 'error'
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
     });
