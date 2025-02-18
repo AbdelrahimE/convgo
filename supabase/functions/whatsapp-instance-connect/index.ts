@@ -19,10 +19,9 @@ serve(async (req) => {
     console.log(`Attempting to connect WhatsApp instance: ${instanceName}`);
 
     const response = await fetch(`https://api.convgo.com/instance/connect/${instanceName}`, {
-      method: 'POST',
+      method: 'GET',  // Changed from POST to GET
       headers: {
-        'apikey': apiKey,
-        'Content-Type': 'application/json'
+        'apikey': apiKey
       }
     });
 
@@ -33,9 +32,15 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    console.log(`Successfully initiated connection for WhatsApp instance: ${instanceName}`);
+    console.log('Response from Evolution API:', data);
 
-    return new Response(JSON.stringify({ qrcode: data.qrcode }), {
+    // Handle the updated response format
+    const qrCode = data.code || data.qrcode;
+    if (!qrCode) {
+      throw new Error('No QR code or connection code received from server');
+    }
+
+    return new Response(JSON.stringify({ qrcode: qrCode }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
