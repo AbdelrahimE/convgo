@@ -12,7 +12,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus } from "lucide-react";
+import { 
+  Loader2, 
+  Plus, 
+  RefreshCw,
+  Power,
+  Trash2,
+  Clock
+} from "lucide-react";
 
 interface WhatsAppInstance {
   id: string;
@@ -189,10 +196,52 @@ const WhatsAppLink = () => {
     }
   };
 
+  const handleRestart = async (instanceName: string) => {
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.functions.invoke('whatsapp-instance-restart', {
+        body: { instanceName }
+      });
+
+      if (error) throw error;
+      toast.success('Instance restart initiated');
+      await checkInstanceStatus(instanceName);
+    } catch (error) {
+      console.error('Error restarting instance:', error);
+      toast.error('Failed to restart instance');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const validateInstanceName = (name: string) => {
     const isValid = /^[a-zA-Z0-9]+$/.test(name);
     setIsValidName(isValid);
     return isValid;
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'connected':
+        return 'bg-green-500';
+      case 'connecting':
+        return 'bg-yellow-500';
+      default:
+        return 'bg-red-500';
+    }
+  };
+
+  const getStatusDisplay = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'connected':
+        return 'Connected';
+      case 'connecting':
+        return 'Connecting...';
+      case 'created':
+        return 'Scan QR Code';
+      default:
+        return 'Disconnected';
+    }
   };
 
   useEffect(() => {
@@ -340,44 +389,74 @@ const WhatsAppLink = () => {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {instances.map((instance) => (
           <Card key={instance.id} className="flex flex-col">
-            <CardHeader>
-              <CardTitle>{instance.instance_name}</CardTitle>
-              <CardDescription>
-                Status: {instance.status.toLowerCase()}
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`h-2.5 w-2.5 rounded-full ${getStatusColor(instance.status)}`} />
+                  <CardTitle className="text-lg">{instance.instance_name}</CardTitle>
+                </div>
+              </div>
+              <CardDescription className="mt-1.5">
+                {getStatusDisplay(instance.status)}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-grow">
               <div className="space-y-4">
                 {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && (
                   <div className="flex flex-col items-center space-y-2">
-                    <p className="text-sm font-medium">Scan QR Code to Connect</p>
-                    <img 
-                      src={instance.qr_code}
-                      alt="WhatsApp QR Code" 
-                      className="w-full max-w-[200px] h-auto mx-auto"
-                    />
+                    <div className="rounded-lg border bg-card p-2">
+                      <img 
+                        src={instance.qr_code}
+                        alt="WhatsApp QR Code" 
+                        className="w-full max-w-[200px] h-auto mx-auto"
+                      />
+                    </div>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      Scan with WhatsApp to connect
+                    </p>
                   </div>
                 )}
                 {instance.last_connected && (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-4 w-4" />
                     Last connected: {new Date(instance.last_connected).toLocaleString()}
                   </p>
                 )}
-                <Button
-                  variant="destructive"
-                  onClick={() => handleDelete(instance.id, instance.instance_name)}
-                  disabled={isLoading}
-                  className="w-full"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    'Delete Instance'
+                <div className="flex gap-2">
+                  {instance.status !== 'CONNECTED' && (
+                    <Button
+                      variant="outline"
+                      onClick={() => handleRestart(instance.instance_name)}
+                      disabled={isLoading}
+                      className="flex-1"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Restart
+                        </>
+                      )}
+                    </Button>
                   )}
-                </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => handleDelete(instance.id, instance.instance_name)}
+                    disabled={isLoading}
+                    className="flex-1"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
