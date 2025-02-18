@@ -36,11 +36,11 @@ serve(async (req) => {
 
     // Map Evolution API connection state to our expected states
     let state = 'close';
-    let statusReason = data.state || 'Unknown';
+    let statusReason = data.instance?.state || 'Unknown';
 
-    if (data.state === 'connected' || data.state === 'open') {
+    if (data.instance?.state === 'open') {
       state = 'open';
-    } else if (data.state === 'connecting' || data.state === 'starting') {
+    } else if (data.instance?.state === 'connecting') {
       state = 'connecting';
     }
 
