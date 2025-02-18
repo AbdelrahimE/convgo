@@ -19,7 +19,7 @@ serve(async (req) => {
     console.log(`Attempting to connect WhatsApp instance: ${instanceName}`);
 
     const response = await fetch(`https://api.convgo.com/instance/connect/${instanceName}`, {
-      method: 'GET',  // Changed from POST to GET
+      method: 'GET',
       headers: {
         'apikey': apiKey
       }
@@ -34,13 +34,12 @@ serve(async (req) => {
     const data = await response.json();
     console.log('Response from Evolution API:', data);
 
-    // Handle the updated response format
-    const qrCode = data.code || data.qrcode;
-    if (!qrCode) {
-      throw new Error('No QR code or connection code received from server');
+    // The QR code is in the 'code' field according to the API response
+    if (!data.code) {
+      throw new Error('No QR code received from server');
     }
 
-    return new Response(JSON.stringify({ qrcode: qrCode }), {
+    return new Response(JSON.stringify({ qrcode: data.code }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
