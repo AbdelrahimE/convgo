@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -227,23 +226,22 @@ const WhatsAppLink = () => {
     try {
       setIsLoading(true);
       
-      // Update status to CONNECTING
+      // Only update status to CONNECTING in DB
       const { error: updateError } = await supabase
         .from('whatsapp_instances')
-        .update({ 
-          status: 'CONNECTING',
-          qr_code: null // Clear any existing QR code
-        })
+        .update({ status: 'CONNECTING' })
         .eq('id', instanceId);
 
       if (updateError) throw updateError;
 
+      // Update local state (status only)
       setInstances(prev => prev.map(instance => 
         instance.id === instanceId 
-          ? { ...instance, status: 'CONNECTING', qr_code: undefined }
+          ? { ...instance, status: 'CONNECTING' }
           : instance
       ));
 
+      // Get QR code from Evolution API
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-connect', {
         body: { instanceName: instanceName.trim() }
       });
@@ -251,23 +249,12 @@ const WhatsAppLink = () => {
       if (error) throw error;
 
       if (data?.qrcode) {
-        // Update instance with QR code
-        const { error: qrUpdateError } = await supabase
-          .from('whatsapp_instances')
-          .update({ 
-            status: 'CONNECTING',
-            qr_code: data.qrcode
-          })
-          .eq('id', instanceId);
-
-        if (qrUpdateError) throw qrUpdateError;
-
+        // Update local state with QR code (not storing in DB)
         setInstances(prev => prev.map(instance => 
           instance.id === instanceId 
             ? { ...instance, status: 'CONNECTING', qr_code: data.qrcode }
             : instance
         ));
-
         toast.success('Scan the QR code to reconnect your WhatsApp instance');
       } else {
         throw new Error('No QR code received from server');
@@ -276,18 +263,16 @@ const WhatsAppLink = () => {
       console.error('Error reconnecting WhatsApp instance:', error);
       toast.error('Failed to reconnect WhatsApp instance');
       
-      // Reset status to DISCONNECTED on error
+      // Reset only status in DB on error
       await supabase
         .from('whatsapp_instances')
-        .update({ 
-          status: 'DISCONNECTED',
-          qr_code: null 
-        })
+        .update({ status: 'DISCONNECTED' })
         .eq('id', instanceId);
 
+      // Reset local state
       setInstances(prev => prev.map(instance => 
         instance.id === instanceId 
-          ? { ...instance, status: 'DISCONNECTED', qr_code: undefined }
+          ? { ...instance, status: 'DISCONNECTED' }
           : instance
       ));
     } finally {
