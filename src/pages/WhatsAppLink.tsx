@@ -189,6 +189,39 @@ const WhatsAppLink = () => {
     }
   };
 
+  const handleLogout = async (instanceId: string, instanceName: string) => {
+    try {
+      setIsLoading(true);
+      
+      const { error } = await supabase.functions.invoke('whatsapp-instance-logout', {
+        body: { instanceName }
+      });
+
+      if (error) throw error;
+
+      await supabase
+        .from('whatsapp_instances')
+        .update({ 
+          status: 'DISCONNECTED',
+          last_connected: null 
+        })
+        .eq('id', instanceId);
+
+      setInstances(prev => prev.map(instance => 
+        instance.id === instanceId 
+          ? { ...instance, status: 'DISCONNECTED', last_connected: null }
+          : instance
+      ));
+
+      toast.success('WhatsApp instance logged out successfully');
+    } catch (error) {
+      console.error('Error logging out WhatsApp instance:', error);
+      toast.error('Failed to logout WhatsApp instance');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const validateInstanceName = (name: string) => {
     const isValid = /^[a-zA-Z0-9]+$/.test(name);
     setIsValidName(isValid);
@@ -363,21 +396,40 @@ const WhatsAppLink = () => {
                     Last connected: {new Date(instance.last_connected).toLocaleString()}
                   </p>
                 )}
-                <Button
-                  variant="destructive"
-                  onClick={() => handleDelete(instance.id, instance.instance_name)}
-                  disabled={isLoading}
-                  className="w-full"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    'Delete Instance'
+                <div className="flex flex-col gap-2">
+                  {instance.status === 'CONNECTED' && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleLogout(instance.id, instance.instance_name)}
+                      disabled={isLoading}
+                      className="w-full"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Logging out...
+                        </>
+                      ) : (
+                        'Logout'
+                      )}
+                    </Button>
                   )}
-                </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => handleDelete(instance.id, instance.instance_name)}
+                    disabled={isLoading}
+                    className="w-full"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      'Delete Instance'
+                    )}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
