@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -94,6 +95,7 @@ const WhatsAppLink = () => {
                 })
                 .eq('id', currentInstanceId);
             }
+            return true; // Return true to indicate successful connection
             break;
           case 'connecting':
           case 'STARTING':
@@ -110,10 +112,12 @@ const WhatsAppLink = () => {
             setSubstatus(`Unknown connection state: ${state}`);
         }
       }
+      return false; // Return false if not yet connected
     } catch (error: any) {
       console.error('Status check error:', error);
       setStatus('Error checking status');
       setSubstatus(error.message);
+      return false;
     }
   };
 
@@ -211,13 +215,27 @@ const WhatsAppLink = () => {
   };
 
   useEffect(() => {
-    if (isConfigured && instanceName && !initialLoading) {
-      const interval = setInterval(() => {
-        checkInstanceStatus(instanceName);
-      }, 3000);
+    let intervalId: number | undefined;
 
-      return () => clearInterval(interval);
+    if (isConfigured && instanceName && !initialLoading) {
+      const startPolling = () => {
+        intervalId = setInterval(async () => {
+          const isConnected = await checkInstanceStatus(instanceName);
+          if (isConnected) {
+            // If connected, clear the interval
+            clearInterval(intervalId);
+          }
+        }, 3000);
+      };
+
+      startPolling();
     }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [isConfigured, instanceName, initialLoading]);
 
   if (authLoading || initialLoading) {
