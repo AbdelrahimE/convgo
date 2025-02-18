@@ -289,46 +289,50 @@ const WhatsAppLink = () => {
     return isValid;
   };
 
-  const formatQrCodeDataUrl = (qrCodeData: string) => {
-    console.log('Raw QR code data:', qrCodeData);
-    if (!qrCodeData) return '';
-    
-    try {
-      const decodedData = decodeURIComponent(qrCodeData);
-      console.log('Decoded QR code data:', decodedData);
-      
-      const base64Data = decodedData.replace(/^data:image\/[a-z]+;base64,/, '');
-      
-      const cleanBase64 = base64Data
-        .trim()
-        .replace(/[\n\r\s]/g, '')
-        .replace(/-/g, '+')
-        .replace(/_/g, '/');
-      
-      const formattedQrCode = `data:image/png;base64,${cleanBase64}`;
-      console.log('Final formatted QR code:', formattedQrCode);
-      return formattedQrCode;
-    } catch (error) {
-      console.error('Error formatting QR code:', error);
-      return '';
-    }
-  };
-
   const extractQRCode = (data: any): string | null => {
     console.log('Extracting QR code from response:', data);
-    
-    if (data.base64) {
-      console.log('Found QR code in base64 field');
-      return data.base64;
-    }
     
     if (data.qrcode?.base64 || data.qrcode) {
       console.log('Found QR code in qrcode field');
       return data.qrcode?.base64 || data.qrcode;
     }
     
+    if (data.base64) {
+      console.log('Found QR code in base64 field');
+      return data.base64;
+    }
+    
+    if (data.code) {
+      console.log('Found QR code in code field');
+      if (!data.code.startsWith('data:image/')) {
+        return `data:image/png;base64,${data.code}`;
+      }
+      return data.code;
+    }
+    
     console.log('No QR code found in response');
     return null;
+  };
+
+  const formatQrCodeDataUrl = (qrCodeData: string) => {
+    if (!qrCodeData) return '';
+    
+    try {
+      if (qrCodeData.startsWith('data:image/')) {
+        return qrCodeData;
+      }
+      
+      const cleanBase64 = qrCodeData
+        .trim()
+        .replace(/[\n\r\s]/g, '')
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+      
+      return `data:image/png;base64,${cleanBase64}`;
+    } catch (error) {
+      console.error('Error formatting QR code:', error);
+      return '';
+    }
   };
 
   useEffect(() => {
