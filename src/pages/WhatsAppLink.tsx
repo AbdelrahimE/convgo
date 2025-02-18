@@ -222,6 +222,65 @@ const WhatsAppLink = () => {
     }
   };
 
+  const handleReconnect = async (instanceId: string, instanceName: string) => {
+    try {
+      setIsLoading(true);
+      
+      await supabase
+        .from('whatsapp_instances')
+        .update({ status: 'CONNECTING' })
+        .eq('id', instanceId);
+
+      setInstances(prev => prev.map(instance => 
+        instance.id === instanceId 
+          ? { ...instance, status: 'CONNECTING' }
+          : instance
+      ));
+
+      const { data, error } = await supabase.functions.invoke('whatsapp-instance-connect', {
+        body: { instanceName }
+      });
+
+      if (error) throw error;
+
+      if (data.qrcode) {
+        await supabase
+          .from('whatsapp_instances')
+          .update({ 
+            status: 'CONNECTING',
+            qr_code: data.qrcode
+          })
+          .eq('id', instanceId);
+
+        setInstances(prev => prev.map(instance => 
+          instance.id === instanceId 
+            ? { ...instance, status: 'CONNECTING', qr_code: data.qrcode }
+            : instance
+        ));
+
+        toast.success('Scan the QR code to reconnect your WhatsApp instance');
+      } else {
+        throw new Error('No QR code received from server');
+      }
+    } catch (error) {
+      console.error('Error reconnecting WhatsApp instance:', error);
+      toast.error('Failed to reconnect WhatsApp instance');
+      
+      await supabase
+        .from('whatsapp_instances')
+        .update({ status: 'DISCONNECTED' })
+        .eq('id', instanceId);
+
+      setInstances(prev => prev.map(instance => 
+        instance.id === instanceId 
+          ? { ...instance, status: 'DISCONNECTED' }
+          : instance
+      ));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const validateInstanceName = (name: string) => {
     const isValid = /^[a-zA-Z0-9]+$/.test(name);
     setIsValidName(isValid);
@@ -411,6 +470,23 @@ const WhatsAppLink = () => {
                         </>
                       ) : (
                         'Logout'
+                      )}
+                    </Button>
+                  )}
+                  {instance.status === 'DISCONNECTED' && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleReconnect(instance.id, instance.instance_name)}
+                      disabled={isLoading}
+                      className="w-full"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Reconnecting...
+                        </>
+                      ) : (
+                        'Reconnect'
                       )}
                     </Button>
                   )}
