@@ -139,7 +139,9 @@ const WhatsAppLink = () => {
 
       if (error) throw error;
       
-      const qrCodeData = data.qrcode?.base64 || data.qrcode;
+      console.log('Response from create:', data);
+      
+      const qrCodeData = extractQRCode(data);
       if (!qrCodeData) {
         throw new Error('No QR code received from server');
       }
@@ -249,7 +251,9 @@ const WhatsAppLink = () => {
 
       if (error) throw error;
 
-      const qrCodeData = data.qrcode?.base64 || data.qrcode;
+      console.log('Response from reconnect:', data);
+      
+      const qrCodeData = extractQRCode(data);
       if (!qrCodeData) {
         throw new Error('No QR code received from server');
       }
@@ -308,6 +312,23 @@ const WhatsAppLink = () => {
       console.error('Error formatting QR code:', error);
       return '';
     }
+  };
+
+  const extractQRCode = (data: any): string | null => {
+    console.log('Extracting QR code from response:', data);
+    
+    if (data.base64) {
+      console.log('Found QR code in base64 field');
+      return data.base64;
+    }
+    
+    if (data.qrcode?.base64 || data.qrcode) {
+      console.log('Found QR code in qrcode field');
+      return data.qrcode?.base64 || data.qrcode;
+    }
+    
+    console.log('No QR code found in response');
+    return null;
   };
 
   useEffect(() => {
