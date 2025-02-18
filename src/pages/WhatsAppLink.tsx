@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -226,31 +227,40 @@ const WhatsAppLink = () => {
     try {
       setIsLoading(true);
       
-      await supabase
+      // Update status to CONNECTING
+      const { error: updateError } = await supabase
         .from('whatsapp_instances')
-        .update({ status: 'CONNECTING' })
+        .update({ 
+          status: 'CONNECTING',
+          qr_code: null // Clear any existing QR code
+        })
         .eq('id', instanceId);
+
+      if (updateError) throw updateError;
 
       setInstances(prev => prev.map(instance => 
         instance.id === instanceId 
-          ? { ...instance, status: 'CONNECTING' }
+          ? { ...instance, status: 'CONNECTING', qr_code: undefined }
           : instance
       ));
 
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-connect', {
-        body: { instanceName }
+        body: { instanceName: instanceName.trim() }
       });
 
       if (error) throw error;
 
-      if (data.qrcode) {
-        await supabase
+      if (data?.qrcode) {
+        // Update instance with QR code
+        const { error: qrUpdateError } = await supabase
           .from('whatsapp_instances')
           .update({ 
             status: 'CONNECTING',
             qr_code: data.qrcode
           })
           .eq('id', instanceId);
+
+        if (qrUpdateError) throw qrUpdateError;
 
         setInstances(prev => prev.map(instance => 
           instance.id === instanceId 
@@ -262,18 +272,22 @@ const WhatsAppLink = () => {
       } else {
         throw new Error('No QR code received from server');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error reconnecting WhatsApp instance:', error);
       toast.error('Failed to reconnect WhatsApp instance');
       
+      // Reset status to DISCONNECTED on error
       await supabase
         .from('whatsapp_instances')
-        .update({ status: 'DISCONNECTED' })
+        .update({ 
+          status: 'DISCONNECTED',
+          qr_code: null 
+        })
         .eq('id', instanceId);
 
       setInstances(prev => prev.map(instance => 
         instance.id === instanceId 
-          ? { ...instance, status: 'DISCONNECTED' }
+          ? { ...instance, status: 'DISCONNECTED', qr_code: undefined }
           : instance
       ));
     } finally {
