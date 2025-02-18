@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -215,7 +214,7 @@ const WhatsAppLink = () => {
   };
 
   useEffect(() => {
-    let intervalId: number | undefined;
+    let intervalId: ReturnType<typeof setInterval>;
 
     if (isConfigured && instanceName && !initialLoading) {
       const startPolling = () => {
