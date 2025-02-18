@@ -248,15 +248,20 @@ const WhatsAppLink = () => {
 
       if (error) throw error;
 
+      console.log('Response from Evolution API:', data);
+
       if (data?.qrcode) {
-        // Update local state with QR code (not storing in DB)
+        const formattedQrCode = formatQrCodeDataUrl(data.qrcode);
+        
+        // Update local state with formatted QR code (not storing in DB)
         setInstances(prev => prev.map(instance => 
           instance.id === instanceId 
-            ? { ...instance, status: 'CONNECTING', qr_code: data.qrcode }
+            ? { ...instance, status: 'CONNECTING', qr_code: formattedQrCode }
             : instance
         ));
         toast.success('Scan the QR code to reconnect your WhatsApp instance');
       } else {
+        console.error('Invalid QR code data:', data);
         throw new Error('No QR code received from server');
       }
     } catch (error: any) {
@@ -284,6 +289,22 @@ const WhatsAppLink = () => {
     const isValid = /^[a-zA-Z0-9]+$/.test(name);
     setIsValidName(isValid);
     return isValid;
+  };
+
+  const formatQrCodeDataUrl = (qrCodeData: string) => {
+    console.log('Raw QR code data:', qrCodeData);
+    if (!qrCodeData) return '';
+    
+    // If it's already a data URL, return as is
+    if (qrCodeData.startsWith('data:image')) {
+      console.log('QR code is already formatted');
+      return qrCodeData;
+    }
+    
+    // Format as data URL
+    const formattedQrCode = `data:image/png;base64,${qrCodeData}`;
+    console.log('Formatted QR code data URL');
+    return formattedQrCode;
   };
 
   useEffect(() => {
