@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,6 +19,7 @@ interface WhatsAppInstance {
   instance_name: string;
   status: string;
   last_connected: string | null;
+  qr_code?: string;
 }
 
 const WhatsAppLink = () => {
@@ -148,22 +148,7 @@ const WhatsAppLink = () => {
 
       if (dbError) throw dbError;
 
-      setInstances(prev => [...prev, instanceData]);
-      
-      // Show QR code in a toast notification
-      toast.message('Scan QR Code', {
-        description: (
-          <div className="mt-2">
-            <img 
-              src={qrCodeData}
-              alt="WhatsApp QR Code" 
-              className="max-w-[200px] h-auto mx-auto"
-            />
-          </div>
-        ),
-        duration: 60000, // 1 minute
-      });
-      
+      setInstances(prev => [...prev, { ...instanceData, qr_code: qrCodeData }]);
       setShowCreateForm(false);
       setInstanceName('');
       
@@ -350,15 +335,25 @@ const WhatsAppLink = () => {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {instances.map((instance) => (
-          <Card key={instance.id}>
+          <Card key={instance.id} className="flex flex-col">
             <CardHeader>
               <CardTitle>{instance.instance_name}</CardTitle>
               <CardDescription>
                 Status: {instance.status.toLowerCase()}
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-grow">
               <div className="space-y-4">
+                {instance.status === 'CREATED' && instance.qr_code && (
+                  <div className="flex flex-col items-center space-y-2">
+                    <p className="text-sm font-medium">Scan QR Code to Connect</p>
+                    <img 
+                      src={instance.qr_code}
+                      alt="WhatsApp QR Code" 
+                      className="w-full max-w-[200px] h-auto mx-auto"
+                    />
+                  </div>
+                )}
                 {instance.last_connected && (
                   <p className="text-sm text-muted-foreground">
                     Last connected: {new Date(instance.last_connected).toLocaleString()}
