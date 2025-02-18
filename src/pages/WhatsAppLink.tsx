@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,49 +13,65 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
+
+interface WhatsAppInstance {
+  id: string;
+  instance_name: string;
+  status: string;
+  last_connected: string | null;
+}
 
 const WhatsAppLink = () => {
   const { user, loading: authLoading } = useAuth();
-  const [status, setStatus] = useState('Not connected');
-  const [substatus, setSubstatus] = useState('');
-  const [qrCode, setQrCode] = useState('');
+  const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [instanceName, setInstanceName] = useState('');
-  const [isConfigured, setIsConfigured] = useState(false);
-  const [currentInstanceId, setCurrentInstanceId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [instanceLimit, setInstanceLimit] = useState(0);
+  const [isValidName, setIsValidName] = useState(true);
 
   useEffect(() => {
-    if (!authLoading) {
-      if (user) {
-        fetchInstance();
-      } else {
-        setInitialLoading(false);
-      }
+    if (!authLoading && user) {
+      fetchInstances();
+      fetchUserProfile();
+    } else if (!authLoading) {
+      setInitialLoading(false);
     }
   }, [user, authLoading]);
 
-  const fetchInstance = async () => {
+  const fetchUserProfile = async () => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('instance_limit')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      setInstanceLimit(profile.instance_limit);
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      toast.error('Failed to fetch user profile');
+    }
+  };
+
+  const fetchInstances = async () => {
     try {
       setInitialLoading(true);
       const { data, error } = await supabase
         .from('whatsapp_instances')
         .select('*')
-        .eq('user_id', user?.id)
-        .maybeSingle();
+        .eq('user_id', user?.id);
 
       if (error) throw error;
 
-      if (data) {
-        setInstanceName(data.instance_name);
-        setIsConfigured(true);
-        setCurrentInstanceId(data.id);
-        await checkInstanceStatus(data.instance_name);
-      }
+      setInstances(data || []);
+      await Promise.all(data?.map(instance => checkInstanceStatus(instance.instance_name)) || []);
     } catch (error) {
-      console.error('Error fetching WhatsApp instance:', error);
-      toast.error('Failed to fetch WhatsApp instance');
+      console.error('Error fetching WhatsApp instances:', error);
+      toast.error('Failed to fetch WhatsApp instances');
     } finally {
       setInitialLoading(false);
     }
@@ -62,86 +79,60 @@ const WhatsAppLink = () => {
 
   const checkInstanceStatus = async (name: string) => {
     try {
-      console.log('Checking instance status for:', name);
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-status', {
-        body: { 
-          instanceName: name.trim()
-        }
+        body: { instanceName: name.trim() }
       });
       
       if (error) throw error;
-      
-      console.log('Status check response:', data);
       
       if (data) {
         const state = data.state;
         const statusReason = data.statusReason;
         
-        console.log('State:', state, 'Status Reason:', statusReason);
-        
-        switch(state) {
-          case 'open':
-          case 'CONNECTED':
-            setStatus('Connected');
-            setSubstatus('WhatsApp connected successfully!');
-            setQrCode(''); // Clear QR code when connected
-            if (currentInstanceId) {
-              await supabase
-                .from('whatsapp_instances')
-                .update({ 
-                  status: 'CONNECTED',
-                  last_connected: new Date().toISOString()
-                })
-                .eq('id', currentInstanceId);
-            }
-            return true; // Return true to indicate successful connection
-            break;
-          case 'connecting':
-          case 'STARTING':
-            setStatus('Connecting');
-            setSubstatus('Connecting to WhatsApp...');
-            break;
-          case 'close':
-          case 'DISCONNECTED':
-            setStatus('Not connected');
-            setSubstatus(statusReason || 'Waiting for QR code scan...');
-            break;
-          default:
-            setStatus('Not connected');
-            setSubstatus(`Unknown connection state: ${state}`);
-        }
+        const updatedStatus = 
+          state === 'open' || state === 'CONNECTED' ? 'CONNECTED' :
+          state === 'connecting' || state === 'STARTING' ? 'CONNECTING' :
+          'DISCONNECTED';
+
+        await supabase
+          .from('whatsapp_instances')
+          .update({ 
+            status: updatedStatus,
+            last_connected: updatedStatus === 'CONNECTED' ? new Date().toISOString() : null
+          })
+          .eq('instance_name', name);
+
+        setInstances(prev => prev.map(instance => 
+          instance.instance_name === name 
+            ? { ...instance, status: updatedStatus }
+            : instance
+        ));
+
+        return updatedStatus === 'CONNECTED';
       }
-      return false; // Return false if not yet connected
+      return false;
     } catch (error: any) {
       console.error('Status check error:', error);
-      setStatus('Error checking status');
-      setSubstatus(error.message);
       return false;
     }
   };
 
   const createInstance = async (instanceName: string) => {
     try {
-      setIsLoading(true);
-      setStatus('Creating instance...');
-      setSubstatus('Please wait...');
+      if (instances.length >= instanceLimit) {
+        toast.error(`You have reached your limit of ${instanceLimit} instances`);
+        return;
+      }
 
+      setIsLoading(true);
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-create', {
         body: { instanceName }
       });
 
       if (error) throw error;
       
-      console.log('Instance creation response:', data);
-
-      // Handle QR code from response
       const qrCodeData = data.qrcode?.base64 || data.qrcode;
-      if (qrCodeData) {
-        console.log('Received QR code data');
-        setQrCode(qrCodeData);
-        setSubstatus('Please scan the QR code with WhatsApp');
-      } else {
-        console.error('No QR code received in response');
+      if (!qrCodeData) {
         throw new Error('No QR code received from server');
       }
       
@@ -157,89 +148,92 @@ const WhatsAppLink = () => {
 
       if (dbError) throw dbError;
 
-      setCurrentInstanceId(instanceData.id);
-      setIsConfigured(true);
+      setInstances(prev => [...prev, instanceData]);
       
-      toast.success('WhatsApp instance created successfully');
+      // Show QR code in a toast notification
+      toast.message('Scan QR Code', {
+        description: (
+          <div className="mt-2">
+            <img 
+              src={qrCodeData}
+              alt="WhatsApp QR Code" 
+              className="max-w-[200px] h-auto mx-auto"
+            />
+          </div>
+        ),
+        duration: 60000, // 1 minute
+      });
+      
+      setShowCreateForm(false);
+      setInstanceName('');
       
     } catch (error: any) {
       console.error('Error creating WhatsApp instance:', error);
       toast.error(`Failed to create WhatsApp instance: ${error.message}`);
-      setStatus('Error');
-      setSubstatus(error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!instanceName.trim()) {
-      toast.error('Please enter an instance name');
-      return;
-    }
+  const handleDelete = async (instanceId: string, instanceName: string) => {
+    try {
+      setIsLoading(true);
+      
+      const { error } = await supabase.functions.invoke('whatsapp-instance-delete', {
+        body: { instanceName }
+      });
 
-    await createInstance(instanceName);
+      if (error) throw error;
+
+      await supabase
+        .from('whatsapp_instances')
+        .delete()
+        .eq('id', instanceId);
+
+      setInstances(prev => prev.filter(instance => instance.id !== instanceId));
+      toast.success('WhatsApp instance deleted successfully');
+    } catch (error) {
+      console.error('Error deleting WhatsApp instance:', error);
+      toast.error('Failed to delete WhatsApp instance');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleReset = async () => {
-    try {
-      if (currentInstanceId) {
-        const { error } = await supabase.functions.invoke('whatsapp-instance-delete', {
-          body: { instanceName }
-        });
-
-        if (error) throw error;
-
-        const { error: dbError } = await supabase
-          .from('whatsapp_instances')
-          .delete()
-          .eq('id', currentInstanceId);
-
-        if (dbError) throw dbError;
-      }
-
-      setInstanceName('');
-      setIsConfigured(false);
-      setStatus('Not connected');
-      setSubstatus('');
-      setQrCode('');
-      setCurrentInstanceId(null);
-      toast.success('WhatsApp instance reset');
-    } catch (error) {
-      console.error('Error resetting WhatsApp instance:', error);
-      toast.error('Failed to reset WhatsApp instance');
-    }
+  const validateInstanceName = (name: string) => {
+    const isValid = /^[a-zA-Z0-9]+$/.test(name);
+    setIsValidName(isValid);
+    return isValid;
   };
 
   useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval>;
+    const instancePolling = instances.map(instance => {
+      let intervalId: ReturnType<typeof setInterval>;
 
-    if (isConfigured && instanceName && !initialLoading) {
-      const startPolling = () => {
+      if (instance.status !== 'CONNECTED') {
         intervalId = setInterval(async () => {
-          const isConnected = await checkInstanceStatus(instanceName);
+          const isConnected = await checkInstanceStatus(instance.instance_name);
           if (isConnected) {
-            // If connected, clear the interval
             clearInterval(intervalId);
           }
         }, 3000);
-      };
+      }
 
-      startPolling();
-    }
+      return () => {
+        if (intervalId) {
+          clearInterval(intervalId);
+        }
+      };
+    });
 
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
+      instancePolling.forEach(cleanup => cleanup());
     };
-  }, [isConfigured, instanceName, initialLoading]);
+  }, [instances]);
 
   if (authLoading || initialLoading) {
     return (
-      <div className="container mx-auto max-w-2xl py-8">
+      <div className="container mx-auto max-w-5xl py-8">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-center space-x-2">
@@ -254,7 +248,7 @@ const WhatsAppLink = () => {
 
   if (!user) {
     return (
-      <div className="container mx-auto max-w-2xl py-8">
+      <div className="container mx-auto max-w-5xl py-8">
         <Card>
           <CardContent className="p-6">
             <p className="text-center text-muted-foreground">
@@ -267,66 +261,139 @@ const WhatsAppLink = () => {
   }
 
   return (
-    <div className="container mx-auto max-w-2xl py-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Link WhatsApp Account</CardTitle>
-          <CardDescription>
-            {isConfigured 
-              ? 'Scan the QR code with your WhatsApp to connect your account'
-              : 'Enter a name for your WhatsApp instance to get started'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!isConfigured ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="container mx-auto max-w-5xl py-8">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">WhatsApp Instances</h1>
+          <p className="text-sm text-muted-foreground">
+            {instances.length} of {instanceLimit} instances used
+          </p>
+        </div>
+        <Button
+          onClick={() => setShowCreateForm(true)}
+          disabled={instances.length >= instanceLimit || showCreateForm}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          New Instance
+        </Button>
+      </div>
+
+      {showCreateForm && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Create New Instance</CardTitle>
+            <CardDescription>
+              Enter a unique name using only letters and numbers (no spaces or special characters)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (validateInstanceName(instanceName)) {
+                  createInstance(instanceName);
+                }
+              }} 
+              className="space-y-4"
+            >
               <div className="space-y-2">
                 <Label htmlFor="instanceName">Instance Name</Label>
                 <Input
                   id="instanceName"
                   value={instanceName}
-                  onChange={(e) => setInstanceName(e.target.value)}
-                  placeholder="Enter a name for your WhatsApp instance"
+                  onChange={(e) => {
+                    setInstanceName(e.target.value);
+                    validateInstanceName(e.target.value);
+                  }}
+                  placeholder="Enter instance name"
+                  className={!isValidName ? 'border-red-500' : ''}
                   required
                 />
-              </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating Instance...
-                  </>
-                ) : (
-                  'Create Instance'
+                {!isValidName && (
+                  <p className="text-sm text-red-500">
+                    Instance name can only contain letters and numbers
+                  </p>
                 )}
-              </Button>
-            </form>
-          ) : (
-            <>
-              <div className="text-center space-y-2">
-                <p className="text-lg font-medium">{status}</p>
-                {substatus && <p className="text-sm text-muted-foreground">{substatus}</p>}
               </div>
-              {qrCode && status !== 'Connected' && (
-                <div className="flex justify-center p-4 bg-white rounded-lg">
-                  <img 
-                    src={qrCode}
-                    alt="WhatsApp QR Code" 
-                    className="max-w-full h-auto"
-                  />
-                </div>
-              )}
-              <Button 
-                variant="destructive" 
-                onClick={handleReset}
-                className="w-full"
-              >
-                Reset Instance
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
+              <div className="flex gap-4">
+                <Button 
+                  type="submit" 
+                  disabled={isLoading || !isValidName || !instanceName}
+                  className="flex-1"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Create Instance'
+                  )}
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setInstanceName('');
+                    setIsValidName(true);
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {instances.map((instance) => (
+          <Card key={instance.id}>
+            <CardHeader>
+              <CardTitle>{instance.instance_name}</CardTitle>
+              <CardDescription>
+                Status: {instance.status.toLowerCase()}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {instance.last_connected && (
+                  <p className="text-sm text-muted-foreground">
+                    Last connected: {new Date(instance.last_connected).toLocaleString()}
+                  </p>
+                )}
+                <Button
+                  variant="destructive"
+                  onClick={() => handleDelete(instance.id, instance.instance_name)}
+                  disabled={isLoading}
+                  className="w-full"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete Instance'
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {instances.length === 0 && !showCreateForm && (
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-center text-muted-foreground">
+              No WhatsApp instances found. Click the "New Instance" button to create one.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

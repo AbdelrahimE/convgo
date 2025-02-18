@@ -60,6 +60,7 @@ export type Database = {
           created_at: string | null
           full_name: string | null
           id: string
+          instance_limit: number
           is_active: boolean | null
           storage_limit_mb: number
           updated_at: string | null
@@ -71,6 +72,7 @@ export type Database = {
           created_at?: string | null
           full_name?: string | null
           id: string
+          instance_limit?: number
           is_active?: boolean | null
           storage_limit_mb?: number
           updated_at?: string | null
@@ -82,6 +84,7 @@ export type Database = {
           created_at?: string | null
           full_name?: string | null
           id?: string
+          instance_limit?: number
           is_active?: boolean | null
           storage_limit_mb?: number
           updated_at?: string | null
