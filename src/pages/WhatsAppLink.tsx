@@ -292,22 +292,22 @@ const WhatsAppLink = () => {
   const extractQRCode = (data: any): string | null => {
     console.log('Extracting QR code from response:', data);
     
-    if (data.qrcode?.base64 || data.qrcode) {
-      console.log('Found QR code in qrcode field');
-      return data.qrcode?.base64 || data.qrcode;
+    if (data.base64 && data.base64.startsWith('data:image/')) {
+      console.log('Found ready-to-use base64 image');
+      return data.base64;
     }
     
-    if (data.base64) {
-      console.log('Found QR code in base64 field');
-      return data.base64;
+    if (data.qrcode) {
+      console.log('Found QR code in qrcode object');
+      const qrData = data.qrcode.base64 || data.qrcode.code || data.qrcode;
+      if (qrData) {
+        return qrData.startsWith('data:image/') ? qrData : `data:image/png;base64,${qrData}`;
+      }
     }
     
     if (data.code) {
       console.log('Found QR code in code field');
-      if (!data.code.startsWith('data:image/')) {
-        return `data:image/png;base64,${data.code}`;
-      }
-      return data.code;
+      return data.code.startsWith('data:image/') ? data.code : `data:image/png;base64,${data.code}`;
     }
     
     console.log('No QR code found in response');
