@@ -92,22 +92,26 @@ const WhatsAppLink = () => {
         const updatedStatus = 
           state === 'open' || state === 'CONNECTED' ? 'CONNECTED' :
           state === 'connecting' || state === 'STARTING' ? 'CONNECTING' :
+          state === 'qrcode' ? 'CONNECTING' : // Keep as CONNECTING when showing QR
           'DISCONNECTED';
 
-        await supabase
-          .from('whatsapp_instances')
-          .update({ 
-            status: updatedStatus,
-            last_connected: updatedStatus === 'CONNECTED' ? new Date().toISOString() : null
-          })
-          .eq('instance_name', name);
+        if (updatedStatus === 'CONNECTED') {
+          await supabase
+            .from('whatsapp_instances')
+            .update({ 
+              status: updatedStatus,
+              last_connected: new Date().toISOString()
+            })
+            .eq('instance_name', name);
+        }
 
         setInstances(prev => prev.map(instance => 
           instance.instance_name === name 
             ? { 
                 ...instance, 
                 status: updatedStatus,
-                qr_code: updatedStatus === 'CONNECTED' ? undefined : instance.qr_code
+                qr_code: updatedStatus === 'CONNECTED' ? undefined : instance.qr_code,
+                last_connected: updatedStatus === 'CONNECTED' ? new Date().toISOString() : instance.last_connected
               }
             : instance
         ));
@@ -226,7 +230,6 @@ const WhatsAppLink = () => {
     try {
       setIsLoading(true);
       
-      // Only update status to CONNECTING in DB
       const { error: updateError } = await supabase
         .from('whatsapp_instances')
         .update({ status: 'CONNECTING' })
@@ -234,29 +237,23 @@ const WhatsAppLink = () => {
 
       if (updateError) throw updateError;
 
-      // Update local state (status only)
       setInstances(prev => prev.map(instance => 
         instance.id === instanceId 
           ? { ...instance, status: 'CONNECTING' }
           : instance
       ));
 
-      // Get QR code from Evolution API
       const { data, error } = await supabase.functions.invoke('whatsapp-instance-connect', {
         body: { instanceName: instanceName.trim() }
       });
 
       if (error) throw error;
 
-      console.log('Response from Evolution API:', data);
-
-      // Use the same QR code extraction logic as createInstance
       const qrCodeData = data.qrcode?.base64 || data.qrcode;
       if (!qrCodeData) {
         throw new Error('No QR code received from server');
       }
 
-      // Update local state with QR code (no formatting needed)
       setInstances(prev => prev.map(instance => 
         instance.id === instanceId 
           ? { ...instance, status: 'CONNECTING', qr_code: qrCodeData }
@@ -267,13 +264,11 @@ const WhatsAppLink = () => {
       console.error('Error reconnecting WhatsApp instance:', error);
       toast.error('Failed to reconnect WhatsApp instance');
       
-      // Reset only status in DB on error
       await supabase
         .from('whatsapp_instances')
         .update({ status: 'DISCONNECTED' })
         .eq('id', instanceId);
 
-      // Reset local state
       setInstances(prev => prev.map(instance => 
         instance.id === instanceId 
           ? { ...instance, status: 'DISCONNECTED' }
@@ -319,11 +314,15 @@ const WhatsAppLink = () => {
     const instancePolling = instances.map(instance => {
       let intervalId: ReturnType<typeof setInterval>;
 
-      if (instance.status !== 'CONNECTED') {
+      if (
+        (instance.status === 'CONNECTING' && !instance.qr_code) ||
+        (instance.status === 'CONNECTING' && instance.last_connected)
+      ) {
         intervalId = setInterval(async () => {
           const isConnected = await checkInstanceStatus(instance.instance_name);
           if (isConnected) {
             clearInterval(intervalId);
+            toast.success(`WhatsApp instance ${instance.instance_name} connected successfully`);
           }
         }, 3000);
       }
