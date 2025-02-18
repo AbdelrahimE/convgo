@@ -250,25 +250,19 @@ const WhatsAppLink = () => {
 
       console.log('Response from Evolution API:', data);
 
-      if (data?.qrcode) {
-        const formattedQrCode = formatQrCodeDataUrl(data.qrcode);
-        console.log('Final formatted QR code:', formattedQrCode);
-        
-        if (!formattedQrCode) {
-          throw new Error('Failed to format QR code');
-        }
-        
-        // Update local state with formatted QR code
-        setInstances(prev => prev.map(instance => 
-          instance.id === instanceId 
-            ? { ...instance, status: 'CONNECTING', qr_code: formattedQrCode }
-            : instance
-        ));
-        toast.success('Scan the QR code to reconnect your WhatsApp instance');
-      } else {
-        console.error('Invalid QR code data:', data);
+      // Use the same QR code extraction logic as createInstance
+      const qrCodeData = data.qrcode?.base64 || data.qrcode;
+      if (!qrCodeData) {
         throw new Error('No QR code received from server');
       }
+
+      // Update local state with QR code (no formatting needed)
+      setInstances(prev => prev.map(instance => 
+        instance.id === instanceId 
+          ? { ...instance, status: 'CONNECTING', qr_code: qrCodeData }
+          : instance
+      ));
+      toast.success('Scan the QR code to reconnect your WhatsApp instance');
     } catch (error: any) {
       console.error('Error reconnecting WhatsApp instance:', error);
       toast.error('Failed to reconnect WhatsApp instance');
