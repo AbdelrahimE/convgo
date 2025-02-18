@@ -104,7 +104,11 @@ const WhatsAppLink = () => {
 
         setInstances(prev => prev.map(instance => 
           instance.instance_name === name 
-            ? { ...instance, status: updatedStatus }
+            ? { 
+                ...instance, 
+                status: updatedStatus,
+                qr_code: updatedStatus === 'CONNECTED' ? undefined : instance.qr_code
+              }
             : instance
         ));
 
@@ -344,7 +348,7 @@ const WhatsAppLink = () => {
             </CardHeader>
             <CardContent className="flex-grow">
               <div className="space-y-4">
-                {instance.status === 'CREATED' && instance.qr_code && (
+                {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && (
                   <div className="flex flex-col items-center space-y-2">
                     <p className="text-sm font-medium">Scan QR Code to Connect</p>
                     <img 
