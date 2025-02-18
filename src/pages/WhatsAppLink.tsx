@@ -252,8 +252,14 @@ const WhatsAppLink = () => {
 
       if (data?.qrcode) {
         const formattedQrCode = formatQrCodeDataUrl(data.qrcode);
+        console.log('Final formatted QR code:', formattedQrCode);
         
-        // Update local state with formatted QR code (not storing in DB)
+        // Validate the formatted QR code
+        if (!formattedQrCode.startsWith('data:image/png;base64,')) {
+          throw new Error('Invalid QR code format');
+        }
+        
+        // Update local state with formatted QR code
         setInstances(prev => prev.map(instance => 
           instance.id === instanceId 
             ? { ...instance, status: 'CONNECTING', qr_code: formattedQrCode }
@@ -295,15 +301,15 @@ const WhatsAppLink = () => {
     console.log('Raw QR code data:', qrCodeData);
     if (!qrCodeData) return '';
     
-    // If it's already a data URL, return as is
-    if (qrCodeData.startsWith('data:image')) {
-      console.log('QR code is already formatted');
-      return qrCodeData;
-    }
+    // Remove any existing data URL prefix if present
+    const base64Data = qrCodeData.replace(/^data:image\/[a-z]+;base64,/, '');
     
-    // Format as data URL
-    const formattedQrCode = `data:image/png;base64,${qrCodeData}`;
-    console.log('Formatted QR code data URL');
+    // Clean the base64 string by removing any whitespace or line breaks
+    const cleanBase64 = base64Data.trim().replace(/[\n\r\s]/g, '');
+    
+    // Format as data URL with proper MIME type
+    const formattedQrCode = `data:image/png;base64,${cleanBase64}`;
+    console.log('Formatted QR code:', formattedQrCode);
     return formattedQrCode;
   };
 
