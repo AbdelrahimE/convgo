@@ -241,37 +241,14 @@ const EmptyState = ({ onCreateClick }: { onCreateClick: () => void }) => {
               ))}
             </div>
 
-            <div className="space-y-4">
-              <Button 
-                onClick={onCreateClick} 
-                className="w-full sm:w-auto"
-                size="lg"
-              >
-                Create Your First Instance
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-              
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  size="lg"
-                  onClick={() => window.open("https://doc.evolution-api.com/", "_blank")}
-                >
-                  <FileText className="mr-2 h-4 w-4" />
-                  View Documentation
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  size="lg"
-                  onClick={() => window.open("https://doc.evolution-api.com/overview/about-evolution", "_blank")}
-                >
-                  <Bot className="mr-2 h-4 w-4" />
-                  Learn About AI Integration
-                </Button>
-              </div>
-            </div>
+            <Button 
+              onClick={onCreateClick} 
+              className="w-full sm:w-auto"
+              size="lg"
+            >
+              Create Your First Instance
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </div>
         </div>
       </CardContent>
