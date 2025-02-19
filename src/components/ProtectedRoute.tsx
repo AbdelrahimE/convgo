@@ -7,19 +7,17 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  console.log('ProtectedRoute:', { 
-    user: user?.email, 
-    loading, 
-    pathname: location.pathname,
-    isAuthRoute: location.pathname === '/auth'
-  });
+  // If we're on the auth page and have a user, redirect to dashboard
+  if (location.pathname === '/auth' && user) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
-  // Don't protect the auth route itself
+  // If we're on the auth page and not logged in, show the auth page
   if (location.pathname === '/auth') {
     return <>{children}</>;
   }
 
-  // Show loading state while checking authentication
+  // Show loading spinner while checking auth
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -28,12 +26,11 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     );
   }
 
-  // Only redirect if we're sure there's no user
-  if (!user && !loading) {
-    console.log('Redirecting to auth, no user found');
-    // Save the current location to redirect back after login
+  // If not logged in and not on auth page, redirect to auth
+  if (!user) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
+  // If we have a user and we're not loading, show the protected content
   return <>{children}</>;
 }

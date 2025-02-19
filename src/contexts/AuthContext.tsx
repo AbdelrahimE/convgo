@@ -25,69 +25,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let mounted = true;
-
-    // Get initial session
-    const getInitialSession = async () => {
-      try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
-        console.log('Initial session fetch:', initialSession?.user?.email);
-        
-        // Only update state if component is still mounted
-        if (mounted) {
-          if (initialSession) {
-            setSession(initialSession);
-            setUser(initialSession.user);
-          }
-          // Delay setting loading to false to ensure state updates have propagated
-          setTimeout(() => {
-            if (mounted) {
-              setLoading(false);
-            }
-          }, 100);
-        }
-      } catch (error) {
-        console.error('Error getting initial session:', error);
-        if (mounted) {
-          setLoading(false);
-        }
+    // Initialize auth state
+    const initializeAuth = async () => {
+      // First, try to get the session
+      const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Error getting session:', error.message);
+        setLoading(false);
+        return;
       }
+
+      if (currentSession) {
+        setSession(currentSession);
+        setUser(currentSession.user);
+      }
+      
+      setLoading(false);
     };
 
-    getInitialSession();
+    // Call initialization
+    initializeAuth();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
       console.log('Auth state changed:', event, currentSession?.user?.email);
       
-      if (mounted) {
+      if (currentSession) {
         setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        // Don't set loading to false here - let the initial session handle that
+        setUser(currentSession.user);
+      } else {
+        setSession(null);
+        setUser(null);
       }
     });
 
+    // Cleanup subscription
     return () => {
-      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
-  const value = {
-    session,
-    user,
-    loading
-  };
-
-  console.log('AuthProvider state:', { 
-    userEmail: user?.email,
-    loading,
-    hasSession: !!session,
-    pathname: window.location.pathname
-  });
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ session, user, loading }}>
       {children}
     </AuthContext.Provider>
   );
