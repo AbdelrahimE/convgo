@@ -23,24 +23,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    console.log('AuthProvider mounting');
+    let mounted = true;
     
     // Get initial session
     const getInitialSession = async () => {
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        console.log('Initial session:', initialSession?.user?.email);
+        console.log('Initial session fetch:', initialSession?.user?.email);
         
-        if (initialSession) {
-          setSession(initialSession);
-          setUser(initialSession.user);
+        if (mounted) {
+          if (initialSession) {
+            setSession(initialSession);
+            setUser(initialSession.user);
+          }
+          setInitialized(true);
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error getting initial session:', error);
-      } finally {
-        setLoading(false);
+        if (mounted) {
+          setInitialized(true);
+          setLoading(false);
+        }
       }
     };
 
@@ -50,29 +57,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
       console.log('Auth state changed:', event, currentSession?.user?.email);
       
-      // Only update if there's an actual change
-      const hasSessionChanged = currentSession?.user?.id !== session?.user?.id;
-      if (hasSessionChanged) {
+      if (mounted && initialized) {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {
-      console.log('AuthProvider unmounting');
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
-  // Provide some debug information
-  console.log('AuthProvider rendering with:', { session, user, loading });
-
   const value = {
     session,
     user,
-    loading,
+    loading: loading || !initialized
   };
+
+  console.log('AuthProvider state:', { 
+    userEmail: user?.email,
+    loading,
+    initialized
+  });
 
   return (
     <AuthContext.Provider value={value}>
