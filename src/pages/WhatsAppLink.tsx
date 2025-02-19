@@ -187,29 +187,29 @@ const InstanceActions = ({
 
 const EmptyState = ({ onCreateClick }: { onCreateClick: () => void }) => {
   return (
-    <Card className="w-full max-w-3xl mx-auto">
-      <CardContent className="p-6 sm:p-8">
-        <div className="flex flex-col items-center text-center space-y-8">
+    <Card className="w-full mx-auto bg-background">
+      <CardContent className="p-8 md:p-10 lg:p-12">
+        <div className="flex flex-col items-center text-center space-y-8 md:space-y-10">
           <div className="relative">
-            <div className="w-24 h-24 rounded-full bg-primary/5 flex items-center justify-center">
-              <MessageSquare className="w-12 h-12 text-primary/40" />
+            <div className="w-20 h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 rounded-full bg-primary/5 flex items-center justify-center">
+              <MessageSquare className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 text-primary/40" />
             </div>
             <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center animate-pulse">
               <Bot className="w-4 h-4 text-primary/40" />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <h3 className="text-2xl font-semibold tracking-tight">
+          <div className="space-y-3">
+            <h3 className="text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight">
               Start Your WhatsApp Integration
             </h3>
-            <p className="text-muted-foreground max-w-sm mx-auto">
+            <p className="text-sm md:text-base lg:text-lg text-muted-foreground max-w-sm mx-auto">
               Connect your WhatsApp account to start automating responses with AI
             </p>
           </div>
 
-          <div className="w-full max-w-md space-y-6">
-            <div className="space-y-4">
+          <div className="w-full max-w-2xl space-y-8">
+            <div className="space-y-6">
               {[
                 {
                   title: "Create an Instance",
@@ -228,12 +228,12 @@ const EmptyState = ({ onCreateClick }: { onCreateClick: () => void }) => {
                 }
               ].map((step, index) => (
                 <div key={index} className="flex items-start space-x-4 text-left">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <step.icon className="w-4 h-4 text-primary" />
+                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <step.icon className="w-4 h-4 md:w-5 md:h-5 text-primary" />
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-medium">{step.title}</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <h4 className="text-sm md:text-base lg:text-lg font-medium">{step.title}</h4>
+                    <p className="text-xs md:text-sm lg:text-base text-muted-foreground">
                       {step.description}
                     </p>
                   </div>
@@ -244,7 +244,7 @@ const EmptyState = ({ onCreateClick }: { onCreateClick: () => void }) => {
             <div className="space-y-4">
               <Button 
                 onClick={onCreateClick} 
-                className="w-full"
+                className="w-full md:w-auto md:min-w-[200px]"
                 size="lg"
               >
                 Create Your First Instance
@@ -651,30 +651,35 @@ const WhatsAppLink = () => {
   }
 
   return (
-    <div className="container mx-auto max-w-5xl py-8 px-4 sm:px-6">
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div className="mb-4 sm:mb-0">
-          <h1 className="text-2xl font-bold">WhatsApp Instances</h1>
-          <p className="text-sm text-muted-foreground">
-            {instances.length} of {instanceLimit} instances used
-          </p>
+    <div className="container max-w-7xl mx-auto p-4 md:p-6 lg:p-8 min-h-[calc(100vh-4rem)]">
+      <div className="mb-8 md:mb-10">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold tracking-tight">
+              WhatsApp Instances
+            </h1>
+            <p className="text-sm md:text-base text-muted-foreground mt-1">
+              {instances.length} of {instanceLimit} instances used
+            </p>
+          </div>
+          <Button
+            onClick={() => setShowCreateForm(true)}
+            disabled={instances.length >= instanceLimit || showCreateForm}
+            className="w-full sm:w-auto"
+            size="lg"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Instance
+          </Button>
         </div>
-        <Button
-          onClick={() => setShowCreateForm(true)}
-          disabled={instances.length >= instanceLimit || showCreateForm}
-          className="w-full sm:w-auto"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          New Instance
-        </Button>
       </div>
 
       {showCreateForm && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Create New Instance</CardTitle>
-            <CardDescription>
-              Enter a unique name using only letters and numbers (no spaces or special characters)
+        <Card className="mb-8">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-lg md:text-xl lg:text-2xl">Create New Instance</CardTitle>
+            <CardDescription className="text-sm md:text-base">
+              Enter a unique name using only letters and numbers
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -685,10 +690,10 @@ const WhatsAppLink = () => {
                   createInstance(instanceName);
                 }
               }} 
-              className="space-y-4"
+              className="space-y-6"
             >
               <div className="space-y-2">
-                <Label htmlFor="instanceName">Instance Name</Label>
+                <Label htmlFor="instanceName" className="text-sm md:text-base">Instance Name</Label>
                 <Input
                   id="instanceName"
                   value={instanceName}
@@ -701,7 +706,7 @@ const WhatsAppLink = () => {
                   required
                 />
                 {!isValidName && (
-                  <p className="text-sm text-red-500">
+                  <p className="text-xs md:text-sm text-red-500">
                     Instance name can only contain letters and numbers
                   </p>
                 )}
@@ -711,6 +716,7 @@ const WhatsAppLink = () => {
                   type="submit" 
                   disabled={isLoading || !isValidName || !instanceName}
                   className="w-full"
+                  size="lg"
                 >
                   {isLoading ? (
                     <>
@@ -730,6 +736,7 @@ const WhatsAppLink = () => {
                     setIsValidName(true);
                   }}
                   className="w-full"
+                  size="lg"
                 >
                   Cancel
                 </Button>
@@ -748,30 +755,28 @@ const WhatsAppLink = () => {
             >
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>{instance.instance_name}</CardTitle>
+                  <CardTitle className="text-base md:text-lg">{instance.instance_name}</CardTitle>
                   <StatusBadge status={instance.status} />
                 </div>
               </CardHeader>
               <CardContent className="flex-grow">
-                <div className="space-y-4">
-                  {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && (
-                    <div className="flex flex-col items-center space-y-2">
-                      <p className="text-sm font-medium">Scan QR Code to Connect</p>
-                      <img 
-                        src={instance.qr_code}
-                        alt="WhatsApp QR Code" 
-                        className="w-full max-w-[200px] h-auto mx-auto"
-                      />
-                    </div>
-                  )}
-                  <InstanceActions
-                    instance={instance}
-                    isLoading={isLoading}
-                    onLogout={() => handleLogout(instance.id, instance.instance_name)}
-                    onReconnect={() => handleReconnect(instance.id, instance.instance_name)}
-                    onDelete={() => handleDelete(instance.id, instance.instance_name)}
-                  />
-                </div>
+                {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && (
+                  <div className="flex flex-col items-center space-y-2">
+                    <p className="text-sm font-medium">Scan QR Code to Connect</p>
+                    <img 
+                      src={instance.qr_code}
+                      alt="WhatsApp QR Code" 
+                      className="w-full max-w-[200px] h-auto mx-auto"
+                    />
+                  </div>
+                )}
+                <InstanceActions
+                  instance={instance}
+                  isLoading={isLoading}
+                  onLogout={() => handleLogout(instance.id, instance.instance_name)}
+                  onReconnect={() => handleReconnect(instance.id, instance.instance_name)}
+                  onDelete={() => handleDelete(instance.id, instance.instance_name)}
+                />
               </CardContent>
             </Card>
           ))}
