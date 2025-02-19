@@ -25,30 +25,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-      setSession(initialSession);
-      setUser(initialSession?.user ?? null);
-      setLoading(false);
-    });
+    let mounted = true;
 
-    // Set up auth state change listener
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      // Only update if the session actually changed
-      if (JSON.stringify(currentSession) !== JSON.stringify(session)) {
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        setLoading(false);
+    async function getInitialSession() {
+      try {
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        if (mounted) {
+          if (initialSession) {
+            setSession(initialSession);
+            setUser(initialSession.user);
+          }
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error getting initial session:', error);
+        if (mounted) {
+          setLoading(false);
+        }
       }
-    });
+    }
 
-    // Cleanup subscription
+    getInitialSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, currentSession) => {
+        if (mounted) {
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          setLoading(false);
+        }
+      }
+    );
+
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
-  }, []); // Remove session from dependencies
+  }, []);
 
   const value = {
     session,
