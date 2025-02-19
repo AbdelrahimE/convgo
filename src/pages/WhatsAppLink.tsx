@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,7 +12,30 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus, Check, X } from "lucide-react";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Loader2, Plus, Check, X, MoreVertical, RefreshCw, LogOut, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface WhatsAppInstance {
@@ -64,6 +86,89 @@ const StatusBadge = ({ status }: { status: string }) => {
       <Icon className={cn("w-4 h-4 mr-1.5", config.animation)} />
       {config.label}
     </div>
+  );
+};
+
+const InstanceActions = ({ 
+  instance, 
+  isLoading, 
+  onLogout, 
+  onReconnect, 
+  onDelete 
+}: { 
+  instance: WhatsAppInstance;
+  isLoading: boolean;
+  onLogout: () => void;
+  onReconnect: () => void;
+  onDelete: () => void;
+}) => {
+  return (
+    <TooltipProvider>
+      <div className="flex items-center justify-end space-x-2">
+        {instance.status === 'CONNECTED' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary"
+                onClick={onLogout}
+                disabled={isLoading}
+                className="w-full sm:w-auto"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Disconnect
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Disconnect this WhatsApp instance</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+        
+        {instance.status === 'DISCONNECTED' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary"
+                onClick={onReconnect}
+                disabled={isLoading}
+                className="w-full sm:w-auto"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Reconnect
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Reconnect this WhatsApp instance</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="destructive"
+              disabled={isLoading}
+              className="w-full sm:w-auto"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete WhatsApp Instance</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this WhatsApp instance? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={onDelete}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </TooltipProvider>
   );
 };
 
@@ -439,9 +544,9 @@ const WhatsAppLink = () => {
   }
 
   return (
-    <div className="container mx-auto max-w-5xl py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
+    <div className="container mx-auto max-w-5xl py-8 px-4 sm:px-6">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-4 sm:mb-0">
           <h1 className="text-2xl font-bold">WhatsApp Instances</h1>
           <p className="text-sm text-muted-foreground">
             {instances.length} of {instanceLimit} instances used
@@ -450,6 +555,7 @@ const WhatsAppLink = () => {
         <Button
           onClick={() => setShowCreateForm(true)}
           disabled={instances.length >= instanceLimit || showCreateForm}
+          className="w-full sm:w-auto"
         >
           <Plus className="mr-2 h-4 w-4" />
           New Instance
@@ -493,11 +599,11 @@ const WhatsAppLink = () => {
                   </p>
                 )}
               </div>
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-4">
                 <Button 
                   type="submit" 
                   disabled={isLoading || !isValidName || !instanceName}
-                  className="flex-1"
+                  className="w-full"
                 >
                   {isLoading ? (
                     <>
@@ -516,7 +622,7 @@ const WhatsAppLink = () => {
                     setInstanceName('');
                     setIsValidName(true);
                   }}
-                  className="flex-1"
+                  className="w-full"
                 >
                   Cancel
                 </Button>
@@ -526,21 +632,17 @@ const WhatsAppLink = () => {
         </Card>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {instances.map((instance) => (
-          <Card key={instance.id} className="flex flex-col">
+          <Card 
+            key={instance.id} 
+            className="flex flex-col transition-all duration-200 hover:shadow-lg"
+          >
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>{instance.instance_name}</CardTitle>
                 <StatusBadge status={instance.status} />
               </div>
-              <CardDescription>
-                {instance.last_connected && (
-                  <span className="text-sm text-muted-foreground">
-                    Last connected: {new Date(instance.last_connected).toLocaleString()}
-                  </span>
-                )}
-              </CardDescription>
             </CardHeader>
             <CardContent className="flex-grow">
               <div className="space-y-4">
@@ -554,57 +656,13 @@ const WhatsAppLink = () => {
                     />
                   </div>
                 )}
-                <div className="flex flex-col gap-2">
-                  {instance.status === 'CONNECTED' && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => handleLogout(instance.id, instance.instance_name)}
-                      disabled={isLoading}
-                      className="w-full"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Logging out...
-                        </>
-                      ) : (
-                        'Logout'
-                      )}
-                    </Button>
-                  )}
-                  {instance.status === 'DISCONNECTED' && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => handleReconnect(instance.id, instance.instance_name)}
-                      disabled={isLoading}
-                      className="w-full"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Reconnecting...
-                        </>
-                      ) : (
-                        'Reconnect'
-                      )}
-                    </Button>
-                  )}
-                  <Button
-                    variant="destructive"
-                    onClick={() => handleDelete(instance.id, instance.instance_name)}
-                    disabled={isLoading}
-                    className="w-full"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      'Delete Instance'
-                    )}
-                  </Button>
-                </div>
+                <InstanceActions
+                  instance={instance}
+                  isLoading={isLoading}
+                  onLogout={() => handleLogout(instance.id, instance.instance_name)}
+                  onReconnect={() => handleReconnect(instance.id, instance.instance_name)}
+                  onDelete={() => handleDelete(instance.id, instance.instance_name)}
+                />
               </div>
             </CardContent>
           </Card>
