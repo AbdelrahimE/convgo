@@ -25,43 +25,48 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let mounted = true;
-
-    async function getInitialSession() {
+    console.log('AuthProvider mounting');
+    
+    // Get initial session
+    const getInitialSession = async () => {
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        if (mounted) {
-          if (initialSession) {
-            setSession(initialSession);
-            setUser(initialSession.user);
-          }
-          setLoading(false);
+        console.log('Initial session:', initialSession?.user?.email);
+        
+        if (initialSession) {
+          setSession(initialSession);
+          setUser(initialSession.user);
         }
       } catch (error) {
         console.error('Error getting initial session:', error);
-        if (mounted) {
-          setLoading(false);
-        }
+      } finally {
+        setLoading(false);
       }
-    }
+    };
 
     getInitialSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, currentSession) => {
-        if (mounted) {
-          setSession(currentSession);
-          setUser(currentSession?.user ?? null);
-          setLoading(false);
-        }
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
+      console.log('Auth state changed:', event, currentSession?.user?.email);
+      
+      // Only update if there's an actual change
+      const hasSessionChanged = currentSession?.user?.id !== session?.user?.id;
+      if (hasSessionChanged) {
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
       }
-    );
+      setLoading(false);
+    });
 
     return () => {
-      mounted = false;
+      console.log('AuthProvider unmounting');
       subscription.unsubscribe();
     };
   }, []);
+
+  // Provide some debug information
+  console.log('AuthProvider rendering with:', { session, user, loading });
 
   const value = {
     session,
