@@ -23,31 +23,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-    
     // Get initial session
     const getInitialSession = async () => {
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        console.log('Initial session fetch:', initialSession?.user?.email);
+        console.log('Initial session:', initialSession?.user?.email);
         
-        if (mounted) {
-          if (initialSession) {
-            setSession(initialSession);
-            setUser(initialSession.user);
-          }
-          setInitialized(true);
-          setLoading(false);
+        if (initialSession) {
+          setSession(initialSession);
+          setUser(initialSession.user);
         }
       } catch (error) {
         console.error('Error getting initial session:', error);
-        if (mounted) {
-          setInitialized(true);
-          setLoading(false);
-        }
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -57,15 +48,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
       console.log('Auth state changed:', event, currentSession?.user?.email);
       
-      if (mounted && initialized) {
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        setLoading(false);
-      }
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+      setLoading(false);
     });
 
     return () => {
-      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -73,13 +61,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const value = {
     session,
     user,
-    loading: loading || !initialized
+    loading
   };
 
   console.log('AuthProvider state:', { 
     userEmail: user?.email,
     loading,
-    initialized
+    hasSession: !!session
   });
 
   return (
