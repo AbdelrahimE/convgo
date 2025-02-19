@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,7 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Check, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface WhatsAppInstance {
   id: string;
@@ -21,6 +23,49 @@ interface WhatsAppInstance {
   last_connected: string | null;
   qr_code?: string;
 }
+
+const statusConfig = {
+  CONNECTED: {
+    color: "text-green-500 bg-green-50 dark:bg-green-950/50",
+    icon: Check,
+    animation: "",
+    label: "Connected"
+  },
+  DISCONNECTED: {
+    color: "text-red-500 bg-red-50 dark:bg-red-950/50",
+    icon: X,
+    animation: "",
+    label: "Disconnected"
+  },
+  CONNECTING: {
+    color: "text-yellow-500 bg-yellow-50 dark:bg-yellow-950/50",
+    icon: Loader2,
+    animation: "animate-spin",
+    label: "Connecting"
+  },
+  CREATED: {
+    color: "text-yellow-500 bg-yellow-50 dark:bg-yellow-950/50",
+    icon: Loader2,
+    animation: "animate-spin",
+    label: "Connecting"
+  }
+};
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const config = statusConfig[status as keyof typeof statusConfig];
+  const Icon = config.icon;
+
+  return (
+    <div className={cn(
+      "inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium",
+      config.color,
+      status === "CONNECTING" && "animate-pulse"
+    )}>
+      <Icon className={cn("w-4 h-4 mr-1.5", config.animation)} />
+      {config.label}
+    </div>
+  );
+};
 
 const WhatsAppLink = () => {
   const { user, loading: authLoading } = useAuth();
@@ -485,9 +530,16 @@ const WhatsAppLink = () => {
         {instances.map((instance) => (
           <Card key={instance.id} className="flex flex-col">
             <CardHeader>
-              <CardTitle>{instance.instance_name}</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>{instance.instance_name}</CardTitle>
+                <StatusBadge status={instance.status} />
+              </div>
               <CardDescription>
-                Status: {instance.status.toLowerCase()}
+                {instance.last_connected && (
+                  <span className="text-sm text-muted-foreground">
+                    Last connected: {new Date(instance.last_connected).toLocaleString()}
+                  </span>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-grow">
@@ -501,11 +553,6 @@ const WhatsAppLink = () => {
                       className="w-full max-w-[200px] h-auto mx-auto"
                     />
                   </div>
-                )}
-                {instance.last_connected && (
-                  <p className="text-sm text-muted-foreground">
-                    Last connected: {new Date(instance.last_connected).toLocaleString()}
-                  </p>
                 )}
                 <div className="flex flex-col gap-2">
                   {instance.status === 'CONNECTED' && (
