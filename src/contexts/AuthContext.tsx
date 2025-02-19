@@ -24,6 +24,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshAttempts, setRefreshAttempts] = useState(0);
 
   // Validate token format and expiration
   const validateToken = (currentSession: Session | null): boolean => {
@@ -46,18 +47,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return false;
       }
 
-      // Check token expiration
+      // Check token expiration with 5-minute buffer
       if (expires_at) {
         const expirationTime = new Date(expires_at * 1000);
         const currentTime = new Date();
+        const bufferTime = new Date(currentTime.getTime() + 5 * 60 * 1000); // 5 minutes buffer
+        
         console.debug('Token expiration check:', {
           expirationTime: expirationTime.toISOString(),
           currentTime: currentTime.toISOString(),
-          hasExpired: expirationTime <= currentTime
+          bufferTime: bufferTime.toISOString(),
+          hasExpired: expirationTime <= bufferTime
         });
 
-        if (expirationTime <= currentTime) {
-          console.error('Token validation failed: Token has expired');
+        if (expirationTime <= bufferTime) {
+          console.error('Token validation failed: Token will expire soon or has expired');
           return false;
         }
       }
@@ -71,7 +75,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Handle session update with validation
-  const handleSessionUpdate = (currentSession: Session | null) => {
+  const handleSessionUpdate = async (currentSession: Session | null) => {
     console.debug('Session update handler:', { 
       hasSession: !!currentSession,
       userEmail: currentSession?.user?.email,
@@ -85,19 +89,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.debug('Setting valid session and user');
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
-    } else if (currentSession) {
+      setRefreshAttempts(0); // Reset refresh attempts on valid session
+    } else if (currentSession && refreshAttempts < 3) {
       console.debug('Invalid session detected, attempting refresh');
-      supabase.auth.refreshSession().then(({ data, error }) => {
+      setRefreshAttempts(prev => prev + 1);
+      
+      try {
+        const { data, error } = await supabase.auth.refreshSession();
         console.debug('Session refresh attempt result:', {
           success: !!data.session,
           error: error?.message,
           newTokenExpiry: data.session?.expires_at ? new Date(data.session.expires_at * 1000).toISOString() : 'N/A'
         });
-      });
+
+        if (error) throw error;
+        
+        if (data.session) {
+          handleSessionUpdate(data.session);
+        } else {
+          console.debug('No session after refresh, clearing state');
+          setSession(null);
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Session refresh failed:', error);
+        setSession(null);
+        setUser(null);
+        toast.error('Your session has expired. Please log in again.');
+      }
     } else {
       console.debug('Clearing invalid session and user');
       setSession(null);
       setUser(null);
+      if (refreshAttempts >= 3) {
+        toast.error('Unable to maintain session. Please log in again.');
+      }
     }
   };
 
@@ -124,21 +150,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
             toast.error('Error fetching session');
           }
 
-          handleSessionUpdate(initialSession);
+          await handleSessionUpdate(initialSession);
           
-          console.debug('Delaying loading state update');
-          setTimeout(() => {
-            if (mounted) {
-              console.debug('Setting loading to false');
-              setLoading(false);
-            }
-          }, 100);
+          console.debug('Setting loading to false');
+          setLoading(false);
         }
       } catch (error) {
         console.error('Fatal error getting initial session:', error);
         if (mounted) {
           toast.error('Error initializing authentication');
-          console.debug('Setting loading to false after error');
           setLoading(false);
         }
       }
@@ -148,7 +168,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Listen for auth changes with validation
     console.debug('Setting up auth state change listener');
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
       console.debug('Auth state change detected:', { 
         event, 
         userEmail: currentSession?.user?.email,
@@ -157,7 +177,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
       
       if (mounted) {
-        handleSessionUpdate(currentSession);
+        await handleSessionUpdate(currentSession);
       }
     });
 
@@ -166,7 +186,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [refreshAttempts]); // Add refreshAttempts as dependency
 
   const value = {
     session,
@@ -181,7 +201,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     hasSession: !!session,
     hasValidToken: session ? validateToken(session) : false,
     pathname: window.location.pathname,
-    sessionExpiry: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'N/A'
+    sessionExpiry: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'N/A',
+    refreshAttempts
   });
 
   return (
