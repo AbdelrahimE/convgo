@@ -35,7 +35,20 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Loader2, Plus, Check, X, MoreVertical, RefreshCw, LogOut, Trash2 } from "lucide-react";
+import { 
+  Loader2, 
+  Plus, 
+  Check, 
+  X, 
+  MoreVertical, 
+  RefreshCw, 
+  LogOut, 
+  Trash2,
+  MessageSquare,
+  ArrowRight,
+  FileText,
+  Bot
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface WhatsAppInstance {
@@ -169,6 +182,100 @@ const InstanceActions = ({
         </AlertDialog>
       </div>
     </TooltipProvider>
+  );
+};
+
+const EmptyState = ({ onCreateClick }: { onCreateClick: () => void }) => {
+  return (
+    <Card className="w-full max-w-3xl mx-auto">
+      <CardContent className="p-6 sm:p-8">
+        <div className="flex flex-col items-center text-center space-y-8">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-full bg-primary/5 flex items-center justify-center">
+              <MessageSquare className="w-12 h-12 text-primary/40" />
+            </div>
+            <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center animate-pulse">
+              <Bot className="w-4 h-4 text-primary/40" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-2xl font-semibold tracking-tight">
+              Start Your WhatsApp Integration
+            </h3>
+            <p className="text-muted-foreground max-w-sm mx-auto">
+              Connect your WhatsApp account to start automating responses with AI
+            </p>
+          </div>
+
+          <div className="w-full max-w-md space-y-6">
+            <div className="space-y-4">
+              {[
+                {
+                  title: "Create an Instance",
+                  description: "Set up your first WhatsApp connection",
+                  icon: Plus
+                },
+                {
+                  title: "Scan QR Code",
+                  description: "Link your WhatsApp account securely",
+                  icon: MessageSquare
+                },
+                {
+                  title: "Start Automating",
+                  description: "Let AI handle your customer inquiries",
+                  icon: Bot
+                }
+              ].map((step, index) => (
+                <div key={index} className="flex items-start space-x-4 text-left">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <step.icon className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium">{step.title}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {step.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-4">
+              <Button 
+                onClick={onCreateClick} 
+                className="w-full"
+                size="lg"
+              >
+                Create Your First Instance
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  size="lg"
+                  onClick={() => window.open("https://doc.evolution-api.com/", "_blank")}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  View Documentation
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  size="lg"
+                  onClick={() => window.open("https://doc.evolution-api.com/overview/about-evolution", "_blank")}
+                >
+                  <Bot className="mr-2 h-4 w-4" />
+                  Learn About AI Integration
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -632,51 +739,45 @@ const WhatsAppLink = () => {
         </Card>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {instances.map((instance) => (
-          <Card 
-            key={instance.id} 
-            className="flex flex-col transition-all duration-200 hover:shadow-lg"
-          >
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>{instance.instance_name}</CardTitle>
-                <StatusBadge status={instance.status} />
-              </div>
-            </CardHeader>
-            <CardContent className="flex-grow">
-              <div className="space-y-4">
-                {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && (
-                  <div className="flex flex-col items-center space-y-2">
-                    <p className="text-sm font-medium">Scan QR Code to Connect</p>
-                    <img 
-                      src={instance.qr_code}
-                      alt="WhatsApp QR Code" 
-                      className="w-full max-w-[200px] h-auto mx-auto"
-                    />
-                  </div>
-                )}
-                <InstanceActions
-                  instance={instance}
-                  isLoading={isLoading}
-                  onLogout={() => handleLogout(instance.id, instance.instance_name)}
-                  onReconnect={() => handleReconnect(instance.id, instance.instance_name)}
-                  onDelete={() => handleDelete(instance.id, instance.instance_name)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {instances.length === 0 && !showCreateForm && (
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-center text-muted-foreground">
-              No WhatsApp instances found. Click the "New Instance" button to create one.
-            </p>
-          </CardContent>
-        </Card>
+      {instances.length > 0 ? (
+        <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {instances.map((instance) => (
+            <Card 
+              key={instance.id} 
+              className="flex flex-col transition-all duration-200 hover:shadow-lg"
+            >
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>{instance.instance_name}</CardTitle>
+                  <StatusBadge status={instance.status} />
+                </div>
+              </CardHeader>
+              <CardContent className="flex-grow">
+                <div className="space-y-4">
+                  {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && (
+                    <div className="flex flex-col items-center space-y-2">
+                      <p className="text-sm font-medium">Scan QR Code to Connect</p>
+                      <img 
+                        src={instance.qr_code}
+                        alt="WhatsApp QR Code" 
+                        className="w-full max-w-[200px] h-auto mx-auto"
+                      />
+                    </div>
+                  )}
+                  <InstanceActions
+                    instance={instance}
+                    isLoading={isLoading}
+                    onLogout={() => handleLogout(instance.id, instance.instance_name)}
+                    onReconnect={() => handleReconnect(instance.id, instance.instance_name)}
+                    onDelete={() => handleDelete(instance.id, instance.instance_name)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : !showCreateForm && (
+        <EmptyState onCreateClick={() => setShowCreateForm(true)} />
       )}
     </div>
   );
