@@ -74,6 +74,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  // Verify user data is complete
+  const verifyUserData = async (currentSession: Session | null): Promise<boolean> => {
+    if (!currentSession?.user) {
+      console.debug('User verification failed: No user in session');
+      return false;
+    }
+
+    try {
+      // Verify we can get user data from Supabase
+      const { data: { user: userData }, error } = await supabase.auth.getUser();
+      
+      console.debug('User verification check:', {
+        hasUserData: !!userData,
+        error: error?.message,
+        userEmail: userData?.email,
+        sessionUserMatch: userData?.id === currentSession.user.id
+      });
+
+      if (error || !userData) {
+        console.error('User verification failed:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('User verification error:', error);
+      return false;
+    }
+  };
+
   // Handle session update with validation
   const handleSessionUpdate = async (currentSession: Session | null) => {
     console.debug('Session update handler:', { 
@@ -82,16 +112,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
       accessToken: currentSession?.access_token ? '[PRESENT]' : '[MISSING]'
     });
 
-    const isValid = validateToken(currentSession);
-    console.debug('Session validation result:', { isValid });
+    const isTokenValid = validateToken(currentSession);
+    const isUserValid = await verifyUserData(currentSession);
     
-    if (isValid) {
+    console.debug('Validation results:', { isTokenValid, isUserValid });
+    
+    if (isTokenValid && isUserValid) {
       console.debug('Setting valid session and user');
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
-      setRefreshAttempts(0); // Reset refresh attempts on valid session
+      setRefreshAttempts(0);
     } else if (currentSession && refreshAttempts < 3) {
-      console.debug('Invalid session detected, attempting refresh');
+      console.debug('Invalid session or user data, attempting refresh');
       setRefreshAttempts(prev => prev + 1);
       
       try {
@@ -151,8 +183,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }
 
           await handleSessionUpdate(initialSession);
-          
-          console.debug('Setting loading to false');
           setLoading(false);
         }
       } catch (error) {
@@ -186,7 +216,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [refreshAttempts]); // Add refreshAttempts as dependency
+  }, [refreshAttempts]);
 
   const value = {
     session,
