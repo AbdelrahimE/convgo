@@ -21,15 +21,10 @@ function AppContent() {
         {!isAuthPage && <AppSidebar />}
         <main className="flex-1 px-4 py-8 overflow-auto">
           <Routes>
+            {/* Auth route - not protected */}
             <Route path="/auth" element={<Auth />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Navigate to="/dashboard" replace />
-                </ProtectedRoute>
-              }
-            />
+
+            {/* Protected routes */}
             <Route
               path="/dashboard"
               element={
@@ -53,6 +48,12 @@ function AppContent() {
                   <WhatsAppLink />
                 </ProtectedRoute>
               }
+            />
+
+            {/* Redirect root to dashboard */}
+            <Route
+              path="/"
+              element={<Navigate to="/dashboard" replace />}
             />
           </Routes>
         </main>
