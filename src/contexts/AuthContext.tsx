@@ -25,33 +25,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('AuthProvider mounted');
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Initial session:', session);
-      setSession(session);
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      setSession(initialSession);
+      setUser(initialSession?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('Auth state changed:', session);
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+    // Set up auth state change listener
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      // Only update if the session actually changed
+      if (JSON.stringify(currentSession) !== JSON.stringify(session)) {
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    // Cleanup subscription
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []); // Remove session from dependencies
 
   const value = {
     session,
     user,
-    loading
+    loading,
   };
-
-  console.log('AuthProvider rendering with:', value);
 
   return (
     <AuthContext.Provider value={value}>
