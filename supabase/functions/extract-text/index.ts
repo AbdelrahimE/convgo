@@ -1,14 +1,79 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { convert } from 'https://deno.land/x/docx2text/mod.ts'
+import { read as readPDF } from 'https://deno.land/x/pdf_text_deno/mod.ts'
+import { detect } from 'https://deno.land/x/franc@v6.1.0/mod.ts'
+import { getLanguageNameFromISOCode } from 'https://deno.land/x/iso_639_1@v1.0.1/mod.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+async function detectTextLanguage(text: string) {
+  try {
+    // Split text into chunks for better language detection
+    const chunks = text.split(/[.!?]+/).filter(chunk => chunk.trim().length > 30);
+    const detectedLanguages = new Set<string>();
+    let primaryLanguage = null;
+
+    // Detect language for each significant chunk
+    for (const chunk of chunks) {
+      const langCode = detect(chunk);
+      if (langCode && langCode !== 'und') {
+        const langName = getLanguageNameFromISOCode(langCode);
+        if (langName) {
+          detectedLanguages.add(langName);
+          // Use the first detected language as primary if not set
+          if (!primaryLanguage) {
+            primaryLanguage = langName;
+          }
+        }
+      }
+    }
+
+    return {
+      primaryLanguage,
+      detectedLanguages: Array.from(detectedLanguages),
+      direction: isRTL(text) ? 'rtl' : 'ltr'
+    };
+  } catch (error) {
+    console.error('Language detection error:', error);
+    return {
+      primaryLanguage: null,
+      detectedLanguages: [],
+      direction: 'ltr'
+    };
+  }
+}
+
+function isRTL(text: string): boolean {
+  const rtlRegex = /[\u0591-\u07FF\u200F\u202B\u202E\uFB1D-\uFDFD\uFE70-\uFEFC]/;
+  return rtlRegex.test(text);
+}
+
+async function extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
+  try {
+    const textContent = await readPDF(new Uint8Array(arrayBuffer));
+    return textContent.trim();
+  } catch (error) {
+    console.error('PDF extraction error:', error);
+    throw new Error('Failed to extract text from PDF');
+  }
+}
+
+async function extractTextFromDOCX(arrayBuffer: ArrayBuffer): Promise<string> {
+  try {
+    const textContent = await convert(new Uint8Array(arrayBuffer));
+    return textContent.trim();
+  } catch (error) {
+    console.error('DOCX extraction error:', error);
+    throw new Error('Failed to extract text from DOCX');
+  }
+}
+
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -56,28 +121,35 @@ serve(async (req) => {
     }
 
     // Extract text based on file type
-    let extractedText = ''
-    const blob = new Blob([await fileContent.arrayBuffer()])
+    const arrayBuffer = await fileContent.arrayBuffer();
+    let extractedText = '';
 
-    if (fileData.mime_type === 'text/plain') {
-      extractedText = await blob.text()
-    } else if (fileData.mime_type === 'text/csv') {
-      extractedText = await blob.text()
-    } else if (
-      fileData.mime_type === 'application/pdf' ||
-      fileData.mime_type === 'application/msword' ||
-      fileData.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ) {
-      // For PDF/DOC/DOCX we'll use a text extraction service
-      // This is a placeholder - we'll implement the actual extraction in the next step
-      extractedText = await blob.text()
+    switch (fileData.mime_type) {
+      case 'text/plain':
+      case 'text/csv':
+        extractedText = await new Blob([arrayBuffer]).text();
+        break;
+      case 'application/pdf':
+        extractedText = await extractTextFromPDF(arrayBuffer);
+        break;
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+        extractedText = await extractTextFromDOCX(arrayBuffer);
+        break;
+      default:
+        throw new Error(`Unsupported file type: ${fileData.mime_type}`);
     }
 
-    // Update file with extracted text
+    // Detect language and text direction
+    const { primaryLanguage, detectedLanguages, direction } = await detectTextLanguage(extractedText);
+
+    // Update file with extracted text and language information
     const { error: updateError } = await supabase
       .from('files')
       .update({
         text_content: extractedText,
+        primary_language: primaryLanguage,
+        detected_languages: detectedLanguages,
+        text_direction: direction,
         text_extraction_status: {
           status: 'completed',
           error: null,
@@ -91,7 +163,13 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, message: 'Text extraction completed' }),
+      JSON.stringify({ 
+        success: true, 
+        message: 'Text extraction completed',
+        languages: detectedLanguages,
+        primaryLanguage,
+        direction
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
