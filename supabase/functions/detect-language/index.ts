@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { detectLanguage } from "https://deno.land/x/whatlang@0.1.0/mod.ts"
+import { franc } from "https://esm.sh/franc@6.1.0"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,11 +27,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Detect language
-    const result = detectLanguage(text)
-    const detectedLanguage = result?.lang?.toString().toLowerCase() ?? 'und'
-    const isReliable = true // whatlang Deno version doesn't provide reliability info
-    const direction = ['ar', 'fa', 'he', 'ur'].includes(detectedLanguage) ? 'rtl' : 'ltr'
+    // Detect language using franc
+    const detectedLanguage = franc(text) || 'und'
+    const direction = ['ara', 'fas', 'heb', 'urd'].includes(detectedLanguage) ? 'rtl' : 'ltr'
 
     console.log('Language detection result:', {
       text: text.substring(0, 100) + '...', // Log first 100 chars for debugging
@@ -49,8 +47,8 @@ serve(async (req) => {
         language: detectedLanguage,
         direction,
         metadata: {
-          confidence: 'medium', // Default confidence level since reliability info isn't available
-          script: 'unknown' // This version doesn't provide script info
+          confidence: 'high', // Franc has good accuracy for text > 10 characters
+          script: 'auto'
         }
       })
       .select()
