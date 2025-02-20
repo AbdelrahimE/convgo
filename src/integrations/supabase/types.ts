@@ -24,6 +24,7 @@ export type Database = {
           size_bytes: number
           text_content: string | null
           text_direction: string | null
+          text_validation_status: Json | null
           updated_at: string | null
         }
         Insert: {
@@ -40,6 +41,7 @@ export type Database = {
           size_bytes: number
           text_content?: string | null
           text_direction?: string | null
+          text_validation_status?: Json | null
           updated_at?: string | null
         }
         Update: {
@@ -56,6 +58,7 @@ export type Database = {
           size_bytes?: number
           text_content?: string | null
           text_direction?: string | null
+          text_validation_status?: Json | null
           updated_at?: string | null
         }
         Relationships: [
@@ -109,34 +112,43 @@ export type Database = {
       }
       text_chunks: {
         Row: {
+          character_set: string | null
           chunk_order: number
           content: string
           created_at: string | null
           direction: string | null
+          encoding: string | null
           file_id: string | null
           id: string
           language: string | null
           metadata: Json | null
+          validation_status: Json | null
         }
         Insert: {
+          character_set?: string | null
           chunk_order: number
           content: string
           created_at?: string | null
           direction?: string | null
+          encoding?: string | null
           file_id?: string | null
           id?: string
           language?: string | null
           metadata?: Json | null
+          validation_status?: Json | null
         }
         Update: {
+          character_set?: string | null
           chunk_order?: number
           content?: string
           created_at?: string | null
           direction?: string | null
+          encoding?: string | null
           file_id?: string | null
           id?: string
           language?: string | null
           metadata?: Json | null
+          validation_status?: Json | null
         }
         Relationships: [
           {

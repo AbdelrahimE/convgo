@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Languages } from "lucide-react";
+import { AlertCircle, CheckCircle2, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +28,13 @@ type FileItem = {
   primary_language?: string;
   text_direction?: string;
   detected_languages?: string[];
+  text_validation_status?: {
+    isValid: boolean;
+    chunks: Array<{
+      isValid: boolean;
+      errors: string[];
+    }>;
+  };
 };
 
 type ViewMode = "list" | "grid";
@@ -230,6 +238,9 @@ export function FileList() {
               >
                 Language {sortField === "primary_language" && (sortOrder === "asc" ? "↑" : "↓")}
               </TableHead>
+              <TableHead className="hidden xl:table-cell min-w-[100px]">
+                Validation
+              </TableHead>
               <TableHead 
                 className="hidden xl:table-cell cursor-pointer min-w-[120px]"
                 onClick={() => handleSort("created_at")}
@@ -243,7 +254,7 @@ export function FileList() {
             <AnimatePresence>
               {filteredFiles.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -276,6 +287,35 @@ export function FileList() {
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       {getLanguageDisplay(file)}
+                    </TableCell>
+                    <TableCell className="hidden xl:table-cell">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <div className="flex items-center gap-2">
+                              {file.text_validation_status?.isValid ? (
+                                <CheckCircle2 className="h-5 w-5 text-green-500" />
+                              ) : (
+                                <AlertCircle className="h-5 w-5 text-yellow-500" />
+                              )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <div className="text-sm">
+                              {file.text_validation_status?.isValid 
+                                ? "Text validation passed"
+                                : "Some chunks have validation issues"}
+                            </div>
+                            {!file.text_validation_status?.isValid && file.text_validation_status?.chunks.map((chunk, idx) => (
+                              !chunk.isValid && (
+                                <div key={idx} className="text-xs text-red-400 mt-1">
+                                  {chunk.errors.join(", ")}
+                                </div>
+                              )
+                            ))}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </TableCell>
                     <TableCell className="hidden xl:table-cell">
                       {formatDate(file.created_at)}

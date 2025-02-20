@@ -1,11 +1,17 @@
 import { useState, useRef } from "react";
-import { Upload } from "lucide-react";
+import { Upload, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export function FileUploader() {
   const [isUploading, setIsUploading] = useState(false);
@@ -173,7 +179,24 @@ export function FileUploader() {
               ? "Uploading..."
               : "Drag & drop or click to upload"}
           </p>
-          <p className="text-xs sm:text-sm text-gray-500 text-center">PDF, DOC, DOCX, TXT, CSV (max 10MB)</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs sm:text-sm text-gray-500 text-center">PDF, DOC, DOCX, TXT, CSV (max 10MB)</p>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <AlertCircle className="h-4 w-4 text-gray-400" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Files will be validated for:</p>
+                  <ul className="text-xs mt-1 list-disc pl-4">
+                    <li>UTF-8 encoding</li>
+                    <li>Text content presence</li>
+                    <li>Character set compatibility</li>
+                  </ul>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
       </label>
 
