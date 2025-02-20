@@ -12,35 +12,50 @@ export type Database = {
       files: {
         Row: {
           created_at: string | null
+          detected_languages: string[] | null
+          encoding: string | null
           filename: string
           id: string
           mime_type: string
           original_name: string
           path: string
+          primary_language: string | null
           profile_id: string
           size_bytes: number
+          text_content: string | null
+          text_direction: string | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          detected_languages?: string[] | null
+          encoding?: string | null
           filename: string
           id?: string
           mime_type: string
           original_name: string
           path: string
+          primary_language?: string | null
           profile_id: string
           size_bytes: number
+          text_content?: string | null
+          text_direction?: string | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          detected_languages?: string[] | null
+          encoding?: string | null
           filename?: string
           id?: string
           mime_type?: string
           original_name?: string
           path?: string
+          primary_language?: string | null
           profile_id?: string
           size_bytes?: number
+          text_content?: string | null
+          text_direction?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -91,6 +106,47 @@ export type Database = {
           webhook_url?: string | null
         }
         Relationships: []
+      }
+      text_chunks: {
+        Row: {
+          chunk_order: number
+          content: string
+          created_at: string | null
+          direction: string | null
+          file_id: string | null
+          id: string
+          language: string | null
+          metadata: Json | null
+        }
+        Insert: {
+          chunk_order: number
+          content: string
+          created_at?: string | null
+          direction?: string | null
+          file_id?: string | null
+          id?: string
+          language?: string | null
+          metadata?: Json | null
+        }
+        Update: {
+          chunk_order?: number
+          content?: string
+          created_at?: string | null
+          direction?: string | null
+          file_id?: string | null
+          id?: string
+          language?: string | null
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "text_chunks_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_connection_logs: {
         Row: {

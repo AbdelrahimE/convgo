@@ -1,6 +1,5 @@
-
 import { useEffect, useState } from "react";
-import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon } from "lucide-react";
+import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Languages } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { motion, AnimatePresence } from "framer-motion";
+import { Badge } from "@/components/ui/badge";
 
 type FileItem = {
   id: string;
@@ -24,10 +24,13 @@ type FileItem = {
   created_at: string;
   mime_type: string;
   path: string;
+  primary_language?: string;
+  text_direction?: string;
+  detected_languages?: string[];
 };
 
 type ViewMode = "list" | "grid";
-type SortField = "filename" | "created_at" | "size_bytes" | "mime_type";
+type SortField = "filename" | "created_at" | "size_bytes" | "mime_type" | "primary_language";
 type SortOrder = "asc" | "desc";
 
 export function FileList() {
@@ -169,6 +172,30 @@ export function FileList() {
     setFilteredFiles(sorted);
   };
 
+  const getLanguageDisplay = (file: FileItem) => {
+    if (!file.primary_language && (!file.detected_languages || file.detected_languages.length === 0)) {
+      return null;
+    }
+
+    return (
+      <div className="flex items-center gap-2">
+        <Languages className="h-4 w-4" />
+        <div className="flex flex-wrap gap-1">
+          {file.primary_language && (
+            <Badge variant="secondary" className="text-xs">
+              {file.primary_language.toUpperCase()}
+            </Badge>
+          )}
+          {file.detected_languages?.map((lang, index) => (
+            <Badge key={index} variant="outline" className="text-xs">
+              {lang.toUpperCase()}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const renderListView = () => (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -180,7 +207,7 @@ export function FileList() {
           <TableHeader>
             <TableRow>
               <TableHead 
-                className="w-[40%] cursor-pointer min-w-[200px]"
+                className="w-[30%] cursor-pointer min-w-[200px]"
                 onClick={() => handleSort("filename")}
               >
                 Name {sortField === "filename" && (sortOrder === "asc" ? "↑" : "↓")}
@@ -199,6 +226,12 @@ export function FileList() {
               </TableHead>
               <TableHead 
                 className="hidden lg:table-cell cursor-pointer min-w-[120px]"
+                onClick={() => handleSort("primary_language")}
+              >
+                Language {sortField === "primary_language" && (sortOrder === "asc" ? "↑" : "↓")}
+              </TableHead>
+              <TableHead 
+                className="hidden xl:table-cell cursor-pointer min-w-[120px]"
                 onClick={() => handleSort("created_at")}
               >
                 Date {sortField === "created_at" && (sortOrder === "asc" ? "↑" : "↓")}
@@ -210,7 +243,7 @@ export function FileList() {
             <AnimatePresence>
               {filteredFiles.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8">
+                  <TableCell colSpan={6} className="text-center py-8">
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -230,7 +263,7 @@ export function FileList() {
                     className="border-b transition-colors hover:bg-muted/50"
                   >
                     <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
+                      <div className={`flex items-center gap-2 ${file.text_direction === 'rtl' ? 'direction-rtl' : ''}`}>
                         {getFileIcon(file.mime_type)}
                         <span className="truncate">{file.filename}</span>
                       </div>
@@ -242,6 +275,9 @@ export function FileList() {
                       {formatFileSize(file.size_bytes)}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
+                      {getLanguageDisplay(file)}
+                    </TableCell>
+                    <TableCell className="hidden xl:table-cell">
                       {formatDate(file.created_at)}
                     </TableCell>
                     <TableCell className="text-right">
@@ -280,15 +316,18 @@ export function FileList() {
             whileHover={{ scale: 1.02 }}
             className="p-4 border rounded-lg hover:border-primary transition-all duration-200"
           >
-            <div className="w-full text-left">
+            <div className={`w-full text-left ${file.text_direction === 'rtl' ? 'direction-rtl' : ''}`}>
               <div className="flex flex-col items-center gap-2">
                 {getFileIcon(file.mime_type)}
                 <p className="text-sm font-medium truncate w-full text-center">
                   {file.filename}
                 </p>
-                <p className="text-xs text-gray-500">
-                  {formatFileSize(file.size_bytes)}
-                </p>
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-xs text-gray-500">
+                    {formatFileSize(file.size_bytes)}
+                  </p>
+                  {getLanguageDisplay(file)}
+                </div>
               </div>
             </div>
             <div className="mt-4 flex justify-center">
