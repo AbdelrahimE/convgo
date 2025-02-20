@@ -1,7 +1,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { detect } from 'https://deno.land/x/franc@v6.1.0/mod.ts'
+import franc from "https://esm.sh/franc@6.1.0"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,11 +13,11 @@ async function detectTextLanguage(text: string) {
     // Split text into chunks for better language detection
     const chunks = text.split(/[.!?]+/).filter(chunk => chunk.trim().length > 30);
     const detectedLanguages = new Set<string>();
-    let primaryLanguage = detect(text);
+    let primaryLanguage = franc(text);
 
     // Detect language for each significant chunk
     for (const chunk of chunks) {
-      const langCode = detect(chunk);
+      const langCode = franc(chunk);
       if (langCode && langCode !== 'und') {
         detectedLanguages.add(langCode);
       }
