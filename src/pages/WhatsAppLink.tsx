@@ -821,7 +821,7 @@ const WhatsAppLink = () => {
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.5 }}
-                        src={instance.qr_code}
+                        src={formatQrCodeDataUrl(instance.qr_code)}
                         alt="WhatsApp QR Code" 
                         className="w-full max-w-[200px] h-auto mx-auto"
                       />
