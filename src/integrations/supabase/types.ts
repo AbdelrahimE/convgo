@@ -24,6 +24,7 @@ export type Database = {
           size_bytes: number
           text_content: string | null
           text_direction: string | null
+          text_extraction_status: Json | null
           text_validation_status: Json | null
           updated_at: string | null
         }
@@ -41,6 +42,7 @@ export type Database = {
           size_bytes: number
           text_content?: string | null
           text_direction?: string | null
+          text_extraction_status?: Json | null
           text_validation_status?: Json | null
           updated_at?: string | null
         }
@@ -58,6 +60,7 @@ export type Database = {
           size_bytes?: number
           text_content?: string | null
           text_direction?: string | null
+          text_extraction_status?: Json | null
           text_validation_status?: Json | null
           updated_at?: string | null
         }

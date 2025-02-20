@@ -1,3 +1,4 @@
+
 import { useState, useRef } from "react";
 import { Upload, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,24 @@ export function FileUploader() {
     return true;
   };
 
+  const triggerTextExtraction = async (fileId: string) => {
+    try {
+      const { error } = await supabase.functions.invoke('extract-text', {
+        body: { fileId }
+      });
+
+      if (error) throw error;
+
+    } catch (error: any) {
+      console.error('Error triggering text extraction:', error);
+      toast({
+        variant: "destructive",
+        title: "Text Extraction Error",
+        description: "Failed to process file text. Please try again."
+      });
+    }
+  };
+
   const handleUpload = async (file: File) => {
     if (!file || !user) return;
     if (!validateFile(file)) return;
@@ -82,7 +101,7 @@ export function FileUploader() {
 
       if (uploadError) throw uploadError;
 
-      const { error: dbError } = await supabase
+      const { data: fileData, error: dbError } = await supabase
         .from('files')
         .insert({
           filename: file.name,
@@ -91,13 +110,20 @@ export function FileUploader() {
           size_bytes: file.size,
           path: filePath,
           profile_id: user.id
-        });
+        })
+        .select()
+        .single();
 
       if (dbError) throw dbError;
 
+      // Trigger text extraction
+      if (fileData) {
+        await triggerTextExtraction(fileData.id);
+      }
+
       toast({
         title: "Success",
-        description: "File uploaded successfully"
+        description: "File uploaded successfully and text extraction started"
       });
     } catch (error: any) {
       toast({
