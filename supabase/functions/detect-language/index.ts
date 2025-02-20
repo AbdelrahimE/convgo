@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { detect } from "https://esm.sh/@szamotulas/whatlang@0.0.3"
+import { detect } from 'https://esm.sh/whatlang-node@1.5.2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,9 +29,16 @@ serve(async (req) => {
 
     // Detect language
     const result = detect(text)
-    const detectedLanguage = result?.lang.code ?? 'und'
+    const detectedLanguage = result?.lang?.code ?? 'und'
     const isReliable = result?.isReliable ?? false
     const direction = ['ar', 'fa', 'he', 'ur'].includes(detectedLanguage) ? 'rtl' : 'ltr'
+
+    console.log('Language detection result:', {
+      text: text.substring(0, 100) + '...', // Log first 100 chars for debugging
+      detectedLanguage,
+      isReliable,
+      direction
+    })
 
     // Store chunk with language metadata
     const { data: chunkData, error: chunkError } = await supabaseClient
@@ -44,13 +51,14 @@ serve(async (req) => {
         direction,
         metadata: {
           confidence: isReliable ? 'high' : 'low',
-          script: result?.script?.code ?? 'unknown'
+          script: result?.script ?? 'unknown'
         }
       })
       .select()
       .single()
 
     if (chunkError) {
+      console.error('Error storing chunk:', chunkError)
       throw chunkError
     }
 
@@ -62,6 +70,7 @@ serve(async (req) => {
       .single()
 
     if (fileError) {
+      console.error('Error fetching file data:', fileError)
       throw fileError
     }
 
@@ -81,6 +90,7 @@ serve(async (req) => {
       .eq('id', fileId)
 
     if (updateError) {
+      console.error('Error updating file:', updateError)
       throw updateError
     }
 
@@ -98,6 +108,7 @@ serve(async (req) => {
     )
 
   } catch (error) {
+    console.error('Language detection error:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       {
