@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { detect } from 'https://esm.sh/whatlang-node@1.5.2'
+import { detectLanguage } from "https://deno.land/x/whatlang@0.1.0/mod.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,15 +28,14 @@ serve(async (req) => {
     )
 
     // Detect language
-    const result = detect(text)
-    const detectedLanguage = result?.lang?.code ?? 'und'
-    const isReliable = result?.isReliable ?? false
+    const result = detectLanguage(text)
+    const detectedLanguage = result?.lang?.toString().toLowerCase() ?? 'und'
+    const isReliable = true // whatlang Deno version doesn't provide reliability info
     const direction = ['ar', 'fa', 'he', 'ur'].includes(detectedLanguage) ? 'rtl' : 'ltr'
 
     console.log('Language detection result:', {
       text: text.substring(0, 100) + '...', // Log first 100 chars for debugging
       detectedLanguage,
-      isReliable,
       direction
     })
 
@@ -50,8 +49,8 @@ serve(async (req) => {
         language: detectedLanguage,
         direction,
         metadata: {
-          confidence: isReliable ? 'high' : 'low',
-          script: result?.script ?? 'unknown'
+          confidence: 'medium', // Default confidence level since reliability info isn't available
+          script: 'unknown' // This version doesn't provide script info
         }
       })
       .select()
@@ -99,7 +98,7 @@ serve(async (req) => {
         chunk: chunkData,
         language: detectedLanguage,
         direction,
-        isReliable
+        isReliable: true
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
