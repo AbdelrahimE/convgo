@@ -43,19 +43,46 @@ function isRTL(text: string): boolean {
   return rtlRegex.test(text);
 }
 
+async function extractTextWithTika(fileBuffer: ArrayBuffer, contentType: string): Promise<string> {
+  console.log('Sending request to Tika server for content type:', contentType);
+  
+  try {
+    const response = await fetch('https://tika.convgo.com/tika', {
+      method: 'PUT',
+      headers: {
+        'Accept': 'text/plain',
+        'Content-Type': contentType
+      },
+      body: fileBuffer
+    });
+
+    if (!response.ok) {
+      console.error('Tika server error:', response.status, await response.text());
+      throw new Error(`Tika server returned status ${response.status}`);
+    }
+
+    const extractedText = await response.text();
+    console.log('Text extraction successful, length:', extractedText.length);
+    return extractedText;
+  } catch (error) {
+    console.error('Text extraction failed:', error);
+    throw new Error(`Text extraction failed: ${error.message}`);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
+    const { fileId } = await req.json()
+    console.log('Processing file:', fileId)
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-
-    const { fileId } = await req.json()
-    console.log('Processing file:', fileId)
 
     // Get file metadata from database
     const { data: fileData, error: fileError } = await supabase
@@ -65,8 +92,14 @@ serve(async (req) => {
       .single()
 
     if (fileError) {
+      console.error('Failed to get file metadata:', fileError);
       throw new Error(`Failed to get file metadata: ${fileError.message}`)
     }
+
+    console.log('File metadata retrieved:', { 
+      path: fileData.path, 
+      type: fileData.mime_type 
+    });
 
     // Update extraction status to processing
     await supabase
@@ -87,19 +120,27 @@ serve(async (req) => {
       .download(fileData.path)
 
     if (downloadError) {
+      console.error('Failed to download file:', downloadError);
       throw new Error(`Failed to download file: ${downloadError.message}`)
     }
 
     // Extract text from file
     let extractedText = '';
     try {
-      // For now, we'll handle text-based files only
-      // For PDF and DOCX, we'll need to implement a separate service
       if (fileData.mime_type === 'text/plain' || fileData.mime_type === 'text/csv') {
+        // Handle text files directly
         const blob = new Blob([await fileContent.arrayBuffer()]);
         extractedText = await blob.text();
+      } else if (
+        fileData.mime_type === 'application/pdf' ||
+        fileData.mime_type === 'application/msword' ||
+        fileData.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ) {
+        // Use Tika for PDF and Office documents
+        const fileBuffer = await fileContent.arrayBuffer();
+        extractedText = await extractTextWithTika(fileBuffer, fileData.mime_type);
       } else {
-        throw new Error(`File type ${fileData.mime_type} processing not yet implemented`);
+        throw new Error(`Unsupported file type: ${fileData.mime_type}`);
       }
     } catch (error) {
       console.error('Text extraction error:', error);
@@ -108,6 +149,11 @@ serve(async (req) => {
 
     // Detect language and text direction
     const { primaryLanguage, detectedLanguages, direction } = await detectTextLanguage(extractedText);
+    console.log('Language detection results:', { 
+      primaryLanguage, 
+      detectedLanguages, 
+      direction 
+    });
 
     // Update file with extracted text and language information
     const { error: updateError } = await supabase
@@ -126,8 +172,11 @@ serve(async (req) => {
       .eq('id', fileId)
 
     if (updateError) {
+      console.error('Failed to update file with extracted text:', updateError);
       throw new Error(`Failed to update file with extracted text: ${updateError.message}`)
     }
+
+    console.log('Text extraction completed successfully for file:', fileId);
 
     return new Response(
       JSON.stringify({ 
