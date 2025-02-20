@@ -1,10 +1,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { convert } from 'https://deno.land/x/docx2text/mod.ts'
-import { read as readPDF } from 'https://deno.land/x/pdf_text_deno/mod.ts'
 import { detect } from 'https://deno.land/x/franc@v6.1.0/mod.ts'
-import { getLanguageNameFromISOCode } from 'https://deno.land/x/iso_639_1@v1.0.1/mod.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,20 +13,13 @@ async function detectTextLanguage(text: string) {
     // Split text into chunks for better language detection
     const chunks = text.split(/[.!?]+/).filter(chunk => chunk.trim().length > 30);
     const detectedLanguages = new Set<string>();
-    let primaryLanguage = null;
+    let primaryLanguage = detect(text);
 
     // Detect language for each significant chunk
     for (const chunk of chunks) {
       const langCode = detect(chunk);
       if (langCode && langCode !== 'und') {
-        const langName = getLanguageNameFromISOCode(langCode);
-        if (langName) {
-          detectedLanguages.add(langName);
-          // Use the first detected language as primary if not set
-          if (!primaryLanguage) {
-            primaryLanguage = langName;
-          }
-        }
+        detectedLanguages.add(langCode);
       }
     }
 
@@ -51,26 +41,6 @@ async function detectTextLanguage(text: string) {
 function isRTL(text: string): boolean {
   const rtlRegex = /[\u0591-\u07FF\u200F\u202B\u202E\uFB1D-\uFDFD\uFE70-\uFEFC]/;
   return rtlRegex.test(text);
-}
-
-async function extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
-  try {
-    const textContent = await readPDF(new Uint8Array(arrayBuffer));
-    return textContent.trim();
-  } catch (error) {
-    console.error('PDF extraction error:', error);
-    throw new Error('Failed to extract text from PDF');
-  }
-}
-
-async function extractTextFromDOCX(arrayBuffer: ArrayBuffer): Promise<string> {
-  try {
-    const textContent = await convert(new Uint8Array(arrayBuffer));
-    return textContent.trim();
-  } catch (error) {
-    console.error('DOCX extraction error:', error);
-    throw new Error('Failed to extract text from DOCX');
-  }
 }
 
 serve(async (req) => {
@@ -120,23 +90,20 @@ serve(async (req) => {
       throw new Error(`Failed to download file: ${downloadError.message}`)
     }
 
-    // Extract text based on file type
-    const arrayBuffer = await fileContent.arrayBuffer();
+    // Extract text from file
     let extractedText = '';
-
-    switch (fileData.mime_type) {
-      case 'text/plain':
-      case 'text/csv':
-        extractedText = await new Blob([arrayBuffer]).text();
-        break;
-      case 'application/pdf':
-        extractedText = await extractTextFromPDF(arrayBuffer);
-        break;
-      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-        extractedText = await extractTextFromDOCX(arrayBuffer);
-        break;
-      default:
-        throw new Error(`Unsupported file type: ${fileData.mime_type}`);
+    try {
+      // For now, we'll handle text-based files only
+      // For PDF and DOCX, we'll need to implement a separate service
+      if (fileData.mime_type === 'text/plain' || fileData.mime_type === 'text/csv') {
+        const blob = new Blob([await fileContent.arrayBuffer()]);
+        extractedText = await blob.text();
+      } else {
+        throw new Error(`File type ${fileData.mime_type} processing not yet implemented`);
+      }
+    } catch (error) {
+      console.error('Text extraction error:', error);
+      throw new Error(`Failed to extract text: ${error.message}`);
     }
 
     // Detect language and text direction
