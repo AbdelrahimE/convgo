@@ -1,6 +1,12 @@
+
 import { useEffect, useState } from "react";
-import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Languages } from "lucide-react";
-import { AlertCircle, CheckCircle2, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -14,9 +20,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Progress } from "@/components/ui/progress";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
+
+type ValidationStatus = {
+  isValid: boolean;
+  chunks: Array<{
+    isValid: boolean;
+    errors: string[];
+  }>;
+};
 
 type FileItem = {
   id: string;
@@ -28,13 +41,7 @@ type FileItem = {
   primary_language?: string;
   text_direction?: string;
   detected_languages?: string[];
-  text_validation_status?: {
-    isValid: boolean;
-    chunks: Array<{
-      isValid: boolean;
-      errors: string[];
-    }>;
-  };
+  text_validation_status?: ValidationStatus | null;
 };
 
 type ViewMode = "list" | "grid";
@@ -78,8 +85,19 @@ export function FileList() {
       }
       
       console.log('Fetched files:', data);
-      setFiles(data || []);
-      setFilteredFiles(data || []);
+      
+      // Parse the text_validation_status for each file
+      const parsedFiles = data?.map(file => ({
+        ...file,
+        text_validation_status: file.text_validation_status ? 
+          (typeof file.text_validation_status === 'string' 
+            ? JSON.parse(file.text_validation_status) 
+            : file.text_validation_status) as ValidationStatus
+          : null
+      })) || [];
+
+      setFiles(parsedFiles);
+      setFilteredFiles(parsedFiles);
     } catch (error: any) {
       console.error('Error in fetchFiles:', error);
       toast({
