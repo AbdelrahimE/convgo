@@ -1,7 +1,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import franc from "https://esm.sh/franc@6.1.0"
+import franc from "https://esm.sh/franc-min@6"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +13,7 @@ async function detectTextLanguage(text: string) {
     // Split text into chunks for better language detection
     const chunks = text.split(/[.!?]+/).filter(chunk => chunk.trim().length > 30);
     const detectedLanguages = new Set<string>();
-    let primaryLanguage = franc(text);
+    const primaryLanguage = franc(text);
 
     // Detect language for each significant chunk
     for (const chunk of chunks) {
@@ -71,12 +71,16 @@ async function extractTextWithTika(fileBuffer: ArrayBuffer, contentType: string)
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
     const { fileId } = await req.json()
+    if (!fileId) {
+      throw new Error('File ID is required');
+    }
     console.log('Processing file:', fileId)
 
     const supabase = createClient(
@@ -96,13 +100,17 @@ serve(async (req) => {
       throw new Error(`Failed to get file metadata: ${fileError.message}`)
     }
 
+    if (!fileData) {
+      throw new Error('File not found');
+    }
+
     console.log('File metadata retrieved:', { 
       path: fileData.path, 
       type: fileData.mime_type 
     });
 
     // Update extraction status to processing
-    await supabase
+    const { error: statusError } = await supabase
       .from('files')
       .update({
         text_extraction_status: {
@@ -113,6 +121,11 @@ serve(async (req) => {
       })
       .eq('id', fileId)
 
+    if (statusError) {
+      console.error('Failed to update processing status:', statusError);
+      throw new Error(`Failed to update processing status: ${statusError.message}`);
+    }
+
     // Download file from storage
     const { data: fileContent, error: downloadError } = await supabase
       .storage
@@ -122,6 +135,10 @@ serve(async (req) => {
     if (downloadError) {
       console.error('Failed to download file:', downloadError);
       throw new Error(`Failed to download file: ${downloadError.message}`)
+    }
+
+    if (!fileContent) {
+      throw new Error('No file content received');
     }
 
     // Extract text from file
@@ -142,9 +159,14 @@ serve(async (req) => {
       } else {
         throw new Error(`Unsupported file type: ${fileData.mime_type}`);
       }
+
+      if (!extractedText || extractedText.trim().length === 0) {
+        throw new Error('No text content extracted from file');
+      }
+
     } catch (error) {
       console.error('Text extraction error:', error);
-      throw new Error(`Failed to extract text: ${error.message}`);
+      throw error;
     }
 
     // Detect language and text direction
@@ -186,38 +208,55 @@ serve(async (req) => {
         primaryLanguage,
         direction
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
+      }
     )
 
   } catch (error) {
     console.error('Error in text extraction:', error)
 
     // Update file status with error
-    const { fileId } = await req.json()
-    if (fileId) {
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      )
+    if (req.method !== 'OPTIONS') {
+      try {
+        const { fileId } = await req.json()
+        if (fileId) {
+          const supabase = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          )
 
-      await supabase
-        .from('files')
-        .update({
-          text_extraction_status: {
-            status: 'error',
-            error: error.message,
-            last_updated: new Date().toISOString()
-          }
-        })
-        .eq('id', fileId)
+          await supabase
+            .from('files')
+            .update({
+              text_extraction_status: {
+                status: 'error',
+                error: error.message,
+                last_updated: new Date().toISOString()
+              }
+            })
+            .eq('id', fileId)
+        }
+      } catch (updateError) {
+        console.error('Failed to update error status:', updateError)
+      }
     }
 
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message 
+      }),
       { 
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        }
       }
     )
   }
 })
+
