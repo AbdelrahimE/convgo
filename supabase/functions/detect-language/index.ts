@@ -6,6 +6,8 @@ import francMin from "https://esm.sh/franc-min@6";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400', // 24 hours cache for preflight requests
 };
 
 const CONFIDENCE_THRESHOLD = 0.1; // 10% minimum confidence
@@ -13,9 +15,16 @@ const ARABIC_SCRIPT_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFD
 const MIN_TEXT_LENGTH = 10; // Minimum text length for reliable detection
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // Handle CORS preflight requests - Updated with proper response
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, {
+      status: 204, // No content
+      headers: {
+        ...corsHeaders,
+        'Content-Length': '0',
+        'Content-Type': 'text/plain'
+      }
+    });
   }
 
   try {
