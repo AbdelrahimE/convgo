@@ -18,6 +18,7 @@ export type Database = {
           filename: string
           id: string
           language_confidence: Json | null
+          language_detection_status: Json | null
           language_distribution: Json | null
           mime_type: string
           original_name: string
@@ -39,6 +40,7 @@ export type Database = {
           filename: string
           id?: string
           language_confidence?: Json | null
+          language_detection_status?: Json | null
           language_distribution?: Json | null
           mime_type: string
           original_name: string
@@ -60,6 +62,7 @@ export type Database = {
           filename?: string
           id?: string
           language_confidence?: Json | null
+          language_detection_status?: Json | null
           language_distribution?: Json | null
           mime_type?: string
           original_name?: string

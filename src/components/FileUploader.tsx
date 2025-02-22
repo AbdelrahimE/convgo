@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { Upload, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,18 +54,25 @@ export function FileUploader() {
 
   const triggerTextExtraction = async (fileId: string) => {
     try {
-      const { error } = await supabase.functions.invoke('extract-text', {
+      const { error: extractError } = await supabase.functions.invoke('extract-text', {
         body: { fileId }
       });
 
-      if (error) throw error;
+      if (extractError) throw extractError;
+
+      // Trigger language detection after text extraction
+      const { error: detectError } = await supabase.functions.invoke('detect-language', {
+        body: { fileId }
+      });
+
+      if (detectError) throw detectError;
 
     } catch (error: any) {
-      console.error('Error triggering text extraction:', error);
+      console.error('Error in processing:', error);
       toast({
         variant: "destructive",
-        title: "Text Extraction Error",
-        description: "Failed to process file text. Please try again."
+        title: "Processing Error",
+        description: "Failed to process file. Please try again."
       });
     }
   };
@@ -116,14 +122,14 @@ export function FileUploader() {
 
       if (dbError) throw dbError;
 
-      // Trigger text extraction
+      // Trigger text extraction and language detection
       if (fileData) {
         await triggerTextExtraction(fileData.id);
       }
 
       toast({
         title: "Success",
-        description: "File uploaded successfully and text extraction started"
+        description: "File uploaded successfully and processing started"
       });
     } catch (error: any) {
       toast({
