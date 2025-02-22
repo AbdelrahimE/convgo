@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { detect } from "https://esm.sh/langdetect@0.2.1";
+import francMin from "https://esm.sh/franc-min@6";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,11 +10,7 @@ const corsHeaders = {
 
 const CONFIDENCE_THRESHOLD = 0.1; // 10% minimum confidence
 const ARABIC_SCRIPT_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
-
-interface DetectionResult {
-  language: string;
-  confidence: number;
-}
+const MIN_TEXT_LENGTH = 10; // Minimum text length for reliable detection
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -34,6 +30,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+
+    console.log('Starting language detection for file:', fileId);
 
     // Update status to processing
     await supabaseClient
@@ -58,20 +56,16 @@ serve(async (req) => {
       throw new Error('Failed to fetch file content or content is empty');
     }
 
-    // Perform language detection
-    const detectionResults: DetectionResult[] = detect(fileData.text_content, { bestResults: true });
+    console.log('Text content length:', fileData.text_content.length);
 
-    // Filter results by confidence threshold and sort by confidence
-    const filteredResults = detectionResults
-      .filter(result => result.confidence >= CONFIDENCE_THRESHOLD)
-      .sort((a, b) => b.confidence - a.confidence);
+    // Check if text is long enough for reliable detection
+    if (fileData.text_content.length < MIN_TEXT_LENGTH) {
+      throw new Error('Text content too short for reliable language detection');
+    }
 
-    // Calculate language distribution
-    const totalConfidence = filteredResults.reduce((sum, result) => sum + result.confidence, 0);
-    const languageDistribution = filteredResults.reduce((dist, result) => {
-      dist[result.language] = (result.confidence / totalConfidence) * 100;
-      return dist;
-    }, {} as Record<string, number>);
+    // Perform language detection with franc-min
+    const detectedLanguage = francMin(fileData.text_content);
+    console.log('Detected language:', detectedLanguage);
 
     // Arabic script detection
     const arabicScriptDetails = {
@@ -80,20 +74,14 @@ serve(async (req) => {
       direction: ARABIC_SCRIPT_REGEX.test(fileData.text_content) ? 'rtl' : 'ltr'
     };
 
-    // Prepare confidence data
-    const languageConfidence = filteredResults.reduce((conf, result) => {
-      conf[result.language] = result.confidence;
-      return conf;
-    }, {} as Record<string, number>);
-
     // Update file with detection results
     const { error: updateError } = await supabaseClient
       .from('files')
       .update({
-        primary_language: filteredResults[0]?.language || null,
-        detected_languages: filteredResults.map(result => result.language),
-        language_confidence: languageConfidence,
-        language_distribution: languageDistribution,
+        primary_language: detectedLanguage,
+        detected_languages: [detectedLanguage],
+        language_confidence: { [detectedLanguage]: 1 }, // franc-min doesn't provide confidence scores
+        language_distribution: { [detectedLanguage]: 100 },
         arabic_script_details: arabicScriptDetails,
         text_direction: arabicScriptDetails.direction,
         language_detection_status: {
@@ -104,7 +92,12 @@ serve(async (req) => {
       })
       .eq('id', fileId);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error('Error updating file:', updateError);
+      throw updateError;
+    }
+
+    console.log('Language detection completed successfully');
 
     return new Response(
       JSON.stringify({
