@@ -1,12 +1,16 @@
-
 import { useEffect, useState } from "react";
-import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -86,7 +90,6 @@ export function FileList() {
       
       console.log('Fetched files:', data);
       
-      // Parse the text_validation_status for each file
       const parsedFiles = data?.map(file => ({
         ...file,
         text_validation_status: file.text_validation_status ? 
@@ -203,20 +206,35 @@ export function FileList() {
       return null;
     }
 
+    const additionalLanguages = file.detected_languages?.filter(lang => lang !== file.primary_language) || [];
+
     return (
       <div className="flex items-center gap-2">
         <Languages className="h-4 w-4" />
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 items-center">
           {file.primary_language && (
             <Badge variant="secondary" className="text-xs">
               {file.primary_language.toUpperCase()}
             </Badge>
           )}
-          {file.detected_languages?.map((lang, index) => (
-            <Badge key={index} variant="outline" className="text-xs">
-              {lang.toUpperCase()}
-            </Badge>
-          ))}
+          {additionalLanguages.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-6 px-2 text-xs">
+                  +{additionalLanguages.length} more <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-2">
+                <div className="flex flex-wrap gap-1">
+                  {additionalLanguages.map((lang, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {lang.toUpperCase()}
+                    </Badge>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       </div>
     );
