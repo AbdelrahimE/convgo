@@ -46,6 +46,13 @@ type FileItem = {
   text_direction?: string;
   detected_languages?: string[];
   text_validation_status?: ValidationStatus | null;
+  language_confidence?: Record<string, number>;
+  language_distribution?: Record<string, number>;
+  arabic_script_details?: {
+    containsArabicScript: boolean;
+    arabicScriptPercentage: number;
+    direction: string;
+  };
 };
 
 type ViewMode = "list" | "grid";
@@ -213,9 +220,28 @@ export function FileList() {
         <Languages className="h-4 w-4" />
         <div className="flex flex-wrap gap-1 items-center">
           {file.primary_language && (
-            <Badge variant="secondary" className="text-xs">
-              {file.primary_language.toUpperCase()}
-            </Badge>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="secondary" className="text-xs">
+                    {file.primary_language.toUpperCase()}
+                    {file.language_confidence && (
+                      <span className="ml-1 opacity-75">
+                        {Math.round(file.language_confidence[file.primary_language] * 100)}%
+                      </span>
+                    )}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Primary Language</p>
+                  {file.arabic_script_details?.containsArabicScript && (
+                    <p className="text-xs text-muted-foreground">
+                      Contains Arabic Script ({Math.round(file.arabic_script_details.arabicScriptPercentage)}%)
+                    </p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           {additionalLanguages.length > 0 && (
             <Popover>
@@ -224,12 +250,19 @@ export function FileList() {
                   +{additionalLanguages.length} more <ChevronDown className="h-3 w-3 ml-1" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-48 p-2">
-                <div className="flex flex-wrap gap-1">
+              <PopoverContent className="w-64 p-2">
+                <div className="space-y-2">
                   {additionalLanguages.map((lang, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {lang.toUpperCase()}
-                    </Badge>
+                    <div key={index} className="flex items-center justify-between">
+                      <Badge variant="outline" className="text-xs">
+                        {lang.toUpperCase()}
+                      </Badge>
+                      {file.language_confidence && (
+                        <span className="text-xs text-muted-foreground">
+                          {Math.round(file.language_confidence[lang] * 100)}% confidence
+                        </span>
+                      )}
+                    </div>
                   ))}
                 </div>
               </PopoverContent>

@@ -11,11 +11,14 @@ export type Database = {
     Tables: {
       files: {
         Row: {
+          arabic_script_details: Json | null
           created_at: string | null
           detected_languages: string[] | null
           encoding: string | null
           filename: string
           id: string
+          language_confidence: Json | null
+          language_distribution: Json | null
           mime_type: string
           original_name: string
           path: string
@@ -29,11 +32,14 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          arabic_script_details?: Json | null
           created_at?: string | null
           detected_languages?: string[] | null
           encoding?: string | null
           filename: string
           id?: string
+          language_confidence?: Json | null
+          language_distribution?: Json | null
           mime_type: string
           original_name: string
           path: string
@@ -47,11 +53,14 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          arabic_script_details?: Json | null
           created_at?: string | null
           detected_languages?: string[] | null
           encoding?: string | null
           filename?: string
           id?: string
+          language_confidence?: Json | null
+          language_distribution?: Json | null
           mime_type?: string
           original_name?: string
           path?: string
