@@ -60,13 +60,6 @@ export function FileUploader() {
 
       if (extractError) throw extractError;
 
-      // Trigger language detection after text extraction
-      const { error: detectError } = await supabase.functions.invoke('detect-language', {
-        body: { fileId }
-      });
-
-      if (detectError) throw detectError;
-
     } catch (error: any) {
       console.error('Error in processing:', error);
       toast({

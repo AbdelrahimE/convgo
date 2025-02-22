@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { franc } from "https://esm.sh/franc-min@6"
@@ -178,6 +177,67 @@ async function extractTextWithTika(fileBuffer: ArrayBuffer, contentType: string)
   }
 }
 
+async function performLanguageDetection(supabase: any, fileId: string, extractedText: string) {
+  console.log('Starting language detection for file:', fileId);
+  
+  try {
+    // Update language detection status to processing
+    await supabase
+      .from('files')
+      .update({
+        language_detection_status: {
+          status: 'processing',
+          error: null,
+          last_updated: new Date().toISOString()
+        }
+      })
+      .eq('id', fileId);
+
+    // Perform language detection
+    const { primaryLanguage, detectedLanguages, direction, confidence } = await detectTextLanguage(extractedText);
+
+    // Update file with language information
+    const { error: updateError } = await supabase
+      .from('files')
+      .update({
+        primary_language: primaryLanguage,
+        detected_languages: detectedLanguages,
+        text_direction: direction,
+        language_detection_status: {
+          status: 'completed',
+          error: null,
+          last_updated: new Date().toISOString(),
+          language_confidence: confidence
+        }
+      })
+      .eq('id', fileId);
+
+    if (updateError) {
+      throw new Error(`Failed to update language detection results: ${updateError.message}`);
+    }
+
+    console.log('Language detection completed successfully for file:', fileId);
+    return { success: true };
+
+  } catch (error) {
+    console.error('Language detection failed:', error);
+    
+    // Update status to error
+    await supabase
+      .from('files')
+      .update({
+        language_detection_status: {
+          status: 'error',
+          error: error.message,
+          last_updated: new Date().toISOString()
+        }
+      })
+      .eq('id', fileId);
+
+    throw error;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -288,25 +348,18 @@ serve(async (req) => {
         throw new Error(`Failed to store text chunks: ${chunksError.message}`);
       }
 
-      // Detect language and text direction
-      const { primaryLanguage, detectedLanguages, direction, confidence } = await detectTextLanguage(extractedText);
-
-      // Update file with extracted text and language information
+      // Update file with extracted text
       const { error: updateError } = await supabase
         .from('files')
         .update({
           text_content: extractedText,
-          primary_language: primaryLanguage,
-          detected_languages: detectedLanguages,
-          text_direction: direction,
           text_extraction_status: {
             status: 'completed',
             error: null,
-            last_updated: new Date().toISOString(),
-            language_confidence: confidence
+            last_updated: new Date().toISOString()
           }
         })
-        .eq('id', fileId)
+        .eq('id', fileId);
 
       if (updateError) {
         throw new Error(`Failed to update file with extracted text: ${updateError.message}`);
@@ -314,14 +367,13 @@ serve(async (req) => {
 
       console.log('Text extraction completed successfully for file:', fileId);
 
+      // Now perform language detection
+      await performLanguageDetection(supabase, fileId, extractedText);
+
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'Text extraction completed',
-          languages: detectedLanguages,
-          primaryLanguage,
-          direction,
-          chunksCount: chunks.length
+          message: 'Text extraction and language detection completed'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
