@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown } from "lucide-react";
 import {
@@ -103,7 +104,10 @@ export function FileList() {
           (typeof file.text_validation_status === 'string' 
             ? JSON.parse(file.text_validation_status) 
             : file.text_validation_status) as ValidationStatus
-          : null
+          : null,
+        language_confidence: file.language_confidence as Record<string, number>,
+        language_distribution: file.language_distribution as Record<string, number>,
+        arabic_script_details: file.arabic_script_details as FileItem['arabic_script_details']
       })) || [];
 
       setFiles(parsedFiles);
