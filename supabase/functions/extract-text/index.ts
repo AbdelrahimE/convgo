@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { franc } from "https://esm.sh/franc-min@6"
@@ -7,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Improved language detection with better handling for Arabic
+// Enhanced language detection with better Arabic script support
 async function detectTextLanguage(text: string) {
   try {
     // Split text into meaningful chunks (sentences/paragraphs)
@@ -16,29 +17,66 @@ async function detectTextLanguage(text: string) {
       .filter(chunk => chunk.trim().length > 30);
     
     const detectedLanguages = new Set<string>();
-    const languageConfidence: Record<string, number> = {};
+    const languageScores: Record<string, number[]> = {};
+    let totalScore = 0;
     
     // Enhanced language detection for each chunk
     for (const chunk of chunks) {
-      const langCode = franc(chunk);
+      const langCode = franc(chunk, { minLength: 1 });
       if (langCode && langCode !== 'und') {
         detectedLanguages.add(langCode);
-        languageConfidence[langCode] = (languageConfidence[langCode] || 0) + 1;
+        if (!languageScores[langCode]) {
+          languageScores[langCode] = [];
+        }
+        const score = chunk.length / text.length; // Weight by chunk length
+        languageScores[langCode].push(score);
+        totalScore += score;
       }
     }
 
-    // Determine primary language based on frequency
+    // Calculate normalized confidence scores and distribution
+    const languageConfidence: Record<string, number> = {};
+    const languageDistribution: Record<string, number> = {};
+    
+    for (const [lang, scores] of Object.entries(languageScores)) {
+      const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+      const normalizedScore = avgScore / totalScore;
+      languageConfidence[lang] = Math.round(normalizedScore * 100) / 100;
+      languageDistribution[lang] = Math.round(normalizedScore * 100);
+    }
+
+    // Determine primary language based on confidence
     const primaryLanguage = Object.entries(languageConfidence)
       .sort(([, a], [, b]) => b - a)[0]?.[0] || null;
 
-    // Improved RTL detection with specific Arabic script ranges
-    const hasRTL = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+    // Enhanced Arabic script analysis
+    const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+    const arabicMatches = text.match(arabicPattern) || [];
+    const totalChars = text.length;
+    const arabicChars = arabicMatches.length;
+    const arabicPercentage = (arabicChars / totalChars) * 100;
+
+    const arabicScriptDetails = {
+      containsArabicScript: arabicChars > 0,
+      arabicScriptPercentage: Math.round(arabicPercentage * 100) / 100,
+      direction: arabicPercentage > 30 ? 'rtl' : 'ltr'
+    };
+
+    console.log('Language detection results:', {
+      primaryLanguage,
+      detectedLanguages: Array.from(detectedLanguages),
+      confidence: languageConfidence,
+      distribution: languageDistribution,
+      arabicDetails: arabicScriptDetails
+    });
 
     return {
       primaryLanguage,
       detectedLanguages: Array.from(detectedLanguages),
-      direction: hasRTL.test(text) ? 'rtl' : 'ltr',
-      confidence: languageConfidence
+      direction: arabicScriptDetails.direction,
+      confidence: languageConfidence,
+      distribution: languageDistribution,
+      arabicScriptDetails
     };
   } catch (error) {
     console.error('Language detection error:', error);
@@ -46,7 +84,13 @@ async function detectTextLanguage(text: string) {
       primaryLanguage: null,
       detectedLanguages: [],
       direction: 'ltr',
-      confidence: {}
+      confidence: {},
+      distribution: {},
+      arabicScriptDetails: {
+        containsArabicScript: false,
+        arabicScriptPercentage: 0,
+        direction: 'ltr'
+      }
     };
   }
 }
@@ -193,21 +237,39 @@ async function performLanguageDetection(supabase: any, fileId: string, extracted
       })
       .eq('id', fileId);
 
-    // Perform language detection
-    const { primaryLanguage, detectedLanguages, direction, confidence } = await detectTextLanguage(extractedText);
+    // Perform enhanced language detection
+    const { 
+      primaryLanguage, 
+      detectedLanguages, 
+      direction, 
+      confidence, 
+      distribution, 
+      arabicScriptDetails 
+    } = await detectTextLanguage(extractedText);
 
-    // Update file with language information
+    console.log('Language detection completed, updating database with:', {
+      primaryLanguage,
+      detectedLanguages,
+      direction,
+      confidence,
+      distribution,
+      arabicScriptDetails
+    });
+
+    // Update file with enhanced language information
     const { error: updateError } = await supabase
       .from('files')
       .update({
         primary_language: primaryLanguage,
         detected_languages: detectedLanguages,
         text_direction: direction,
+        language_confidence: confidence,
+        language_distribution: distribution,
+        arabic_script_details: arabicScriptDetails,
         language_detection_status: {
           status: 'completed',
           error: null,
-          last_updated: new Date().toISOString(),
-          language_confidence: confidence
+          last_updated: new Date().toISOString()
         }
       })
       .eq('id', fileId);
