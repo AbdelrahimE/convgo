@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { franc } from "https://esm.sh/franc-min@6"
@@ -7,39 +8,147 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Improved language detection with better handling for Arabic
 async function detectTextLanguage(text: string) {
   try {
-    // Split text into chunks for better language detection
-    const chunks = text.split(/[.!?]+/).filter(chunk => chunk.trim().length > 30);
+    // Split text into meaningful chunks (sentences/paragraphs)
+    const chunks = text
+      .split(/[.!?؟\n]+/)
+      .filter(chunk => chunk.trim().length > 30);
+    
     const detectedLanguages = new Set<string>();
-    const primaryLanguage = franc(text);
-
-    // Detect language for each significant chunk
+    const languageConfidence: Record<string, number> = {};
+    
+    // Enhanced language detection for each chunk
     for (const chunk of chunks) {
       const langCode = franc(chunk);
       if (langCode && langCode !== 'und') {
         detectedLanguages.add(langCode);
+        languageConfidence[langCode] = (languageConfidence[langCode] || 0) + 1;
       }
     }
+
+    // Determine primary language based on frequency
+    const primaryLanguage = Object.entries(languageConfidence)
+      .sort(([, a], [, b]) => b - a)[0]?.[0] || null;
+
+    // Improved RTL detection with specific Arabic script ranges
+    const hasRTL = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
     return {
       primaryLanguage,
       detectedLanguages: Array.from(detectedLanguages),
-      direction: isRTL(text) ? 'rtl' : 'ltr'
+      direction: hasRTL.test(text) ? 'rtl' : 'ltr',
+      confidence: languageConfidence
     };
   } catch (error) {
     console.error('Language detection error:', error);
     return {
       primaryLanguage: null,
       detectedLanguages: [],
-      direction: 'ltr'
+      direction: 'ltr',
+      confidence: {}
     };
   }
 }
 
-function isRTL(text: string): boolean {
-  const rtlRegex = /[\u0591-\u07FF\u200F\u202B\u202E\uFB1D-\uFDFD\uFE70-\uFEFC]/;
-  return rtlRegex.test(text);
+// Smart text chunking with Arabic support
+function createTextChunks(text: string, maxChunkSize = 1500) {
+  const chunks: string[] = [];
+  let currentChunk = '';
+
+  // Split by paragraphs first
+  const paragraphs = text.split(/\n\s*\n/);
+
+  for (const paragraph of paragraphs) {
+    // If paragraph is too long, split by sentences
+    if (paragraph.length > maxChunkSize) {
+      // Handle both English and Arabic sentence endings
+      const sentences = paragraph.split(/(?<=[.!?؟])\s+/);
+      
+      for (const sentence of sentences) {
+        if (currentChunk.length + sentence.length > maxChunkSize) {
+          if (currentChunk) {
+            chunks.push(currentChunk.trim());
+            currentChunk = '';
+          }
+          
+          // If single sentence is too long, split by words while preserving RTL
+          if (sentence.length > maxChunkSize) {
+            const words = sentence.split(/\s+/);
+            for (const word of words) {
+              if (currentChunk.length + word.length > maxChunkSize) {
+                chunks.push(currentChunk.trim());
+                currentChunk = word + ' ';
+              } else {
+                currentChunk += word + ' ';
+              }
+            }
+          } else {
+            currentChunk = sentence + ' ';
+          }
+        } else {
+          currentChunk += sentence + ' ';
+        }
+      }
+    } else {
+      if (currentChunk.length + paragraph.length > maxChunkSize) {
+        chunks.push(currentChunk.trim());
+        currentChunk = paragraph + '\n\n';
+      } else {
+        currentChunk += paragraph + '\n\n';
+      }
+    }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return chunks;
+}
+
+// Validate text content with enhanced UTF-8 and Arabic support
+function validateTextContent(text: string): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  try {
+    // Check for null or empty content
+    if (!text || text.trim().length === 0) {
+      errors.push('Empty or null content');
+      return { isValid: false, errors };
+    }
+
+    // Validate UTF-8 encoding
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder('utf-8', { fatal: true });
+    
+    try {
+      const encoded = encoder.encode(text);
+      decoder.decode(encoded);
+    } catch (e) {
+      errors.push('Invalid UTF-8 encoding');
+      return { isValid: false, errors };
+    }
+
+    // Check for corrupt Arabic characters
+    const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+    if (arabicPattern.test(text)) {
+      // Check for common Arabic text corruption patterns
+      if (/Ø|Ù|æ|ç/.test(text)) {
+        errors.push('Possible corrupt Arabic characters detected');
+      }
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  } catch (error) {
+    console.error('Validation error:', error);
+    errors.push(`Validation error: ${error.message}`);
+    return { isValid: false, errors };
+  }
 }
 
 async function extractTextWithTika(fileBuffer: ArrayBuffer, contentType: string): Promise<string> {
@@ -70,7 +179,6 @@ async function extractTextWithTika(fileBuffer: ArrayBuffer, contentType: string)
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -144,76 +252,83 @@ serve(async (req) => {
     let extractedText = '';
     try {
       if (fileData.mime_type === 'text/plain' || fileData.mime_type === 'text/csv') {
-        // Handle text files directly
         const blob = new Blob([await fileContent.arrayBuffer()]);
         extractedText = await blob.text();
-      } else if (
-        fileData.mime_type === 'application/pdf' ||
-        fileData.mime_type === 'application/msword' ||
-        fileData.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ) {
-        // Use Tika for PDF and Office documents
+      } else {
         const fileBuffer = await fileContent.arrayBuffer();
         extractedText = await extractTextWithTika(fileBuffer, fileData.mime_type);
-      } else {
-        throw new Error(`Unsupported file type: ${fileData.mime_type}`);
       }
 
       if (!extractedText || extractedText.trim().length === 0) {
         throw new Error('No text content extracted from file');
       }
 
+      // Create and validate text chunks
+      const chunks = createTextChunks(extractedText);
+      const validatedChunks = chunks.map((chunk, index) => {
+        const validation = validateTextContent(chunk);
+        return {
+          content: chunk,
+          validation_status: validation,
+          chunk_order: index
+        };
+      });
+
+      // Insert chunks into database
+      const { error: chunksError } = await supabase
+        .from('text_chunks')
+        .insert(validatedChunks.map(chunk => ({
+          file_id: fileId,
+          content: chunk.content,
+          chunk_order: chunk.chunk_order,
+          validation_status: chunk.validation_status
+        })));
+
+      if (chunksError) {
+        throw new Error(`Failed to store text chunks: ${chunksError.message}`);
+      }
+
+      // Detect language and text direction
+      const { primaryLanguage, detectedLanguages, direction, confidence } = await detectTextLanguage(extractedText);
+
+      // Update file with extracted text and language information
+      const { error: updateError } = await supabase
+        .from('files')
+        .update({
+          text_content: extractedText,
+          primary_language: primaryLanguage,
+          detected_languages: detectedLanguages,
+          text_direction: direction,
+          text_extraction_status: {
+            status: 'completed',
+            error: null,
+            last_updated: new Date().toISOString(),
+            language_confidence: confidence
+          }
+        })
+        .eq('id', fileId)
+
+      if (updateError) {
+        throw new Error(`Failed to update file with extracted text: ${updateError.message}`);
+      }
+
+      console.log('Text extraction completed successfully for file:', fileId);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Text extraction completed',
+          languages: detectedLanguages,
+          primaryLanguage,
+          direction,
+          chunksCount: chunks.length
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+
     } catch (error) {
-      console.error('Text extraction error:', error);
       throw error;
     }
-
-    // Detect language and text direction
-    const { primaryLanguage, detectedLanguages, direction } = await detectTextLanguage(extractedText);
-    console.log('Language detection results:', { 
-      primaryLanguage, 
-      detectedLanguages, 
-      direction 
-    });
-
-    // Update file with extracted text and language information
-    const { error: updateError } = await supabase
-      .from('files')
-      .update({
-        text_content: extractedText,
-        primary_language: primaryLanguage,
-        detected_languages: detectedLanguages,
-        text_direction: direction,
-        text_extraction_status: {
-          status: 'completed',
-          error: null,
-          last_updated: new Date().toISOString()
-        }
-      })
-      .eq('id', fileId)
-
-    if (updateError) {
-      console.error('Failed to update file with extracted text:', updateError);
-      throw new Error(`Failed to update file with extracted text: ${updateError.message}`)
-    }
-
-    console.log('Text extraction completed successfully for file:', fileId);
-
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Text extraction completed',
-        languages: detectedLanguages,
-        primaryLanguage,
-        direction
-      }),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
-      }
-    )
 
   } catch (error) {
     console.error('Error in text extraction:', error)
@@ -245,16 +360,8 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
-        error: error.message 
-      }),
-      { 
-        status: 500,
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        }
-      }
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
