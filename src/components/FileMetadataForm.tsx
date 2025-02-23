@@ -85,15 +85,44 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   };
 
   const validateFormField = async (field: MetadataField, value: any): Promise<string | null> => {
+    // Basic required field validation
+    if (field.is_required && (value === undefined || value === null || value === '')) {
+      return 'This field is required';
+    }
+
+    // If empty but not required, it's valid
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+
+    // Type-specific validation
+    switch (field.field_type) {
+      case 'number':
+        if (isNaN(Number(value))) {
+          return 'Must be a valid number';
+        }
+        break;
+      case 'date':
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          return 'Must be a valid date (YYYY-MM-DD)';
+        }
+        break;
+      case 'select':
+        if (field.options && !field.options.some(opt => opt.value === value)) {
+          return 'Invalid selection';
+        }
+        break;
+    }
+
+    // Use metadata validation for additional checks
     const validationErrors = await validateField({
       ...field,
       name: field.name,
       description: field.description,
       options: field.options,
-      value: value
     });
 
-    const error = validationErrors.find(err => err.field === 'value');
+    const error = validationErrors.find(err => err.field === 'name' || err.field === 'description' || err.field === 'options');
     return error ? error.message : null;
   };
 
