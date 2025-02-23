@@ -1,3 +1,4 @@
+
 import * as React from "react";
 import type {
   ToastActionElement,
@@ -163,7 +164,7 @@ function toast({ ...props }: Toast) {
     
     // Format the description to include error details
     if (errorDetails.help) {
-      props.description = (
+      const ErrorContent: React.ReactNode = (
         <div className="space-y-2">
           <p>{errorDetails.message}</p>
           {errorDetails.details && (
@@ -177,6 +178,7 @@ function toast({ ...props }: Toast) {
           )}
         </div>
       );
+      props.description = ErrorContent;
     }
   }
 
