@@ -9,6 +9,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import './App.css';
 
 function AppContent() {
@@ -20,33 +21,35 @@ function AppContent() {
       <div className="min-h-screen flex w-full">
         {!isAuthPage && <AppSidebar />}
         <main className="flex-1 px-4 py-8 overflow-auto">
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <div>Dashboard (coming soon)</div>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/files"
-              element={
-                <ProtectedRoute>
-                  <FileManagement />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/whatsapp"
-              element={
-                <ProtectedRoute>
-                  <WhatsAppLink />
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <div>Dashboard (coming soon)</div>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/files"
+                element={
+                  <ProtectedRoute>
+                    <FileManagement />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/whatsapp"
+                element={
+                  <ProtectedRoute>
+                    <WhatsAppLink />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </ErrorBoundary>
         </main>
       </div>
     </SidebarProvider>
@@ -55,12 +58,14 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <AppContent />
-        <Toaster />
-      </Router>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <AppContent />
+          <Toaster />
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
