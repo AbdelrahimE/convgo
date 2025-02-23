@@ -9,6 +9,48 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      file_metadata: {
+        Row: {
+          created_at: string | null
+          field_id: string
+          file_id: string
+          id: string
+          updated_at: string | null
+          value: Json
+        }
+        Insert: {
+          created_at?: string | null
+          field_id: string
+          file_id: string
+          id?: string
+          updated_at?: string | null
+          value: Json
+        }
+        Update: {
+          created_at?: string | null
+          field_id?: string
+          file_id?: string
+          id?: string
+          updated_at?: string | null
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_metadata_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "metadata_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "file_metadata_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       files: {
         Row: {
           arabic_script_details: Json | null
@@ -79,6 +121,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "files_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      metadata_fields: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          field_type: Database["public"]["Enums"]["metadata_field_type"]
+          id: string
+          is_required: boolean | null
+          name: string
+          options: Json | null
+          profile_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          field_type: Database["public"]["Enums"]["metadata_field_type"]
+          id?: string
+          is_required?: boolean | null
+          name: string
+          options?: Json | null
+          profile_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          field_type?: Database["public"]["Enums"]["metadata_field_type"]
+          id?: string
+          is_required?: boolean | null
+          name?: string
+          options?: Json | null
+          profile_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "metadata_fields_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -245,7 +331,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      metadata_field_type: "text" | "number" | "date" | "boolean" | "select"
     }
     CompositeTypes: {
       [_ in never]: never

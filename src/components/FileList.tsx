@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown } from "lucide-react";
 import {
@@ -27,6 +26,15 @@ import {
 } from "@/components/ui/table";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { FileMetadataForm } from "./FileMetadataForm";
+import { Tag } from "lucide-react";
 
 type ValidationStatus = {
   isValid: boolean;
@@ -277,6 +285,23 @@ export function FileList() {
     );
   };
 
+  const renderMetadataDialog = (fileId: string) => (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="ml-2">
+          <Tag className="h-4 w-4 mr-2" />
+          Metadata
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>File Metadata</DialogTitle>
+        </DialogHeader>
+        <FileMetadataForm fileId={fileId} />
+      </DialogContent>
+    </Dialog>
+  );
+
   const renderListView = () => (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -402,6 +427,14 @@ export function FileList() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => renderMetadataDialog(file.id)}
+                      >
+                        <Tag className="h-4 w-4 mr-2" />
+                        Metadata
+                      </Button>
                     </TableCell>
                   </motion.tr>
                 ))
@@ -451,6 +484,14 @@ export function FileList() {
                   onClick={() => handleDelete(file.id, file.path)}
                 >
                   <Trash2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => renderMetadataDialog(file.id)}
+                >
+                  <Tag className="h-4 w-4 mr-2" />
+                  Metadata
                 </Button>
               </motion.div>
             </div>
