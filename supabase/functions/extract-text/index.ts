@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { franc } from "https://esm.sh/franc-min@6"
@@ -96,7 +95,7 @@ async function detectTextLanguage(text: string) {
 }
 
 // Smart text chunking with Arabic support
-function createTextChunks(text: string, maxChunkSize = 1500) {
+function createTextChunks(text: string, maxChunkSize = 1500): string[] {
   const chunks: string[] = [];
   let currentChunk = '';
 
@@ -194,6 +193,41 @@ function validateTextContent(text: string): { isValid: boolean; errors: string[]
   }
 }
 
+// New function for chunk-level language detection
+async function detectChunkLanguage(chunk: string) {
+  try {
+    const langCode = franc(chunk, { minLength: 1 });
+    
+    // Enhanced Arabic script analysis for chunk
+    const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+    const arabicMatches = chunk.match(arabicPattern) || [];
+    const totalChars = chunk.length;
+    const arabicChars = arabicMatches.length;
+    const arabicPercentage = (arabicChars / totalChars) * 100;
+    
+    return {
+      language: langCode !== 'und' ? langCode : null,
+      direction: arabicPercentage > 30 ? 'rtl' : 'ltr',
+      metadata: {
+        arabicScriptPercentage: Math.round(arabicPercentage * 100) / 100,
+        containsArabicScript: arabicChars > 0,
+        confidence: langCode !== 'und' ? 1 : 0
+      }
+    };
+  } catch (error) {
+    console.error('Chunk language detection error:', error);
+    return {
+      language: null,
+      direction: 'ltr',
+      metadata: {
+        arabicScriptPercentage: 0,
+        containsArabicScript: false,
+        confidence: 0
+      }
+    };
+  }
+}
+
 async function extractTextWithTika(fileBuffer: ArrayBuffer, contentType: string): Promise<string> {
   console.log('Sending request to Tika server for content type:', contentType);
   
@@ -237,34 +271,82 @@ async function performLanguageDetection(supabase: any, fileId: string, extracted
       })
       .eq('id', fileId);
 
-    // Perform enhanced language detection
-    const { 
-      primaryLanguage, 
-      detectedLanguages, 
-      direction, 
-      confidence, 
-      distribution, 
-      arabicScriptDetails 
-    } = await detectTextLanguage(extractedText);
+    // Get all chunks for this file
+    const { data: chunks, error: chunksError } = await supabase
+      .from('text_chunks')
+      .select('id, content')
+      .eq('file_id', fileId)
+      .order('chunk_order');
+
+    if (chunksError) throw new Error(`Failed to fetch chunks: ${chunksError.message}`);
+
+    console.log(`Processing ${chunks.length} chunks for language detection`);
+
+    // Process each chunk and update its language
+    const chunkLanguages = new Set<string>();
+    const languageConfidence: Record<string, number> = {};
+    const languageDistribution: Record<string, number> = {};
+    let totalLength = 0;
+
+    // First pass: Detect languages and calculate total length
+    for (const chunk of chunks) {
+      const { language, direction, metadata } = await detectChunkLanguage(chunk.content);
+      
+      if (language) {
+        chunkLanguages.add(language);
+        const chunkLength = chunk.content.length;
+        totalLength += chunkLength;
+        
+        if (!languageConfidence[language]) {
+          languageConfidence[language] = 0;
+          languageDistribution[language] = 0;
+        }
+        
+        languageConfidence[language] += metadata.confidence;
+        languageDistribution[language] += chunkLength;
+      }
+
+      // Update chunk with language information
+      await supabase
+        .from('text_chunks')
+        .update({
+          language,
+          direction,
+          metadata: metadata
+        })
+        .eq('id', chunk.id);
+    }
+
+    // Normalize confidence scores and calculate distribution
+    Object.keys(languageConfidence).forEach(lang => {
+      languageConfidence[lang] = Math.round((languageConfidence[lang] / chunks.length) * 100) / 100;
+      languageDistribution[lang] = Math.round((languageDistribution[lang] / totalLength) * 100);
+    });
+
+    // Determine primary language based on distribution
+    const primaryLanguage = Object.entries(languageDistribution)
+      .sort(([, a], [, b]) => b - a)[0]?.[0] || null;
+
+    // Get file-level Arabic script analysis
+    const { arabicScriptDetails, direction } = await detectTextLanguage(extractedText);
 
     console.log('Language detection completed, updating database with:', {
       primaryLanguage,
-      detectedLanguages,
-      direction,
-      confidence,
-      distribution,
+      detectedLanguages: Array.from(chunkLanguages),
+      languageConfidence,
+      languageDistribution,
       arabicScriptDetails
     });
 
-    // Update file with enhanced language information
+    // Update file with language information
     const { error: updateError } = await supabase
       .from('files')
       .update({
         primary_language: primaryLanguage,
-        detected_languages: detectedLanguages,
+        detected_languages: Array.from(chunkLanguages),
         text_direction: direction,
-        language_confidence: confidence,
-        language_distribution: distribution,
+        language_confidence: languageConfidence,
+        language_distribution: languageDistribution,
         arabic_script_details: arabicScriptDetails,
         language_detection_status: {
           status: 'completed',
