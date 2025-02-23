@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2, Save } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import type { MetadataField, MetadataFieldType } from "@/types/metadata";
+import type { MetadataField, MetadataFieldType, MetadataFieldInput } from "@/types/metadata";
 
 export function MetadataFieldsManager() {
   const [fields, setFields] = useState<MetadataField[]>([]);
@@ -51,8 +50,8 @@ export function MetadataFieldsManager() {
     const transformedFields: MetadataField[] = (data || []).map(field => ({
       ...field,
       options: field.options ? (typeof field.options === 'string' ? 
-        JSON.parse(field.options) : field.options) as { label: string; value: string }[]
-        : undefined
+        JSON.parse(field.options) : field.options) as { label: string; value: string; }[]
+        : null
     }));
 
     setFields(transformedFields);
@@ -62,33 +61,37 @@ export function MetadataFieldsManager() {
     fetchFields();
   }, [user]);
 
-  const handleSaveField = async (fieldData: Partial<MetadataField>) => {
+  const handleSaveField = async (fieldData: Partial<MetadataFieldInput>) => {
     if (!user || !fieldData.name || !fieldData.field_type) return;
 
     try {
       const isEditing = Boolean(fieldData.id);
       
-      // Prepare the field data in the format expected by Supabase
-      const fieldToSave = {
+      // Prepare the base field data
+      const baseFieldData = {
         name: fieldData.name,
         field_type: fieldData.field_type,
-        description: fieldData.description || null,
-        is_required: fieldData.is_required || false,
-        options: fieldData.options ? JSON.stringify(fieldData.options) : null,
-        ...(isEditing ? { id: fieldData.id } : { profile_id: user.id })
+        description: fieldData.description ?? null,
+        is_required: fieldData.is_required ?? false,
+        options: fieldData.options ? JSON.stringify(fieldData.options) : null
       };
 
-      if (isEditing) {
+      if (isEditing && fieldData.id) {
+        // For updates, only include the fields we want to update
         const { error } = await supabase
           .from('metadata_fields')
-          .update(fieldToSave)
+          .update(baseFieldData)
           .eq('id', fieldData.id);
 
         if (error) throw error;
       } else {
+        // For inserts, include the profile_id
         const { error } = await supabase
           .from('metadata_fields')
-          .insert(fieldToSave);
+          .insert({
+            ...baseFieldData,
+            profile_id: user.id
+          });
 
         if (error) throw error;
       }
@@ -218,7 +221,7 @@ export function MetadataFieldsManager() {
 
 interface MetadataFieldFormProps {
   field: MetadataField | null;
-  onSave: (field: Partial<MetadataField>) => void;
+  onSave: (field: Partial<MetadataFieldInput>) => void;
   onCancel: () => void;
 }
 

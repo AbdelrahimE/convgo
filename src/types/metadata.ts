@@ -4,12 +4,13 @@ export type MetadataFieldType = 'text' | 'number' | 'date' | 'boolean' | 'select
 export interface MetadataField {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   field_type: MetadataFieldType;
   is_required: boolean;
-  options?: { label: string; value: string }[];
+  options?: { label: string; value: string; }[] | null;
   created_at?: string;
   updated_at?: string;
+  profile_id: string;
 }
 
 export interface FileMetadataValue {
@@ -19,4 +20,15 @@ export interface FileMetadataValue {
   value: any;
   created_at?: string;
   updated_at?: string;
+}
+
+// Type for creating/updating metadata fields
+export interface MetadataFieldInput {
+  id?: string;
+  name: string;
+  description?: string | null;
+  field_type: MetadataFieldType;
+  is_required: boolean;
+  options?: { label: string; value: string; }[] | null;
+  profile_id?: string;
 }
