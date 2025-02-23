@@ -49,6 +49,20 @@ export type Database = {
             referencedRelation: "files"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_file_metadata_field"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "metadata_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_file_metadata_file"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
         ]
       }
       files: {
