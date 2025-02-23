@@ -10,6 +10,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import './App.css';
 
 function AppContent() {
@@ -22,33 +23,35 @@ function AppContent() {
         {!isAuthPage && <AppSidebar />}
         <main className="flex-1 px-4 py-8 overflow-auto">
           <ErrorBoundary>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <div>Dashboard (coming soon)</div>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/files"
-                element={
-                  <ProtectedRoute>
-                    <FileManagement />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/whatsapp"
-                element={
-                  <ProtectedRoute>
-                    <WhatsAppLink />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
+            <NetworkErrorBoundary>
+              <Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <div>Dashboard (coming soon)</div>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/files"
+                  element={
+                    <ProtectedRoute>
+                      <FileManagement />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/whatsapp"
+                  element={
+                    <ProtectedRoute>
+                      <WhatsAppLink />
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </NetworkErrorBoundary>
           </ErrorBoundary>
         </main>
       </div>
@@ -59,12 +62,14 @@ function AppContent() {
 function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <Router>
-          <AppContent />
-          <Toaster />
-        </Router>
-      </AuthProvider>
+      <NetworkErrorBoundary>
+        <AuthProvider>
+          <Router>
+            <AppContent />
+            <Toaster />
+          </Router>
+        </AuthProvider>
+      </NetworkErrorBoundary>
     </ErrorBoundary>
   );
 }
