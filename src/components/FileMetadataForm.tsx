@@ -24,6 +24,7 @@ interface FileMetadataFormProps {
 export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   const [fields, setFields] = useState<MetadataField[]>([]);
   const [values, setValues] = useState<Record<string, any>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -78,8 +79,60 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     }
   };
 
+  const validateField = (field: MetadataField, value: any): string | null => {
+    if (field.is_required && (value === undefined || value === null || value === '')) {
+      return 'This field is required';
+    }
+
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+
+    switch (field.field_type) {
+      case 'number':
+        if (isNaN(Number(value))) {
+          return 'Must be a valid number';
+        }
+        break;
+      case 'date':
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          return 'Must be a valid date (YYYY-MM-DD)';
+        }
+        break;
+      case 'select':
+        if (field.options && !field.options.some(opt => opt.value === value)) {
+          return 'Invalid selection';
+        }
+        break;
+    }
+
+    return null;
+  };
+
   const handleSave = async () => {
     if (!user || !fileId) return;
+
+    // Validate all fields
+    const newErrors: Record<string, string> = {};
+    let hasErrors = false;
+
+    fields.forEach(field => {
+      const error = validateField(field, values[field.id]);
+      if (error) {
+        newErrors[field.id] = error;
+        hasErrors = true;
+      }
+    });
+
+    if (hasErrors) {
+      setErrors(newErrors);
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Please check the form for errors"
+      });
+      return;
+    }
 
     try {
       // Delete existing values
@@ -121,6 +174,14 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       ...prev,
       [fieldId]: value
     }));
+    
+    // Clear error when value changes
+    if (errors[fieldId]) {
+      setErrors(prev => ({
+        ...prev,
+        [fieldId]: ''
+      }));
+    }
   };
 
   if (isLoading) {
@@ -141,6 +202,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
               value={values[field.id] || ''}
               onChange={(e) => handleValueChange(field.id, e.target.value)}
               required={field.is_required}
+              className={errors[field.id] ? 'border-destructive' : ''}
             />
           )}
           
@@ -150,6 +212,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
               value={values[field.id] || ''}
               onChange={(e) => handleValueChange(field.id, parseFloat(e.target.value))}
               required={field.is_required}
+              className={errors[field.id] ? 'border-destructive' : ''}
             />
           )}
           
@@ -159,6 +222,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
               value={values[field.id] || ''}
               onChange={(e) => handleValueChange(field.id, e.target.value)}
               required={field.is_required}
+              className={errors[field.id] ? 'border-destructive' : ''}
             />
           )}
           
@@ -174,7 +238,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
               value={values[field.id] || ''}
               onValueChange={(value) => handleValueChange(field.id, value)}
             >
-              <SelectTrigger>
+              <SelectTrigger className={errors[field.id] ? 'border-destructive' : ''}>
                 <SelectValue placeholder="Select an option" />
               </SelectTrigger>
               <SelectContent>
@@ -189,6 +253,10 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
           
           {field.description && (
             <p className="text-sm text-muted-foreground">{field.description}</p>
+          )}
+          
+          {errors[field.id] && (
+            <p className="text-sm text-destructive">{errors[field.id]}</p>
           )}
         </div>
       ))}

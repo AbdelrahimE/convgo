@@ -32,3 +32,4 @@ export interface MetadataFieldInput {
   options?: { label: string; value: string; }[] | null;
   profile_id?: string;
 }
+
