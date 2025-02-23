@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { MetadataField, FileMetadataValue } from "@/types/metadata";
 
 interface FileMetadataFormProps {
@@ -26,6 +26,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   const [values, setValues] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -36,6 +37,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   const fetchMetadata = async () => {
     if (!user || !fileId) return;
 
+    setIsLoading(true);
     try {
       // Fetch metadata fields
       const { data: fieldsData, error: fieldsError } = await supabase
@@ -134,6 +136,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       return;
     }
 
+    setIsSaving(true);
     try {
       // Delete existing values
       await supabase
@@ -166,6 +169,8 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         title: "Error saving metadata",
         description: error.message
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -185,11 +190,20 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   };
 
   if (isLoading) {
-    return <div>Loading metadata...</div>;
+    return (
+      <div className="space-y-4 animate-in fade-in duration-300">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-in fade-in duration-300">
       {fields.map(field => (
         <div key={field.id} className="space-y-2">
           <Label>
@@ -203,6 +217,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
               onChange={(e) => handleValueChange(field.id, e.target.value)}
               required={field.is_required}
               className={errors[field.id] ? 'border-destructive' : ''}
+              disabled={isSaving}
             />
           )}
           
@@ -213,6 +228,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
               onChange={(e) => handleValueChange(field.id, parseFloat(e.target.value))}
               required={field.is_required}
               className={errors[field.id] ? 'border-destructive' : ''}
+              disabled={isSaving}
             />
           )}
           
@@ -223,6 +239,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
               onChange={(e) => handleValueChange(field.id, e.target.value)}
               required={field.is_required}
               className={errors[field.id] ? 'border-destructive' : ''}
+              disabled={isSaving}
             />
           )}
           
@@ -230,6 +247,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
             <Switch
               checked={values[field.id] || false}
               onCheckedChange={(checked) => handleValueChange(field.id, checked)}
+              disabled={isSaving}
             />
           )}
           
@@ -237,6 +255,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
             <Select
               value={values[field.id] || ''}
               onValueChange={(value) => handleValueChange(field.id, value)}
+              disabled={isSaving}
             >
               <SelectTrigger className={errors[field.id] ? 'border-destructive' : ''}>
                 <SelectValue placeholder="Select an option" />
@@ -262,7 +281,12 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       ))}
 
       {fields.length > 0 && (
-        <Button onClick={handleSave}>Save Metadata</Button>
+        <Button 
+          onClick={handleSave} 
+          disabled={isSaving}
+        >
+          {isSaving ? "Saving..." : "Save Metadata"}
+        </Button>
       )}
 
       {fields.length === 0 && (
