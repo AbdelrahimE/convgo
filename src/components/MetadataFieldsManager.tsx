@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2, Save } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -61,26 +62,33 @@ export function MetadataFieldsManager() {
     fetchFields();
   }, [user]);
 
-  const handleSaveField = async (field: Partial<MetadataField>) => {
-    if (!user) return;
+  const handleSaveField = async (fieldData: Partial<MetadataField>) => {
+    if (!user || !fieldData.name || !fieldData.field_type) return;
 
     try {
-      const isEditing = Boolean(field.id);
+      const isEditing = Boolean(fieldData.id);
       
+      // Prepare the field data in the format expected by Supabase
+      const fieldToSave = {
+        name: fieldData.name,
+        field_type: fieldData.field_type,
+        description: fieldData.description || null,
+        is_required: fieldData.is_required || false,
+        options: fieldData.options ? JSON.stringify(fieldData.options) : null,
+        ...(isEditing ? { id: fieldData.id } : { profile_id: user.id })
+      };
+
       if (isEditing) {
         const { error } = await supabase
           .from('metadata_fields')
-          .update({ ...field })
-          .eq('id', field.id);
+          .update(fieldToSave)
+          .eq('id', fieldData.id);
 
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('metadata_fields')
-          .insert({
-            ...field,
-            profile_id: user.id
-          });
+          .insert(fieldToSave);
 
         if (error) throw error;
       }
