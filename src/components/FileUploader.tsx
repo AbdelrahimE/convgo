@@ -12,7 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { FileMetadataForm } from "@/components/FileMetadataForm";
 
 interface UploadingFile {
@@ -366,15 +366,18 @@ export function FileUploader() {
 
       <Dialog open={showMetadataDialog} onOpenChange={setShowMetadataDialog}>
         <DialogContent className="sm:max-w-[600px]">
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Add File Metadata</h2>
-            {currentUploadingFile?.id && (
-              <FileMetadataForm 
-                fileId={currentUploadingFile.id}
-                onSave={handleMetadataSave}
-              />
-            )}
-          </div>
+          <DialogHeader>
+            <DialogTitle>Add File Metadata</DialogTitle>
+            <DialogDescription>
+              Please provide the metadata for your uploaded file. This information will help organize and search your documents.
+            </DialogDescription>
+          </DialogHeader>
+          {currentUploadingFile?.id && (
+            <FileMetadataForm 
+              fileId={currentUploadingFile.id}
+              onSave={handleMetadataSave}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </>
