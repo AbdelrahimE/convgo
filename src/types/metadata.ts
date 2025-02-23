@@ -22,7 +22,6 @@ export interface FileMetadataValue {
   updated_at?: string;
 }
 
-// Type for creating/updating metadata fields
 export interface MetadataFieldInput {
   id?: string;
   name: string;
@@ -31,5 +30,16 @@ export interface MetadataFieldInput {
   is_required: boolean;
   options?: { label: string; value: string; }[] | null;
   profile_id?: string;
+}
+
+export interface ValidationError {
+  field: string;
+  message: string;
+}
+
+export interface MetadataFieldValidationState {
+  name: boolean;
+  description: boolean;
+  options: boolean;
 }
 
