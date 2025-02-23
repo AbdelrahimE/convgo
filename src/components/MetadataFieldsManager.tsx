@@ -48,7 +48,14 @@ export function MetadataFieldsManager() {
       return;
     }
 
-    setFields(data || []);
+    const transformedFields: MetadataField[] = (data || []).map(field => ({
+      ...field,
+      options: field.options ? (typeof field.options === 'string' ? 
+        JSON.parse(field.options) : field.options) as { label: string; value: string }[]
+        : undefined
+    }));
+
+    setFields(transformedFields);
   };
 
   useEffect(() => {
@@ -60,14 +67,14 @@ export function MetadataFieldsManager() {
 
     try {
       const isEditing = Boolean(field.id);
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('metadata_fields')
-        [isEditing ? 'update' : 'insert']({
-          ...field,
-          ...(isEditing ? {} : { profile_id: user.id })
-        })
-        [isEditing ? 'eq' : 'select']('id', field.id)
-        .single();
+        [isEditing ? 'update' : 'insert'](
+          isEditing 
+            ? { ...field }
+            : { ...field, profile_id: user.id }
+        )
+        [isEditing ? 'eq' : 'select']('id', field.id);
 
       if (error) throw error;
 

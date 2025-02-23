@@ -43,6 +43,14 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
 
       if (fieldsError) throw fieldsError;
 
+      // Transform the fields data to ensure options are properly parsed
+      const transformedFields: MetadataField[] = (fieldsData || []).map(field => ({
+        ...field,
+        options: field.options ? (typeof field.options === 'string' ? 
+          JSON.parse(field.options) : field.options) as { label: string; value: string }[]
+          : undefined
+      }));
+
       // Fetch existing values
       const { data: valuesData, error: valuesError } = await supabase
         .from('file_metadata')
@@ -51,7 +59,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
 
       if (valuesError) throw valuesError;
 
-      setFields(fieldsData || []);
+      setFields(transformedFields);
       
       // Transform values array to object
       const valuesObject: Record<string, any> = {};
