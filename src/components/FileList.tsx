@@ -142,22 +142,25 @@ export function FileList() {
 
   const handleDelete = async (id: string, path: string) => {
     try {
-      console.log('Deleting file:', { id, path });
+      console.log('Attempting to delete file:', { id, path });
       
-      // First delete from database which will trigger the cleanup function
-      const { error: dbError } = await supabase
+      const { data, error: deleteError } = await supabase
         .from('files')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
 
-      if (dbError) {
-        console.error('Database deletion error:', dbError);
-        throw dbError;
+      if (deleteError) {
+        console.error('Delete operation failed:', deleteError);
+        throw deleteError;
       }
 
-      // Update UI state only after successful deletion
-      setFiles(files.filter(file => file.id !== id));
-      setFilteredFiles(filteredFiles.filter(file => file.id !== id));
+      console.log('File deleted successfully:', data);
+      
+      // Only update UI after successful deletion
+      setFiles(prevFiles => prevFiles.filter(file => file.id !== id));
+      setFilteredFiles(prevFiltered => prevFiltered.filter(file => file.id !== id));
       
       toast({
         title: "Success",
