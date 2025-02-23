@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useMetadataValidation } from "@/hooks/use-metadata-validation";
 import type { MetadataField, FileMetadataValue } from "@/types/metadata";
 
 interface FileMetadataFormProps {
@@ -29,6 +31,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   const [isSaving, setIsSaving] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
+  const { validateField } = useMetadataValidation(user?.id || '');
 
   useEffect(() => {
     fetchMetadata();
@@ -46,7 +49,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
 
       if (fieldsError) throw fieldsError;
 
-      // Transform the fields data to ensure options are properly parsed
+      // Transform fields data to ensure options are properly parsed
       const transformedFields: MetadataField[] = (fieldsData || []).map(field => ({
         ...field,
         options: field.options ? (typeof field.options === 'string' ? 
@@ -81,34 +84,33 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     }
   };
 
-  const validateField = (field: MetadataField, value: any): string | null => {
-    if (field.is_required && (value === undefined || value === null || value === '')) {
-      return 'This field is required';
-    }
+  const validateFormField = async (field: MetadataField, value: any): Promise<string | null> => {
+    const validationErrors = await validateField({
+      ...field,
+      name: field.name,
+      description: field.description,
+      options: field.options,
+      value: value
+    });
 
-    if (value === undefined || value === null || value === '') {
-      return null;
-    }
+    const error = validationErrors.find(err => err.field === 'value');
+    return error ? error.message : null;
+  };
 
-    switch (field.field_type) {
-      case 'number':
-        if (isNaN(Number(value))) {
-          return 'Must be a valid number';
-        }
-        break;
-      case 'date':
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-          return 'Must be a valid date (YYYY-MM-DD)';
-        }
-        break;
-      case 'select':
-        if (field.options && !field.options.some(opt => opt.value === value)) {
-          return 'Invalid selection';
-        }
-        break;
+  const handleValueChange = async (fieldId: string, value: any) => {
+    setValues(prev => ({
+      ...prev,
+      [fieldId]: value
+    }));
+    
+    const field = fields.find(f => f.id === fieldId);
+    if (field) {
+      const error = await validateFormField(field, value);
+      setErrors(prev => ({
+        ...prev,
+        [fieldId]: error || ''
+      }));
     }
-
-    return null;
   };
 
   const handleSave = async () => {
@@ -118,13 +120,13 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     const newErrors: Record<string, string> = {};
     let hasErrors = false;
 
-    fields.forEach(field => {
-      const error = validateField(field, values[field.id]);
+    for (const field of fields) {
+      const error = await validateFormField(field, values[field.id]);
       if (error) {
         newErrors[field.id] = error;
         hasErrors = true;
       }
-    });
+    }
 
     if (hasErrors) {
       setErrors(newErrors);
@@ -171,21 +173,6 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       });
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleValueChange = (fieldId: string, value: any) => {
-    setValues(prev => ({
-      ...prev,
-      [fieldId]: value
-    }));
-    
-    // Clear error when value changes
-    if (errors[fieldId]) {
-      setErrors(prev => ({
-        ...prev,
-        [fieldId]: ''
-      }));
     }
   };
 
@@ -283,7 +270,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       {fields.length > 0 && (
         <Button 
           onClick={handleSave} 
-          disabled={isSaving}
+          disabled={isSaving || Object.keys(errors).length > 0}
         >
           {isSaving ? "Saving..." : "Save Metadata"}
         </Button>
