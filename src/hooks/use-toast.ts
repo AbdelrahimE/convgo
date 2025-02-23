@@ -4,7 +4,6 @@ import type {
   ToastActionElement,
   ToastProps,
 } from "@/components/ui/toast";
-import { getErrorDetails } from "@/utils/errorCodes";
 
 const TOAST_LIMIT = 1;
 const TOAST_REMOVE_DELAY = 1000000;
@@ -15,11 +14,9 @@ type ToasterToast = ToastProps & {
   description?: React.ReactNode;
   action?: ToastActionElement;
   error?: {
-    code: string;
-    message: string;
+    code?: string;
     details?: string;
-    help?: string;
-    timestamp: string;
+    timestamp?: string;
     stack?: string;
   };
 }
@@ -146,10 +143,10 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">;
 
-function formatErrorDetails(error: any) {
-  const errorDetails = getErrorDetails(error);
+function formatErrorDetails(error: any): ToasterToast['error'] {
   return {
-    ...errorDetails,
+    code: error.code || 'UNKNOWN_ERROR',
+    details: error.details || error.message || 'An unexpected error occurred',
     timestamp: new Date().toISOString(),
     stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
   };
@@ -159,27 +156,13 @@ function toast({ ...props }: Toast) {
   const id = genId();
 
   if (props.variant === 'destructive' && props.description) {
-    const errorDetails = formatErrorDetails(props.description);
+    const errorDetails = props.description instanceof Error ? 
+      formatErrorDetails(props.description) : 
+      typeof props.description === 'object' ? 
+        formatErrorDetails(props.description) :
+        { details: String(props.description) };
+
     props.error = errorDetails;
-    
-    // Format the description to include error details
-    if (errorDetails.help) {
-      const ErrorContent: React.ReactNode = (
-        <div className="space-y-2">
-          <p>{errorDetails.message}</p>
-          {errorDetails.details && (
-            <p className="text-sm opacity-90">{errorDetails.details}</p>
-          )}
-          <p className="text-sm opacity-75">{errorDetails.help}</p>
-          {process.env.NODE_ENV === 'development' && (
-            <p className="text-xs opacity-50 font-mono">
-              Error Code: {errorDetails.code}
-            </p>
-          )}
-        </div>
-      );
-      props.description = ErrorContent;
-    }
   }
 
   const update = (props: ToasterToast) =>
