@@ -1,3 +1,4 @@
+import { logger } from './logger';
 
 export const ErrorCodes = {
   // File Management Errors (1000-1999)
@@ -90,32 +91,41 @@ export class AppError extends Error {
     this.code = errorDetails.code;
     this.details = errorDetails.details;
     this.help = errorDetails.help;
+
+    // Log the error when it's created
+    logger.error(this.message, {
+      code: this.code,
+      details: this.details,
+      help: this.help,
+      stack: this.stack
+    });
   }
 }
 
 export function getErrorDetails(error: unknown): ErrorDetails {
-  if (error instanceof AppError) {
-    return {
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      help: error.help,
-    };
-  }
+  const details = error instanceof AppError
+    ? {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        help: error.help,
+      }
+    : error instanceof Error
+    ? {
+        code: ErrorCodes.UNKNOWN_ERROR,
+        message: error.message,
+        details: error.stack,
+      }
+    : {
+        code: ErrorCodes.UNKNOWN_ERROR,
+        message: 'An unknown error occurred',
+        details: String(error),
+      };
 
-  if (error instanceof Error) {
-    return {
-      code: ErrorCodes.UNKNOWN_ERROR,
-      message: error.message,
-      details: error.stack,
-    };
-  }
+  // Log all error details
+  logger.error(details.message, details);
 
-  return {
-    code: ErrorCodes.UNKNOWN_ERROR,
-    message: 'An unknown error occurred',
-    details: String(error),
-  };
+  return details;
 }
 
 export function createError(code: ErrorCode, customMessage?: string): AppError {
