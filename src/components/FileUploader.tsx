@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Upload, AlertCircle } from "lucide-react";
+import { Upload, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,12 +20,22 @@ interface UploadingFile {
   id?: string;
 }
 
+interface RetryState {
+  attempts: number;
+  lastError: string | null;
+  operation: 'upload' | 'metadata' | 'extraction';
+}
+
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 1000;
+
 export function FileUploader() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [showMetadataDialog, setShowMetadataDialog] = useState(false);
   const [currentUploadingFile, setCurrentUploadingFile] = useState<UploadingFile | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -38,6 +48,60 @@ export function FileUploader() {
     'text/csv'
   ];
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+  const [retryState, setRetryState] = useState<RetryState>({
+    attempts: 0,
+    lastError: null,
+    operation: 'upload'
+  });
+
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const resetRetryState = () => {
+    setRetryState({
+      attempts: 0,
+      lastError: null,
+      operation: 'upload'
+    });
+  };
+
+  const handleRetry = async () => {
+    if (retryState.attempts >= MAX_RETRY_ATTEMPTS) {
+      toast({
+        variant: "destructive",
+        title: "Maximum retry attempts reached",
+        description: "Please try uploading the file again"
+      });
+      resetRetryState();
+      return;
+    }
+
+    setRetryState(prev => ({
+      ...prev,
+      attempts: prev.attempts + 1
+    }));
+
+    // Add exponential backoff
+    await sleep(RETRY_DELAY_MS * Math.pow(2, retryState.attempts));
+
+    switch (retryState.operation) {
+      case 'upload':
+        if (currentUploadingFile?.file) {
+          await handleFileUpload(currentUploadingFile.file);
+        }
+        break;
+      case 'metadata':
+        if (currentUploadingFile?.id) {
+          await triggerTextExtraction(currentUploadingFile.id);
+        }
+        break;
+      case 'extraction':
+        if (currentUploadingFile?.id) {
+          await triggerTextExtraction(currentUploadingFile.id);
+        }
+        break;
+    }
+  };
 
   const validateFile = (file: File) => {
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
@@ -67,14 +131,29 @@ export function FileUploader() {
         body: { fileId }
       });
 
-      if (extractError) throw extractError;
+      if (extractError) {
+        setRetryState(prev => ({
+          attempts: prev.attempts,
+          lastError: extractError.message,
+          operation: 'extraction'
+        }));
+        throw extractError;
+      }
+
+      resetRetryState();
 
     } catch (error: any) {
       console.error('Error in processing:', error);
       toast({
         variant: "destructive",
         title: "Processing Error",
-        description: "Failed to process file. Please try again."
+        description: "Failed to process file. Click retry to attempt again.",
+        action: retryState.attempts < MAX_RETRY_ATTEMPTS ? (
+          <Button variant="outline" size="sm" onClick={handleRetry}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry ({MAX_RETRY_ATTEMPTS - retryState.attempts} left)
+          </Button>
+        ) : undefined
       });
     }
   };
@@ -83,7 +162,7 @@ export function FileUploader() {
     if (!file || !user) return;
     if (!validateFile(file)) return;
 
-    setIsUploading(true);
+    setIsLoading(true);
     setUploadProgress(0);
     
     try {
@@ -108,7 +187,14 @@ export function FileUploader() {
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        setRetryState(prev => ({
+          attempts: prev.attempts,
+          lastError: uploadError.message,
+          operation: 'upload'
+        }));
+        throw uploadError;
+      }
 
       const { data: fileData, error: dbError } = await supabase
         .from('files')
@@ -123,17 +209,22 @@ export function FileUploader() {
         .select()
         .single();
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        setRetryState(prev => ({
+          attempts: prev.attempts,
+          lastError: dbError.message,
+          operation: 'metadata'
+        }));
+        throw dbError;
+      }
 
       if (fileData) {
-        // Store the file info temporarily and show metadata dialog
         setCurrentUploadingFile({ file, id: fileData.id });
         setShowMetadataDialog(true);
-
-        // Trigger text extraction in parallel
         await triggerTextExtraction(fileData.id);
       }
 
+      resetRetryState();
       toast({
         title: "Success",
         description: "File uploaded successfully. Please add metadata."
@@ -142,10 +233,16 @@ export function FileUploader() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message
+        description: error.message,
+        action: retryState.attempts < MAX_RETRY_ATTEMPTS ? (
+          <Button variant="outline" size="sm" onClick={handleRetry}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry ({MAX_RETRY_ATTEMPTS - retryState.attempts} left)
+          </Button>
+        ) : undefined
       });
     } finally {
-      setIsUploading(false);
+      setIsLoading(false);
       setUploadProgress(0);
       if (inputRef.current) inputRef.current.value = '';
     }
@@ -216,20 +313,27 @@ export function FileUploader() {
         >
           <div className="flex flex-col items-center justify-center pt-5 pb-6">
             <motion.div
-              animate={isUploading ? { rotate: 360 } : {}}
+              animate={isLoading ? { rotate: 360 } : {}}
               transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
             >
-              <Upload className={`w-8 h-8 mb-2 sm:w-10 sm:h-10 md:w-12 md:h-12 ${isUploading ? 'text-primary' : ''}`} />
+              <Upload className={`w-8 h-8 mb-2 sm:w-10 sm:h-10 md:w-12 md:h-12 ${isLoading ? 'text-primary' : ''}`} />
             </motion.div>
             <p className="mb-2 text-sm sm:text-base md:text-lg text-gray-500 text-center px-4">
               {dragActive
                 ? "Drop the file here"
-                : isUploading
+                : isLoading
                 ? "Uploading..."
                 : "Drag & drop or click to upload"}
             </p>
             <div className="flex items-center gap-2">
-              <p className="text-xs sm:text-sm text-gray-500 text-center">PDF, DOC, DOCX, TXT, CSV (max 10MB)</p>
+              <p className="text-xs sm:text-sm text-gray-500 text-center">
+                PDF, DOC, DOCX, TXT, CSV (max 10MB)
+                {retryState.lastError && retryState.attempts > 0 && (
+                  <span className="text-destructive ml-2">
+                    Retry attempt {retryState.attempts}/{MAX_RETRY_ATTEMPTS}
+                  </span>
+                )}
+              </p>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger>
@@ -249,7 +353,7 @@ export function FileUploader() {
           </div>
         </label>
 
-        {isUploading && (
+        {isLoading && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
