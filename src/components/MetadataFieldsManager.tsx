@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2, Save } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -67,16 +66,24 @@ export function MetadataFieldsManager() {
 
     try {
       const isEditing = Boolean(field.id);
-      const { error } = await supabase
-        .from('metadata_fields')
-        [isEditing ? 'update' : 'insert'](
-          isEditing 
-            ? { ...field }
-            : { ...field, profile_id: user.id }
-        )
-        [isEditing ? 'eq' : 'select']('id', field.id);
+      
+      if (isEditing) {
+        const { error } = await supabase
+          .from('metadata_fields')
+          .update({ ...field })
+          .eq('id', field.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('metadata_fields')
+          .insert({
+            ...field,
+            profile_id: user.id
+          });
+
+        if (error) throw error;
+      }
 
       toast({
         title: "Success",
