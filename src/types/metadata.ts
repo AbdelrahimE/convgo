@@ -42,4 +42,3 @@ export interface MetadataFieldValidationState {
   description: boolean;
   options: boolean;
 }
-
