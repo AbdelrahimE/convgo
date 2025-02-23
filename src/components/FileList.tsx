@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown } from "lucide-react";
 import {
@@ -141,30 +142,33 @@ export function FileList() {
 
   const handleDelete = async (id: string, path: string) => {
     try {
-      const { error: storageError } = await supabase.storage
-        .from('files')
-        .remove([path]);
-
-      if (storageError) throw storageError;
-
+      console.log('Deleting file:', { id, path });
+      
+      // First delete from database which will trigger the cleanup function
       const { error: dbError } = await supabase
         .from('files')
         .delete()
         .eq('id', id);
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error('Database deletion error:', dbError);
+        throw dbError;
+      }
 
+      // Update UI state only after successful deletion
       setFiles(files.filter(file => file.id !== id));
       setFilteredFiles(filteredFiles.filter(file => file.id !== id));
+      
       toast({
         title: "Success",
         description: "File deleted successfully"
       });
     } catch (error: any) {
+      console.error('Delete operation failed:', error);
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "Failed to delete file"
+        title: "Error deleting file",
+        description: error.message || "Failed to delete file"
       });
     }
   };
