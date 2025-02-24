@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -21,6 +21,7 @@ interface AuthState {
 interface PersistedAuthState {
   timestamp: number;
   state: Omit<AuthState, 'loading'>;
+  adminCheckTimestamp?: number;
 }
 
 interface AuthError {
@@ -40,7 +41,7 @@ const initialState: AuthState = {
 const AUTH_TIMEOUT = 20000;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
-
+const ADMIN_CACHE_DURATION = 1000 * 60 * 5; // 5 minutes
 const STATE_STORAGE_KEY = 'auth_state';
 const STATE_MAX_AGE = 1000 * 60 * 60;
 
@@ -58,6 +59,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const mountedRef = useRef(true);
   const pendingPromises = useRef<AbortController[]>([]);
   const stateRecoveryAttempted = useRef(false);
+  const lastAdminCheck = useRef<number>(0);
 
   const formatError = (error: any): AuthError => {
     const now = new Date().toISOString();
@@ -104,7 +106,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return formattedError;
   };
 
-  const persistState = (newState: AuthState) => {
+  const persistState = useCallback((newState: AuthState, adminCheckTime?: number) => {
     if (!newState.session) {
       localStorage.removeItem(STATE_STORAGE_KEY);
       return;
@@ -117,6 +119,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         user: newState.user,
         isAdmin: newState.isAdmin,
       },
+      adminCheckTimestamp: adminCheckTime || lastAdminCheck.current,
     };
 
     try {
@@ -124,34 +127,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (error) {
       console.warn('[Auth] Failed to persist state:', error);
     }
-  };
+  }, []);
 
-  const recoverState = (): Partial<AuthState> | null => {
+  const recoverState = useCallback((): { state: Partial<AuthState>, adminCheckTimestamp?: number } | null => {
     try {
       const stored = localStorage.getItem(STATE_STORAGE_KEY);
       if (!stored) return null;
 
-      const { timestamp, state: storedState }: PersistedAuthState = JSON.parse(stored);
+      const { timestamp, state: storedState, adminCheckTimestamp }: PersistedAuthState = JSON.parse(stored);
       
       if (Date.now() - timestamp > STATE_MAX_AGE) {
         localStorage.removeItem(STATE_STORAGE_KEY);
         return null;
       }
 
-      return storedState;
+      return { state: storedState, adminCheckTimestamp };
     } catch (error) {
       console.warn('[Auth] Failed to recover state:', error);
       localStorage.removeItem(STATE_STORAGE_KEY);
       return null;
     }
-  };
+  }, []);
 
   const cleanupOnUnmount = () => {
     pendingPromises.current.forEach(controller => controller.abort());
     pendingPromises.current = [];
   };
 
-  const checkAdminStatus = async (retryCount = 0): Promise<boolean> => {
+  const checkAdminStatus = useCallback(async (retryCount = 0, force = false): Promise<boolean> => {
+    const now = Date.now();
+    
+    if (!force && lastAdminCheck.current && (now - lastAdminCheck.current < ADMIN_CACHE_DURATION)) {
+      console.debug('[Auth] Using cached admin status');
+      return state.isAdmin;
+    }
+
     console.debug('[Auth] Checking admin status (attempt ' + (retryCount + 1) + ')');
     try {
       const controller = new AbortController();
@@ -174,15 +184,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return false;
       }
       
+      lastAdminCheck.current = now;
       console.debug('[Auth] Admin status result:', !!data);
       return !!data;
     } catch (error) {
       handleError(error, 'admin status check');
       return false;
     }
-  };
+  }, [state.isAdmin]);
 
-  const updateAuthState = async (session: Session | null, retryCount = 0) => {
+  const updateAuthState = useCallback(async (session: Session | null, retryCount = 0) => {
     console.debug('[Auth] Updating auth state:', { 
       hasSession: !!session, 
       attempt: retryCount + 1,
@@ -203,15 +214,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
 
-      const recoveredState = recoverState();
+      const recovered = recoverState();
       let isAdminUser = false;
 
-      if (recoveredState?.isAdmin !== undefined && !stateRecoveryAttempted.current) {
+      if (recovered?.state.isAdmin !== undefined && 
+          recovered.adminCheckTimestamp && 
+          (Date.now() - recovered.adminCheckTimestamp < ADMIN_CACHE_DURATION) &&
+          !stateRecoveryAttempted.current) {
         console.debug('[Auth] Using recovered admin status');
-        isAdminUser = recoveredState.isAdmin;
+        isAdminUser = recovered.state.isAdmin;
+        lastAdminCheck.current = recovered.adminCheckTimestamp;
         stateRecoveryAttempted.current = true;
       } else {
-        isAdminUser = await checkAdminStatus();
+        isAdminUser = await checkAdminStatus(0, true);
       }
       
       if (!mountedRef.current) return;
@@ -223,15 +238,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         loading: false,
       };
 
-      console.debug('[Auth] Setting new state:', {
-        hasSession: !!session,
-        hasUser: !!session.user,
-        isAdmin: isAdminUser,
-        isRecovered: !!recoveredState
+      setState(prevState => {
+        if (JSON.stringify(prevState) === JSON.stringify(newState)) {
+          console.debug('[Auth] Skipping state update - no changes');
+          return prevState;
+        }
+        console.debug('[Auth] Updating state with changes');
+        return newState;
       });
-
-      setState(newState);
-      persistState(newState);
+      persistState(newState, Date.now());
     };
 
     try {
@@ -285,7 +300,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
       }
     }
-  };
+  }, [persistState, recoverState, checkAdminStatus]);
 
   const logout = async () => {
     console.debug('[Auth] Initiating logout');
@@ -314,15 +329,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         pendingPromises.current.push(controller);
 
         const initPromise = async () => {
-          const recoveredState = recoverState();
-          if (recoveredState && !stateRecoveryAttempted.current) {
-            console.debug('[Auth] Recovered state found:', recoveredState);
+          const recovered = recoverState();
+          if (recovered?.state && !stateRecoveryAttempted.current) {
+            console.debug('[Auth] Recovered state found:', recovered);
             setState({ 
-              session: recoveredState.session,
-              user: recoveredState.user,
-              isAdmin: recoveredState.isAdmin,
+              session: recovered.state.session,
+              user: recovered.state.user,
+              isAdmin: recovered.state.isAdmin,
               loading: false 
             });
+            if (recovered.adminCheckTimestamp) {
+              lastAdminCheck.current = recovered.adminCheckTimestamp;
+            }
             stateRecoveryAttempted.current = true;
             toast.info("Restored previous session", {
               description: "Verifying authentication status...",
@@ -333,11 +351,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           
           if (error) throw error;
           if (!mountedRef.current) return;
-          
-          console.debug('[Auth] Initial session retrieved:', { 
-            hasSession: !!session,
-            hasRecoveredState: !!recoveredState 
-          });
           
           await updateAuthState(session);
         };
@@ -396,6 +409,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       if (event === 'SIGNED_OUT') {
         toast.info("You have been signed out");
+        lastAdminCheck.current = 0; // Reset admin cache on logout
       } else if (event === 'SIGNED_IN') {
         toast.success("Signed in successfully");
       }
@@ -409,7 +423,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       cleanupOnUnmount();
       subscription.unsubscribe();
     };
-  }, []);
+  }, [updateAuthState, recoverState]);
 
   const value = {
     session: state.session,
