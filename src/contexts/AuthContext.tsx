@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,6 +21,13 @@ interface AuthState {
 interface PersistedAuthState {
   timestamp: number;
   state: Omit<AuthState, 'loading'>;
+}
+
+interface AuthError {
+  code: string;
+  message: string;
+  details?: string;
+  timestamp: string;
 }
 
 const initialState: AuthState = {
@@ -52,6 +58,51 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const mountedRef = useRef(true);
   const pendingPromises = useRef<AbortController[]>([]);
   const stateRecoveryAttempted = useRef(false);
+
+  const formatError = (error: any): AuthError => {
+    const now = new Date().toISOString();
+    if (error instanceof Error) {
+      return {
+        code: 'UNKNOWN_ERROR',
+        message: error.message,
+        details: error.stack,
+        timestamp: now,
+      };
+    }
+    
+    if (typeof error === 'string') {
+      return {
+        code: 'STRING_ERROR',
+        message: error,
+        timestamp: now,
+      };
+    }
+
+    return {
+      code: error.code || 'UNKNOWN_ERROR',
+      message: error.message || 'An unexpected error occurred',
+      details: error.details || error.stack,
+      timestamp: now,
+    };
+  };
+
+  const handleError = (error: any, context: string, critical = false) => {
+    const formattedError = formatError(error);
+    console.error(`[Auth] Error in ${context}:`, formattedError);
+
+    if (!mountedRef.current) return;
+
+    if (critical) {
+      toast.error(formattedError.message, {
+        description: "Please try refreshing the page or contact support if the issue persists.",
+        duration: 5000,
+      });
+    } else {
+      toast.error(formattedError.message);
+    }
+
+    return formattedError;
+  };
 
   const persistState = (newState: AuthState) => {
     if (!newState.session) {
@@ -114,7 +165,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (index > -1) pendingPromises.current.splice(index, 1);
       
       if (error) {
-        console.error('[Auth] Error checking admin status:', error);
+        handleError(error, 'admin status check');
         if (retryCount < MAX_RETRIES) {
           console.debug(`[Auth] Retrying admin check in ${RETRY_DELAY}ms`);
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
@@ -126,7 +177,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.debug('[Auth] Admin status result:', !!data);
       return !!data;
     } catch (error) {
-      console.error('[Auth] Unexpected error checking admin status:', error);
+      handleError(error, 'admin status check');
       return false;
     }
   };
@@ -202,7 +253,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const index = pendingPromises.current.indexOf(controller);
       if (index > -1) pendingPromises.current.splice(index, 1);
     } catch (error) {
-      console.error('[Auth] Error updating auth state:', error);
+      const formattedError = handleError(error, 'state update', true);
       
       const recoveredState = recoverState();
       if (recoveredState && mountedRef.current && retryCount === MAX_RETRIES) {
@@ -213,18 +264,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
           isAdmin: recoveredState.isAdmin,
           loading: false 
         });
+        toast.info("Recovered from last known good state", {
+          description: `Last verified: ${new Date(recoveredState.session?.expires_at || 0).toLocaleString()}`,
+        });
         return;
       }
 
       if (retryCount < MAX_RETRIES && mountedRef.current) {
         console.debug(`[Auth] Retrying state update in ${RETRY_DELAY}ms`);
+        toast.info(`Retrying... (Attempt ${retryCount + 1}/${MAX_RETRIES})`);
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         return updateAuthState(session, retryCount + 1);
       }
 
       if (mountedRef.current) {
         setState(initialState);
-        toast.error("Authentication update failed. Please refresh the page.");
+        toast.error("Authentication failed", {
+          description: formattedError.message,
+          duration: 5000,
+        });
       }
     }
   };
@@ -241,10 +299,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       console.debug('[Auth] Logout successful');
     } catch (error) {
-      console.error('[Auth] Error during logout:', error);
-      if (mountedRef.current) {
-        toast.error("Failed to log out. Please try again.");
-      }
+      handleError(error, 'logout');
     }
   };
 
@@ -269,6 +324,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
               loading: false 
             });
             stateRecoveryAttempted.current = true;
+            toast.info("Restored previous session", {
+              description: "Verifying authentication status...",
+            });
           }
 
           const { data: { session }, error } = await supabase.auth.getSession();
@@ -299,7 +357,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const index = pendingPromises.current.indexOf(controller);
         if (index > -1) pendingPromises.current.splice(index, 1);
       } catch (error) {
-        console.error('[Auth] Error during initialization:', error);
+        const formattedError = handleError(error, 'initialization', true);
         const recoveredState = recoverState();
         if (recoveredState && mountedRef.current) {
           console.debug('[Auth] Recovering from persisted state after init error');
@@ -309,16 +367,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
             isAdmin: recoveredState.isAdmin,
             loading: false 
           });
+          toast.info("Using cached authentication state", {
+            description: "Unable to verify current status. Some features may be limited.",
+            duration: 5000,
+          });
           return;
         }
 
         if (mountedRef.current) {
           setState({ ...initialState, loading: false });
-          toast.error(
-            error.message.includes('timed out')
-              ? "Authentication check timed out. Please refresh the page."
-              : "Failed to initialize authentication. Please refresh the page."
-          );
+          toast.error("Authentication initialization failed", {
+            description: formattedError.message,
+            duration: 5000,
+          });
         }
       }
     };
@@ -331,6 +392,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (!mountedRef.current) {
         console.debug('[Auth] Skipping update - component unmounted');
         return;
+      }
+      
+      if (event === 'SIGNED_OUT') {
+        toast.info("You have been signed out");
+      } else if (event === 'SIGNED_IN') {
+        toast.success("Signed in successfully");
       }
       
       await updateAuthState(session);
