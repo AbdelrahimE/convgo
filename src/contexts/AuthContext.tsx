@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -140,7 +141,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const updatePromise = async () => {
       if (!session?.user) {
         console.debug('[Auth] No session/user, resetting state');
-        const newState = {
+        const newState: AuthState = {
           session: null,
           user: null,
           isAdmin: false,
@@ -164,7 +165,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       if (!mountedRef.current) return;
 
-      const newState = {
+      const newState: AuthState = {
         session,
         user: session.user,
         isAdmin: isAdminUser,
@@ -206,7 +207,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const recoveredState = recoverState();
       if (recoveredState && mountedRef.current && retryCount === MAX_RETRIES) {
         console.debug('[Auth] Recovering from persisted state');
-        setState({ ...recoveredState, loading: false });
+        setState({ 
+          session: recoveredState.session,
+          user: recoveredState.user,
+          isAdmin: recoveredState.isAdmin,
+          loading: false 
+        });
         return;
       }
 
@@ -217,9 +223,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (mountedRef.current) {
-        const newState = { ...initialState, loading: false };
-        setState(newState);
-        persistState(newState);
+        setState(initialState);
         toast.error("Authentication update failed. Please refresh the page.");
       }
     }
@@ -258,7 +262,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const recoveredState = recoverState();
           if (recoveredState && !stateRecoveryAttempted.current) {
             console.debug('[Auth] Recovered state found:', recoveredState);
-            setState({ ...recoveredState, loading: false });
+            setState({ 
+              session: recoveredState.session,
+              user: recoveredState.user,
+              isAdmin: recoveredState.isAdmin,
+              loading: false 
+            });
             stateRecoveryAttempted.current = true;
           }
 
@@ -294,7 +303,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const recoveredState = recoverState();
         if (recoveredState && mountedRef.current) {
           console.debug('[Auth] Recovering from persisted state after init error');
-          setState({ ...recoveredState, loading: false });
+          setState({ 
+            session: recoveredState.session,
+            user: recoveredState.user,
+            isAdmin: recoveredState.isAdmin,
+            loading: false 
+          });
           return;
         }
 
