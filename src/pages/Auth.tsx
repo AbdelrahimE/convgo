@@ -1,4 +1,4 @@
-<lov-code>
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -996,7 +996,7 @@ const countryCodes = [{
 export default function Auth() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth(); // Add this to check auth state
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1008,7 +1008,6 @@ export default function Auth() {
 
   const countryCode = selectedCountry.split('+')[1];
 
-  // Add useEffect to handle navigation when user is authenticated
   useEffect(() => {
     if (user) {
       console.debug('[Auth] User authenticated, navigating to dashboard');
@@ -1019,7 +1018,7 @@ export default function Auth() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    console.log('Starting sign up process...'); // Debug log
+    console.log('Starting sign up process...');
 
     try {
       if (fullName.length < 3) {
@@ -1030,7 +1029,7 @@ export default function Auth() {
         throw new Error('Password must be at least 6 characters long');
       }
 
-      console.log('Attempting to sign up with email:', email); // Debug log
+      console.log('Attempting to sign up with email:', email);
 
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -1044,8 +1043,6 @@ export default function Auth() {
         }
       });
 
-      console.log('Sign up response:', { data, error: signUpError }); // Debug log
-
       if (signUpError) {
         if (signUpError.message.includes('User already registered')) {
           throw new Error('An account with this email already exists. Please sign in instead.');
@@ -1053,13 +1050,11 @@ export default function Auth() {
         throw signUpError;
       }
 
-      // Check if the sign-up was successful
       if (data?.user) {
         toast({
           title: "Success!",
           description: "Please check your email to confirm your account."
         });
-        // Optional: Clear the form
         setEmail('');
         setPassword('');
         setFullName('');
@@ -1069,7 +1064,7 @@ export default function Auth() {
         throw new Error('Failed to create account. Please try again.');
       }
     } catch (error: any) {
-      console.error('Sign up error:', error); // Debug log
+      console.error('Sign up error:', error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -1083,7 +1078,7 @@ export default function Auth() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    console.log('[Auth] Attempting sign in...'); // Debug log
+    console.log('[Auth] Attempting sign in...');
     
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -1091,14 +1086,13 @@ export default function Auth() {
         password
       });
       
-      console.log('[Auth] Sign in response:', { data, error }); // Debug log
+      console.log('[Auth] Sign in response:', { data, error });
       
       if (error) throw error;
       
-      // The useEffect hook will handle navigation when the auth state updates
       toast.success("Signed in successfully");
     } catch (error: any) {
-      console.error('[Auth] Sign in error:', error); // Debug log
+      console.error('[Auth] Sign in error:', error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -1113,9 +1107,7 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
-      const {
-        error
-      } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/reset-password`
       });
       if (error) throw error;
@@ -1146,4 +1138,169 @@ export default function Auth() {
           <CardContent>
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowResetPassword(false)}
+                >
+                  Back to Sign In
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Sending..." : "Reset Password"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Welcome</CardTitle>
+          <CardDescription>Sign in to your account or create a new one</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="signin" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="signin">Sign In</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="signin">
+              <form onSubmit={handleSignIn} className="space-y-4">
+                <div>
+                  <Label htmlFor="signin-email">Email</Label>
+                  <Input
+                    id="signin-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="signin-password">Password</Label>
+                  <Input
+                    id="signin-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    required
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setShowResetPassword(true)}
+                  >
+                    Forgot password?
+                  </Button>
+                  <Button type="submit" disabled={loading}>
+                    {loading ? "Signing in..." : "Sign In"}
+                  </Button>
+                </div>
+              </form>
+            </TabsContent>
+            
+            <TabsContent value="signup">
+              <form onSubmit={handleSignUp} className="space-y-4">
+                <div>
+                  <Label htmlFor="signup-email">Email</Label>
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="signup-password">Password</Label>
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="fullname">Full Name</Label>
+                  <Input
+                    id="fullname"
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Enter your full name"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="business">Business Name</Label>
+                  <Input
+                    id="business"
+                    type="text"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="Enter your business name"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone Number</Label>
+                  <div className="flex gap-2">
+                    <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {countryCodes.map((country) => (
+                          <SelectItem 
+                            key={country.code} 
+                            value={`${country.country}${country.code}`}
+                          >
+                            {country.flag} {country.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="Phone number"
+                      required
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? "Signing up..." : "Sign Up"}
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
