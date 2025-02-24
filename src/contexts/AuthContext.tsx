@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -12,7 +12,6 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
-// Combined state interface for coordinated updates
 interface AuthState {
   session: Session | null;
   user: User | null;
@@ -27,8 +26,10 @@ const initialState: AuthState = {
   loading: true,
 };
 
-// Auth timeout duration (10 seconds)
-const AUTH_TIMEOUT = 10000;
+// Increased timeout and added retry configuration
+const AUTH_TIMEOUT = 20000; // Increased to 20 seconds
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 seconds between retries
 
 const AuthContext = createContext<AuthContextType>({
   ...initialState,
@@ -41,17 +42,36 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [state, setState] = useState<AuthState>(initialState);
+  const mountedRef = useRef(true);
+  const pendingPromises = useRef<AbortController[]>([]);
 
-  // Enhanced admin check with better error handling
-  const checkAdminStatus = async () => {
-    console.debug('[Auth] Checking admin status');
+  // Utility to handle unmounting and cleanup
+  const cleanupOnUnmount = () => {
+    pendingPromises.current.forEach(controller => controller.abort());
+    pendingPromises.current = [];
+  };
+
+  // Enhanced admin check with retry mechanism
+  const checkAdminStatus = async (retryCount = 0): Promise<boolean> => {
+    console.debug('[Auth] Checking admin status (attempt ' + (retryCount + 1) + ')');
     try {
+      const controller = new AbortController();
+      pendingPromises.current.push(controller);
+
       const { data, error } = await supabase.rpc('has_role', {
         role: 'admin'
       });
+
+      const index = pendingPromises.current.indexOf(controller);
+      if (index > -1) pendingPromises.current.splice(index, 1);
       
       if (error) {
         console.error('[Auth] Error checking admin status:', error);
+        if (retryCount < MAX_RETRIES) {
+          console.debug(`[Auth] Retrying admin check in ${RETRY_DELAY}ms`);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+          return checkAdminStatus(retryCount + 1);
+        }
         return false;
       }
       
@@ -63,9 +83,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  // Coordinated state update with timeout
-  const updateAuthState = async (session: Session | null) => {
-    console.debug('[Auth] Updating auth state:', { hasSession: !!session });
+  // Improved state update with retry mechanism
+  const updateAuthState = async (session: Session | null, retryCount = 0) => {
+    console.debug('[Auth] Updating auth state:', { hasSession: !!session, attempt: retryCount + 1 });
 
     const updatePromise = async () => {
       if (!session?.user) {
@@ -81,6 +101,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const isAdminUser = await checkAdminStatus();
       
+      if (!mountedRef.current) return;
+
       console.debug('[Auth] Setting new state:', {
         hasSession: !!session,
         hasUser: !!session.user,
@@ -96,46 +118,70 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     try {
-      // Race between update and timeout
+      const controller = new AbortController();
+      pendingPromises.current.push(controller);
+
       await Promise.race([
         updatePromise(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Auth state update timed out')), AUTH_TIMEOUT)
-        ),
+        new Promise((_, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error('Auth state update timed out'));
+          }, AUTH_TIMEOUT);
+          controller.signal.addEventListener('abort', () => {
+            clearTimeout(timeoutId);
+          });
+        }),
       ]);
+
+      const index = pendingPromises.current.indexOf(controller);
+      if (index > -1) pendingPromises.current.splice(index, 1);
     } catch (error) {
       console.error('[Auth] Error updating auth state:', error);
-      setState({ ...initialState, loading: false });
-      toast.error("Authentication update failed. Please refresh the page.");
+      if (retryCount < MAX_RETRIES && mountedRef.current) {
+        console.debug(`[Auth] Retrying state update in ${RETRY_DELAY}ms`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return updateAuthState(session, retryCount + 1);
+      }
+      if (mountedRef.current) {
+        setState({ ...initialState, loading: false });
+        toast.error("Authentication update failed. Please refresh the page.");
+      }
     }
   };
 
-  // Enhanced logout with better error handling
   const logout = async () => {
     console.debug('[Auth] Initiating logout');
     try {
+      cleanupOnUnmount(); // Cancel any pending operations
       await supabase.auth.signOut();
-      setState(initialState);
-      toast.success("Logged out successfully");
+      if (mountedRef.current) {
+        setState(initialState);
+        toast.success("Logged out successfully");
+      }
       console.debug('[Auth] Logout successful');
     } catch (error) {
       console.error('[Auth] Error during logout:', error);
-      toast.error("Failed to log out. Please try again.");
+      if (mountedRef.current) {
+        toast.error("Failed to log out. Please try again.");
+      }
     }
   };
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
     console.debug('[Auth] Provider mounted');
     
     const initializeAuth = async () => {
       try {
         console.debug('[Auth] Initializing auth state');
+        const controller = new AbortController();
+        pendingPromises.current.push(controller);
+
         const initPromise = async () => {
           const { data: { session }, error } = await supabase.auth.getSession();
           
           if (error) throw error;
-          if (!mounted) return;
+          if (!mountedRef.current) return;
           
           console.debug('[Auth] Initial session retrieved:', { hasSession: !!session });
           await updateAuthState(session);
@@ -143,13 +189,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         await Promise.race([
           initPromise(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Initial auth check timed out')), AUTH_TIMEOUT)
-          ),
+          new Promise((_, reject) => {
+            const timeoutId = setTimeout(() => {
+              reject(new Error('Initial auth check timed out'));
+            }, AUTH_TIMEOUT);
+            controller.signal.addEventListener('abort', () => {
+              clearTimeout(timeoutId);
+            });
+          }),
         ]);
+
+        const index = pendingPromises.current.indexOf(controller);
+        if (index > -1) pendingPromises.current.splice(index, 1);
       } catch (error) {
         console.error('[Auth] Error during initialization:', error);
-        if (mounted) {
+        if (mountedRef.current) {
           setState({ ...initialState, loading: false });
           toast.error(
             error.message.includes('timed out')
@@ -165,7 +219,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.debug('[Auth] Auth state changed:', { event, hasSession: !!session });
       
-      if (!mounted) {
+      if (!mountedRef.current) {
         console.debug('[Auth] Skipping update - component unmounted');
         return;
       }
@@ -175,7 +229,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return () => {
       console.debug('[Auth] Provider unmounting - cleaning up');
-      mounted = false;
+      mountedRef.current = false;
+      cleanupOnUnmount();
       subscription.unsubscribe();
     };
   }, []);
