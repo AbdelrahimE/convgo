@@ -363,6 +363,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      insert_default_metadata_fields: {
+        Args: {
+          target_profile_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "user"
