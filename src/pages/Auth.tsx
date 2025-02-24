@@ -1090,7 +1090,11 @@ export default function Auth() {
       
       if (error) throw error;
       
-      toast.success("Signed in successfully");
+      // Changed from toast.success to the correct toast function syntax
+      toast({
+        title: "Success",
+        description: "Signed in successfully"
+      });
     } catch (error: any) {
       console.error('[Auth] Sign in error:', error);
       toast({
