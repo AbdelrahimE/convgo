@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -78,7 +77,6 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       });
       setValues(valuesObject);
 
-      // Don't set initial errors, wait for user interaction
       setErrors({});
 
     } catch (error: any) {
@@ -94,22 +92,18 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   };
 
   const validateFormField = async (field: MetadataField, value: any): Promise<string | null> => {
-    // If not dirty and not saving, don't show validation errors yet
     if (!isDirty && !isSaving) {
       return null;
     }
 
-    // If empty and required, return error
     if (field.is_required && (value === undefined || value === null || value === '')) {
       return 'This field is required';
     }
 
-    // If empty but not required, it's valid
     if (!field.is_required && (value === undefined || value === null || value === '')) {
       return null;
     }
 
-    // Type-specific validation
     switch (field.field_type) {
       case 'number':
         if (isNaN(Number(value))) {
@@ -131,6 +125,17 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     return null;
   };
 
+  const formatValueForDatabase = (field: MetadataField, value: any): any => {
+    if (!value) return value;
+    
+    switch (field.field_type) {
+      case 'date':
+        return value.toString();
+      default:
+        return value;
+    }
+  };
+
   const handleValueChange = async (fieldId: string, value: any) => {
     setIsDirty(true);
     const newValues = {
@@ -148,28 +153,23 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       }));
     }
 
-    // Log state for debugging
     console.log('Updated values:', newValues);
     console.log('Current errors:', errors);
   };
 
   const isFormValid = () => {
-    // If not dirty and not saving, consider form valid
     if (!isDirty && !isSaving) {
       return true;
     }
 
-    // Check if all required fields are filled
     const requiredFields = fields.filter(field => field.is_required);
     const hasAllRequired = requiredFields.every(field => {
       const value = values[field.id];
       return value !== undefined && value !== null && value !== '';
     });
     
-    // Check if there are any validation errors
     const hasNoErrors = Object.values(errors).every(error => !error);
     
-    // Log validation state for debugging
     console.log('Form validation:', {
       hasAllRequired,
       hasNoErrors,
@@ -194,7 +194,6 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     console.log('Starting metadata save operation...');
 
     try {
-      // Validate all fields before saving
       const validationErrors: Record<string, string> = {};
       for (const field of fields) {
         const error = await validateFormField(field, values[field.id]);
@@ -209,7 +208,6 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         throw new Error('Please fill in all required fields correctly');
       }
 
-      // Delete existing values
       const { error: deleteError } = await supabase
         .from('file_metadata')
         .delete()
@@ -222,14 +220,17 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
 
       console.log('Successfully deleted existing metadata');
 
-      // Insert new values
       const metadataValues = Object.entries(values)
         .filter(([_, value]) => value !== undefined && value !== null && value !== '')
-        .map(([field_id, value]) => ({
-          file_id: fileId,
-          field_id,
-          value
-        }));
+        .map(([field_id, value]) => {
+          const field = fields.find(f => f.id === field_id);
+          const formattedValue = field ? formatValueForDatabase(field, value) : value;
+          return {
+            file_id: fileId,
+            field_id,
+            value: formattedValue
+          };
+        });
 
       console.log('Preparing to insert new metadata:', metadataValues);
 
@@ -249,7 +250,6 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         description: "Metadata saved successfully"
       });
 
-      // Reset form state and call onSave callback
       setIsDirty(false);
       onSave?.();
       
@@ -374,4 +374,3 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     </ScrollArea>
   );
 }
-
