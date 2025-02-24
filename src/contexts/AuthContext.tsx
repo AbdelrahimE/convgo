@@ -2,12 +2,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -15,6 +17,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   isAdmin: false,
+  logout: async () => {},
 });
 
 interface AuthProviderProps {
@@ -46,6 +49,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  // Logout function
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setSession(null);
+      setUser(null);
+      setIsAdmin(false);
+      toast.success("Logged out successfully");
+    } catch (error) {
+      console.error('Error logging out:', error);
+      toast.error("Failed to log out");
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
     console.log('AuthProvider mounted');
@@ -58,10 +75,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         if (!mounted) return;
         
-        setSession(session);
-        setUser(session?.user ?? null);
-        
         if (session?.user) {
+          setSession(session);
+          setUser(session.user);
           const isAdminUser = await checkAdminStatus();
           if (mounted) {
             setIsAdmin(isAdminUser);
@@ -84,15 +100,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       if (!mounted) return;
       
-      setSession(session);
-      setUser(session?.user ?? null);
-      
       if (session?.user) {
+        setSession(session);
+        setUser(session.user);
         const isAdminUser = await checkAdminStatus();
         if (mounted) {
           setIsAdmin(isAdminUser);
         }
       } else {
+        setSession(null);
+        setUser(null);
         setIsAdmin(false);
       }
       
@@ -109,7 +126,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     session,
     user,
     loading,
-    isAdmin
+    isAdmin,
+    logout
   };
 
   console.log('AuthProvider rendering with:', value);
