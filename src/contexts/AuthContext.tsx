@@ -26,6 +26,9 @@ const initialState: AuthState = {
   loading: true,
 };
 
+// Timeout duration in milliseconds
+const AUTH_TIMEOUT_DURATION = 10000; // 10 seconds
+
 const AuthContext = createContext<AuthContextType>({
   ...initialState,
   logout: async () => {},
@@ -57,28 +60,51 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  // Coordinated state update function
+  // Coordinated state update function with timeout
   const updateAuthState = async (session: Session | null) => {
     console.log('Updating auth state with session:', session);
     
-    if (!session?.user) {
+    // Create a promise that resolves after the timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Auth state update timed out'));
+      }, AUTH_TIMEOUT_DURATION);
+    });
+
+    try {
+      // Race between the actual update and the timeout
+      await Promise.race([
+        (async () => {
+          if (!session?.user) {
+            setAuthState({
+              session: null,
+              user: null,
+              isAdmin: false,
+              loading: false,
+            });
+            return;
+          }
+
+          const isAdminUser = await checkAdminStatus();
+          
+          setAuthState({
+            session,
+            user: session.user,
+            isAdmin: isAdminUser,
+            loading: false,
+          });
+        })(),
+        timeoutPromise
+      ]);
+    } catch (error) {
+      console.error('Auth state update error:', error);
+      // If timeout or error occurs, reset to a safe state
       setAuthState({
-        session: null,
-        user: null,
-        isAdmin: false,
+        ...initialState,
         loading: false,
       });
-      return;
+      toast.error("Authentication timed out. Please try refreshing the page.");
     }
-
-    const isAdminUser = await checkAdminStatus();
-    
-    setAuthState({
-      session,
-      user: session.user,
-      isAdmin: isAdminUser,
-      loading: false,
-    });
   };
 
   // Logout function
@@ -97,15 +123,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     let mounted = true;
     console.log('AuthProvider mounted');
     
-    // Get initial session
+    // Get initial session with timeout
     const initializeAuth = async () => {
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Initial auth check timed out'));
+        }, AUTH_TIMEOUT_DURATION);
+      });
+
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log('Initial session:', session);
-        
-        if (!mounted) return;
-        
-        await updateAuthState(session);
+        // Race between the session check and timeout
+        await Promise.race([
+          (async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            console.log('Initial session:', session);
+            
+            if (!mounted) return;
+            
+            await updateAuthState(session);
+          })(),
+          timeoutPromise
+        ]);
       } catch (error) {
         console.error('Error initializing auth:', error);
         if (mounted) {
@@ -113,6 +151,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
             ...initialState,
             loading: false,
           });
+          if (error.message.includes('timed out')) {
+            toast.error("Authentication check timed out. Please refresh the page.");
+          }
         }
       }
     };
