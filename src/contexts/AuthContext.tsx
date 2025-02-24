@@ -12,11 +12,22 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
+interface AuthState {
+  session: Session | null;
+  user: User | null;
+  isAdmin: boolean;
+  loading: boolean;
+}
+
+const initialState: AuthState = {
   session: null,
   user: null,
-  loading: true,
   isAdmin: false,
+  loading: true,
+};
+
+const AuthContext = createContext<AuthContextType>({
+  ...initialState,
   logout: async () => {},
 });
 
@@ -25,10 +36,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [authState, setAuthState] = useState<AuthState>(initialState);
 
   // Check if user is admin using the updated RPC function
   const checkAdminStatus = async () => {
@@ -42,20 +50,42 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return false;
       }
       
-      return !!data; // Convert to boolean
+      return !!data;
     } catch (error) {
       console.error('Error checking admin status:', error);
       return false;
     }
   };
 
+  // Coordinated state update function
+  const updateAuthState = async (session: Session | null) => {
+    console.log('Updating auth state with session:', session);
+    
+    if (!session?.user) {
+      setAuthState({
+        session: null,
+        user: null,
+        isAdmin: false,
+        loading: false,
+      });
+      return;
+    }
+
+    const isAdminUser = await checkAdminStatus();
+    
+    setAuthState({
+      session,
+      user: session.user,
+      isAdmin: isAdminUser,
+      loading: false,
+    });
+  };
+
   // Logout function
   const logout = async () => {
     try {
       await supabase.auth.signOut();
-      setSession(null);
-      setUser(null);
-      setIsAdmin(false);
+      setAuthState(initialState);
       toast.success("Logged out successfully");
     } catch (error) {
       console.error('Error logging out:', error);
@@ -75,19 +105,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         if (!mounted) return;
         
-        if (session?.user) {
-          setSession(session);
-          setUser(session.user);
-          const isAdminUser = await checkAdminStatus();
-          if (mounted) {
-            setIsAdmin(isAdminUser);
-          }
-        }
+        await updateAuthState(session);
       } catch (error) {
         console.error('Error initializing auth:', error);
-      } finally {
         if (mounted) {
-          setLoading(false);
+          setAuthState({
+            ...initialState,
+            loading: false,
+          });
         }
       }
     };
@@ -100,20 +125,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       if (!mounted) return;
       
-      if (session?.user) {
-        setSession(session);
-        setUser(session.user);
-        const isAdminUser = await checkAdminStatus();
-        if (mounted) {
-          setIsAdmin(isAdminUser);
-        }
-      } else {
-        setSession(null);
-        setUser(null);
-        setIsAdmin(false);
-      }
-      
-      setLoading(false);
+      await updateAuthState(session);
     });
 
     return () => {
@@ -123,10 +135,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const value = {
-    session,
-    user,
-    loading,
-    isAdmin,
+    session: authState.session,
+    user: authState.user,
+    loading: authState.loading,
+    isAdmin: authState.isAdmin,
     logout
   };
 
