@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuth } from '@/contexts/AuthContext';
 
 const countryCodes = [{
   code: '+93',
@@ -744,7 +742,7 @@ const countryCodes = [{
 }, {
   code: '+1',
   country: 'LC',
-  flag: '🇱🇨',
+  flag: '��🇨',
   name: 'Saint Lucia'
 }, {
   code: '+1',
@@ -996,7 +994,6 @@ const countryCodes = [{
 export default function Auth() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1008,17 +1005,10 @@ export default function Auth() {
 
   const countryCode = selectedCountry.split('+')[1];
 
-  useEffect(() => {
-    if (user) {
-      console.debug('[Auth] User authenticated, navigating to dashboard');
-      navigate('/');
-    }
-  }, [user, navigate]);
-
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    console.log('Starting sign up process...');
+    console.log('Starting sign up process...'); // Debug log
 
     try {
       if (fullName.length < 3) {
@@ -1029,7 +1019,7 @@ export default function Auth() {
         throw new Error('Password must be at least 6 characters long');
       }
 
-      console.log('Attempting to sign up with email:', email);
+      console.log('Attempting to sign up with email:', email); // Debug log
 
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -1043,6 +1033,8 @@ export default function Auth() {
         }
       });
 
+      console.log('Sign up response:', { data, error: signUpError }); // Debug log
+
       if (signUpError) {
         if (signUpError.message.includes('User already registered')) {
           throw new Error('An account with this email already exists. Please sign in instead.');
@@ -1050,11 +1042,13 @@ export default function Auth() {
         throw signUpError;
       }
 
+      // Check if the sign-up was successful
       if (data?.user) {
         toast({
           title: "Success!",
           description: "Please check your email to confirm your account."
         });
+        // Optional: Clear the form
         setEmail('');
         setPassword('');
         setFullName('');
@@ -1064,7 +1058,7 @@ export default function Auth() {
         throw new Error('Failed to create account. Please try again.');
       }
     } catch (error: any) {
-      console.error('Sign up error:', error);
+      console.error('Sign up error:', error); // Debug log
       toast({
         variant: "destructive",
         title: "Error",
@@ -1078,25 +1072,16 @@ export default function Auth() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    console.log('[Auth] Attempting sign in...');
-    
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const {
+        error: signInError
+      } = await supabase.auth.signInWithPassword({
         email,
         password
       });
-      
-      console.log('[Auth] Sign in response:', { data, error });
-      
-      if (error) throw error;
-      
-      // Changed from toast.success to the correct toast function syntax
-      toast({
-        title: "Success",
-        description: "Signed in successfully"
-      });
+      if (signInError) throw signInError;
+      navigate('/dashboard');
     } catch (error: any) {
-      console.error('[Auth] Sign in error:', error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -1111,7 +1096,9 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const {
+        error
+      } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/reset-password`
       });
       if (error) throw error;
@@ -1142,26 +1129,15 @@ export default function Auth() {
           <CardContent>
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                />
+                <Label htmlFor="reset-email" className="text-left block py-[5px]">Email</Label>
+                <Input id="reset-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
               </div>
-              <div className="flex items-center justify-between">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setShowResetPassword(false)}
-                >
-                  Back to Sign In
+              <div className="flex gap-4">
+                <Button type="submit" className="flex-1" disabled={loading}>
+                  {loading ? 'Sending...' : 'Send Reset Link'}
                 </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading ? "Sending..." : "Reset Password"}
+                <Button type="button" variant="outline" onClick={() => setShowResetPassword(false)} className="flex-1">
+                  Back to Login
                 </Button>
               </div>
             </form>
@@ -1174,7 +1150,7 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
       <Card className="w-full max-w-md">
-        <CardHeader>
+        <CardHeader className="text-center">
           <CardTitle>Welcome</CardTitle>
           <CardDescription>Sign in to your account or create a new one</CardDescription>
         </CardHeader>
@@ -1188,117 +1164,66 @@ export default function Auth() {
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div>
-                  <Label htmlFor="signin-email">Email</Label>
-                  <Input
-                    id="signin-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
-                    required
-                  />
+                  <Label htmlFor="signin-email" className="text-left block py-[5px]">Email</Label>
+                  <Input id="signin-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
                 </div>
                 <div>
-                  <Label htmlFor="signin-password">Password</Label>
-                  <Input
-                    id="signin-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    required
-                  />
+                  <Label htmlFor="signin-password" className="text-left block py-[5px]">Password</Label>
+                  <Input id="signin-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
                 </div>
-                <div className="flex items-center justify-between">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setShowResetPassword(true)}
-                  >
-                    Forgot password?
-                  </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? "Signing in..." : "Sign In"}
-                  </Button>
-                </div>
+                <Button type="button" variant="link" onClick={() => setShowResetPassword(true)} className="px-0 justify-start w-auto h-auto text-left my-0 mx-0 py-0">
+                  Can't access your account?
+                </Button>
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? 'Signing in...' : 'Sign In'}
+                </Button>
               </form>
             </TabsContent>
-            
+
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div>
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
-                    required
-                  />
+                  <Label htmlFor="signup-email" className="text-left block py-[5px]">Email</Label>
+                  <Input id="signup-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
                 </div>
                 <div>
-                  <Label htmlFor="signup-password">Password</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    required
-                  />
+                  <Label htmlFor="signup-password" className="text-left block py-[5px]">Password</Label>
+                  <Input id="signup-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
                 </div>
                 <div>
-                  <Label htmlFor="fullname">Full Name</Label>
-                  <Input
-                    id="fullname"
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Enter your full name"
-                    required
-                  />
+                  <Label htmlFor="fullName" className="text-left block py-[5px]">Full Name</Label>
+                  <Input id="fullName" type="text" placeholder="John Doe" value={fullName} onChange={e => setFullName(e.target.value)} required />
                 </div>
                 <div>
-                  <Label htmlFor="business">Business Name</Label>
-                  <Input
-                    id="business"
-                    type="text"
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    placeholder="Enter your business name"
-                    required
-                  />
+                  <Label htmlFor="businessName" className="text-left block py-[5px]">Business Name</Label>
+                  <Input id="businessName" type="text" placeholder="Acme Inc" value={businessName} onChange={e => setBusinessName(e.target.value)} required />
                 </div>
-                <div className="space-y-2">
-                  <Label>Phone Number</Label>
+                <div className="relative">
+                  <Label htmlFor="phone-number" className="text-left block py-[5px]">Phone Number</Label>
                   <div className="flex gap-2">
                     <Select value={selectedCountry} onValueChange={setSelectedCountry}>
                       <SelectTrigger className="w-[140px]">
-                        <SelectValue />
+                        <SelectValue>
+                          {countryCodes.find(c => `${c.country}${c.code}` === selectedCountry)?.flag} +{countryCode}
+                        </SelectValue>
                       </SelectTrigger>
-                      <SelectContent>
-                        {countryCodes.map((country) => (
-                          <SelectItem 
-                            key={country.code} 
-                            value={`${country.country}${country.code}`}
-                          >
-                            {country.flag} {country.name}
+                      <SelectContent className="max-h-[300px] overflow-y-auto bg-white">
+                        {countryCodes.map(country => (
+                          <SelectItem key={country.country} value={`${country.country}${country.code}`}>
+                            <span className="flex items-center gap-2">
+                              <span>{country.flag}</span>
+                              <span>{country.code}</span>
+                              <span className="text-gray-500 text-sm">({country.name})</span>
+                            </span>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Input
-                      type="tel"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="Phone number"
-                      required
-                    />
+                    <Input id="phone-number" type="tel" placeholder="Enter phone number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required />
                   </div>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Signing up..." : "Sign Up"}
+                  {loading ? 'Signing up...' : 'Sign Up'}
                 </Button>
               </form>
             </TabsContent>
