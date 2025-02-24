@@ -85,7 +85,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const persistState = useCallback((newState: AuthState) => {
+    console.debug('[Auth] Persisting state:', {
+      hasSession: !!newState.session,
+      hasUser: !!newState.user,
+      isAdmin: newState.isAdmin
+    });
+
     if (!newState.session) {
+      console.debug('[Auth] No session, clearing persisted state');
       localStorage.removeItem(STATE_STORAGE_KEY);
       return;
     }
@@ -100,17 +107,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(persistedData));
+      console.debug('[Auth] State persisted successfully');
     } catch (error) {
       console.warn('[Auth] Failed to persist state:', error);
     }
   }, []);
 
   const recoverState = useCallback((): PersistedAuthState | null => {
+    console.debug('[Auth] Attempting to recover state from storage');
     try {
       const stored = localStorage.getItem(STATE_STORAGE_KEY);
-      if (!stored) return null;
+      if (!stored) {
+        console.debug('[Auth] No stored state found');
+        return null;
+      }
 
-      return JSON.parse(stored);
+      const recovered = JSON.parse(stored);
+      console.debug('[Auth] Recovered state:', {
+        hasSession: !!recovered?.state?.session,
+        hasUser: !!recovered?.state?.user,
+        isAdmin: recovered?.state?.isAdmin
+      });
+      return recovered;
     } catch (error) {
       console.warn('[Auth] Failed to recover state:', error);
       localStorage.removeItem(STATE_STORAGE_KEY);
@@ -130,6 +148,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return false;
       }
 
+      console.debug('[Auth] Admin status result:', data);
       return !!data;
     } catch (error) {
       console.warn('[Auth] Admin check error:', error);
@@ -138,7 +157,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const updateAuthState = useCallback(async (session: Session | null, retryCount = 0) => {
-    console.debug('[Auth] Updating auth state:', { hasSession: !!session });
+    console.debug('[Auth] Updating auth state:', { 
+      hasSession: !!session,
+      sessionUser: session?.user?.email,
+      retryCount
+    });
 
     if (!session?.user) {
       console.debug('[Auth] No session/user, resetting state');
@@ -154,9 +177,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     try {
+      console.debug('[Auth] Checking admin status for user:', session.user.email);
       const isAdminUser = await checkAdminStatus();
       
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) {
+        console.debug('[Auth] Component unmounted during admin check');
+        return;
+      }
 
       const newState: AuthState = {
         session,
@@ -165,18 +192,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
         loading: false,
       };
 
+      console.debug('[Auth] Setting new state:', {
+        userEmail: session.user.email,
+        isAdmin: isAdminUser,
+        loading: false
+      });
+
       setState(newState);
       persistState(newState);
     } catch (error) {
       const formattedError = handleError(error, 'state update');
 
       if (retryCount < MAX_RETRIES && mountedRef.current) {
-        console.debug('[Auth] Retrying state update');
+        console.debug('[Auth] Retrying state update, attempt:', retryCount + 1);
         await updateAuthState(session, retryCount + 1);
         return;
       }
 
-      // If we can't verify admin status, proceed with non-admin access
+      console.debug('[Auth] Max retries reached or proceeding with non-admin access');
       const newState: AuthState = {
         session,
         user: session.user,
@@ -194,6 +227,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       localStorage.removeItem(STATE_STORAGE_KEY);
       await supabase.auth.signOut();
+      console.debug('[Auth] Logout successful');
       setState(initialState);
       toast.success("Logged out successfully");
     } catch (error) {
@@ -203,13 +237,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     mountedRef.current = true;
-    console.debug('[Auth] Provider mounted');
+    console.debug('[Auth] Provider mounted, initializing auth');
     
     const initializeAuth = async () => {
+      console.debug('[Auth] Starting initialization');
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
+        console.debug('[Auth] Got session:', { 
+          hasSession: !!session,
+          sessionUser: session?.user?.email,
+          error: error?.message 
+        });
+        
         if (error) throw error;
-        if (!mountedRef.current) return;
+        if (!mountedRef.current) {
+          console.debug('[Auth] Component unmounted during initialization');
+          return;
+        }
         
         await updateAuthState(session);
       } catch (error) {
@@ -221,13 +265,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.debug('[Auth] Auth state changed:', { event, hasSession: !!session });
+      console.debug('[Auth] Auth state changed:', { 
+        event, 
+        hasSession: !!session,
+        sessionUser: session?.user?.email 
+      });
       
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) {
+        console.debug('[Auth] Component unmounted during auth state change');
+        return;
+      }
       
       if (event === 'SIGNED_OUT') {
+        console.debug('[Auth] User signed out');
         toast.info("You have been signed out");
       } else if (event === 'SIGNED_IN') {
+        console.debug('[Auth] User signed in:', session?.user?.email);
         toast.success("Signed in successfully");
       }
       
