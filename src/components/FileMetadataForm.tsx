@@ -30,6 +30,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
   const { validateField } = useMetadataValidation(user?.id || '');
@@ -77,13 +78,8 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       });
       setValues(valuesObject);
 
-      const initialErrors: Record<string, string> = {};
-      for (const field of transformedFields) {
-        if (field.is_required && !valuesObject[field.id]) {
-          initialErrors[field.id] = 'This field is required';
-        }
-      }
-      setErrors(initialErrors);
+      // Don't set initial errors, wait for user interaction
+      setErrors({});
 
     } catch (error: any) {
       console.error('Fetch metadata error:', error);
@@ -98,6 +94,11 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   };
 
   const validateFormField = async (field: MetadataField, value: any): Promise<string | null> => {
+    // If not dirty and not saving, don't show validation errors yet
+    if (!isDirty && !isSaving) {
+      return null;
+    }
+
     // If empty and required, return error
     if (field.is_required && (value === undefined || value === null || value === '')) {
       return 'This field is required';
@@ -131,6 +132,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   };
 
   const handleValueChange = async (fieldId: string, value: any) => {
+    setIsDirty(true);
     const newValues = {
       ...values,
       [fieldId]: value
@@ -152,6 +154,11 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   };
 
   const isFormValid = () => {
+    // If not dirty and not saving, consider form valid
+    if (!isDirty && !isSaving) {
+      return true;
+    }
+
     // Check if all required fields are filled
     const requiredFields = fields.filter(field => field.is_required);
     const hasAllRequired = requiredFields.every(field => {
@@ -187,6 +194,21 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     console.log('Starting metadata save operation...');
 
     try {
+      // Validate all fields before saving
+      const validationErrors: Record<string, string> = {};
+      for (const field of fields) {
+        const error = await validateFormField(field, values[field.id]);
+        if (error) {
+          validationErrors[field.id] = error;
+        }
+      }
+
+      setErrors(validationErrors);
+
+      if (Object.keys(validationErrors).length > 0) {
+        throw new Error('Please fill in all required fields correctly');
+      }
+
       // Delete existing values
       const { error: deleteError } = await supabase
         .from('file_metadata')
@@ -227,7 +249,8 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         description: "Metadata saved successfully"
       });
 
-      // Call onSave callback and reset form state
+      // Reset form state and call onSave callback
+      setIsDirty(false);
       onSave?.();
       
     } catch (error: any) {
