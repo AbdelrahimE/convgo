@@ -43,14 +43,12 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
 
     setIsLoading(true);
     try {
-      // Fetch metadata fields
       const { data: fieldsData, error: fieldsError } = await supabase
         .from('metadata_fields')
         .select('*');
 
       if (fieldsError) throw fieldsError;
 
-      // Transform fields data to ensure options are properly parsed
       const transformedFields: MetadataField[] = (fieldsData || []).map(field => ({
         ...field,
         options: field.options ? (typeof field.options === 'string' ? 
@@ -58,7 +56,6 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
           : undefined
       }));
 
-      // Fetch existing values
       const { data: valuesData, error: valuesError } = await supabase
         .from('file_metadata')
         .select('*')
@@ -68,13 +65,23 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
 
       setFields(transformedFields);
       
-      // Transform values array to object
       const valuesObject: Record<string, any> = {};
       valuesData?.forEach((value: FileMetadataValue) => {
         valuesObject[value.field_id] = value.value;
       });
       setValues(valuesObject);
+
+      // Validate all fields after setting initial values
+      const initialErrors: Record<string, string> = {};
+      for (const field of transformedFields) {
+        if (field.is_required && !valuesObject[field.id]) {
+          initialErrors[field.id] = 'This field is required';
+        }
+      }
+      setErrors(initialErrors);
+
     } catch (error: any) {
+      console.error('Fetch metadata error:', error);
       toast({
         variant: "destructive",
         title: "Error fetching metadata",
@@ -86,13 +93,13 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   };
 
   const validateFormField = async (field: MetadataField, value: any): Promise<string | null> => {
-    // Basic required field validation
+    // If empty and required, return error
     if (field.is_required && (value === undefined || value === null || value === '')) {
       return 'This field is required';
     }
 
     // If empty but not required, it's valid
-    if (value === undefined || value === null || value === '') {
+    if (!field.is_required && (value === undefined || value === null || value === '')) {
       return null;
     }
 
@@ -115,23 +122,15 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         break;
     }
 
-    // Use metadata validation for additional checks
-    const validationErrors = await validateField({
-      ...field,
-      name: field.name,
-      description: field.description,
-      options: field.options,
-    });
-
-    const error = validationErrors.find(err => err.field === 'name' || err.field === 'description' || err.field === 'options');
-    return error ? error.message : null;
+    return null;
   };
 
   const handleValueChange = async (fieldId: string, value: any) => {
-    setValues(prev => ({
-      ...prev,
+    const newValues = {
+      ...values,
       [fieldId]: value
-    }));
+    };
+    setValues(newValues);
     
     const field = fields.find(f => f.id === fieldId);
     if (field) {
@@ -141,32 +140,36 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         [fieldId]: error || ''
       }));
     }
+
+    // Log state for debugging
+    console.log('Updated values:', newValues);
+    console.log('Current errors:', errors);
+  };
+
+  const isFormValid = () => {
+    // Check if all required fields are filled
+    const requiredFields = fields.filter(field => field.is_required);
+    const hasAllRequired = requiredFields.every(field => {
+      const value = values[field.id];
+      return value !== undefined && value !== null && value !== '';
+    });
+    
+    // Check if there are any validation errors
+    const hasNoErrors = Object.values(errors).every(error => !error);
+    
+    // Log validation state for debugging
+    console.log('Form validation:', {
+      hasAllRequired,
+      hasNoErrors,
+      values,
+      errors
+    });
+
+    return hasAllRequired && hasNoErrors;
   };
 
   const handleSave = async () => {
     if (!user || !fileId) return;
-
-    // Validate all fields
-    const newErrors: Record<string, string> = {};
-    let hasErrors = false;
-
-    for (const field of fields) {
-      const error = await validateFormField(field, values[field.id]);
-      if (error) {
-        newErrors[field.id] = error;
-        hasErrors = true;
-      }
-    }
-
-    if (hasErrors) {
-      setErrors(newErrors);
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Please check the form for errors"
-      });
-      return;
-    }
 
     setIsSaving(true);
     try {
@@ -177,11 +180,13 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         .eq('file_id', fileId);
 
       // Insert new values
-      const metadataValues = Object.entries(values).map(([field_id, value]) => ({
-        file_id: fileId,
-        field_id,
-        value
-      }));
+      const metadataValues = Object.entries(values)
+        .filter(([_, value]) => value !== undefined && value !== null && value !== '')
+        .map(([field_id, value]) => ({
+          file_id: fileId,
+          field_id,
+          value
+        }));
 
       const { error } = await supabase
         .from('file_metadata')
@@ -196,6 +201,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
 
       onSave?.();
     } catch (error: any) {
+      console.error('Save metadata error:', error);
       toast({
         variant: "destructive",
         title: "Error saving metadata",
@@ -243,7 +249,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
               <Input
                 type="number"
                 value={values[field.id] || ''}
-                onChange={(e) => handleValueChange(field.id, parseFloat(e.target.value))}
+                onChange={(e) => handleValueChange(field.id, e.target.value)}
                 required={field.is_required}
                 className={errors[field.id] ? 'border-destructive' : ''}
                 disabled={isSaving}
@@ -301,8 +307,8 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         {fields.length > 0 && (
           <Button 
             onClick={handleSave} 
-            disabled={isSaving || Object.keys(errors).length > 0}
-            className="mt-4"
+            disabled={!isFormValid() || isSaving}
+            className="mt-4 w-full"
           >
             {isSaving ? "Saving..." : "Save Metadata"}
           </Button>
