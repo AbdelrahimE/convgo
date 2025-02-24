@@ -47,7 +47,10 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         .from('metadata_fields')
         .select('*');
 
-      if (fieldsError) throw fieldsError;
+      if (fieldsError) {
+        console.error('Error fetching metadata fields:', fieldsError);
+        throw fieldsError;
+      }
 
       const transformedFields: MetadataField[] = (fieldsData || []).map(field => ({
         ...field,
@@ -61,7 +64,10 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         .select('*')
         .eq('file_id', fileId);
 
-      if (valuesError) throw valuesError;
+      if (valuesError) {
+        console.error('Error fetching metadata values:', valuesError);
+        throw valuesError;
+      }
 
       setFields(transformedFields);
       
@@ -71,7 +77,6 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       });
       setValues(valuesObject);
 
-      // Validate all fields after setting initial values
       const initialErrors: Record<string, string> = {};
       for (const field of transformedFields) {
         if (field.is_required && !valuesObject[field.id]) {
@@ -169,15 +174,31 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   };
 
   const handleSave = async () => {
-    if (!user || !fileId) return;
+    if (!user || !fileId) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "User or file information is missing"
+      });
+      return;
+    }
 
     setIsSaving(true);
+    console.log('Starting metadata save operation...');
+
     try {
       // Delete existing values
-      await supabase
+      const { error: deleteError } = await supabase
         .from('file_metadata')
         .delete()
         .eq('file_id', fileId);
+
+      if (deleteError) {
+        console.error('Error deleting existing metadata:', deleteError);
+        throw deleteError;
+      }
+
+      console.log('Successfully deleted existing metadata');
 
       // Insert new values
       const metadataValues = Object.entries(values)
@@ -188,24 +209,33 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
           value
         }));
 
-      const { error } = await supabase
+      console.log('Preparing to insert new metadata:', metadataValues);
+
+      const { error: insertError } = await supabase
         .from('file_metadata')
         .insert(metadataValues);
 
-      if (error) throw error;
+      if (insertError) {
+        console.error('Error inserting new metadata:', insertError);
+        throw insertError;
+      }
+
+      console.log('Successfully inserted new metadata');
 
       toast({
         title: "Success",
         description: "Metadata saved successfully"
       });
 
+      // Call onSave callback and reset form state
       onSave?.();
+      
     } catch (error: any) {
       console.error('Save metadata error:', error);
       toast({
         variant: "destructive",
         title: "Error saving metadata",
-        description: error.message
+        description: error.message || "Failed to save metadata. Please try again."
       });
     } finally {
       setIsSaving(false);
@@ -321,3 +351,4 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     </ScrollArea>
   );
 }
+
