@@ -27,8 +27,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Check if user is admin
-  const checkAdminStatus = async (userId: string) => {
+  // Check if user is admin using the updated RPC function
+  const checkAdminStatus = async () => {
     try {
       const { data, error } = await supabase.rpc('has_role', {
         role: 'admin'
@@ -39,7 +39,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return false;
       }
       
-      return data || false;
+      return !!data; // Convert to boolean
     } catch (error) {
       console.error('Error checking admin status:', error);
       return false;
@@ -47,31 +47,51 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   useEffect(() => {
+    let mounted = true;
     console.log('AuthProvider mounted');
     
     // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log('Initial session:', session);
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        const isAdminUser = await checkAdminStatus(session.user.id);
-        setIsAdmin(isAdminUser);
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('Initial session:', session);
+        
+        if (!mounted) return;
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          const isAdminUser = await checkAdminStatus();
+          if (mounted) {
+            setIsAdmin(isAdminUser);
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
-      
-      setLoading(false);
-    });
+    };
+
+    initializeAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       console.log('Auth state changed:', session);
+      
+      if (!mounted) return;
+      
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        const isAdminUser = await checkAdminStatus(session.user.id);
-        setIsAdmin(isAdminUser);
+        const isAdminUser = await checkAdminStatus();
+        if (mounted) {
+          setIsAdmin(isAdminUser);
+        }
       } else {
         setIsAdmin(false);
       }
@@ -79,7 +99,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const value = {

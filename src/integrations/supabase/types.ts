@@ -366,6 +366,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_user_role: {
+        Args: {
+          _user_id: string
+          _role: Database["public"]["Enums"]["app_role"]
+        }
+        Returns: boolean
+      }
       cleanup_failed_uploads: {
         Args: Record<PropertyKey, never>
         Returns: undefined

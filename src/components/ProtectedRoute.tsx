@@ -18,6 +18,7 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
     return <Navigate to="/auth" />;
   }
 
+  // Only check admin status if requireAdmin is true
   if (requireAdmin && !isAdmin) {
     return <Navigate to="/" />;
   }
