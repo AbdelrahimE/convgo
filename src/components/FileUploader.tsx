@@ -365,7 +365,7 @@ export function FileUploader() {
       </motion.div>
 
       <Dialog open={showMetadataDialog} onOpenChange={setShowMetadataDialog}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] p-6">
           <DialogHeader>
             <DialogTitle>Add File Metadata</DialogTitle>
             <DialogDescription>

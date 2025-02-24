@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMetadataValidation } from "@/hooks/use-metadata-validation";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import type { MetadataField, FileMetadataValue } from "@/types/metadata";
 
 interface FileMetadataFormProps {
@@ -219,95 +220,98 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   }
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-300">
-      {fields.map(field => (
-        <div key={field.id} className="space-y-2">
-          <Label>
-            {field.name}
-            {field.is_required && <span className="text-destructive ml-1">*</span>}
-          </Label>
-          
-          {field.field_type === 'text' && (
-            <Input
-              value={values[field.id] || ''}
-              onChange={(e) => handleValueChange(field.id, e.target.value)}
-              required={field.is_required}
-              className={errors[field.id] ? 'border-destructive' : ''}
-              disabled={isSaving}
-            />
-          )}
-          
-          {field.field_type === 'number' && (
-            <Input
-              type="number"
-              value={values[field.id] || ''}
-              onChange={(e) => handleValueChange(field.id, parseFloat(e.target.value))}
-              required={field.is_required}
-              className={errors[field.id] ? 'border-destructive' : ''}
-              disabled={isSaving}
-            />
-          )}
-          
-          {field.field_type === 'date' && (
-            <Input
-              type="date"
-              value={values[field.id] || ''}
-              onChange={(e) => handleValueChange(field.id, e.target.value)}
-              required={field.is_required}
-              className={errors[field.id] ? 'border-destructive' : ''}
-              disabled={isSaving}
-            />
-          )}
-          
-          {field.field_type === 'boolean' && (
-            <Switch
-              checked={values[field.id] || false}
-              onCheckedChange={(checked) => handleValueChange(field.id, checked)}
-              disabled={isSaving}
-            />
-          )}
-          
-          {field.field_type === 'select' && field.options && (
-            <Select
-              value={values[field.id] || ''}
-              onValueChange={(value) => handleValueChange(field.id, value)}
-              disabled={isSaving}
-            >
-              <SelectTrigger className={errors[field.id] ? 'border-destructive' : ''}>
-                <SelectValue placeholder="Select an option" />
-              </SelectTrigger>
-              <SelectContent>
-                {field.options.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          
-          {field.description && (
-            <p className="text-sm text-muted-foreground">{field.description}</p>
-          )}
-          
-          {errors[field.id] && (
-            <p className="text-sm text-destructive">{errors[field.id]}</p>
-          )}
-        </div>
-      ))}
+    <ScrollArea className="h-[60vh] pr-4">
+      <div className="space-y-4 animate-in fade-in duration-300">
+        {fields.map(field => (
+          <div key={field.id} className="space-y-2">
+            <Label>
+              {field.name}
+              {field.is_required && <span className="text-destructive ml-1">*</span>}
+            </Label>
+            
+            {field.field_type === 'text' && (
+              <Input
+                value={values[field.id] || ''}
+                onChange={(e) => handleValueChange(field.id, e.target.value)}
+                required={field.is_required}
+                className={errors[field.id] ? 'border-destructive' : ''}
+                disabled={isSaving}
+              />
+            )}
+            
+            {field.field_type === 'number' && (
+              <Input
+                type="number"
+                value={values[field.id] || ''}
+                onChange={(e) => handleValueChange(field.id, parseFloat(e.target.value))}
+                required={field.is_required}
+                className={errors[field.id] ? 'border-destructive' : ''}
+                disabled={isSaving}
+              />
+            )}
+            
+            {field.field_type === 'date' && (
+              <Input
+                type="date"
+                value={values[field.id] || ''}
+                onChange={(e) => handleValueChange(field.id, e.target.value)}
+                required={field.is_required}
+                className={errors[field.id] ? 'border-destructive' : ''}
+                disabled={isSaving}
+              />
+            )}
+            
+            {field.field_type === 'boolean' && (
+              <Switch
+                checked={values[field.id] || false}
+                onCheckedChange={(checked) => handleValueChange(field.id, checked)}
+                disabled={isSaving}
+              />
+            )}
+            
+            {field.field_type === 'select' && field.options && (
+              <Select
+                value={values[field.id] || ''}
+                onValueChange={(value) => handleValueChange(field.id, value)}
+                disabled={isSaving}
+              >
+                <SelectTrigger className={errors[field.id] ? 'border-destructive' : ''}>
+                  <SelectValue placeholder="Select an option" />
+                </SelectTrigger>
+                <SelectContent>
+                  {field.options.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            
+            {field.description && (
+              <p className="text-sm text-muted-foreground">{field.description}</p>
+            )}
+            
+            {errors[field.id] && (
+              <p className="text-sm text-destructive">{errors[field.id]}</p>
+            )}
+          </div>
+        ))}
 
-      {fields.length > 0 && (
-        <Button 
-          onClick={handleSave} 
-          disabled={isSaving || Object.keys(errors).length > 0}
-        >
-          {isSaving ? "Saving..." : "Save Metadata"}
-        </Button>
-      )}
+        {fields.length > 0 && (
+          <Button 
+            onClick={handleSave} 
+            disabled={isSaving || Object.keys(errors).length > 0}
+            className="mt-4"
+          >
+            {isSaving ? "Saving..." : "Save Metadata"}
+          </Button>
+        )}
 
-      {fields.length === 0 && (
-        <p className="text-muted-foreground">No metadata fields defined</p>
-      )}
-    </div>
+        {fields.length === 0 && (
+          <p className="text-muted-foreground">No metadata fields defined</p>
+        )}
+      </div>
+    </ScrollArea>
   );
 }
