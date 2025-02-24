@@ -275,30 +275,6 @@ export type Database = {
           },
         ]
       }
-      user_roles: {
-        Row: {
-          created_at: string
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       whatsapp_connection_logs: {
         Row: {
           created_at: string
@@ -366,13 +342,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      check_user_role: {
-        Args: {
-          _user_id: string
-          _role: Database["public"]["Enums"]["app_role"]
-        }
-        Returns: boolean
-      }
       cleanup_failed_uploads: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -381,15 +350,8 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      has_role: {
-        Args: {
-          role: Database["public"]["Enums"]["app_role"]
-        }
-        Returns: boolean
-      }
     }
     Enums: {
-      app_role: "admin" | "user"
       metadata_field_type: "text" | "number" | "date" | "boolean" | "select"
     }
     CompositeTypes: {

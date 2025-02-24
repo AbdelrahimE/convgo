@@ -16,11 +16,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const FULL_NAME_MAX_LENGTH = 25;
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Files', href: '/files', icon: FileText },
   { name: 'WhatsApp', href: '/whatsapp', icon: MessageCircle },
 ];
@@ -36,12 +38,18 @@ function getInitials(name: string | null): string {
 }
 
 export function AppSidebar() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
   const isMobile = useIsMobile();
 
   const handleLogout = async () => {
-    await logout();
+    try {
+      await supabase.auth.signOut();
+      toast.success("Logged out successfully");
+    } catch (error) {
+      console.error('Error logging out:', error);
+      toast.error("Failed to log out");
+    }
   };
 
   const profile = user ? {
