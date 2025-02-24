@@ -7,12 +7,14 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
   loading: true,
+  isAdmin: false,
 });
 
 interface AuthProviderProps {
@@ -23,22 +25,57 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check if user is admin
+  const checkAdminStatus = async (userId: string) => {
+    try {
+      const { data, error } = await supabase.rpc('has_role', {
+        role: 'admin'
+      });
+      
+      if (error) {
+        console.error('Error checking admin status:', error);
+        return false;
+      }
+      
+      return data || false;
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      return false;
+    }
+  };
 
   useEffect(() => {
     console.log('AuthProvider mounted');
+    
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log('Initial session:', session);
       setSession(session);
       setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        const isAdminUser = await checkAdminStatus(session.user.id);
+        setIsAdmin(isAdminUser);
+      }
+      
       setLoading(false);
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       console.log('Auth state changed:', session);
       setSession(session);
       setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        const isAdminUser = await checkAdminStatus(session.user.id);
+        setIsAdmin(isAdminUser);
+      } else {
+        setIsAdmin(false);
+      }
+      
       setLoading(false);
     });
 
@@ -48,7 +85,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const value = {
     session,
     user,
-    loading
+    loading,
+    isAdmin
   };
 
   console.log('AuthProvider rendering with:', value);
