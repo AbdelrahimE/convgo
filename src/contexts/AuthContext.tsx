@@ -134,14 +134,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const stored = localStorage.getItem(STATE_STORAGE_KEY);
       if (!stored) return null;
 
-      const { timestamp, state: storedState, adminCheckTimestamp }: PersistedAuthState = JSON.parse(stored);
+      const parsed: PersistedAuthState = JSON.parse(stored);
       
-      if (Date.now() - timestamp > STATE_MAX_AGE) {
+      if (Date.now() - parsed.timestamp > STATE_MAX_AGE) {
         localStorage.removeItem(STATE_STORAGE_KEY);
         return null;
       }
 
-      return { state: storedState, adminCheckTimestamp };
+      return {
+        state: parsed.state,
+        adminCheckTimestamp: parsed.adminCheckTimestamp
+      };
     } catch (error) {
       console.warn('[Auth] Failed to recover state:', error);
       localStorage.removeItem(STATE_STORAGE_KEY);
@@ -217,12 +220,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const recovered = recoverState();
       let isAdminUser = false;
 
-      if (recovered?.state.isAdmin !== undefined && 
+      if (recovered?.state && 
+          'isAdmin' in recovered.state && 
           recovered.adminCheckTimestamp && 
           (Date.now() - recovered.adminCheckTimestamp < ADMIN_CACHE_DURATION) &&
           !stateRecoveryAttempted.current) {
         console.debug('[Auth] Using recovered admin status');
-        isAdminUser = recovered.state.isAdmin;
+        isAdminUser = recovered.state.isAdmin as boolean;
         lastAdminCheck.current = recovered.adminCheckTimestamp;
         stateRecoveryAttempted.current = true;
       } else {
@@ -271,16 +275,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const formattedError = handleError(error, 'state update', true);
       
       const recoveredState = recoverState();
-      if (recoveredState && mountedRef.current && retryCount === MAX_RETRIES) {
+      if (recoveredState?.state && mountedRef.current && retryCount === MAX_RETRIES) {
         console.debug('[Auth] Recovering from persisted state');
         setState({ 
-          session: recoveredState.session,
-          user: recoveredState.user,
-          isAdmin: recoveredState.isAdmin,
+          session: recoveredState.state.session as Session,
+          user: recoveredState.state.user as User,
+          isAdmin: recoveredState.state.isAdmin as boolean,
           loading: false 
         });
         toast.info("Recovered from last known good state", {
-          description: `Last verified: ${new Date(recoveredState.session?.expires_at || 0).toLocaleString()}`,
+          description: `Last verified: ${new Date((recoveredState.state.session as Session)?.expires_at || 0).toLocaleString()}`,
         });
         return;
       }
@@ -375,9 +379,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (recoveredState && mountedRef.current) {
           console.debug('[Auth] Recovering from persisted state after init error');
           setState({ 
-            session: recoveredState.session,
-            user: recoveredState.user,
-            isAdmin: recoveredState.isAdmin,
+            session: recoveredState.state.session,
+            user: recoveredState.state.user,
+            isAdmin: recoveredState.state.isAdmin,
             loading: false 
           });
           toast.info("Using cached authentication state", {
