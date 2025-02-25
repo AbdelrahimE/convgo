@@ -36,29 +36,93 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   const { validateField } = useMetadataValidation(user?.id || '');
 
   useEffect(() => {
+    console.log("[DEBUG] FileMetadataForm mounted with fileId:", fileId);
+    console.log("[DEBUG] Current user:", user);
     fetchMetadata();
   }, [fileId, user]);
 
   const fetchMetadata = async () => {
-    if (!user || !fileId) return;
+    if (!user || !fileId) {
+      console.log("[DEBUG] Missing user or fileId:", { user, fileId });
+      return;
+    }
 
     setIsLoading(true);
     try {
+      console.log("[DEBUG] Fetching metadata fields for user:", user.id);
+      
+      // Debug log for the query we're about to execute
+      console.log("[DEBUG] Executing query: supabase.from('metadata_fields').select('*')");
+      
       const { data: fieldsData, error: fieldsError } = await supabase
         .from('metadata_fields')
         .select('*');
 
+      console.log("[DEBUG] Raw metadata fields data:", fieldsData);
+      console.log("[DEBUG] Fields query error:", fieldsError);
+
       if (fieldsError) {
-        console.error('Error fetching metadata fields:', fieldsError);
+        console.error('[ERROR] Error fetching metadata fields:', fieldsError);
         throw fieldsError;
       }
 
-      const transformedFields: MetadataField[] = (fieldsData || []).map(field => ({
-        ...field,
-        options: field.options ? (typeof field.options === 'string' ? 
-          JSON.parse(field.options) : field.options) as { label: string; value: string }[]
-          : undefined
-      }));
+      // Check if fields data is empty
+      if (!fieldsData || fieldsData.length === 0) {
+        console.log("[DEBUG] No metadata fields found for user:", user.id);
+      }
+
+      // Log user profile to check if profile_id matches
+      console.log("[DEBUG] User profile data:", user.user_metadata);
+      
+      // Try to fetch user profile to check if we have the right profile ID
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+        
+      console.log("[DEBUG] User profile from DB:", profileData);
+      console.log("[DEBUG] Profile query error:", profileError);
+
+      // Additional debugging for RLS policies
+      console.log("[DEBUG] Checking metadata fields with explicit profile_id");
+      
+      // Try explicitly querying with the user's profile ID
+      const { data: profileFieldsData, error: profileFieldsError } = await supabase
+        .from('metadata_fields')
+        .select('*')
+        .eq('profile_id', user.id);
+        
+      console.log("[DEBUG] Metadata fields with profile filter:", profileFieldsData);
+      console.log("[DEBUG] Profile fields query error:", profileFieldsError);
+
+      const transformedFields: MetadataField[] = (fieldsData || []).map(field => {
+        console.log("[DEBUG] Transforming field:", field);
+        
+        let parsedOptions;
+        try {
+          if (field.options) {
+            if (typeof field.options === 'string') {
+              parsedOptions = JSON.parse(field.options);
+              console.log("[DEBUG] Parsed options from string:", parsedOptions);
+            } else {
+              parsedOptions = field.options;
+              console.log("[DEBUG] Using options object directly:", parsedOptions);
+            }
+          }
+        } catch (err) {
+          console.error("[ERROR] Failed to parse options for field:", field.name, err);
+          parsedOptions = undefined;
+        }
+        
+        return {
+          ...field,
+          options: parsedOptions as { label: string; value: string }[] | undefined
+        };
+      });
+
+      console.log("[DEBUG] Transformed fields:", transformedFields);
+      setFields(transformedFields);
 
       const { data: valuesData, error: valuesError } = await supabase
         .from('file_metadata')
@@ -66,11 +130,11 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         .eq('file_id', fileId);
 
       if (valuesError) {
-        console.error('Error fetching metadata values:', valuesError);
+        console.error('[ERROR] Error fetching metadata values:', valuesError);
         throw valuesError;
       }
 
-      console.log('[DEBUG] Fetched values from DB:', valuesData);
+      console.log('[DEBUG] Fetched metadata values from DB:', valuesData);
       
       const valuesObject: Record<string, any> = {};
       valuesData?.forEach((value: FileMetadataValue) => {
@@ -89,7 +153,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       setErrors({});
 
     } catch (error: any) {
-      console.error('Fetch metadata error:', error);
+      console.error('[ERROR] Fetch metadata error:', error);
       toast({
         variant: "destructive",
         title: "Error fetching metadata",
@@ -340,90 +404,99 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   return (
     <ScrollArea className="h-[60vh] pr-4">
       <div className="space-y-4 animate-in fade-in duration-300">
-        {fields.map(field => (
-          <div key={field.id} className="space-y-2">
-            <Label>
-              {field.name}
-              {field.is_required && <span className="text-destructive ml-1">*</span>}
-            </Label>
-            
-            {field.field_type === 'text' && (
-              <Input
-                value={values[field.id] || ''}
-                onChange={(e) => handleValueChange(field.id, e.target.value)}
-                required={field.is_required}
-                className={errors[field.id] ? 'border-destructive' : ''}
-                disabled={isSaving}
-              />
-            )}
-            
-            {field.field_type === 'number' && (
-              <Input
-                type="number"
-                value={values[field.id] || ''}
-                onChange={(e) => handleValueChange(field.id, e.target.value)}
-                required={field.is_required}
-                className={errors[field.id] ? 'border-destructive' : ''}
-                disabled={isSaving}
-              />
-            )}
-            
-            {field.field_type === 'date' && (
-              <>
+        {fields.length > 0 ? (
+          fields.map(field => (
+            <div key={field.id} className="space-y-2">
+              <Label>
+                {field.name}
+                {field.is_required && <span className="text-destructive ml-1">*</span>}
+              </Label>
+              
+              {field.field_type === 'text' && (
                 <Input
-                  type="date"
                   value={values[field.id] || ''}
-                  onChange={(e) => {
-                    console.log(`[DEBUG] Date input onChange - Raw value:`, e.target.value);
-                    console.log(`[DEBUG] Date input onChange - Type:`, typeof e.target.value);
-                    handleValueChange(field.id, e.target.value);
-                  }}
+                  onChange={(e) => handleValueChange(field.id, e.target.value)}
                   required={field.is_required}
                   className={errors[field.id] ? 'border-destructive' : ''}
                   disabled={isSaving}
                 />
-                <div className="text-xs text-muted-foreground">
-                  Current value: {values[field.id] ? `"${values[field.id]}" (${typeof values[field.id]})` : 'empty'}
-                </div>
-              </>
-            )}
-            
-            {field.field_type === 'boolean' && (
-              <Switch
-                checked={values[field.id] || false}
-                onCheckedChange={(checked) => handleValueChange(field.id, checked)}
-                disabled={isSaving}
-              />
-            )}
-            
-            {field.field_type === 'select' && field.options && (
-              <Select
-                value={values[field.id] || ''}
-                onValueChange={(value) => handleValueChange(field.id, value)}
-                disabled={isSaving}
-              >
-                <SelectTrigger className={errors[field.id] ? 'border-destructive' : ''}>
-                  <SelectValue placeholder="Select an option" />
-                </SelectTrigger>
-                <SelectContent>
-                  {field.options.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            
-            {field.description && (
-              <p className="text-sm text-muted-foreground">{field.description}</p>
-            )}
-            
-            {errors[field.id] && (
-              <p className="text-sm text-destructive">{errors[field.id]}</p>
-            )}
+              )}
+              
+              {field.field_type === 'number' && (
+                <Input
+                  type="number"
+                  value={values[field.id] || ''}
+                  onChange={(e) => handleValueChange(field.id, e.target.value)}
+                  required={field.is_required}
+                  className={errors[field.id] ? 'border-destructive' : ''}
+                  disabled={isSaving}
+                />
+              )}
+              
+              {field.field_type === 'date' && (
+                <>
+                  <Input
+                    type="date"
+                    value={values[field.id] || ''}
+                    onChange={(e) => {
+                      console.log(`[DEBUG] Date input onChange - Raw value:`, e.target.value);
+                      console.log(`[DEBUG] Date input onChange - Type:`, typeof e.target.value);
+                      handleValueChange(field.id, e.target.value);
+                    }}
+                    required={field.is_required}
+                    className={errors[field.id] ? 'border-destructive' : ''}
+                    disabled={isSaving}
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    Current value: {values[field.id] ? `"${values[field.id]}" (${typeof values[field.id]})` : 'empty'}
+                  </div>
+                </>
+              )}
+              
+              {field.field_type === 'boolean' && (
+                <Switch
+                  checked={values[field.id] || false}
+                  onCheckedChange={(checked) => handleValueChange(field.id, checked)}
+                  disabled={isSaving}
+                />
+              )}
+              
+              {field.field_type === 'select' && field.options && (
+                <Select
+                  value={values[field.id] || ''}
+                  onValueChange={(value) => handleValueChange(field.id, value)}
+                  disabled={isSaving}
+                >
+                  <SelectTrigger className={errors[field.id] ? 'border-destructive' : ''}>
+                    <SelectValue placeholder="Select an option" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {field.options.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              
+              {field.description && (
+                <p className="text-sm text-muted-foreground">{field.description}</p>
+              )}
+              
+              {errors[field.id] && (
+                <p className="text-sm text-destructive">{errors[field.id]}</p>
+              )}
+            </div>
+          ))
+        ) : (
+          <div>
+            <p className="text-muted-foreground">No metadata fields defined</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Debug info: user ID = {user?.id || 'not available'}
+            </p>
           </div>
-        ))}
+        )}
 
         {fields.length > 0 && (
           <Button 
@@ -433,10 +506,6 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
           >
             {isSaving ? "Saving..." : "Save Metadata"}
           </Button>
-        )}
-
-        {fields.length === 0 && (
-          <p className="text-muted-foreground">No metadata fields defined</p>
         )}
       </div>
     </ScrollArea>
