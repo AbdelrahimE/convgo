@@ -292,23 +292,6 @@ export function FileList() {
     );
   };
 
-  const renderMetadataDialog = (fileId: string) => (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="ml-2">
-          <Tag className="h-4 w-4 mr-2" />
-          Metadata
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>File Metadata</DialogTitle>
-        </DialogHeader>
-        <FileMetadataForm fileId={fileId} />
-      </DialogContent>
-    </Dialog>
-  );
-
   const renderListView = () => (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -434,14 +417,24 @@ export function FileList() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => renderMetadataDialog(file.id)}
-                      >
-                        <Tag className="h-4 w-4 mr-2" />
-                        Metadata
-                      </Button>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="ml-2"
+                          >
+                            <Tag className="h-4 w-4 mr-2" />
+                            Metadata
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>File Metadata</DialogTitle>
+                          </DialogHeader>
+                          <FileMetadataForm fileId={file.id} />
+                        </DialogContent>
+                      </Dialog>
                     </TableCell>
                   </motion.tr>
                 ))
@@ -483,7 +476,7 @@ export function FileList() {
                 </div>
               </div>
             </div>
-            <div className="mt-4 flex justify-center">
+            <div className="mt-4 flex justify-center gap-2">
               <motion.div whileHover={{ scale: 1.1 }}>
                 <Button
                   variant="destructive"
@@ -492,15 +485,26 @@ export function FileList() {
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => renderMetadataDialog(file.id)}
-                >
-                  <Tag className="h-4 w-4 mr-2" />
-                  Metadata
-                </Button>
               </motion.div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <motion.div whileHover={{ scale: 1.1 }}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Tag className="h-4 w-4 mr-2" />
+                      Metadata
+                    </Button>
+                  </motion.div>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>File Metadata</DialogTitle>
+                  </DialogHeader>
+                  <FileMetadataForm fileId={file.id} />
+                </DialogContent>
+              </Dialog>
             </div>
           </motion.div>
         ))}
