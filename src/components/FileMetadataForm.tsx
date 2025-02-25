@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -69,11 +70,19 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         throw valuesError;
       }
 
-      setFields(transformedFields);
+      console.log('[DEBUG] Fetched values from DB:', valuesData);
       
       const valuesObject: Record<string, any> = {};
       valuesData?.forEach((value: FileMetadataValue) => {
         valuesObject[value.field_id] = value.value;
+        
+        // Debug log for date fields
+        const field = transformedFields.find(f => f.id === value.field_id);
+        if (field?.field_type === 'date') {
+          console.log(`[DEBUG] Date field from DB - Field: ${field.name}, Value:`, value.value);
+          console.log(`[DEBUG] Date field type:`, typeof value.value);
+          console.log(`[DEBUG] Date field JSON stringify:`, JSON.stringify(value.value));
+        }
       });
       setValues(valuesObject);
 
@@ -111,6 +120,9 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         }
         break;
       case 'date':
+        console.log(`[DEBUG] Date validation - Value:`, value);
+        console.log(`[DEBUG] Date validation - Type:`, typeof value);
+        console.log(`[DEBUG] Date validation - Regex test:`, /^\d{4}-\d{2}-\d{2}$/.test(value));
         if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
           return 'Must be a valid date (YYYY-MM-DD)';
         }
@@ -130,7 +142,15 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     
     switch (field.field_type) {
       case 'date':
-        return value.toString();
+        console.log(`[DEBUG] Date format for DB - Raw value:`, value);
+        console.log(`[DEBUG] Date format for DB - Type:`, typeof value);
+        
+        // Convert to string value
+        const stringValue = value.toString();
+        console.log(`[DEBUG] Date format for DB - After toString():`, stringValue);
+        console.log(`[DEBUG] Date format for DB - After toString() type:`, typeof stringValue);
+        
+        return stringValue;
       default:
         return value;
     }
@@ -138,13 +158,21 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
 
   const handleValueChange = async (fieldId: string, value: any) => {
     setIsDirty(true);
+    
+    // Debug logging for date fields
+    const field = fields.find(f => f.id === fieldId);
+    if (field?.field_type === 'date') {
+      console.log(`[DEBUG] Date onChange - Field: ${field.name}, Raw value:`, value);
+      console.log(`[DEBUG] Date onChange - Type:`, typeof value);
+      console.log(`[DEBUG] Date onChange - JSON stringify:`, JSON.stringify(value));
+    }
+    
     const newValues = {
       ...values,
       [fieldId]: value
     };
     setValues(newValues);
     
-    const field = fields.find(f => f.id === fieldId);
     if (field) {
       const error = await validateFormField(field, value);
       setErrors(prev => ({
@@ -220,26 +248,52 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
 
       console.log('Successfully deleted existing metadata');
 
+      // Debug log before formatting
+      console.log('[DEBUG] Raw values before formatting:', values);
+      
+      // Format the date fields for database
       const metadataValues = Object.entries(values)
         .filter(([_, value]) => value !== undefined && value !== null && value !== '')
         .map(([field_id, value]) => {
           const field = fields.find(f => f.id === field_id);
+          
+          if (field?.field_type === 'date') {
+            console.log(`[DEBUG] Preparing date field - Field: ${field.name}, Value:`, value);
+            console.log(`[DEBUG] Preparing date field - Type:`, typeof value);
+          }
+          
           const formattedValue = field ? formatValueForDatabase(field, value) : value;
-          return {
+          
+          if (field?.field_type === 'date') {
+            console.log(`[DEBUG] Formatted date field - Field: ${field.name}, Value:`, formattedValue);
+            console.log(`[DEBUG] Formatted date field - Type:`, typeof formattedValue);
+          }
+          
+          const result = {
             file_id: fileId,
             field_id,
             value: formattedValue
           };
+          
+          if (field?.field_type === 'date') {
+            console.log(`[DEBUG] Final date metadata object:`, result);
+            console.log(`[DEBUG] Final date value JSON stringified:`, JSON.stringify(result.value));
+          }
+          
+          return result;
         });
 
-      console.log('Preparing to insert new metadata:', metadataValues);
+      console.log('[DEBUG] Final metadata values array:', metadataValues);
+      console.log('[DEBUG] Final metadata values JSON stringify:', JSON.stringify(metadataValues));
 
       const { error: insertError } = await supabase
         .from('file_metadata')
         .insert(metadataValues);
 
       if (insertError) {
-        console.error('Error inserting new metadata:', insertError);
+        console.error('[DEBUG] Error inserting new metadata:', insertError);
+        console.error('[DEBUG] Error details:', insertError.details);
+        console.error('[DEBUG] Error hint:', insertError.hint);
         throw insertError;
       }
 
@@ -254,7 +308,12 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       onSave?.();
       
     } catch (error: any) {
-      console.error('Save metadata error:', error);
+      console.error('[DEBUG] Save metadata error:', error);
+      console.error('[DEBUG] Error message:', error.message);
+      console.error('[DEBUG] Error code:', error.code);
+      console.error('[DEBUG] Error details:', error.details);
+      console.error('[DEBUG] Error hint:', error.hint);
+      
       toast({
         variant: "destructive",
         title: "Error saving metadata",
@@ -310,14 +369,23 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
             )}
             
             {field.field_type === 'date' && (
-              <Input
-                type="date"
-                value={values[field.id] || ''}
-                onChange={(e) => handleValueChange(field.id, e.target.value)}
-                required={field.is_required}
-                className={errors[field.id] ? 'border-destructive' : ''}
-                disabled={isSaving}
-              />
+              <>
+                <Input
+                  type="date"
+                  value={values[field.id] || ''}
+                  onChange={(e) => {
+                    console.log(`[DEBUG] Date input onChange - Raw value:`, e.target.value);
+                    console.log(`[DEBUG] Date input onChange - Type:`, typeof e.target.value);
+                    handleValueChange(field.id, e.target.value);
+                  }}
+                  required={field.is_required}
+                  className={errors[field.id] ? 'border-destructive' : ''}
+                  disabled={isSaving}
+                />
+                <div className="text-xs text-muted-foreground">
+                  Current value: {values[field.id] ? `"${values[field.id]}" (${typeof values[field.id]})` : 'empty'}
+                </div>
+              </>
             )}
             
             {field.field_type === 'boolean' && (
