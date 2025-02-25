@@ -363,6 +363,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      insert_date_metadata: {
+        Args: {
+          p_file_id: string
+          p_field_id: string
+          p_date_value: string
+        }
+        Returns: boolean
+      }
       insert_default_metadata_fields: {
         Args: {
           target_profile_id: string

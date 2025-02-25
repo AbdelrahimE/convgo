@@ -260,24 +260,6 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     }
     
     switch (field.field_type) {
-      case 'date': {
-        // For date fields, ensure it's a properly formatted date string
-        const dateStr = String(value).trim();
-        
-        // Validate format
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-          console.error(`[ERROR] Invalid date format for database:`, dateStr);
-          throw new Error(`Invalid date format. Expected YYYY-MM-DD, got: ${dateStr}`);
-        }
-        
-        // Return the date string directly - Supabase needs to see this as a JSON string
-        console.log(`[DEBUG] Prepared date value:`, dateStr);
-        
-        // THIS IS THE KEY FIX: Wrap the date string in quotes to make it a valid JSON string
-        // This ensures PostgreSQL treats it as a JSON string value, not an object
-        return dateStr;
-      }
-        
       case 'number':
         return Number(value);
         
@@ -286,6 +268,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         
       case 'text':
       case 'select':
+      case 'date': // Date fields need special handling during saving, not here
       default:
         return String(value);
     }
@@ -319,6 +302,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         throw new Error('Please fill in all required fields correctly');
       }
 
+      // Delete existing metadata
       const { error: deleteError } = await supabase
         .from('file_metadata')
         .delete()
@@ -334,9 +318,20 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       // Debug log before formatting
       console.log('[DEBUG] Raw values before formatting:', values);
       
-      // Create metadata values array for insertion
-      const metadataValues = Object.entries(values)
-        .filter(([_, value]) => value !== undefined && value !== null && value !== '')
+      // Get all the date field IDs for special handling
+      const dateFieldIds = fields
+        .filter(field => field.field_type === 'date')
+        .map(field => field.id);
+
+      console.log('[DEBUG] Date field IDs for special handling:', dateFieldIds);
+      
+      // First, handle non-date fields in a single batch
+      const nonDateMetadata = Object.entries(values)
+        .filter(([field_id, value]) => {
+          // Skip empty/null values and date fields (handled separately)
+          if (value === undefined || value === null || value === '') return false;
+          return !dateFieldIds.includes(field_id);
+        })
         .map(([field_id, value]) => {
           const field = fields.find(f => f.id === field_id);
           
@@ -346,89 +341,77 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
           }
           
           try {
-            // Format the value according to field type
-            const formattedValue = prepareValueForDatabase(field, value);
-            
-            console.log(`[DEBUG] Formatted field: ${field.name} (${field.field_type}), Value:`, formattedValue);
-            console.log(`[DEBUG] Formatted value type:`, typeof formattedValue);
-            
-            // For date fields, use a special approach to ensure proper JSON formatting
-            if (field.field_type === 'date') {
-              return {
-                file_id: fileId,
-                field_id,
-                // Using the 'as unknown as' pattern to bypass TypeScript's type checking
-                // This is necessary because we know the date string needs to be inserted directly 
-                // as a JSON string, but TypeScript doesn't understand our specific database requirements
-                value: formattedValue
-              };
-            }
+            const preparedValue = prepareValueForDatabase(field, value);
+            console.log(`[DEBUG] Non-date field: ${field.name} (${field.field_type}), Prepared value:`, preparedValue);
             
             return {
               file_id: fileId,
               field_id,
-              value: formattedValue
+              value: preparedValue
             };
           } catch (error) {
-            console.error(`[ERROR] Failed to format value for field ${field.name}:`, error);
+            console.error(`[ERROR] Failed to prepare value for field ${field.name}:`, error);
             throw error;
           }
         })
         .filter(Boolean) as any[];
 
-      console.log('[DEBUG] Prepared metadata values:', metadataValues);
+      console.log('[DEBUG] Non-date metadata values:', nonDateMetadata);
       
-      if (metadataValues.length === 0) {
-        console.log('[INFO] No metadata values to save');
-        toast({
-          title: "Success",
-          description: "No metadata values to save"
-        });
-        setIsDirty(false);
-        setIsSaving(false);
-        return;
-      }
-
-      // Alternative implementation: One insert per field to isolate any problematic fields
-      // This can help identify which specific field might be causing issues
-      for (const metadata of metadataValues) {
-        console.log(`[DEBUG] Inserting metadata for field:`, metadata.field_id);
-        
-        const field = fields.find(f => f.id === metadata.field_id);
-        console.log(`[DEBUG] Field type:`, field?.field_type);
-        console.log(`[DEBUG] Value being inserted:`, metadata.value);
-        console.log(`[DEBUG] Value type:`, typeof metadata.value);
-        
-        if (field?.field_type === 'date') {
-          console.log(`[DEBUG] Special handling for date field: ${field.name}`);
-          
-          // For date fields, use a raw SQL query (if available) OR special handle the JSON format
-          // Since we don't have access to RPC, we'll use a special format for date fields
-          // We'll modify the approach to handle datetime specially
-          // Instead of raw SQL, we'll format the date as JSON in JavaScript first
-          
-          const dateStr = String(metadata.value).trim();
-          // Enforce the JSONB serialization directly in JavaScript 
-          // By using JSON.stringify, we ensure it's formatted as a JSON string with quotes,
-          // exactly what PostgreSQL expects for a valid JSONB string value
-          metadata.value = JSON.stringify(dateStr);
-          
-          console.log(`[DEBUG] Date field ${field.name} - Formatted JSON value:`, metadata.value);
-        }
-        
-        const { error: insertError } = await supabase
+      // Insert non-date fields
+      if (nonDateMetadata.length > 0) {
+        const { error: batchError } = await supabase
           .from('file_metadata')
-          .insert([metadata]);
-
-        if (insertError) {
-          console.error(`[ERROR] Error inserting metadata for field ${metadata.field_id}:`, insertError);
-          console.error('[ERROR] Error details:', insertError.details);
-          console.error('[ERROR] Error hint:', insertError.hint);
-          console.error('[ERROR] Problematic value:', metadata.value);
-          throw insertError;
+          .insert(nonDateMetadata);
+        
+        if (batchError) {
+          console.error('[ERROR] Error inserting non-date metadata:', batchError);
+          throw batchError;
         }
         
-        console.log(`[DEBUG] Successfully inserted metadata for field:`, metadata.field_id);
+        console.log('[DEBUG] Successfully inserted non-date metadata fields');
+      }
+      
+      // Now handle date fields one by one using our custom function
+      const dateFieldPromises = Object.entries(values)
+        .filter(([field_id, value]) => {
+          // Skip empty/null values
+          if (value === undefined || value === null || value === '') return false;
+          // Only include date fields
+          return dateFieldIds.includes(field_id);
+        })
+        .map(async ([field_id, value]) => {
+          const field = fields.find(f => f.id === field_id);
+          if (!field) return;
+          
+          const dateStr = String(value).trim();
+          console.log(`[DEBUG] Processing date field: ${field.name}, Value:`, dateStr);
+          
+          // Call our custom PostgreSQL function for date fields
+          // Use raw SQL query via rpc() since the function name needs to be dynamic
+          const { data, error } = await supabase.rpc('insert_date_metadata', {
+            p_file_id: fileId,
+            p_field_id: field_id,
+            p_date_value: dateStr
+          });
+          
+          if (error) {
+            console.error(`[ERROR] Error inserting date field ${field.name}:`, error);
+            console.error('[ERROR] Error message:', error.message);
+            console.error('[ERROR] Error details:', error.details);
+            throw error;
+          }
+          
+          console.log(`[DEBUG] Successfully inserted date field ${field.name}, Result:`, data);
+        });
+      
+      // Wait for all date field promises to complete
+      try {
+        await Promise.all(dateFieldPromises);
+        console.log('[DEBUG] All date fields were processed successfully');
+      } catch (error) {
+        console.error('[ERROR] Error processing date fields:', error);
+        throw error;
       }
 
       console.log('Successfully inserted all metadata');
