@@ -201,7 +201,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     return null;
   };
 
-  // Updated function to properly format values based on field type
+  // Updated function to properly format values based on field type, with special handling for date fields
   const formatValueForDatabase = (field: MetadataField, value: any): any => {
     if (value === undefined || value === null || value === '') {
       return null;
@@ -209,17 +209,12 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     
     switch (field.field_type) {
       case 'text':
-        // Ensure text is always a string
         return String(value);
         
       case 'number':
-        // Convert to actual number for number fields
         return Number(value);
         
-      case 'date':
-        // Date fields must be strings in YYYY-MM-DD format
-        console.log(`[DEBUG] Date format for DB - Raw value:`, value);
-        
+      case 'date': {
         // Ensure date value is a properly formatted string
         const dateStr = String(value).trim();
         console.log(`[DEBUG] Date format for DB - Formatted as string:`, dateStr);
@@ -231,13 +226,12 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         }
         
         return dateStr;
+      }
         
       case 'boolean':
-        // Ensure boolean fields are actual booleans
         return Boolean(value);
         
       case 'select':
-        // Select values should be strings
         return String(value);
         
       default:
@@ -352,10 +346,24 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
           }
           
           try {
-            const formattedValue = formatValueForDatabase(field, value);
+            let formattedValue = formatValueForDatabase(field, value);
             
-            console.log(`[DEBUG] Field: ${field.name} (${field.field_type}), Formatted value:`, formattedValue);
-            console.log(`[DEBUG] Formatted value type:`, typeof formattedValue);
+            // Special handling for JSONB date values - this is the key fix
+            // We need to ensure date values are stored as proper JSON strings
+            if (field.field_type === 'date' && formattedValue !== null) {
+              console.log(`[DEBUG] Date field special handling - Before:`, formattedValue);
+              console.log(`[DEBUG] Date field type - Before:`, typeof formattedValue);
+              
+              // Explicitly convert date strings to JSONB compatible format
+              // We're using a string literal rather than an object
+              formattedValue = String(formattedValue);
+              
+              console.log(`[DEBUG] Date field special handling - After:`, formattedValue);
+              console.log(`[DEBUG] Date field type - After:`, typeof formattedValue);
+            }
+            
+            console.log(`[DEBUG] Field: ${field.name} (${field.field_type}), Final value:`, formattedValue);
+            console.log(`[DEBUG] Final value type:`, typeof formattedValue);
             
             return {
               file_id: fileId,
@@ -370,6 +378,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         .filter(Boolean) as any[];
 
       console.log('[DEBUG] Final metadata values array:', metadataValues);
+      console.log('[DEBUG] Final JSON payload:', JSON.stringify(metadataValues));
       
       if (metadataValues.length === 0) {
         console.log('[INFO] No metadata values to save');
