@@ -201,20 +201,45 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     return null;
   };
 
+  // Updated function to properly format values based on field type
   const formatValueForDatabase = (field: MetadataField, value: any): any => {
-    if (!value) return value;
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
     
     switch (field.field_type) {
+      case 'text':
+        // Ensure text is always a string
+        return String(value);
+        
+      case 'number':
+        // Convert to actual number for number fields
+        return Number(value);
+        
       case 'date':
+        // Date fields must be strings in YYYY-MM-DD format
         console.log(`[DEBUG] Date format for DB - Raw value:`, value);
-        console.log(`[DEBUG] Date format for DB - Type:`, typeof value);
         
-        // Convert to string value
-        const stringValue = value.toString();
-        console.log(`[DEBUG] Date format for DB - After toString():`, stringValue);
-        console.log(`[DEBUG] Date format for DB - After toString() type:`, typeof stringValue);
+        // Ensure date value is a properly formatted string
+        const dateStr = String(value).trim();
+        console.log(`[DEBUG] Date format for DB - Formatted as string:`, dateStr);
         
-        return stringValue;
+        // Verify the format matches YYYY-MM-DD
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          console.error(`[ERROR] Invalid date format for database:`, dateStr);
+          throw new Error(`Invalid date format. Expected YYYY-MM-DD, got: ${dateStr}`);
+        }
+        
+        return dateStr;
+        
+      case 'boolean':
+        // Ensure boolean fields are actual booleans
+        return Boolean(value);
+        
+      case 'select':
+        // Select values should be strings
+        return String(value);
+        
       default:
         return value;
     }
@@ -315,49 +340,57 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       // Debug log before formatting
       console.log('[DEBUG] Raw values before formatting:', values);
       
-      // Format the date fields for database
+      // Format the metadata values for database
       const metadataValues = Object.entries(values)
         .filter(([_, value]) => value !== undefined && value !== null && value !== '')
         .map(([field_id, value]) => {
           const field = fields.find(f => f.id === field_id);
           
-          if (field?.field_type === 'date') {
-            console.log(`[DEBUG] Preparing date field - Field: ${field.name}, Value:`, value);
-            console.log(`[DEBUG] Preparing date field - Type:`, typeof value);
+          if (!field) {
+            console.warn(`[WARN] Field not found for ID: ${field_id}`);
+            return null;
           }
           
-          const formattedValue = field ? formatValueForDatabase(field, value) : value;
-          
-          if (field?.field_type === 'date') {
-            console.log(`[DEBUG] Formatted date field - Field: ${field.name}, Value:`, formattedValue);
-            console.log(`[DEBUG] Formatted date field - Type:`, typeof formattedValue);
+          try {
+            const formattedValue = formatValueForDatabase(field, value);
+            
+            console.log(`[DEBUG] Field: ${field.name} (${field.field_type}), Formatted value:`, formattedValue);
+            console.log(`[DEBUG] Formatted value type:`, typeof formattedValue);
+            
+            return {
+              file_id: fileId,
+              field_id,
+              value: formattedValue
+            };
+          } catch (error) {
+            console.error(`[ERROR] Failed to format value for field ${field.name}:`, error);
+            throw error;
           }
-          
-          const result = {
-            file_id: fileId,
-            field_id,
-            value: formattedValue
-          };
-          
-          if (field?.field_type === 'date') {
-            console.log(`[DEBUG] Final date metadata object:`, result);
-            console.log(`[DEBUG] Final date value JSON stringified:`, JSON.stringify(result.value));
-          }
-          
-          return result;
-        });
+        })
+        .filter(Boolean) as any[];
 
       console.log('[DEBUG] Final metadata values array:', metadataValues);
-      console.log('[DEBUG] Final metadata values JSON stringify:', JSON.stringify(metadataValues));
+      
+      if (metadataValues.length === 0) {
+        console.log('[INFO] No metadata values to save');
+        toast({
+          title: "Success",
+          description: "No metadata values to save"
+        });
+        setIsDirty(false);
+        setIsSaving(false);
+        return;
+      }
 
+      // Insert the new metadata values
       const { error: insertError } = await supabase
         .from('file_metadata')
         .insert(metadataValues);
 
       if (insertError) {
-        console.error('[DEBUG] Error inserting new metadata:', insertError);
-        console.error('[DEBUG] Error details:', insertError.details);
-        console.error('[DEBUG] Error hint:', insertError.hint);
+        console.error('[ERROR] Error inserting new metadata:', insertError);
+        console.error('[ERROR] Error details:', insertError.details);
+        console.error('[ERROR] Error hint:', insertError.hint);
         throw insertError;
       }
 
@@ -372,11 +405,11 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       onSave?.();
       
     } catch (error: any) {
-      console.error('[DEBUG] Save metadata error:', error);
-      console.error('[DEBUG] Error message:', error.message);
-      console.error('[DEBUG] Error code:', error.code);
-      console.error('[DEBUG] Error details:', error.details);
-      console.error('[DEBUG] Error hint:', error.hint);
+      console.error('[ERROR] Save metadata error:', error);
+      console.error('[ERROR] Error message:', error.message);
+      console.error('[ERROR] Error code:', error.code);
+      console.error('[ERROR] Error details:', error.details);
+      console.error('[ERROR] Error hint:', error.hint);
       
       toast({
         variant: "destructive",
