@@ -1,76 +1,46 @@
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Toaster } from '@/components/ui/sonner';
-import { AuthProvider } from '@/contexts/AuthContext';
-import Auth from '@/pages/Auth';
-import ProtectedRoute from '@/components/ProtectedRoute';
-import FileManagement from '@/pages/FileManagement';
-import { AppSidebar } from '@/components/AppSidebar';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { useLocation } from 'react-router-dom';
-import WhatsAppLink from '@/pages/WhatsAppLink';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
-import './App.css';
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 
-function AppContent() {
-  const location = useLocation();
-  const isAuthPage = location.pathname === '/auth';
+// Pages
+import Index from "@/pages/Index";
+import Auth from "@/pages/Auth";
+import NotFound from "@/pages/NotFound";
+import FileManagement from "@/pages/FileManagement";
+import MetadataManagement from "@/pages/MetadataManagement";
+import WhatsAppLink from "@/pages/WhatsAppLink";
 
-  return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full">
-        {!isAuthPage && <AppSidebar />}
-        <main className="flex-1 px-4 py-8 overflow-auto">
-          <ErrorBoundary>
-            <NetworkErrorBoundary>
-              <Routes>
-                <Route path="/auth" element={<Auth />} />
-                <Route
-                  path="/"
-                  element={
-                    <ProtectedRoute>
-                      <div>Dashboard (coming soon)</div>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/files"
-                  element={
-                    <ProtectedRoute>
-                      <FileManagement />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/whatsapp"
-                  element={
-                    <ProtectedRoute>
-                      <WhatsAppLink />
-                    </ProtectedRoute>
-                  }
-                />
-              </Routes>
-            </NetworkErrorBoundary>
-          </ErrorBoundary>
-        </main>
-      </div>
-    </SidebarProvider>
-  );
-}
+// Components
+import NetworkErrorBoundary from "@/components/NetworkErrorBoundary";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import TestOpenAIConnection from "@/components/TestOpenAIConnection";
+
+import "./App.css";
 
 function App() {
   return (
-    <ErrorBoundary>
-      <NetworkErrorBoundary>
-        <AuthProvider>
-          <Router>
-            <AppContent />
-            <Toaster />
-          </Router>
-        </AuthProvider>
-      </NetworkErrorBoundary>
-    </ErrorBoundary>
+    <Router>
+      <AuthProvider>
+        <NetworkErrorBoundary>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/" element={<Index />}>
+                <Route index element={<TestOpenAIConnection />} />
+                <Route path="files" element={<FileManagement />} />
+                <Route path="metadata" element={<MetadataManagement />} />
+                <Route path="whatsapp" element={<WhatsAppLink />} />
+              </Route>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </ErrorBoundary>
+        </NetworkErrorBoundary>
+        <Toaster />
+        <SonnerToaster />
+      </AuthProvider>
+    </Router>
   );
 }
 
