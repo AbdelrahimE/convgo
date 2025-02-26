@@ -11,6 +11,7 @@ import NotFound from "@/pages/NotFound";
 import FileManagement from "@/pages/FileManagement";
 import MetadataManagement from "@/pages/MetadataManagement";
 import WhatsAppLink from "@/pages/WhatsAppLink";
+import Dashboard from "@/pages/Dashboard";
 
 // Components
 import { NetworkErrorBoundary } from "@/components/NetworkErrorBoundary";
@@ -28,6 +29,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Index />}>
                 <Route index element={<TestOpenAIConnection />} />
+                <Route path="dashboard" element={<Dashboard />} />
                 <Route path="files" element={<FileManagement />} />
                 <Route path="metadata" element={<MetadataManagement />} />
                 <Route path="whatsapp" element={<WhatsAppLink />} />
