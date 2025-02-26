@@ -13,8 +13,8 @@ import MetadataManagement from "@/pages/MetadataManagement";
 import WhatsAppLink from "@/pages/WhatsAppLink";
 
 // Components
-import NetworkErrorBoundary from "@/components/NetworkErrorBoundary";
-import ErrorBoundary from "@/components/ErrorBoundary";
+import { NetworkErrorBoundary } from "@/components/NetworkErrorBoundary";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import TestOpenAIConnection from "@/components/TestOpenAIConnection";
 
 import "./App.css";
