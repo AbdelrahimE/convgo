@@ -9,6 +9,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
+import OpenAITest from '@/pages/OpenAITest';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import './App.css';
@@ -47,6 +48,14 @@ function AppContent() {
                   element={
                     <ProtectedRoute>
                       <WhatsAppLink />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/openai-test"
+                  element={
+                    <ProtectedRoute>
+                      <OpenAITest />
                     </ProtectedRoute>
                   }
                 />
