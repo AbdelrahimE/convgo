@@ -1,4 +1,3 @@
-
 /**
  * Text processing utilities for RAG implementation
  * Handles document chunking and preprocessing for embeddings
@@ -68,8 +67,9 @@ export function chunkText(text: string, options: ChunkingOptions = {}): string[]
   
   // If splitting by sentence, we'll try to respect sentence boundaries
   if (splitBySentence) {
-    // Simple sentence splitting - can be improved with more complex regex
-    const sentences = cleanedText.match(/[^.!?]+[.!?]+/g) || [cleanedText];
+    // Enhanced sentence splitting regex that works with Arabic and other scripts
+    // This pattern looks for sentence-ending punctuation followed by a space or end of string
+    const sentences = cleanedText.match(/[^.!?؟،]+[.!?؟،]+(\s|$)/g) || [cleanedText];
     
     let currentChunk = '';
     
@@ -92,7 +92,7 @@ export function chunkText(text: string, options: ChunkingOptions = {}): string[]
         currentChunk = sentence;
       } else {
         // Add sentence to current chunk
-        currentChunk += ' ' + sentence;
+        currentChunk += (currentChunk ? ' ' : '') + sentence;
       }
     }
     
@@ -144,10 +144,13 @@ export function preprocessText(text: string): string {
     .replace(/https?:\/\/[^\s]+/g, '')
     // Remove email addresses
     .replace(/\S+@\S+\.\S+/g, '')
-    // Remove special characters except punctuation needed for sentence boundaries
-    .replace(/[^\w\s.,!?;:]/g, '')
-    // Replace multiple punctuation
-    .replace(/([.,!?;:])\1+/g, '$1')
+    // Instead of removing non-Latin characters, only remove truly unsafe characters
+    // This preserves Arabic, Chinese, Cyrillic, and other scripts
+    .replace(/[\u0000-\u001F\u007F-\u009F\u2000-\u200F\uFEFF]/g, '')
+    // Keep parentheses which are common in many languages
+    .replace(/[^\p{L}\p{N}\p{P}\p{Z}\p{Sc}\p{Emoji}]/gu, '')
+    // Replace multiple punctuation (keep Arabic punctuation like ؟،)
+    .replace(/([.,!?;:؟،])\1+/g, '$1')
     .trim();
 }
 
@@ -190,7 +193,8 @@ export function createChunkMetadata(
 export function extractKeywords(text: string): string[] {
   if (!text) return [];
   
-  // Remove common stop words (simplified list)
+  // Remove common stop words (simplified list - English only)
+  // For multilingual support, consider using a dedicated NLP library
   const stopWords = new Set([
     'a', 'an', 'the', 'and', 'or', 'but', 'if', 'then', 'else', 'when',
     'at', 'from', 'by', 'for', 'with', 'about', 'against', 'between', 'into',
@@ -201,13 +205,19 @@ export function extractKeywords(text: string): string[] {
     'these', 'those', 'am', 'on', 'your', 'my', 'its'
   ]);
   
-  // Extract words, convert to lowercase, filter out stop words and short words
-  const words = text
-    .toLowerCase()
-    .match(/\b[a-z\d]{3,}\b/g) || [];
+  // Modified word extraction pattern that works with multiple scripts
+  // Use Unicode property escapes to match words in any language
+  const words = text.match(/\p{L}+/gu) || [];
   
-  const filteredWords = words
-    .filter(word => !stopWords.has(word));
+  // Only filter out English stopwords for now
+  const filteredWords = words.filter(word => {
+    // If it's not an English word (ASCII only), keep it
+    if (!/^[a-zA-Z]+$/.test(word)) {
+      return true;
+    }
+    // Otherwise, filter out English stopwords
+    return !stopWords.has(word.toLowerCase());
+  });
   
   // Count frequency of each word
   const wordFrequency: Record<string, number> = {};
