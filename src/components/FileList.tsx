@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown } from "lucide-react";
 import {
@@ -35,7 +36,6 @@ import {
 } from "@/components/ui/dialog";
 import { FileMetadataForm } from "./FileMetadataForm";
 import { Tag } from "lucide-react";
-import FileProcessingTools from "@/pages/FileProcessingTools";
 
 type ValidationStatus = {
   isValid: boolean;
@@ -79,7 +79,6 @@ export function FileList() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
 
   const fetchFiles = async () => {
     try {
@@ -550,10 +549,6 @@ export function FileList() {
         renderListView()
       ) : (
         renderGridView()
-      )}
-
-      {selectedFile && (
-        <FileProcessingTools fileId={selectedFile.id} />
       )}
     </div>
   );
