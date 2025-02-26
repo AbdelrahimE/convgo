@@ -10,6 +10,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
 import OpenAITest from '@/pages/OpenAITest';
+import TextProcessingDemo from '@/pages/TextProcessingDemo';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import './App.css';
@@ -56,6 +57,14 @@ function AppContent() {
                   element={
                     <ProtectedRoute>
                       <OpenAITest />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/text-processing"
+                  element={
+                    <ProtectedRoute>
+                      <TextProcessingDemo />
                     </ProtectedRoute>
                   }
                 />
