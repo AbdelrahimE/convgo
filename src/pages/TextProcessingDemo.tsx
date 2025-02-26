@@ -158,73 +158,73 @@ export default function TextProcessingDemo() {
             <CardDescription>
               Stats: {result.stats.chunkCount} chunks, Avg {result.stats.averageChunkSize} chars/chunk
             </CardDescription>
+          </CardHeader>
+          <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="chunks">Chunks ({result.chunks.length})</TabsTrigger>
                 <TabsTrigger value="keywords">Keywords ({result.keywords.length})</TabsTrigger>
                 <TabsTrigger value="stats">Stats</TabsTrigger>
               </TabsList>
-            </Tabs>
-          </CardHeader>
-          <CardContent>
-            <TabsContent value="chunks" className="mt-0">
-              <div className="space-y-4">
-                {result.chunks.map((chunk, index) => (
-                  <div key={index} className="border rounded-md p-4">
-                    <div className="flex justify-between mb-2">
-                      <h4 className="font-medium">Chunk {index + 1}</h4>
-                      <span className="text-sm text-muted-foreground">
-                        {chunk.text.length} chars, {chunk.text.split(/\s+/).filter(Boolean).length} words
-                      </span>
+              <TabsContent value="chunks" className="mt-4">
+                <div className="space-y-4">
+                  {result.chunks.map((chunk, index) => (
+                    <div key={index} className="border rounded-md p-4">
+                      <div className="flex justify-between mb-2">
+                        <h4 className="font-medium">Chunk {index + 1}</h4>
+                        <span className="text-sm text-muted-foreground">
+                          {chunk.text.length} chars, {chunk.text.split(/\s+/).filter(Boolean).length} words
+                        </span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{chunk.text}</p>
+                      <Separator className="my-2" />
+                      <div className="text-xs text-muted-foreground">
+                        <code className="block overflow-x-auto">
+                          {JSON.stringify(chunk.metadata, null, 2)}
+                        </code>
+                      </div>
                     </div>
-                    <p className="text-sm whitespace-pre-wrap">{chunk.text}</p>
-                    <Separator className="my-2" />
-                    <div className="text-xs text-muted-foreground">
-                      <code className="block overflow-x-auto">
-                        {JSON.stringify(chunk.metadata, null, 2)}
-                      </code>
+                  ))}
+                </div>
+              </TabsContent>
+              <TabsContent value="keywords" className="mt-4">
+                <div className="flex flex-wrap gap-2 py-4">
+                  {result.keywords.map((keyword, index) => (
+                    <Badge key={index} variant="outline">
+                      {keyword}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-sm text-muted-foreground mt-4">
+                  These keywords were extracted using frequency analysis and might be useful for tagging or categorizing content.
+                </p>
+              </TabsContent>
+              <TabsContent value="stats" className="mt-4">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="border rounded-md p-4">
+                      <h4 className="font-medium mb-2">Original Text</h4>
+                      <p className="text-2xl font-bold">{result.stats.originalLength}</p>
+                      <p className="text-sm text-muted-foreground">characters</p>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </TabsContent>
-            <TabsContent value="keywords" className="mt-0">
-              <div className="flex flex-wrap gap-2 py-4">
-                {result.keywords.map((keyword, index) => (
-                  <Badge key={index} variant="outline">
-                    {keyword}
-                  </Badge>
-                ))}
-              </div>
-              <p className="text-sm text-muted-foreground mt-4">
-                These keywords were extracted using frequency analysis and might be useful for tagging or categorizing content.
-              </p>
-            </TabsContent>
-            <TabsContent value="stats" className="mt-0">
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="border rounded-md p-4">
-                    <h4 className="font-medium mb-2">Original Text</h4>
-                    <p className="text-2xl font-bold">{result.stats.originalLength}</p>
-                    <p className="text-sm text-muted-foreground">characters</p>
-                  </div>
-                  <div className="border rounded-md p-4">
-                    <h4 className="font-medium mb-2">Processed Text</h4>
-                    <p className="text-2xl font-bold">{result.stats.processedLength}</p>
-                    <p className="text-sm text-muted-foreground">characters</p>
-                  </div>
-                  <div className="border rounded-md p-4">
-                    <h4 className="font-medium mb-2">Number of Chunks</h4>
-                    <p className="text-2xl font-bold">{result.stats.chunkCount}</p>
-                  </div>
-                  <div className="border rounded-md p-4">
-                    <h4 className="font-medium mb-2">Average Chunk Size</h4>
-                    <p className="text-2xl font-bold">{result.stats.averageChunkSize}</p>
-                    <p className="text-sm text-muted-foreground">characters</p>
+                    <div className="border rounded-md p-4">
+                      <h4 className="font-medium mb-2">Processed Text</h4>
+                      <p className="text-2xl font-bold">{result.stats.processedLength}</p>
+                      <p className="text-sm text-muted-foreground">characters</p>
+                    </div>
+                    <div className="border rounded-md p-4">
+                      <h4 className="font-medium mb-2">Number of Chunks</h4>
+                      <p className="text-2xl font-bold">{result.stats.chunkCount}</p>
+                    </div>
+                    <div className="border rounded-md p-4">
+                      <h4 className="font-medium mb-2">Average Chunk Size</h4>
+                      <p className="text-2xl font-bold">{result.stats.averageChunkSize}</p>
+                      <p className="text-sm text-muted-foreground">characters</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </TabsContent>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       )}
