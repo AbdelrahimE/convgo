@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -36,35 +35,32 @@ serve(async (req) => {
       );
     }
 
-    console.log("API key retrieved, sending test request to OpenAI");
+    console.log("API key retrieved, sending test request to OpenAI for embeddings");
     
-    // Make a simple request to OpenAI API to check connection
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Make a request to OpenAI API to test embeddings
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant.' },
-          { role: 'user', content: 'Hello, are you working? Please reply with a confirmation.' }
-        ],
-        max_tokens: 50,
+        model: 'text-embedding-3-small',
+        input: 'This is a test for embedding generation.',
+        encoding_format: 'float'
       }),
     });
 
     // Parse response
     const data = await response.json();
-    console.log("Response received from OpenAI:", JSON.stringify(data));
+    console.log("Response received from OpenAI embeddings:", data.model, data.data ? "Embedding generated successfully" : "No embedding data");
 
     if (data.error) {
       console.error("OpenAI API returned an error:", data.error);
       return new Response(
         JSON.stringify({ 
           error: data.error, 
-          message: "OpenAI API returned an error", 
+          message: "OpenAI Embeddings API returned an error", 
           success: false 
         }),
         { 
@@ -74,11 +70,11 @@ serve(async (req) => {
       );
     }
 
-    // Success case
+    // Success case - return without the full embedding vector to keep response size reasonable
     return new Response(
       JSON.stringify({ 
-        message: "OpenAI API connection successful", 
-        response: data.choices[0].message.content,
+        message: "OpenAI Embeddings API connection successful", 
+        response: `Embedding generated successfully (${data.data?.[0]?.embedding?.length || 0} dimensions)`,
         model: data.model,
         success: true 
       }),
@@ -94,7 +90,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: error.message, 
-        message: "Failed to connect to OpenAI API", 
+        message: "Failed to connect to OpenAI Embeddings API", 
         success: false 
       }),
       { 

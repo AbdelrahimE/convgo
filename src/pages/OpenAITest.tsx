@@ -18,13 +18,13 @@ export default function OpenAITest() {
 
   return (
     <div className="container max-w-3xl py-8">
-      <h1 className="text-2xl font-bold mb-6">OpenAI API Connection Test</h1>
+      <h1 className="text-2xl font-bold mb-6">OpenAI Embeddings API Connection Test</h1>
       
       <Card>
         <CardHeader>
-          <CardTitle>Test OpenAI API Connection</CardTitle>
+          <CardTitle>Test OpenAI Embeddings API Connection</CardTitle>
           <CardDescription>
-            Click the button below to test your connection to OpenAI's API
+            Click the button below to test your connection to OpenAI's Embeddings API (text-embedding-3-small)
           </CardDescription>
         </CardHeader>
         
@@ -44,7 +44,7 @@ export default function OpenAITest() {
                   <CheckCircle className="h-5 w-5 text-green-600" />
                   <AlertTitle className="text-green-800">Success!</AlertTitle>
                   <AlertDescription className="text-green-700">
-                    <p>OpenAI API connection was successful.</p>
+                    <p>OpenAI Embeddings API connection was successful.</p>
                     {result?.model && <p className="mt-2"><strong>Model:</strong> {result.model}</p>}
                     {result?.response && (
                       <div className="mt-2">
@@ -59,7 +59,7 @@ export default function OpenAITest() {
                   <XCircle className="h-5 w-5 text-red-600" />
                   <AlertTitle className="text-red-800">Connection Error</AlertTitle>
                   <AlertDescription className="text-red-700">
-                    {error?.message || result?.message || 'Failed to connect to OpenAI API'}
+                    {error?.message || result?.message || 'Failed to connect to OpenAI Embeddings API'}
                     {result?.error && (
                       <div className="mt-2 p-2 bg-white border rounded overflow-auto">
                         <pre className="text-xs">{JSON.stringify(result.error, null, 2)}</pre>
@@ -79,7 +79,7 @@ export default function OpenAITest() {
             className="flex items-center gap-2"
           >
             {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isLoading ? 'Testing Connection...' : 'Test OpenAI Connection'}
+            {isLoading ? 'Testing Connection...' : 'Test Embeddings API Connection'}
           </Button>
         </CardFooter>
       </Card>
