@@ -1,3 +1,4 @@
+
 /**
  * Text processing utilities for RAG implementation
  * Handles document chunking and preprocessing for embeddings
@@ -101,7 +102,7 @@ export function chunkText(text: string, options: ChunkingOptions = {}): string[]
       chunks.push(currentChunk.trim());
     }
   } else {
-    // Simple size-based splitting without respecting sentence boundaries
+    // Simple size-based splitting without respecting semantic boundaries
     return splitTextBySize(cleanedText, chunkSize, chunkOverlap);
   }
 
@@ -534,20 +535,20 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
   const detectedLang = detectLanguage(text);
   console.log("Detected language:", detectedLang);
   
-  // Split text into words and get context windows
-  const words = text.match(/\p{L}+/gu) || [];
-  const contextWindows: string[][] = [];
+  // Extract all words using Unicode property escapes to support all scripts
+  const allWords = text.match(/\p{L}+/gu) || [];
   
   // Create context windows (5 words before and after each word)
-  for (let i = 0; i < words.length; i++) {
+  const contextWindows: string[][] = [];
+  for (let i = 0; i < allWords.length; i++) {
     const windowStart = Math.max(0, i - 5);
-    const windowEnd = Math.min(words.length, i + 6);
-    contextWindows.push(words.slice(windowStart, windowEnd));
+    const windowEnd = Math.min(allWords.length, i + 6);
+    contextWindows.push(allWords.slice(windowStart, windowEnd));
   }
   
   if (detectedLang === 'arabic') {
     // Filter out function words
-    const contentWords = words.filter((word, index) => !isArabicFunctionWord(word));
+    const contentWords = allWords.filter(word => !isArabicFunctionWord(word));
     
     if (contentWords.length >= 5) {
       // Count frequencies
@@ -560,7 +561,19 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
       // Calculate scores using enhanced scoring function
       const scores: Record<string, number> = {};
       Object.entries(wordFreq).forEach(([word, freq]) => {
-        const context = contextWindows[words.indexOf(word)] || [];
+        // Find the original index of this word to get its context
+        const originalIndexes: number[] = [];
+        for (let i = 0; i < allWords.length; i++) {
+          if (allWords[i].toLowerCase() === word) {
+            originalIndexes.push(i);
+          }
+        }
+        
+        // Use the first occurrence's context, or empty if not found
+        const context = originalIndexes.length > 0 
+          ? contextWindows[originalIndexes[0]] 
+          : [];
+        
         scores[word] = scoreArabicWord(word, freq, contentWords.length, context);
       });
       
@@ -574,15 +587,11 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
     return [...new Set(contentWords)].slice(0, maxKeywords);
   }
   
-  // For non-Arabic languages, use the existing approach
+  // For non-Arabic languages, use the standard approach
   const stopWords = getStopWords(detectedLang);
   
-  // Extract all words using Unicode property escapes to support all scripts
-  // This matches any sequence of letters (works for all languages including Arabic)
-  const words = text.match(/\p{L}+/gu) || [];
-  
   // First filter out stopwords
-  const filteredWords = words.filter(word => {
+  const filteredWords = allWords.filter(word => {
     const normalized = word.toLowerCase();
     return !stopWords.has(normalized) && normalized.length > 1;
   });
