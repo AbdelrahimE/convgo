@@ -1,4 +1,3 @@
-
 /**
  * Text processing utilities for RAG implementation
  * Handles document chunking and preprocessing for embeddings
@@ -186,6 +185,46 @@ export function createChunkMetadata(
 }
 
 /**
+ * Comprehensive list of Arabic stopwords and function words
+ * This expanded list covers prepositions, pronouns, conjunctions, etc.
+ */
+const ARABIC_STOPWORDS = new Set([
+  // Core prepositions
+  'في', 'من', 'إلى', 'على', 'عن', 'مع', 'ب', 'ل', 'ك',
+  // Variations of prepositions
+  'فى', 'الى', 'علي', 'الي', 'إلي',
+  // Combined prepositions with suffixes
+  'فيه', 'فيها', 'منه', 'منها', 'إليه', 'إليها', 'عليه', 'عليها',
+  'معه', 'معها', 'به', 'بها', 'له', 'لها', 'لك', 'لي', 'لنا', 'لهم', 'لكم',
+  'عنه', 'عنها', 'منه', 'منها',
+  // Conjunctions
+  'و', 'أو', 'ثم', 'ف', 'أم', 'لكن', 'بل', 'حتى', 'إذ', 'إذا', 'إن', 'أن',
+  // Pronouns
+  'هو', 'هي', 'هم', 'هن', 'هما', 'أنت', 'أنتم', 'أنتن', 'أنا', 'نحن',
+  'انت', 'انتم', 'انتن', 'انا',
+  // Demonstratives
+  'هذا', 'هذه', 'ذلك', 'تلك', 'هؤلاء', 'أولئك', 'هنا', 'هناك',
+  // Relative pronouns
+  'الذي', 'التي', 'الذين', 'اللذان', 'اللتان', 'اللواتي', 'اللائي',
+  'الذى', 'التى',
+  // Question words
+  'من', 'ما', 'ماذا', 'أين', 'متى', 'كيف', 'لماذا', 'هل',
+  // Verbal particles
+  'قد', 'لقد', 'لم', 'لن', 'لا', 'ما', 'ليس',
+  // Common verbs (to be, to have, etc.)
+  'كان', 'كانت', 'كانوا', 'يكون', 'تكون', 'كنت', 'أصبح', 'صار', 'ليس',
+  // Articles
+  'ال',
+  // Other function words
+  'كل', 'بعض', 'غير', 'سوى', 'أي', 'جميع', 'عدة', 'خلال', 'ضمن', 'عبر',
+  'قبل', 'بعد', 'تحت', 'فوق', 'بين', 'أمام', 'خلف', 'حول', 'دون', 'سوف',
+  // Words specifically from your screenshots
+  'أن', 'إن', 'ان', 'على', 'في', 'من', 'إلى', 'لك', 'علي',
+  // Additional variations
+  'انه', 'إنه', 'انها', 'إنها', 'انهم', 'إنهم'
+]);
+
+/**
  * Multilingual stop words for common languages
  * These are high-frequency words that typically don't add much semantic value
  */
@@ -202,44 +241,7 @@ const STOP_WORDS: Record<string, Set<string>> = {
     'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such',
     'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't'
   ]),
-  arabic: new Set([
-    // Common Arabic stop words - expanded list
-    'من', 'إلى', 'عن', 'على', 'في', 'مع', 'هذا', 'هذه', 'تلك', 'ذلك',
-    'أنا', 'أنت', 'هو', 'هي', 'نحن', 'أنتم', 'هم', 'كان', 'كانت', 'كانوا',
-    'يكون', 'تكون', 'أو', 'و', 'ثم', 'لكن', 'إذا', 'إلا', 'حتى', 'عندما',
-    'قد', 'قبل', 'بعد', 'خلال', 'مثل', 'أن', 'لا', 'ما', 'لم', 'لن',
-    'كل', 'بعض', 'أي', 'التي', 'الذي', 'الذين', 'اللذان', 'اللتان', 'أحد', 'أكثر',
-    'فقط', 'ليس', 'هناك', 'منذ', 'عند', 'عندها', 'حيث', 'كيف', 'لماذا', 'متى',
-    
-    // Additional Arabic stop words based on your examples
-    'التى', 'الذى', 'فى', 'عنها', 'منها', 'تلك', 'ذلك', 'فيها', 'منه', 'له', 'إنه',
-    'به', 'لها', 'إنها', 'منهم', 'لهم', 'إنهم', 'إذا', 'إن', 'ان', 'عنه',
-    'هذه', 'هذا', 'تلك', 'ذلك', 'هؤلاء', 'هناك', 'هنا', 'أنت', 'انت', 'انا', 'أنا',
-    'نحن', 'انتم', 'أنتم', 'انتن', 'أنتن', 'هم', 'هن', 'هما', 'هو', 'هي',
-    'كان', 'كانت', 'كانوا', 'يكون', 'تكون', 'كنت', 'إلى', 'الى', 'على', 'عليه', 'عليها',
-    'إليه', 'اليه', 'إليها', 'اليها', 'الي', 'إلي', 'عن', 'لي', 'لى', 'لك', 'لكم',
-    'الى', 'إلى', 'في', 'فى', 'مع', 'ومع', 'علي', 'على', 'عليه', 'عليها', 'عليهم',
-    'الذي', 'الذى', 'التي', 'التى', 'الذين', 'اللذان', 'اللتان', 'لنا', 'إلينا', 'علينا',
-    
-    // Arabic pronouns, conjunctions, prepositions and articles
-    'أنا', 'نحن', 'أنت', 'أنتِ', 'أنتما', 'أنتم', 'أنتن', 'هو', 'هي', 'هما', 'هم', 'هن',
-    'إياي', 'إيانا', 'إياك', 'إياكِ', 'إياكما', 'إياكم', 'إياكن', 'إياه', 'إياها', 'إياهما', 'إياهم', 'إياهن',
-    'و', 'ف', 'ثم', 'أو', 'أم', 'لكن', 'بل', 'لا', 'حتى',
-    'في', 'من', 'إلى', 'على', 'عن', 'مع', 'ك', 'ل', 'ب',
-    'ال', 'ذا', 'ذو', 'ذي',
-    
-    // Negations and question words
-    'لا', 'لم', 'لن', 'ما', 'ليس', 'هل', 'أين', 'كيف', 'متى', 'لماذا', 'من', 'ماذا',
-    
-    // Common short verbs or forms
-    'كان', 'يكون', 'صار', 'يصير', 'ظل', 'أصبح', 'أضحى', 'أمسى', 'بات', 'مازال', 'مادام',
-    
-    // Additional connectors
-    'إذ', 'إذا', 'إن', 'أن', 'كي', 'لكي', 'لو', 'لولا', 'حتى',
-    
-    // Adding specifically the words from screenshot
-    'في', 'على', 'أن', 'من', 'لك', 'علي'
-  ]),
+  arabic: ARABIC_STOPWORDS,
   spanish: new Set([
     'de', 'la', 'el', 'en', 'y', 'a', 'que', 'los', 'del', 'se', 'las', 'por', 'un', 'para',
     'con', 'no', 'una', 'su', 'al', 'lo', 'como', 'más', 'pero', 'sus', 'le', 'ya', 'o',
@@ -254,55 +256,7 @@ const STOP_WORDS: Record<string, Set<string>> = {
     'nous', 'vous', 'je', 'tu', 'qui', 'que', 'quoi', 'dont', 'où', 'comment', 'pourquoi',
     'quand', 'plus', 'moins', 'sans', 'avec', 'même', 'autre', 'autres', 'son', 'sa', 'ses'
   ]),
-  // Add more languages as needed
 };
-
-// Direct regex patterns for Arabic common words/particles to filter out
-// These will catch variations with different diacritics or spellings
-const ARABIC_PARTICLES_REGEX = [
-  /\b(من|في|إلى|على|عن|مع|إن|أن|لا|ما|لم|لن|قد|هل|لو|ثم|أو|و|ف)\b/g, // Prepositions and particles
-  /\b(هذا|هذه|ذلك|تلك|هناك|هنا)\b/g, // Demonstratives
-  /\b(أنا|أنت|هو|هي|نحن|هم|أنتم)\b/g, // Pronouns
-  /\b(كان|يكون|كانت|كانوا|صار|أصبح)\b/g, // Common verbs
-  /\b(ال|ب|ل|ك|و|ف)\b/g, // Single letter prefixes
-  /\b(الذي|التي|الذين|اللذان|اللتان)\b/g, // Relative pronouns
-  /\b(إذا|حتى|عندما|حيث|كما|كيف|متى|لماذا)\b/g, // Question words and connectors
-  /\b(أي|كل|بعض|عدة|عديد|كثير|قليل)\b/g, // Quantifiers
-  /\b(لك|له|لها|لهم|لنا|لكم|لهن|إليه|إليها|إليهم|إلينا|إليكم|إليكن|عليه|عليها|عليهم|علينا|عليكم|عليكن)\b/g, // Possessive/directional phrases
-];
-
-// Pattern for common Arabic prefix combinations (multiple prefixes attached to a word)
-// For example "وبال" (and with the) at the beginning of a word
-const ARABIC_PREFIX_COMBINATIONS = /^(و|ف|ب|ل|ك|ال|بال|وال|فال|كال|لل|ولل|فلل|بال|وبال|فبال)/;
-
-/**
- * Checks if a word is an Arabic function word that should be excluded from keywords
- * @param word The word to check
- * @returns True if it's an Arabic function word to exclude
- */
-function isArabicFunctionWord(word: string): boolean {
-  // Check against the list of common words to exclude
-  const commonArabicWords = ['في', 'على', 'إلى', 'من', 'عن', 'أن', 'لك', 'لنا', 'له', 'لها', 'لهم', 'و', 'أو', 'ثم', 'ف', 'ب', 'ل', 'ك'];
-  
-  if (commonArabicWords.includes(word)) {
-    return true;
-  }
-  
-  // Check if it matches any of the regex patterns
-  for (const regex of ARABIC_PARTICLES_REGEX) {
-    regex.lastIndex = 0; // Reset regex state
-    if (regex.test(word)) {
-      return true;
-    }
-  }
-  
-  // Check if it's a very short word (likely a preposition)
-  if (word.length <= 2) {
-    return true;
-  }
-  
-  return false;
-}
 
 /**
  * Detects the most likely language of a text
@@ -343,6 +297,11 @@ function detectLanguage(text: string): string {
     }
   }
   
+  // For Arabic text, we want to be extra certain
+  if (text.match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/)) {
+    detectedLang = 'arabic';
+  }
+  
   return detectedLang;
 }
 
@@ -356,6 +315,65 @@ function getStopWords(lang: string): Set<string> {
 }
 
 /**
+ * Checks if a word is an Arabic function word that should be excluded from keywords
+ * Uses multiple methods for reliable detection
+ * @param word The word to check
+ * @returns True if it's an Arabic function word to exclude
+ */
+function isArabicFunctionWord(word: string): boolean {
+  if (!word) return false;
+  
+  // Normalize the word (remove diacritics, standardize alef/ya forms)
+  const normalizedWord = word.normalize('NFKD')
+    .replace(/[\u064B-\u065F]/g, ''); // Remove Arabic diacritics
+  
+  // 1. Direct check against our comprehensive stopword list
+  if (ARABIC_STOPWORDS.has(normalizedWord)) {
+    return true;
+  }
+  
+  // 2. Check for very short words (most meaningful Arabic words are 3+ letters)
+  if (normalizedWord.length <= 2) {
+    return true;
+  }
+  
+  // 3. Check for common Arabic prefixes (و, ف, ب, ل, ال, etc.)
+  // If removing the prefix makes it a stopword, it's likely a function word
+  if (normalizedWord.startsWith('و') || 
+      normalizedWord.startsWith('ف') || 
+      normalizedWord.startsWith('ب') || 
+      normalizedWord.startsWith('ل') || 
+      normalizedWord.startsWith('ال')) {
+    
+    // Try removing the prefix and check if result is a stopword
+    let withoutPrefix = normalizedWord;
+    
+    if (normalizedWord.startsWith('ال')) {
+      withoutPrefix = normalizedWord.substring(2);
+    } else if (normalizedWord.startsWith('و') || 
+               normalizedWord.startsWith('ف') || 
+               normalizedWord.startsWith('ب') || 
+               normalizedWord.startsWith('ل')) {
+      withoutPrefix = normalizedWord.substring(1);
+    }
+    
+    // If the word without prefix is a stopword, the original is also a function word
+    if (ARABIC_STOPWORDS.has(withoutPrefix) || withoutPrefix.length <= 2) {
+      return true;
+    }
+  }
+  
+  // 4. Check for common preposition + pronoun combinations
+  // These are patterns like "فيه" (in it), "له" (for him), etc.
+  const prepositionPronounPattern = /^(في|من|إلى|على|عن|مع|ب|ل|ك)(ه|ها|هم|هن|ك|كم|كن|ي|نا)$/;
+  if (prepositionPronounPattern.test(normalizedWord)) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
  * Extracts potential keywords/entities from text using a TF-IDF inspired approach
  * @param text - Text to analyze
  * @param maxKeywords - Maximum number of keywords to return
@@ -366,24 +384,44 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
   
   // Detect language to use appropriate stop words
   const detectedLang = detectLanguage(text);
+  console.log("Detected language:", detectedLang);
+  
   const stopWords = getStopWords(detectedLang);
   
   // Extract all words using Unicode property escapes to support all scripts
   // This matches any sequence of letters (works for all languages including Arabic)
   const words = text.match(/\p{L}+/gu) || [];
   
-  // If we have very few words, return all of them (except stop words)
-  if (words.length < 5) {
-    return words
-      .filter(word => !stopWords.has(word.toLowerCase()) && !isArabicFunctionWord(word))
-      .slice(0, maxKeywords);
+  // For Arabic, we need special handling
+  if (detectedLang === 'arabic') {
+    // Filter out common function words first
+    const contentWords = words.filter(word => !isArabicFunctionWord(word));
+    
+    // If we have enough words after filtering, use frequency to get top keywords
+    if (contentWords.length >= 5) {
+      // Count word frequencies
+      const wordFreq: Record<string, number> = {};
+      contentWords.forEach(word => {
+        const normalized = word.toLowerCase();
+        wordFreq[normalized] = (wordFreq[normalized] || 0) + 1;
+      });
+      
+      // Sort by frequency
+      return Object.entries(wordFreq)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, maxKeywords)
+        .map(([word]) => word);
+    }
+    
+    // If we have few words, just return them all
+    return [...new Set(contentWords)].slice(0, maxKeywords);
   }
   
-  // Filter out stopwords and calculate frequencies
+  // For non-Arabic languages, use the standard approach
+  // First filter out stopwords
   const filteredWords = words.filter(word => {
     const normalized = word.toLowerCase();
-    return !stopWords.has(normalized) && normalized.length > 1 && 
-           (detectedLang !== 'arabic' || !isArabicFunctionWord(normalized));
+    return !stopWords.has(normalized) && normalized.length > 1;
   });
   
   // If we have very few words after filtering, return them all
@@ -393,22 +431,16 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
   
   // Calculate word frequencies (Term Frequency)
   const wordFrequency: Record<string, number> = {};
-  const wordCount = filteredWords.length;
-  
   filteredWords.forEach(word => {
     const normalized = word.toLowerCase();
     wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
   });
   
-  // Apply TF-IDF inspired scoring
+  // Calculate scores with TF-IDF inspired approach
   const scores: Record<string, number> = {};
+  const wordCount = filteredWords.length;
   
   Object.entries(wordFrequency).forEach(([word, freq]) => {
-    // Skip explicitly blacklisted Arabic words
-    if (detectedLang === 'arabic' && isArabicFunctionWord(word)) {
-      return;
-    }
-    
     // TF component (frequency in this document)
     const tf = freq / wordCount;
     
@@ -416,25 +448,7 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
     const lengthBoost = Math.min(1.0, word.length / 5); // Boost for longer words
     const commonnessPenalty = Math.max(0.5, 1.0 - (freq / wordCount) * 10); // Penalize very common words
     
-    // Additional Arabic-specific handling
-    let totalScore = tf * lengthBoost * commonnessPenalty;
-    
-    if (detectedLang === 'arabic') {
-      // Check for common prefix combinations
-      if (ARABIC_PREFIX_COMBINATIONS.test(word)) {
-        const rootWord = word.replace(ARABIC_PREFIX_COMBINATIONS, '');
-        if (rootWord.length >= 2 && !isArabicFunctionWord(rootWord)) {
-          // Add the root word with a higher score instead
-          scores[rootWord] = totalScore * 1.2;
-          totalScore *= 0.5; // Reduce score for the prefixed version
-        }
-      }
-    }
-    
-    // Store score if it's significant
-    if (totalScore > 0.005) {
-      scores[word] = totalScore;
-    }
+    scores[word] = tf * lengthBoost * commonnessPenalty;
   });
   
   // Sort words by score and take top N
