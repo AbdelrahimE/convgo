@@ -398,6 +398,56 @@ const ARABIC_NER_PATTERNS = {
 };
 
 /**
+ * Patterns for English Named Entity Recognition
+ */
+const ENGLISH_NER_PATTERNS = {
+  // Common titles and honorifics that often precede names
+  personTitles: new Set([
+    'Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sir', 'Lady', 'Lord', 'President',
+    'King', 'Queen', 'Prince', 'Princess', 'Captain', 'General', 'Senator'
+  ]),
+  
+  // Common place indicators
+  locationIndicators: new Set([
+    'City', 'State', 'Country', 'Street', 'Avenue', 'Boulevard', 'Road',
+    'Mountain', 'Lake', 'River', 'Ocean', 'Sea', 'Island', 'Gulf', 
+    'North', 'South', 'East', 'West', 'Downtown', 'Uptown'
+  ]),
+  
+  // Organization indicators
+  organizationIndicators: new Set([
+    'Company', 'Corporation', 'Inc', 'Ltd', 'LLC', 'Organization',
+    'University', 'College', 'School', 'Institute', 'Agency', 'Department',
+    'Ministry', 'Association', 'Foundation', 'Society', 'Council', 'Committee'
+  ])
+};
+
+/**
+ * Patterns for French Named Entity Recognition
+ */
+const FRENCH_NER_PATTERNS = {
+  // Common titles and honorifics that often precede names
+  personTitles: new Set([
+    'M', 'Mme', 'Mlle', 'Dr', 'Prof', 'Docteur', 'Professeur', 'Président',
+    'Roi', 'Reine', 'Prince', 'Princesse', 'Capitaine', 'Général', 'Sénateur'
+  ]),
+  
+  // Common place indicators
+  locationIndicators: new Set([
+    'Ville', 'État', 'Pays', 'Rue', 'Avenue', 'Boulevard', 'Route',
+    'Montagne', 'Lac', 'Rivière', 'Océan', 'Mer', 'Île', 'Golfe',
+    'Nord', 'Sud', 'Est', 'Ouest', 'Centre-ville'
+  ]),
+  
+  // Organization indicators
+  organizationIndicators: new Set([
+    'Société', 'Entreprise', 'SARL', 'SA', 'Organisation',
+    'Université', 'Collège', 'École', 'Institut', 'Agence', 'Département',
+    'Ministère', 'Association', 'Fondation', 'Conseil', 'Comité'
+  ])
+};
+
+/**
  * Calculates TF-IDF score for a word in the current document context
  * @param word The word to score
  * @param frequency Word frequency in current document
@@ -484,6 +534,138 @@ function detectArabicNamedEntity(word: string, context: string[] = []): {
 }
 
 /**
+ * Detects if a word might be a named entity in English
+ * @param word The word to check
+ * @param context The surrounding words (for pattern matching)
+ */
+function detectEnglishNamedEntity(word: string, context: string[] = []): {
+  isEntity: boolean;
+  type?: 'person' | 'location' | 'organization';
+  confidence: number;
+} {
+  // Normalize the word
+  const normalizedWord = word.trim();
+  
+  // Initialize result
+  let result = {
+    isEntity: false,
+    type: undefined as 'person' | 'location' | 'organization' | undefined,
+    confidence: 0
+  };
+  
+  // Basic capitalization check - proper nouns in English are usually capitalized
+  const isCapitalized = /^[A-Z][a-z]+$/.test(normalizedWord);
+  if (isCapitalized) {
+    result.isEntity = true;
+    result.confidence = 0.3;
+  }
+  
+  // All caps might be an organization or acronym
+  const isAllCaps = /^[A-Z]{2,}$/.test(normalizedWord);
+  if (isAllCaps) {
+    result.isEntity = true;
+    result.type = 'organization';
+    result.confidence = 0.5;
+  }
+  
+  // Check context for NER indicators
+  for (let i = 0; i < context.length; i++) {
+    const contextWord = context[i];
+    
+    // Check for person titles
+    if (ENGLISH_NER_PATTERNS.personTitles.has(contextWord)) {
+      result = { isEntity: true, type: 'person', confidence: 0.8 };
+      break;
+    }
+    
+    // Check for location indicators
+    if (ENGLISH_NER_PATTERNS.locationIndicators.has(contextWord)) {
+      result = { isEntity: true, type: 'location', confidence: 0.7 };
+      break;
+    }
+    
+    // Check for organization indicators
+    if (ENGLISH_NER_PATTERNS.organizationIndicators.has(contextWord)) {
+      result = { isEntity: true, type: 'organization', confidence: 0.7 };
+      break;
+    }
+    
+    // Check for "of" pattern which often indicates organizations (University of X)
+    if (i > 0 && i < context.length - 1 && 
+        contextWord.toLowerCase() === 'of' && 
+        isCapitalized && 
+        /^[A-Z][a-z]+$/.test(context[i-1])) {
+      result = { isEntity: true, type: 'organization', confidence: 0.6 };
+      break;
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * Detects if a word might be a named entity in French
+ * @param word The word to check
+ * @param context The surrounding words (for pattern matching)
+ */
+function detectFrenchNamedEntity(word: string, context: string[] = []): {
+  isEntity: boolean;
+  type?: 'person' | 'location' | 'organization';
+  confidence: number;
+} {
+  // Normalize the word
+  const normalizedWord = word.trim();
+  
+  // Initialize result
+  let result = {
+    isEntity: false,
+    type: undefined as 'person' | 'location' | 'organization' | undefined,
+    confidence: 0
+  };
+  
+  // Basic capitalization check - proper nouns in French are usually capitalized
+  const isCapitalized = /^[A-Z][a-zàáâäæçèéêëìíîïòóôöùúûüÿ]+$/.test(normalizedWord);
+  if (isCapitalized) {
+    result.isEntity = true;
+    result.confidence = 0.3;
+  }
+  
+  // Check context for NER indicators
+  for (let i = 0; i < context.length; i++) {
+    const contextWord = context[i];
+    
+    // Check for person titles
+    if (FRENCH_NER_PATTERNS.personTitles.has(contextWord)) {
+      result = { isEntity: true, type: 'person', confidence: 0.8 };
+      break;
+    }
+    
+    // Check for location indicators
+    if (FRENCH_NER_PATTERNS.locationIndicators.has(contextWord)) {
+      result = { isEntity: true, type: 'location', confidence: 0.7 };
+      break;
+    }
+    
+    // Check for organization indicators
+    if (FRENCH_NER_PATTERNS.organizationIndicators.has(contextWord)) {
+      result = { isEntity: true, type: 'organization', confidence: 0.7 };
+      break;
+    }
+    
+    // Check for "de" pattern which often indicates organizations (Université de X)
+    if (i > 0 && i < context.length - 1 && 
+        (contextWord.toLowerCase() === 'de' || contextWord.toLowerCase() === 'du' || contextWord.toLowerCase() === 'des') && 
+        isCapitalized && 
+        /^[A-Z][a-zàáâäæçèéêëìíîïòóôöùúûüÿ]+$/.test(context[i-1])) {
+      result = { isEntity: true, type: 'organization', confidence: 0.6 };
+      break;
+    }
+  }
+  
+  return result;
+}
+
+/**
  * Enhanced scoring for Arabic keywords considering both statistical and semantic factors
  */
 function scoreArabicWord(
@@ -521,6 +703,92 @@ function scoreArabicWord(
   
   // Length bonus (longer words often carry more meaning in Arabic)
   const lengthBonus = Math.min(1.2, word.length / 5);
+  finalScore *= lengthBonus;
+  
+  return finalScore;
+}
+
+/**
+ * Enhanced scoring for English keywords considering both statistical and semantic factors
+ */
+function scoreEnglishWord(
+  word: string,
+  frequency: number,
+  totalWords: number,
+  context: string[]
+): number {
+  // Base TF-IDF score
+  const tfIdfScore = calculateTfIdf(word, frequency, totalWords);
+  
+  // Named entity detection
+  const nerResult = detectEnglishNamedEntity(word, context);
+  
+  // Calculate final score
+  let finalScore = tfIdfScore;
+  
+  // Boost score for named entities
+  if (nerResult.isEntity) {
+    finalScore *= (1 + nerResult.confidence);
+    
+    // Additional boost for specific entity types
+    switch (nerResult.type) {
+      case 'person':
+        finalScore *= 1.3;
+        break;
+      case 'location':
+        finalScore *= 1.2;
+        break;
+      case 'organization':
+        finalScore *= 1.2;
+        break;
+    }
+  }
+  
+  // Length bonus (longer words often carry more meaning)
+  const lengthBonus = Math.min(1.1, word.length / 7);
+  finalScore *= lengthBonus;
+  
+  return finalScore;
+}
+
+/**
+ * Enhanced scoring for French keywords considering both statistical and semantic factors
+ */
+function scoreFrenchWord(
+  word: string,
+  frequency: number,
+  totalWords: number,
+  context: string[]
+): number {
+  // Base TF-IDF score
+  const tfIdfScore = calculateTfIdf(word, frequency, totalWords);
+  
+  // Named entity detection
+  const nerResult = detectFrenchNamedEntity(word, context);
+  
+  // Calculate final score
+  let finalScore = tfIdfScore;
+  
+  // Boost score for named entities
+  if (nerResult.isEntity) {
+    finalScore *= (1 + nerResult.confidence);
+    
+    // Additional boost for specific entity types
+    switch (nerResult.type) {
+      case 'person':
+        finalScore *= 1.3;
+        break;
+      case 'location':
+        finalScore *= 1.2;
+        break;
+      case 'organization':
+        finalScore *= 1.2;
+        break;
+    }
+  }
+  
+  // Length bonus (longer words often carry more meaning)
+  const lengthBonus = Math.min(1.1, word.length / 6);
   finalScore *= lengthBonus;
   
   return finalScore;
@@ -585,47 +853,143 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
     }
     
     return [...new Set(contentWords)].slice(0, maxKeywords);
-  }
-  
-  // For non-Arabic languages, use the standard approach
-  const stopWords = getStopWords(detectedLang);
-  
-  // First filter out stopwords
-  const filteredWords = allWords.filter(word => {
-    const normalized = word.toLowerCase();
-    return !stopWords.has(normalized) && normalized.length > 1;
-  });
-  
-  // If we have very few words after filtering, return them all
-  if (filteredWords.length < 5) {
-    return [...new Set(filteredWords)].slice(0, maxKeywords);
-  }
-  
-  // Calculate word frequencies (Term Frequency)
-  const wordFrequency: Record<string, number> = {};
-  filteredWords.forEach(word => {
-    const normalized = word.toLowerCase();
-    wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
-  });
-  
-  // Calculate scores with TF-IDF inspired approach
-  const scores: Record<string, number> = {};
-  const wordCount = filteredWords.length;
-  
-  Object.entries(wordFrequency).forEach(([word, freq]) => {
-    // TF component (frequency in this document)
-    const tf = freq / wordCount;
+  } else if (detectedLang === 'english') {
+    // For English language, use the standard approach with NER
+    const stopWords = getStopWords(detectedLang);
     
-    // IDF-like component (boost longer words and penalize very common words)
-    const lengthBoost = Math.min(1.0, word.length / 5); // Boost for longer words
-    const commonnessPenalty = Math.max(0.5, 1.0 - (freq / wordCount) * 10); // Penalize very common words
+    // Filter out stopwords
+    const filteredWords = allWords.filter(word => {
+      const normalized = word.toLowerCase();
+      return !stopWords.has(normalized) && normalized.length > 1;
+    });
     
-    scores[word] = tf * lengthBoost * commonnessPenalty;
-  });
-  
-  // Sort words by score and take top N
-  return Object.entries(scores)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, maxKeywords)
-    .map(([word]) => word);
+    // If we have very few words after filtering, return them all
+    if (filteredWords.length < 5) {
+      return [...new Set(filteredWords)].slice(0, maxKeywords);
+    }
+    
+    // Calculate word frequencies
+    const wordFrequency: Record<string, number> = {};
+    filteredWords.forEach(word => {
+      const normalized = word.toLowerCase();
+      wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+    });
+    
+    // Calculate scores using English NER enhanced scoring
+    const scores: Record<string, number> = {};
+    const wordCount = filteredWords.length;
+    
+    Object.entries(wordFrequency).forEach(([word, freq]) => {
+      // Find context for this word
+      const originalIndexes: number[] = [];
+      for (let i = 0; i < allWords.length; i++) {
+        if (allWords[i].toLowerCase() === word) {
+          originalIndexes.push(i);
+        }
+      }
+      
+      // Use the first occurrence's context
+      const context = originalIndexes.length > 0 
+        ? contextWindows[originalIndexes[0]] 
+        : [];
+      
+      scores[word] = scoreEnglishWord(word, freq, wordCount, context);
+    });
+    
+    // Sort by score and take top N
+    return Object.entries(scores)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxKeywords)
+      .map(([word]) => word);
+  } else if (detectedLang === 'french') {
+    // For French language, use the standard approach with NER
+    const stopWords = getStopWords(detectedLang);
+    
+    // Filter out stopwords
+    const filteredWords = allWords.filter(word => {
+      const normalized = word.toLowerCase();
+      return !stopWords.has(normalized) && normalized.length > 1;
+    });
+    
+    // If we have very few words after filtering, return them all
+    if (filteredWords.length < 5) {
+      return [...new Set(filteredWords)].slice(0, maxKeywords);
+    }
+    
+    // Calculate word frequencies
+    const wordFrequency: Record<string, number> = {};
+    filteredWords.forEach(word => {
+      const normalized = word.toLowerCase();
+      wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+    });
+    
+    // Calculate scores using French NER enhanced scoring
+    const scores: Record<string, number> = {};
+    const wordCount = filteredWords.length;
+    
+    Object.entries(wordFrequency).forEach(([word, freq]) => {
+      // Find context for this word
+      const originalIndexes: number[] = [];
+      for (let i = 0; i < allWords.length; i++) {
+        if (allWords[i].toLowerCase() === word) {
+          originalIndexes.push(i);
+        }
+      }
+      
+      // Use the first occurrence's context
+      const context = originalIndexes.length > 0 
+        ? contextWindows[originalIndexes[0]] 
+        : [];
+      
+      scores[word] = scoreFrenchWord(word, freq, wordCount, context);
+    });
+    
+    // Sort by score and take top N
+    return Object.entries(scores)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxKeywords)
+      .map(([word]) => word);
+  } else {
+    // For non-Arabic/English/French languages, use the standard approach
+    const stopWords = getStopWords(detectedLang);
+    
+    // First filter out stopwords
+    const filteredWords = allWords.filter(word => {
+      const normalized = word.toLowerCase();
+      return !stopWords.has(normalized) && normalized.length > 1;
+    });
+    
+    // If we have very few words after filtering, return them all
+    if (filteredWords.length < 5) {
+      return [...new Set(filteredWords)].slice(0, maxKeywords);
+    }
+    
+    // Calculate word frequencies (Term Frequency)
+    const wordFrequency: Record<string, number> = {};
+    filteredWords.forEach(word => {
+      const normalized = word.toLowerCase();
+      wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+    });
+    
+    // Calculate scores with TF-IDF inspired approach
+    const scores: Record<string, number> = {};
+    const wordCount = filteredWords.length;
+    
+    Object.entries(wordFrequency).forEach(([word, freq]) => {
+      // TF component (frequency in this document)
+      const tf = freq / wordCount;
+      
+      // IDF-like component (boost longer words and penalize very common words)
+      const lengthBoost = Math.min(1.0, word.length / 5); // Boost for longer words
+      const commonnessPenalty = Math.max(0.5, 1.0 - (freq / wordCount) * 10); // Penalize very common words
+      
+      scores[word] = tf * lengthBoost * commonnessPenalty;
+    });
+    
+    // Sort words by score and take top N
+    return Object.entries(scores)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxKeywords)
+      .map(([word]) => word);
+  }
 }
