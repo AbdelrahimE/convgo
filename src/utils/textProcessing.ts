@@ -203,13 +203,39 @@ const STOP_WORDS: Record<string, Set<string>> = {
     'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't'
   ]),
   arabic: new Set([
-    // Common Arabic stop words
+    // Common Arabic stop words - expanded list
     'من', 'إلى', 'عن', 'على', 'في', 'مع', 'هذا', 'هذه', 'تلك', 'ذلك',
     'أنا', 'أنت', 'هو', 'هي', 'نحن', 'أنتم', 'هم', 'كان', 'كانت', 'كانوا',
     'يكون', 'تكون', 'أو', 'و', 'ثم', 'لكن', 'إذا', 'إلا', 'حتى', 'عندما',
     'قد', 'قبل', 'بعد', 'خلال', 'مثل', 'أن', 'لا', 'ما', 'لم', 'لن',
     'كل', 'بعض', 'أي', 'التي', 'الذي', 'الذين', 'اللذان', 'اللتان', 'أحد', 'أكثر',
-    'فقط', 'ليس', 'هناك', 'منذ', 'عند', 'عندها', 'حيث', 'كيف', 'لماذا', 'متى'
+    'فقط', 'ليس', 'هناك', 'منذ', 'عند', 'عندها', 'حيث', 'كيف', 'لماذا', 'متى',
+    
+    // Additional Arabic stop words based on your examples
+    'التى', 'الذى', 'فى', 'عنها', 'منها', 'تلك', 'ذلك', 'فيها', 'منه', 'له', 'إنه',
+    'به', 'لها', 'إنها', 'منهم', 'لهم', 'إنهم', 'إذا', 'إن', 'ان', 'عنه',
+    'هذه', 'هذا', 'تلك', 'ذلك', 'هؤلاء', 'هناك', 'هنا', 'أنت', 'انت', 'انا', 'أنا',
+    'نحن', 'انتم', 'أنتم', 'انتن', 'أنتن', 'هم', 'هن', 'هما', 'هو', 'هي',
+    'كان', 'كانت', 'كانوا', 'يكون', 'تكون', 'كنت', 'إلى', 'الى', 'على', 'عليه', 'عليها',
+    'إليه', 'اليه', 'إليها', 'اليها', 'الي', 'إلي', 'عن', 'لي', 'لى', 'لك', 'لكم',
+    'الى', 'إلى', 'في', 'فى', 'مع', 'ومع', 'علي', 'على', 'عليه', 'عليها', 'عليهم',
+    'الذي', 'الذى', 'التي', 'التى', 'الذين', 'اللذان', 'اللتان',
+    
+    // Arabic pronouns, conjunctions, prepositions and articles
+    'أنا', 'نحن', 'أنت', 'أنتِ', 'أنتما', 'أنتم', 'أنتن', 'هو', 'هي', 'هما', 'هم', 'هن',
+    'إياي', 'إيانا', 'إياك', 'إياكِ', 'إياكما', 'إياكم', 'إياكن', 'إياه', 'إياها', 'إياهما', 'إياهم', 'إياهن',
+    'و', 'ف', 'ثم', 'أو', 'أم', 'لكن', 'بل', 'لا', 'حتى',
+    'في', 'من', 'إلى', 'على', 'عن', 'مع', 'ك', 'ل', 'ب',
+    'ال', 'ذا', 'ذو', 'ذي',
+    
+    // Negations and question words
+    'لا', 'لم', 'لن', 'ما', 'ليس', 'هل', 'أين', 'كيف', 'متى', 'لماذا', 'من', 'ماذا',
+    
+    // Common short verbs or forms
+    'كان', 'يكون', 'صار', 'يصير', 'ظل', 'أصبح', 'أضحى', 'أمسى', 'بات', 'مازال', 'مادام',
+    
+    // Additional connectors
+    'إذ', 'إذا', 'إن', 'أن', 'كي', 'لكي', 'لو', 'لولا', 'حتى'
   ]),
   spanish: new Set([
     'de', 'la', 'el', 'en', 'y', 'a', 'que', 'los', 'del', 'se', 'las', 'por', 'un', 'para',
@@ -328,8 +354,19 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
     const lengthBoost = Math.min(1.0, word.length / 5); // Boost for longer words
     const commonnessPenalty = Math.max(0.5, 1.0 - (freq / wordCount) * 10); // Penalize very common words
     
-    // Combined score (simplified TF-IDF)
-    scores[word] = tf * lengthBoost * commonnessPenalty;
+    // Additional Arabic-specific filtering for common short prepositions and pronouns
+    // Even if they're not in the stopwords list
+    let totalScore = tf * lengthBoost * commonnessPenalty;
+    
+    // Extra penalty for single and two-letter words in Arabic (typically prepositions)
+    if (detectedLang === 'arabic' && word.length <= 2) {
+      totalScore *= 0.3; // Apply a strong penalty
+    }
+    
+    // Store score if it's above a minimal threshold
+    if (totalScore > 0.001) {
+      scores[word] = totalScore;
+    }
   });
   
   // Sort words by score and take top N
