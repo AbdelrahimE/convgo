@@ -305,6 +305,23 @@ function getStopWords(lang: string): Set<string> {
   return STOP_WORDS[lang] || new Set();
 }
 
+// Direct regex patterns for Arabic common words/particles to filter out
+// These will catch variations with different diacritics or spellings
+const ARABIC_PARTICLES_REGEX = [
+  /\b(من|في|إلى|على|عن|مع|إن|أن|لا|ما|لم|لن|قد|هل|لو|ثم|أو|و|ف)\b/g, // Prepositions and particles
+  /\b(هذا|هذه|ذلك|تلك|هناك|هنا)\b/g, // Demonstratives
+  /\b(أنا|أنت|هو|هي|نحن|هم|أنتم)\b/g, // Pronouns
+  /\b(كان|يكون|كانت|كانوا|صار|أصبح)\b/g, // Common verbs
+  /\b(ال|ب|ل|ك|و|ف)\b/g, // Single letter prefixes
+  /\b(الذي|التي|الذين|اللذان|اللتان)\b/g, // Relative pronouns
+  /\b(إذا|حتى|عندما|حيث|كما|كيف|متى|لماذا)\b/g, // Question words and connectors
+  /\b(أي|كل|بعض|عدة|عديد|كثير|قليل)\b/g, // Quantifiers
+];
+
+// Pattern for common Arabic prefix combinations (multiple prefixes attached to a word)
+// For example "وبال" (and with the) at the beginning of a word
+const ARABIC_PREFIX_COMBINATIONS = /^(و|ف|ب|ل|ك|ال|بال|وال|فال|كال|لل|ولل|فلل|بال|وبال|فبال)/;
+
 /**
  * Extracts potential keywords/entities from text using a TF-IDF inspired approach
  * @param text - Text to analyze
@@ -358,13 +375,42 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
     // Even if they're not in the stopwords list
     let totalScore = tf * lengthBoost * commonnessPenalty;
     
-    // Extra penalty for single and two-letter words in Arabic (typically prepositions)
-    if (detectedLang === 'arabic' && word.length <= 2) {
-      totalScore *= 0.3; // Apply a strong penalty
+    // Apply more aggressive filtering for Arabic
+    if (detectedLang === 'arabic') {
+      // Extra penalty for single and two-letter words in Arabic (typically prepositions)
+      if (word.length <= 2) {
+        totalScore *= 0.2; // Apply a strong penalty
+      }
+      
+      // Check if word matches any of the particle regexes
+      let isParticle = false;
+      for (const regex of ARABIC_PARTICLES_REGEX) {
+        if (regex.test(word)) {
+          isParticle = true;
+          break;
+        }
+      }
+      
+      // Reset regex lastIndex
+      ARABIC_PARTICLES_REGEX.forEach(regex => regex.lastIndex = 0);
+      
+      if (isParticle) {
+        totalScore *= 0.1; // Severely penalize particles
+      }
+      
+      // Check for common prefix combinations
+      if (ARABIC_PREFIX_COMBINATIONS.test(word)) {
+        // Boost the root word without the prefixes
+        const rootWord = word.replace(ARABIC_PREFIX_COMBINATIONS, '');
+        if (rootWord.length >= 2) {
+          // We want to prioritize the root word instead
+          totalScore *= 0.5;
+        }
+      }
     }
     
     // Store score if it's above a minimal threshold
-    if (totalScore > 0.001) {
+    if (totalScore > 0.002) {
       scores[word] = totalScore;
     }
   });
