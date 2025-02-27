@@ -1,3 +1,4 @@
+
 /**
  * Text processing utilities for RAG implementation
  * Handles document chunking and preprocessing for embeddings
@@ -185,49 +186,155 @@ export function createChunkMetadata(
 }
 
 /**
- * Extracts potential keywords/entities from text
- * Simple implementation - for production, consider NLP libraries
- * @param text - Text to analyze
- * @returns Array of potential keywords
+ * Multilingual stop words for common languages
+ * These are high-frequency words that typically don't add much semantic value
  */
-export function extractKeywords(text: string): string[] {
-  if (!text) return [];
-  
-  // Remove common stop words (simplified list - English only)
-  // For multilingual support, consider using a dedicated NLP library
-  const stopWords = new Set([
+const STOP_WORDS: Record<string, Set<string>> = {
+  english: new Set([
     'a', 'an', 'the', 'and', 'or', 'but', 'if', 'then', 'else', 'when',
     'at', 'from', 'by', 'for', 'with', 'about', 'against', 'between', 'into',
     'through', 'during', 'before', 'after', 'above', 'below', 'to', 'of', 'in',
     'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
     'having', 'do', 'does', 'did', 'doing', 'would', 'should', 'could', 'ought',
     'i', 'you', 'he', 'she', 'it', 'we', 'they', 'them', 'their', 'this', 'that',
-    'these', 'those', 'am', 'on', 'your', 'my', 'its'
-  ]);
+    'these', 'those', 'am', 'on', 'your', 'my', 'its', 'me', 'him', 'her', 'us', 
+    'what', 'which', 'who', 'whom', 'whose', 'where', 'when', 'why', 'how',
+    'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such',
+    'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't'
+  ]),
+  arabic: new Set([
+    // Common Arabic stop words
+    'من', 'إلى', 'عن', 'على', 'في', 'مع', 'هذا', 'هذه', 'تلك', 'ذلك',
+    'أنا', 'أنت', 'هو', 'هي', 'نحن', 'أنتم', 'هم', 'كان', 'كانت', 'كانوا',
+    'يكون', 'تكون', 'أو', 'و', 'ثم', 'لكن', 'إذا', 'إلا', 'حتى', 'عندما',
+    'قد', 'قبل', 'بعد', 'خلال', 'مثل', 'أن', 'لا', 'ما', 'لم', 'لن',
+    'كل', 'بعض', 'أي', 'التي', 'الذي', 'الذين', 'اللذان', 'اللتان', 'أحد', 'أكثر',
+    'فقط', 'ليس', 'هناك', 'منذ', 'عند', 'عندها', 'حيث', 'كيف', 'لماذا', 'متى'
+  ]),
+  spanish: new Set([
+    'de', 'la', 'el', 'en', 'y', 'a', 'que', 'los', 'del', 'se', 'las', 'por', 'un', 'para',
+    'con', 'no', 'una', 'su', 'al', 'lo', 'como', 'más', 'pero', 'sus', 'le', 'ya', 'o',
+    'este', 'si', 'porque', 'esta', 'entre', 'cuando', 'muy', 'sin', 'sobre', 'también',
+    'me', 'hasta', 'hay', 'donde', 'quien', 'desde', 'todo', 'nos', 'durante', 'todos',
+    'uno', 'les', 'ni', 'contra', 'otros', 'ese', 'eso', 'ante', 'ellos', 'e', 'esto',
+    'mi', 'antes', 'algunos', 'qué', 'unos', 'yo', 'otro', 'otras'
+  ]),
+  french: new Set([
+    'le', 'la', 'les', 'un', 'une', 'des', 'du', 'de', 'à', 'au', 'aux', 'et', 'ou', 'en',
+    'dans', 'sur', 'pour', 'par', 'ce', 'cette', 'ces', 'est', 'il', 'elle', 'ils', 'elles',
+    'nous', 'vous', 'je', 'tu', 'qui', 'que', 'quoi', 'dont', 'où', 'comment', 'pourquoi',
+    'quand', 'plus', 'moins', 'sans', 'avec', 'même', 'autre', 'autres', 'son', 'sa', 'ses'
+  ]),
+  // Add more languages as needed
+};
+
+/**
+ * Detects the most likely language of a text
+ * Simple implementation based on stop word frequency
+ * @param text The text to analyze
+ * @returns The detected language code or 'unknown'
+ */
+function detectLanguage(text: string): string {
+  if (!text || text.trim() === '') return 'unknown';
   
-  // Modified word extraction pattern that works with multiple scripts
-  // Use Unicode property escapes to match words in any language
+  // Convert to lowercase for better matching
+  const lowerText = text.toLowerCase();
+  
+  // Count occurrences of stop words from each language
+  const langScores: Record<string, number> = {};
+  
+  for (const [lang, stopWords] of Object.entries(STOP_WORDS)) {
+    let score = 0;
+    for (const word of stopWords) {
+      // Count occurrences of this stop word
+      const regex = new RegExp(`\\b${word}\\b`, 'g');
+      const matches = lowerText.match(regex);
+      if (matches) {
+        score += matches.length;
+      }
+    }
+    langScores[lang] = score;
+  }
+  
+  // Find language with highest score
+  let maxScore = 0;
+  let detectedLang = 'unknown';
+  
+  for (const [lang, score] of Object.entries(langScores)) {
+    if (score > maxScore) {
+      maxScore = score;
+      detectedLang = lang;
+    }
+  }
+  
+  return detectedLang;
+}
+
+/**
+ * Gets stop words for a specific language
+ * @param lang Language code
+ * @returns Set of stop words
+ */
+function getStopWords(lang: string): Set<string> {
+  return STOP_WORDS[lang] || new Set();
+}
+
+/**
+ * Extracts potential keywords/entities from text using a TF-IDF inspired approach
+ * @param text - Text to analyze
+ * @param maxKeywords - Maximum number of keywords to return
+ * @returns Array of potential keywords
+ */
+export function extractKeywords(text: string, maxKeywords: number = 20): string[] {
+  if (!text) return [];
+  
+  // Detect language to use appropriate stop words
+  const detectedLang = detectLanguage(text);
+  const stopWords = getStopWords(detectedLang);
+  
+  // Extract all words using Unicode property escapes to support all scripts
+  // This matches any sequence of letters (works for all languages including Arabic)
   const words = text.match(/\p{L}+/gu) || [];
   
-  // Only filter out English stopwords for now
-  const filteredWords = words.filter(word => {
-    // If it's not an English word (ASCII only), keep it
-    if (!/^[a-zA-Z]+$/.test(word)) {
-      return true;
-    }
-    // Otherwise, filter out English stopwords
-    return !stopWords.has(word.toLowerCase());
-  });
+  // If we have very few words, return all of them (except stop words)
+  if (words.length < 5) {
+    return words
+      .filter(word => !stopWords.has(word.toLowerCase()))
+      .slice(0, maxKeywords);
+  }
   
-  // Count frequency of each word
+  // Calculate word frequencies (Term Frequency)
   const wordFrequency: Record<string, number> = {};
-  filteredWords.forEach(word => {
-    wordFrequency[word] = (wordFrequency[word] || 0) + 1;
+  const wordCount = words.length;
+  
+  words.forEach(word => {
+    // Convert to lowercase for better matching (don't do this for languages where case matters differently)
+    const normalized = word.toLowerCase();
+    if (!stopWords.has(normalized) && normalized.length > 1) {
+      wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+    }
   });
   
-  // Convert to array, sort by frequency, and take top 20
-  return Object.entries(wordFrequency)
+  // Calculate TF scores with a simple form of IDF-inspired weighting
+  // Longer words often carry more semantic meaning in many languages
+  const scores: Record<string, number> = {};
+  
+  Object.entries(wordFrequency).forEach(([word, freq]) => {
+    // TF component (frequency in this document)
+    const tf = freq / wordCount;
+    
+    // IDF-like component (boost longer words and penalize very common words)
+    // This is a very simplified approximation without a corpus
+    const lengthBoost = Math.min(1.0, word.length / 5); // Boost for longer words
+    const commonnessPenalty = Math.max(0.5, 1.0 - (freq / wordCount) * 10); // Penalize very common words
+    
+    // Combined score (simplified TF-IDF)
+    scores[word] = tf * lengthBoost * commonnessPenalty;
+  });
+  
+  // Sort words by score and take top N
+  return Object.entries(scores)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
+    .slice(0, maxKeywords)
     .map(([word]) => word);
 }
