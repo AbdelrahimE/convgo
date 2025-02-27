@@ -374,50 +374,213 @@ function isArabicFunctionWord(word: string): boolean {
 }
 
 /**
- * Extracts potential keywords/entities from text using a TF-IDF inspired approach
- * @param text - Text to analyze
- * @param maxKeywords - Maximum number of keywords to return
- * @returns Array of potential keywords
+ * Patterns for Arabic Named Entity Recognition
+ */
+const ARABIC_NER_PATTERNS = {
+  // Common titles and honorifics that often precede names
+  personTitles: new Set([
+    'الشيخ', 'الإمام', 'السلطان', 'الملك', 'الأمير', 'الرسول',
+    'النبي', 'العلامة', 'القاضي', 'الدكتور', 'المهندس'
+  ]),
+  
+  // Common place indicators
+  locationIndicators: new Set([
+    'مدينة', 'بلاد', 'دولة', 'مملكة', 'جمهورية', 'منطقة',
+    'جبل', 'وادي', 'نهر', 'بحر', 'خليج', 'جزيرة'
+  ]),
+  
+  // Organization indicators
+  organizationIndicators: new Set([
+    'جامعة', 'مؤسسة', 'شركة', 'مركز', 'معهد', 'وزارة',
+    'هيئة', 'مجلس', 'جمعية', 'منظمة'
+  ])
+};
+
+/**
+ * Calculates TF-IDF score for a word in the current document context
+ * @param word The word to score
+ * @param frequency Word frequency in current document
+ * @param totalWords Total words in document
+ * @param documentsWithWord Number of documents containing this word (estimated)
+ * @param totalDocuments Total number of documents in corpus (estimated)
+ */
+function calculateTfIdf(
+  word: string,
+  frequency: number,
+  totalWords: number,
+  documentsWithWord: number = 1,
+  totalDocuments: number = 2
+): number {
+  // Term Frequency (TF) = frequency of word / total words in document
+  const tf = frequency / totalWords;
+  
+  // Inverse Document Frequency (IDF) = log(total documents / documents containing word)
+  const idf = Math.log(totalDocuments / Math.max(1, documentsWithWord));
+  
+  return tf * idf;
+}
+
+/**
+ * Detects if a word might be a named entity in Arabic
+ * @param word The word to check
+ * @param context The surrounding words (for pattern matching)
+ */
+function detectArabicNamedEntity(word: string, context: string[] = []): {
+  isEntity: boolean;
+  type?: 'person' | 'location' | 'organization';
+  confidence: number;
+} {
+  // Normalize the word
+  const normalizedWord = word.normalize('NFKD').replace(/[\u064B-\u065F]/g, '');
+  
+  // Check if word has 'Al' prefix (definite article)
+  const hasAl = normalizedWord.startsWith('ال');
+  
+  // Initialize result
+  let result = {
+    isEntity: false,
+    type: undefined as 'person' | 'location' | 'organization' | undefined,
+    confidence: 0
+  };
+  
+  // Check context for title indicators
+  for (let i = 0; i < context.length; i++) {
+    const contextWord = context[i].normalize('NFKD').replace(/[\u064B-\u065F]/g, '');
+    
+    // Check for person titles
+    if (ARABIC_NER_PATTERNS.personTitles.has(contextWord)) {
+      result = { isEntity: true, type: 'person', confidence: 0.8 };
+      break;
+    }
+    
+    // Check for location indicators
+    if (ARABIC_NER_PATTERNS.locationIndicators.has(contextWord)) {
+      result = { isEntity: true, type: 'location', confidence: 0.7 };
+      break;
+    }
+    
+    // Check for organization indicators
+    if (ARABIC_NER_PATTERNS.organizationIndicators.has(contextWord)) {
+      result = { isEntity: true, type: 'organization', confidence: 0.7 };
+      break;
+    }
+  }
+  
+  // Additional heuristics for named entities
+  if (!result.isEntity) {
+    // Most Arabic names and places start with Al- (ال)
+    if (hasAl && normalizedWord.length > 4) {
+      result = { isEntity: true, type: undefined, confidence: 0.4 };
+    }
+    
+    // Check for common word patterns that indicate proper nouns
+    if (normalizedWord.match(/^[A-Z\u0600-\u06FF]{4,}$/)) {
+      result.confidence += 0.2;
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * Enhanced scoring for Arabic keywords considering both statistical and semantic factors
+ */
+function scoreArabicWord(
+  word: string,
+  frequency: number,
+  totalWords: number,
+  context: string[]
+): number {
+  // Base TF-IDF score
+  const tfIdfScore = calculateTfIdf(word, frequency, totalWords);
+  
+  // Named entity detection
+  const nerResult = detectArabicNamedEntity(word, context);
+  
+  // Calculate final score
+  let finalScore = tfIdfScore;
+  
+  // Boost score for named entities
+  if (nerResult.isEntity) {
+    finalScore *= (1 + nerResult.confidence);
+    
+    // Additional boost for specific entity types
+    switch (nerResult.type) {
+      case 'person':
+        finalScore *= 1.3;
+        break;
+      case 'location':
+        finalScore *= 1.2;
+        break;
+      case 'organization':
+        finalScore *= 1.2;
+        break;
+    }
+  }
+  
+  // Length bonus (longer words often carry more meaning in Arabic)
+  const lengthBonus = Math.min(1.2, word.length / 5);
+  finalScore *= lengthBonus;
+  
+  return finalScore;
+}
+
+/**
+ * Enhanced keyword extraction using TF-IDF and NER
  */
 export function extractKeywords(text: string, maxKeywords: number = 20): string[] {
   if (!text) return [];
   
-  // Detect language to use appropriate stop words
   const detectedLang = detectLanguage(text);
   console.log("Detected language:", detectedLang);
   
-  const stopWords = getStopWords(detectedLang);
-  
-  // Extract all words using Unicode property escapes to support all scripts
-  // This matches any sequence of letters (works for all languages including Arabic)
+  // Split text into words and get context windows
   const words = text.match(/\p{L}+/gu) || [];
+  const contextWindows: string[][] = [];
   
-  // For Arabic, we need special handling
+  // Create context windows (5 words before and after each word)
+  for (let i = 0; i < words.length; i++) {
+    const windowStart = Math.max(0, i - 5);
+    const windowEnd = Math.min(words.length, i + 6);
+    contextWindows.push(words.slice(windowStart, windowEnd));
+  }
+  
   if (detectedLang === 'arabic') {
-    // Filter out common function words first
-    const contentWords = words.filter(word => !isArabicFunctionWord(word));
+    // Filter out function words
+    const contentWords = words.filter((word, index) => !isArabicFunctionWord(word));
     
-    // If we have enough words after filtering, use frequency to get top keywords
     if (contentWords.length >= 5) {
-      // Count word frequencies
+      // Count frequencies
       const wordFreq: Record<string, number> = {};
       contentWords.forEach(word => {
         const normalized = word.toLowerCase();
         wordFreq[normalized] = (wordFreq[normalized] || 0) + 1;
       });
       
-      // Sort by frequency
-      return Object.entries(wordFreq)
+      // Calculate scores using enhanced scoring function
+      const scores: Record<string, number> = {};
+      Object.entries(wordFreq).forEach(([word, freq]) => {
+        const context = contextWindows[words.indexOf(word)] || [];
+        scores[word] = scoreArabicWord(word, freq, contentWords.length, context);
+      });
+      
+      // Sort by score and return top keywords
+      return Object.entries(scores)
         .sort((a, b) => b[1] - a[1])
         .slice(0, maxKeywords)
         .map(([word]) => word);
     }
     
-    // If we have few words, just return them all
     return [...new Set(contentWords)].slice(0, maxKeywords);
   }
   
-  // For non-Arabic languages, use the standard approach
+  // For non-Arabic languages, use the existing approach
+  const stopWords = getStopWords(detectedLang);
+  
+  // Extract all words using Unicode property escapes to support all scripts
+  // This matches any sequence of letters (works for all languages including Arabic)
+  const words = text.match(/\p{L}+/gu) || [];
+  
   // First filter out stopwords
   const filteredWords = words.filter(word => {
     const normalized = word.toLowerCase();
