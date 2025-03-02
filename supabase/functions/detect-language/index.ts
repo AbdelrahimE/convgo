@@ -1,224 +1,400 @@
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import * as franc from "https://esm.sh/franc-min@6";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-const supabaseServiceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+// CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-const supabase = createClient(supabaseUrl, supabaseServiceRole);
+// Language name mappings for better readability
+const LANGUAGE_NAMES: Record<string, string> = {
+  arb: "Arabic",
+  eng: "English",
+  fra: "French",
+  spa: "Spanish",
+  deu: "German",
+  ita: "Italian",
+  nld: "Dutch",
+  por: "Portuguese",
+  rus: "Russian",
+  jpn: "Japanese",
+  cmn: "Chinese",
+  kor: "Korean",
+  hin: "Hindi",
+  tur: "Turkish",
+  urd: "Urdu",
+  fas: "Persian",
+  heb: "Hebrew",
+};
 
-// Helper function to detect if text contains Arabic script and its percentage
-function detectArabicScript(text) {
-  // Arabic Unicode range (0600-06FF)
-  const arabicPattern = /[\u0600-\u06FF]/g;
-  const matches = text.match(arabicPattern) || [];
-  const arabicCharCount = matches.length;
-  const totalCharCount = text.length;
-  const percentage = totalCharCount > 0 ? (arabicCharCount / totalCharCount) * 100 : 0;
-  
-  return {
-    containsArabicScript: arabicCharCount > 0,
-    arabicScriptPercentage: percentage,
-    direction: arabicCharCount > 0 ? "rtl" : "ltr"
-  };
+// Languages that use Arabic script and should be grouped under Arabic
+const ARABIC_SCRIPT_LANGUAGES = ['arb', 'urd', 'prs', 'pbu', 'pes', 'zlm', 'skr', 'bal', 'kur', 'hau', 'pnb', 'snd', 'uig'];
+
+// Define confidence thresholds
+const HIGH_CONFIDENCE_THRESHOLD = 0.5;  // 50%
+const MINIMUM_CONFIDENCE_THRESHOLD = 0.2;  // 20%
+
+// Configure Supabase client
+function getSupabaseClient() {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  return createClient(supabaseUrl, supabaseServiceKey);
 }
 
-// Helper to get text direction based on detected language
-function getTextDirection(language) {
-  // Languages that use right-to-left scripts
-  const rtlLanguages = ['ara', 'heb', 'urd', 'fas', 'pus', 'snd', 'uig', 'yid'];
-  return rtlLanguages.includes(language) ? 'rtl' : 'ltr';
-}
-
-// Language detection handler
-Deno.serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
+  if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Add CORS headers to all responses
+  const responseHeaders = { ...corsHeaders, 'Content-Type': 'application/json' };
+
   try {
+    // Parse request
     const { fileId } = await req.json();
     console.log(`Processing language detection for file: ${fileId}`);
-
+    
     if (!fileId) {
       return new Response(
-        JSON.stringify({ error: "File ID is required" }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
+        JSON.stringify({ error: "Missing fileId parameter" }),
+        { status: 400, headers: responseHeaders }
       );
     }
 
-    // Update status to processing
+    const supabase = getSupabaseClient();
+    
+    // Update status to in-progress
     await supabase
-      .from("files")
+      .from('files')
       .update({
-        language_detection_status: { status: "processing", last_updated: new Date().toISOString() }
+        language_detection_status: {
+          status: 'in_progress',
+          last_updated: new Date().toISOString(),
+        }
       })
-      .eq("id", fileId);
-
+      .eq('id', fileId);
+    
     // Fetch file content
     const { data: fileData, error: fileError } = await supabase
-      .from("files")
-      .select("text_content")
-      .eq("id", fileId)
+      .from('files')
+      .select('text_content')
+      .eq('id', fileId)
       .single();
-
+    
     if (fileError || !fileData) {
-      console.error("Error fetching file:", fileError);
-      await supabase
-        .from("files")
-        .update({
-          language_detection_status: { 
-            status: "error", 
-            error: fileError ? fileError.message : "File not found",
-            last_updated: new Date().toISOString()
-          }
-        })
-        .eq("id", fileId);
-      
+      console.error(`Error retrieving file: ${fileError?.message || "File not found"}`);
+      await updateErrorStatus(supabase, fileId, `Failed to retrieve file: ${fileError?.message || "Not found"}`);
       return new Response(
-        JSON.stringify({ error: "Failed to fetch file content" }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
+        JSON.stringify({ error: "File not found or content empty" }),
+        { status: 404, headers: responseHeaders }
       );
     }
-
-    // Skip processing if no text content
-    if (!fileData.text_content || fileData.text_content.trim() === '') {
-      console.log("No text content to process for language detection");
-      await supabase
-        .from("files")
-        .update({
-          language_detection_status: { 
-            status: "completed", 
-            message: "No text content to analyze",
-            last_updated: new Date().toISOString()
-          }
-        })
-        .eq("id", fileId);
-      
-      return new Response(
-        JSON.stringify({ message: "No text content to analyze" }),
-        { 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    }
-
+    
     const textContent = fileData.text_content;
-    console.log(`Text content length: ${textContent.length} characters`);
-
-    // Detect primary language
-    const primaryLanguage = franc.franc(textContent);
-    console.log(`Detected primary language: ${primaryLanguage}`);
-
-    // Detect Arabic script
-    const arabicScriptDetails = detectArabicScript(textContent);
-    console.log(`Arabic script detection:`, arabicScriptDetails);
-
-    // Get text direction
-    const textDirection = arabicScriptDetails.containsArabicScript ? 
-      "rtl" : getTextDirection(primaryLanguage);
-    console.log(`Text direction: ${textDirection}`);
-
-    // Detect multiple languages with confidence scores
-    const options = { minLength: 10, only: [] };
-    const allLanguages = franc.francAll(textContent, options);
-    console.log(`All detected languages:`, allLanguages);
-
-    // Convert to object for easier access in frontend
-    const languageConfidence = {};
-    const detectedLanguages = [];
-    
-    allLanguages.forEach(([lang, score]) => {
-      languageConfidence[lang] = score;
-      detectedLanguages.push(lang);
-    });
-
-    // Calculate language distribution
-    const langDistribution = {};
-    if (textContent.length > 100) {
-      // Split into chunks
-      const chunks = [];
-      const chunkSize = 100;
-      for (let i = 0; i < textContent.length; i += chunkSize) {
-        chunks.push(textContent.slice(i, i + chunkSize));
-      }
-
-      // Detect language for each chunk
-      const chunkLanguages = chunks.map(chunk => franc.franc(chunk));
-      
-      // Calculate distribution
-      chunkLanguages.forEach(lang => {
-        langDistribution[lang] = (langDistribution[lang] || 0) + 1;
-      });
-
-      // Convert to percentages
-      Object.keys(langDistribution).forEach(lang => {
-        langDistribution[lang] = langDistribution[lang] / chunks.length;
-      });
-    } else {
-      langDistribution[primaryLanguage] = 1;
+    if (!textContent) {
+      console.error(`File ${fileId} has no text content`);
+      await updateErrorStatus(supabase, fileId, "No text content available");
+      return new Response(
+        JSON.stringify({ error: "File has no text content" }),
+        { status: 404, headers: responseHeaders }
+      );
     }
-    
-    console.log(`Language distribution:`, langDistribution);
 
-    // Update the file with language information
+    // Perform language detection
+    console.log(`Starting language detection for file ${fileId}`);
+    const detectionResult = detectLanguages(textContent);
+    console.log(`Language detection results:`, detectionResult);
+    
+    // Update the file record with language detection results
     const { error: updateError } = await supabase
-      .from("files")
+      .from('files')
       .update({
-        primary_language: primaryLanguage,
-        detected_languages: detectedLanguages,
-        language_confidence: languageConfidence,
-        language_distribution: langDistribution,
-        arabic_script_details: arabicScriptDetails,
-        text_direction: textDirection,
-        language_detection_status: { 
-          status: "completed", 
-          last_updated: new Date().toISOString() 
+        primary_language: detectionResult.primaryLanguage,
+        detected_languages: detectionResult.detectedLanguages.map(lang => lang.code),
+        language_confidence: {
+          primary: detectionResult.primaryConfidence,
+          all: detectionResult.languageConfidenceMap
+        },
+        language_distribution: detectionResult.languageDistribution,
+        text_direction: detectionResult.textDirection,
+        arabic_script_details: detectionResult.arabicScriptDetails,
+        language_detection_status: {
+          status: 'completed',
+          last_updated: new Date().toISOString(),
         }
       })
-      .eq("id", fileId);
-
+      .eq('id', fileId);
+    
     if (updateError) {
-      console.error("Error updating file language data:", updateError);
+      console.error(`Error updating file with detection results: ${updateError.message}`);
+      await updateErrorStatus(supabase, fileId, `Database update failed: ${updateError.message}`);
       return new Response(
-        JSON.stringify({ error: "Failed to update language data" }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
+        JSON.stringify({ error: `Failed to update detection results: ${updateError.message}` }),
+        { status: 500, headers: responseHeaders }
       );
     }
-
-    console.log(`Language detection completed successfully for file: ${fileId}`);
+    
     return new Response(
       JSON.stringify({ 
-        message: "Language detection completed", 
-        primaryLanguage,
-        detectedLanguages 
+        success: true, 
+        message: "Language detection completed successfully",
+        result: detectionResult
       }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
+      { status: 200, headers: responseHeaders }
     );
-
+    
   } catch (error) {
-    console.error("Language detection error:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`Unexpected error in language detection: ${errorMessage}`);
+    
+    try {
+      const { fileId } = await req.json();
+      if (fileId) {
+        const supabase = getSupabaseClient();
+        await updateErrorStatus(supabase, fileId, errorMessage);
       }
+    } catch (e) {
+      // Ignore errors in error handling
+    }
+    
+    return new Response(
+      JSON.stringify({ error: `Server error: ${errorMessage}` }),
+      { status: 500, headers: responseHeaders }
     );
   }
 });
+
+async function updateErrorStatus(supabase: any, fileId: string, errorDetails: string) {
+  await supabase
+    .from('files')
+    .update({
+      language_detection_status: {
+        status: 'error',
+        error: errorDetails,
+        last_updated: new Date().toISOString(),
+      }
+    })
+    .eq('id', fileId);
+}
+
+/**
+ * Detects languages in the text with improved accuracy
+ */
+function detectLanguages(text: string) {
+  if (!text || text.trim() === '') {
+    return {
+      primaryLanguage: null,
+      primaryConfidence: 0,
+      detectedLanguages: [],
+      languageConfidenceMap: {},
+      languageDistribution: {},
+      textDirection: 'ltr',
+      arabicScriptDetails: null
+    };
+  }
+
+  // Sample different parts of the text for more accurate detection
+  const samples = sampleText(text);
+  
+  // Process each sample for language detection
+  const sampleResults = samples.map(sample => {
+    // Use franc for language detection with expanded options
+    const langResult = franc.franc(sample, {
+      minLength: 10,
+      only: ['eng', 'arb', 'fra', 'spa', 'deu', 'ita', 'nld', 'por', 'rus', 'cmn', 'jpn', 'kor']
+    });
+    
+    return {
+      language: langResult,
+      confidence: 1.0, // We will calculate real confidence later
+      sample
+    };
+  });
+  
+  // Count language occurrences across all samples
+  const langCounts: Record<string, number> = {};
+  sampleResults.forEach(result => {
+    if (result.language !== 'und') {
+      langCounts[result.language] = (langCounts[result.language] || 0) + 1;
+    }
+  });
+  
+  // Calculate confidence scores based on frequency
+  const totalSamples = sampleResults.length;
+  const languageConfidenceMap: Record<string, number> = {};
+  
+  Object.entries(langCounts).forEach(([lang, count]) => {
+    languageConfidenceMap[lang] = count / totalSamples;
+  });
+  
+  // Special handling for Arabic detection
+  const containsArabicText = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+  let arabicScriptDetails = null;
+  
+  if (containsArabicText) {
+    // Count Arabic script characters
+    const arabicScriptCharCount = countArabicScriptChars(text);
+    const totalCharCount = text.length;
+    const arabicScriptRatio = arabicScriptCharCount / totalCharCount;
+    
+    // If we have Arabic script, add Arabic to our detection if not already detected
+    if (arabicScriptRatio > 0.1 && !languageConfidenceMap['arb']) {
+      languageConfidenceMap['arb'] = arabicScriptRatio;
+    }
+    
+    // Boost Arabic confidence based on character ratio
+    if (languageConfidenceMap['arb']) {
+      languageConfidenceMap['arb'] = Math.max(languageConfidenceMap['arb'], arabicScriptRatio);
+    }
+    
+    // Create Arabic script details
+    arabicScriptDetails = {
+      ratio: arabicScriptRatio,
+      charCount: arabicScriptCharCount,
+      totalChars: totalCharCount
+    };
+    
+    // Handle other Arabic script languages
+    Object.keys(languageConfidenceMap).forEach(lang => {
+      if (ARABIC_SCRIPT_LANGUAGES.includes(lang) && lang !== 'arb') {
+        // If we detect related Arabic-script languages, consolidate them under Arabic
+        if (languageConfidenceMap['arb']) {
+          languageConfidenceMap['arb'] = Math.max(languageConfidenceMap['arb'], languageConfidenceMap[lang]);
+        } else {
+          languageConfidenceMap['arb'] = languageConfidenceMap[lang];
+        }
+        // Remove the specific language variant
+        delete languageConfidenceMap[lang];
+      }
+    });
+  }
+  
+  // Special case for English detection
+  const containsLatinText = /[a-zA-Z]/.test(text);
+  if (containsLatinText && !languageConfidenceMap['eng']) {
+    // Count Latin script characters
+    const latinCharCount = (text.match(/[a-zA-Z]/g) || []).length;
+    const totalCharCount = text.length;
+    const latinRatio = latinCharCount / totalCharCount;
+    
+    // Add English if we have significant Latin text
+    if (latinRatio > 0.1) {
+      languageConfidenceMap['eng'] = latinRatio;
+    }
+  }
+  
+  // Apply confidence thresholds
+  Object.keys(languageConfidenceMap).forEach(lang => {
+    if (languageConfidenceMap[lang] < MINIMUM_CONFIDENCE_THRESHOLD) {
+      delete languageConfidenceMap[lang];
+    }
+  });
+  
+  // Sort languages by confidence
+  const sortedLanguages = Object.entries(languageConfidenceMap)
+    .sort((a, b) => b[1] - a[1])
+    .map(([code, confidence]) => ({
+      code,
+      name: LANGUAGE_NAMES[code] || code,
+      confidence
+    }));
+  
+  // Determine primary language
+  const primaryLanguage = sortedLanguages.length > 0 ? sortedLanguages[0].code : null;
+  const primaryConfidence = sortedLanguages.length > 0 ? sortedLanguages[0].confidence : 0;
+  
+  // Calculate normalized language distribution
+  const languageDistribution: Record<string, number> = {};
+  if (sortedLanguages.length > 0) {
+    const totalConfidence = sortedLanguages.reduce((sum, lang) => sum + lang.confidence, 0);
+    
+    sortedLanguages.forEach(lang => {
+      const normalizedConfidence = totalConfidence > 0 
+        ? (lang.confidence / totalConfidence) 
+        : 0;
+      languageDistribution[lang.code] = parseFloat(normalizedConfidence.toFixed(4));
+    });
+  }
+  
+  // Determine text direction
+  const rtlLanguages = ['arb', 'heb', 'urd', 'fas', 'prs', 'pbu', 'pes'];
+  const textDirection = primaryLanguage && rtlLanguages.includes(primaryLanguage) ? 'rtl' : 'ltr';
+  
+  return {
+    primaryLanguage,
+    primaryConfidence,
+    detectedLanguages: sortedLanguages,
+    languageConfidenceMap,
+    languageDistribution,
+    textDirection,
+    arabicScriptDetails
+  };
+}
+
+/**
+ * Breaks text into multiple samples to improve detection accuracy
+ */
+function sampleText(text: string): string[] {
+  const cleanText = text.replace(/\s+/g, ' ').trim();
+  
+  if (cleanText.length <= 100) {
+    return [cleanText];
+  }
+  
+  const samples: string[] = [];
+  
+  // Add full text as one sample
+  samples.push(cleanText);
+  
+  // Add beginning of text
+  samples.push(cleanText.substring(0, Math.min(500, cleanText.length)));
+  
+  // Add middle of text
+  if (cleanText.length > 1000) {
+    const middleStart = Math.floor(cleanText.length / 2) - 250;
+    const middleEnd = Math.floor(cleanText.length / 2) + 250;
+    samples.push(cleanText.substring(
+      Math.max(0, middleStart), 
+      Math.min(cleanText.length, middleEnd)
+    ));
+  }
+  
+  // Add end of text
+  if (cleanText.length > 500) {
+    samples.push(cleanText.substring(Math.max(0, cleanText.length - 500)));
+  }
+  
+  // Add paragraph samples if text is very long
+  if (cleanText.length > 2000) {
+    const paragraphs = cleanText.split(/\n\s*\n/);
+    if (paragraphs.length > 1) {
+      // Add first paragraph
+      samples.push(paragraphs[0]);
+      
+      // Add a middle paragraph
+      if (paragraphs.length > 2) {
+        const middleIndex = Math.floor(paragraphs.length / 2);
+        samples.push(paragraphs[middleIndex]);
+      }
+      
+      // Add last paragraph
+      samples.push(paragraphs[paragraphs.length - 1]);
+    }
+  }
+  
+  return samples.filter(sample => sample.trim().length > 10);
+}
+
+/**
+ * Counts characters that belong to Arabic script
+ */
+function countArabicScriptChars(text: string): number {
+  // Regex to match Arabic script characters
+  const arabicRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+  const matches = text.match(arabicRegex);
+  return matches ? matches.length : 0;
+}
