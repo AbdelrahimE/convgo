@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Grid, List, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown } from "lucide-react";
 import {
@@ -158,7 +157,6 @@ export function FileList() {
 
       console.log('File deleted successfully:', data);
       
-      // Only update UI after successful deletion
       setFiles(prevFiles => prevFiles.filter(file => file.id !== id));
       setFilteredFiles(prevFiltered => prevFiltered.filter(file => file.id !== id));
       
@@ -244,9 +242,9 @@ export function FileList() {
                 <TooltipTrigger asChild>
                   <Badge variant="secondary" className="text-xs">
                     {file.primary_language.toUpperCase()}
-                    {file.language_confidence && file.language_confidence[file.primary_language] && (
+                    {file.language_confidence && file.language_confidence.all && file.language_confidence.all[file.primary_language] && (
                       <span className="ml-1 opacity-75">
-                        {Math.round(file.language_confidence[file.primary_language] * 100)}%
+                        {Math.round(file.language_confidence.all[file.primary_language] * 100)}%
                       </span>
                     )}
                   </Badge>
@@ -276,9 +274,9 @@ export function FileList() {
                       <Badge variant="outline" className="text-xs">
                         {lang.toUpperCase()}
                       </Badge>
-                      {file.language_confidence && file.language_confidence[lang] && (
+                      {file.language_confidence && file.language_confidence.all && file.language_confidence.all[lang] && (
                         <span className="text-xs text-muted-foreground">
-                          {Math.round(file.language_confidence[lang] * 100)}% confidence
+                          {Math.round(file.language_confidence.all[lang] * 100)}% confidence
                         </span>
                       )}
                     </div>
