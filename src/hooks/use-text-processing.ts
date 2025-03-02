@@ -31,6 +31,9 @@ export function useTextProcessing() {
 
   /**
    * Process text document for RAG system
+   * @param text The text content to process
+   * @param documentId Unique identifier for the document
+   * @param options Optional chunking configuration
    */
   const processDocument = async (
     text: string,
@@ -40,12 +43,17 @@ export function useTextProcessing() {
     setIsProcessing(true);
     setError(null);
     
+    console.log("Processing document with options:", options);
+    
     try {
       // 1. Preprocess the text
       const processedText = preprocessText(text);
       
-      // 2. Split into chunks
+      // 2. Split into chunks using provided options
       const chunks = chunkText(processedText, options);
+      
+      console.log(`Created ${chunks.length} chunks with settings:`, 
+        options ? `chunk size: ${options.chunkSize}, overlap: ${options.chunkOverlap}` : "default settings");
       
       // 3. Add metadata to chunks
       const chunksWithMetadata = createChunkMetadata(processedText, chunks, documentId);
@@ -73,6 +81,7 @@ export function useTextProcessing() {
       return result;
     } catch (err) {
       const error = err instanceof Error ? err : new Error('An unknown error occurred');
+      console.error("Error processing document:", error);
       setError(error);
       throw error;
     } finally {

@@ -1,4 +1,3 @@
-
 /**
  * Text processing utilities for RAG implementation
  * Handles document chunking and preprocessing for embeddings
@@ -47,6 +46,8 @@ export function chunkText(text: string, options: ChunkingOptions = {}): string[]
     ...DEFAULT_CHUNKING_OPTIONS,
     ...options
   };
+
+  console.log(`Chunking text with size: ${chunkSize}, overlap: ${chunkOverlap}, splitBySentence: ${splitBySentence}`);
 
   // Handle empty text
   if (!text || text.trim() === '') {
