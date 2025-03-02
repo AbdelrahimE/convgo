@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '../_shared/cors';
+import { DEFAULT_CHUNKING_OPTIONS } from '../../src/utils/documentProcessing';
 
 // Text processing utilities
 interface ChunkingOptions {
@@ -8,22 +9,14 @@ interface ChunkingOptions {
   splitBySentence?: boolean;
 }
 
-// Default chunking options matching the frontend
-const DEFAULT_CHUNKING_OPTIONS: ChunkingOptions = {
-  chunkSize: 768,
-  chunkOverlap: 80,
-  splitBySentence: true
-};
-
 /**
  * Splits text into chunks suitable for embedding models
  */
 function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   // Merge provided options with defaults
-  const { chunkSize, chunkOverlap, splitBySentence } = {
-    ...DEFAULT_CHUNKING_OPTIONS,
-    ...options
-  };
+  const chunkSize = options.chunkSize || DEFAULT_CHUNKING_OPTIONS.chunkSize;
+  const chunkOverlap = options.chunkOverlap || DEFAULT_CHUNKING_OPTIONS.chunkOverlap;
+  const splitBySentence = options.splitBySentence !== undefined ? options.splitBySentence : DEFAULT_CHUNKING_OPTIONS.splitBySentence;
 
   console.log(`Chunking text with size: ${chunkSize}, overlap: ${chunkOverlap}, splitBySentence: ${splitBySentence}`);
 
