@@ -158,6 +158,51 @@ function createChunkMetadata(
   });
 }
 
+/**
+ * Extracts text from a file using the Tika server
+ */
+async function extractTextFromFile(fileUrl: string, mimeType: string): Promise<string> {
+  console.log(`Extracting text from file using Tika: ${fileUrl}`);
+  
+  try {
+    // Download the file
+    const fileResponse = await fetch(fileUrl);
+    
+    if (!fileResponse.ok) {
+      throw new Error(`Failed to download file: ${fileResponse.status} ${fileResponse.statusText}`);
+    }
+    
+    // Get file buffer
+    const fileBuffer = await fileResponse.arrayBuffer();
+    
+    // Call Tika server to extract text
+    const tikaUrl = 'https://tika.convgo.com/tika';
+    console.log(`Calling Tika server at ${tikaUrl}`);
+    
+    const tikaResponse = await fetch(tikaUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': mimeType,
+        'Accept': 'text/plain'
+      },
+      body: fileBuffer
+    });
+    
+    if (!tikaResponse.ok) {
+      throw new Error(`Tika extraction failed: ${tikaResponse.status} ${tikaResponse.statusText}`);
+    }
+    
+    // Get extracted text
+    const extractedText = await tikaResponse.text();
+    console.log(`Successfully extracted ${extractedText.length} characters of text`);
+    
+    return extractedText || 'No text content could be extracted from this file.';
+  } catch (error) {
+    console.error('Error extracting text from file:', error);
+    throw error;
+  }
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -214,9 +259,57 @@ serve(async (req) => {
       })
       .eq('id', fileId);
 
-    // Simulating text extraction process (replace with actual text extraction)
-    const extractedText = "This is simulated extracted text. In a real implementation, this would be text extracted from a document using Tika or another text extraction service.";
-    console.log('Text extracted successfully for file:', fileId);
+    // Generate a signed URL for the file
+    const { data: signedUrl, error: signedUrlError } = await supabase
+      .storage
+      .from('files')
+      .createSignedUrl(fileData.path, 60); // 60 seconds expiry
+
+    if (signedUrlError || !signedUrl?.signedUrl) {
+      console.error('Error creating signed URL:', signedUrlError);
+      
+      // Update file status to error
+      await supabase
+        .from('files')
+        .update({
+          text_extraction_status: {
+            status: 'error',
+            error: 'Failed to create signed URL for file',
+            last_updated: new Date().toISOString()
+          }
+        })
+        .eq('id', fileId);
+        
+      return new Response(
+        JSON.stringify({ error: 'Failed to create signed URL for file' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Extract text from file using Tika
+    let extractedText;
+    try {
+      extractedText = await extractTextFromFile(signedUrl.signedUrl, fileData.mime_type);
+    } catch (error) {
+      console.error('Error in text extraction:', error);
+      
+      // Update file status to error
+      await supabase
+        .from('files')
+        .update({
+          text_extraction_status: {
+            status: 'error',
+            error: error.message,
+            last_updated: new Date().toISOString()
+          }
+        })
+        .eq('id', fileId);
+        
+      return new Response(
+        JSON.stringify({ error: `Text extraction failed: ${error.message}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Apply text chunking with provided settings or default
     const chunkOptions = chunkingSettings || DEFAULT_CHUNKING_OPTIONS;
@@ -262,6 +355,21 @@ serve(async (req) => {
         JSON.stringify({ error: 'Failed to update file with extracted text' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Trigger language detection
+    try {
+      const { error: langDetectError } = await supabase.functions.invoke('detect-language', {
+        body: { fileId }
+      });
+
+      if (langDetectError) {
+        console.error('Error triggering language detection:', langDetectError);
+        // Continue execution - language detection failure shouldn't fail the whole process
+      }
+    } catch (e) {
+      console.error('Exception triggering language detection:', e);
+      // Continue execution - language detection failure shouldn't fail the whole process
     }
 
     return new Response(
