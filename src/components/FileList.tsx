@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from "react";
-import { Grid, List, Search, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown } from "lucide-react";
+import { Grid, List, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -244,7 +244,7 @@ export function FileList() {
                 <TooltipTrigger asChild>
                   <Badge variant="secondary" className="text-xs">
                     {file.primary_language.toUpperCase()}
-                    {file.language_confidence && (
+                    {file.language_confidence && file.language_confidence[file.primary_language] && (
                       <span className="ml-1 opacity-75">
                         {Math.round(file.language_confidence[file.primary_language] * 100)}%
                       </span>
@@ -276,7 +276,7 @@ export function FileList() {
                       <Badge variant="outline" className="text-xs">
                         {lang.toUpperCase()}
                       </Badge>
-                      {file.language_confidence && (
+                      {file.language_confidence && file.language_confidence[lang] && (
                         <span className="text-xs text-muted-foreground">
                           {Math.round(file.language_confidence[lang] * 100)}% confidence
                         </span>
