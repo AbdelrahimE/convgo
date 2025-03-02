@@ -33,6 +33,7 @@ interface RetryState {
 interface ChunkingSettings {
   chunkSize: number;
   chunkOverlap: number;
+  splitBySentence?: boolean;
 }
 
 const MAX_RETRY_ATTEMPTS = 3;
@@ -47,8 +48,8 @@ export function FileUploader() {
   const [isLoading, setIsLoading] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [chunkingSettings, setChunkingSettings] = useState<ChunkingSettings>({
-    chunkSize: 768,  // Updated default value
-    chunkOverlap: 80 // Updated default value
+    chunkSize: 768,
+    chunkOverlap: 80
   });
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -61,7 +62,7 @@ export function FileUploader() {
     'text/plain',
     'text/csv'
   ];
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
   const [retryState, setRetryState] = useState<RetryState>({
     attempts: 0,
@@ -95,7 +96,6 @@ export function FileUploader() {
       attempts: prev.attempts + 1
     }));
 
-    // Add exponential backoff
     await sleep(RETRY_DELAY_MS * Math.pow(2, retryState.attempts));
 
     switch (retryState.operation) {
@@ -146,7 +146,8 @@ export function FileUploader() {
           fileId,
           chunkingSettings: {
             chunkSize: chunkingSettings.chunkSize,
-            chunkOverlap: chunkingSettings.chunkOverlap
+            chunkOverlap: chunkingSettings.chunkOverlap,
+            splitBySentence: true
           }
         }
       });
@@ -189,7 +190,6 @@ export function FileUploader() {
       const fileExt = file.name.split('.').pop();
       const filePath = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
-      // Start a fake progress animation
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
           if (prev >= 90) {
@@ -406,7 +406,6 @@ export function FileUploader() {
         )}
       </motion.div>
 
-      {/* Advanced Text Chunking Settings */}
       <Collapsible
         open={showAdvancedSettings}
         onOpenChange={setShowAdvancedSettings}
