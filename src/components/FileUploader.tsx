@@ -1,5 +1,6 @@
+
 import { useState, useRef } from "react";
-import { Upload, AlertCircle, RefreshCw } from "lucide-react";
+import { Upload, AlertCircle, RefreshCw, ChevronDown, ChevronUp, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +15,10 @@ import {
 } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { FileMetadataForm } from "@/components/FileMetadataForm";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface UploadingFile {
   file: File;
@@ -26,6 +31,11 @@ interface RetryState {
   operation: 'upload' | 'metadata' | 'extraction';
 }
 
+interface ChunkingSettings {
+  chunkSize: number;
+  chunkOverlap: number;
+}
+
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 
@@ -36,6 +46,11 @@ export function FileUploader() {
   const [showMetadataDialog, setShowMetadataDialog] = useState(false);
   const [currentUploadingFile, setCurrentUploadingFile] = useState<UploadingFile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [chunkingSettings, setChunkingSettings] = useState<ChunkingSettings>({
+    chunkSize: 768,
+    chunkOverlap: 80
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -128,7 +143,13 @@ export function FileUploader() {
   const triggerTextExtraction = async (fileId: string) => {
     try {
       const { error: extractError } = await supabase.functions.invoke('extract-text', {
-        body: { fileId }
+        body: { 
+          fileId,
+          chunkingSettings: {
+            chunkSize: chunkingSettings.chunkSize,
+            chunkOverlap: chunkingSettings.chunkOverlap
+          }
+        }
       });
 
       if (extractError) {
@@ -286,6 +307,28 @@ export function FileUploader() {
     }
   };
 
+  const handleChunkSizeChange = (value: number[]) => {
+    setChunkingSettings(prev => ({ ...prev, chunkSize: value[0] }));
+  };
+
+  const handleChunkOverlapChange = (value: number[]) => {
+    setChunkingSettings(prev => ({ ...prev, chunkOverlap: value[0] }));
+  };
+
+  const handleChunkSizeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value, 10);
+    if (!isNaN(value)) {
+      setChunkingSettings(prev => ({ ...prev, chunkSize: Math.min(Math.max(value, 100), 2000) }));
+    }
+  };
+
+  const handleChunkOverlapInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value, 10);
+    if (!isNaN(value)) {
+      setChunkingSettings(prev => ({ ...prev, chunkOverlap: Math.min(Math.max(value, 0), 200) }));
+    }
+  };
+
   return (
     <>
       <motion.div
@@ -363,6 +406,99 @@ export function FileUploader() {
           </motion.div>
         )}
       </motion.div>
+
+      {/* Advanced Text Chunking Settings */}
+      <Collapsible
+        open={showAdvancedSettings}
+        onOpenChange={setShowAdvancedSettings}
+        className="mt-4 border rounded-md p-4 w-full"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Settings className="h-4 w-4 text-gray-500" />
+            <h3 className="text-sm font-medium">Advanced Text Chunking Settings</h3>
+          </div>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm">
+              {showAdvancedSettings ? 
+                <ChevronUp className="h-4 w-4" /> : 
+                <ChevronDown className="h-4 w-4" />
+              }
+            </Button>
+          </CollapsibleTrigger>
+        </div>
+
+        <CollapsibleContent className="mt-2 space-y-4">
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between">
+                <Label htmlFor="chunk-size">Chunk Size (tokens): {chunkingSettings.chunkSize}</Label>
+                <Input 
+                  type="number" 
+                  id="chunk-size-input" 
+                  className="w-20 h-8 text-xs"
+                  value={chunkingSettings.chunkSize}
+                  onChange={handleChunkSizeInputChange}
+                  min={100}
+                  max={2000}
+                />
+              </div>
+              <div className="pt-2">
+                <Slider 
+                  id="chunk-size"
+                  min={100} 
+                  max={2000} 
+                  step={16} 
+                  value={[chunkingSettings.chunkSize]} 
+                  onValueChange={handleChunkSizeChange}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Controls how large each text chunk will be. Larger chunks (768-1024) provide more context but may be less precise. 
+                Smaller chunks (256-512) are more precise but may miss broader context.
+              </p>
+            </div>
+
+            <div>
+              <div className="flex justify-between">
+                <Label htmlFor="chunk-overlap">Chunk Overlap (tokens): {chunkingSettings.chunkOverlap}</Label>
+                <Input 
+                  type="number" 
+                  id="chunk-overlap-input" 
+                  className="w-20 h-8 text-xs"
+                  value={chunkingSettings.chunkOverlap}
+                  onChange={handleChunkOverlapInputChange}
+                  min={0}
+                  max={200}
+                />
+              </div>
+              <div className="pt-2">
+                <Slider 
+                  id="chunk-overlap"
+                  min={0} 
+                  max={200} 
+                  step={8} 
+                  value={[chunkingSettings.chunkOverlap]} 
+                  onValueChange={handleChunkOverlapChange}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Controls how much text overlaps between chunks. Higher overlap (60-100) preserves context between chunks 
+                but creates more redundancy. Lower values (20-40) reduce redundancy but may cause context loss.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
+            <p className="text-xs text-blue-700">
+              <strong>Recommended settings by document type:</strong><br/>
+              • Technical/Reference: 512-768 chunk size, 40-60 overlap<br/>
+              • Narrative/Conversational: 768-1024 chunk size, 80-100 overlap<br/>
+              • Short Form Content: 256-512 chunk size, 20-40 overlap
+            </p>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       <Dialog open={showMetadataDialog} onOpenChange={setShowMetadataDialog}>
         <DialogContent className="sm:max-w-[600px] max-h-[80vh] p-6">
