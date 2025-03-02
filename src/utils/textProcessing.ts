@@ -1,3 +1,4 @@
+
 /**
  * Text processing utilities for RAG implementation
  * Handles document chunking and preprocessing for embeddings
@@ -29,8 +30,8 @@ export interface ChunkingOptions {
  * Default chunking options
  */
 const DEFAULT_CHUNKING_OPTIONS: ChunkingOptions = {
-  chunkSize: 512,
-  chunkOverlap: 50,
+  chunkSize: 768,  // Updated from 512 to 768
+  chunkOverlap: 80, // Updated from 50 to 80
   splitBySentence: true
 };
 

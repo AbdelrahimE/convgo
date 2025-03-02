@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { Upload, AlertCircle, RefreshCw, ChevronDown, ChevronUp, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -48,8 +47,8 @@ export function FileUploader() {
   const [isLoading, setIsLoading] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [chunkingSettings, setChunkingSettings] = useState<ChunkingSettings>({
-    chunkSize: 768,
-    chunkOverlap: 80
+    chunkSize: 768,  // Updated default value
+    chunkOverlap: 80 // Updated default value
   });
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();

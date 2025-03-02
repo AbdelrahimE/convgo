@@ -43,17 +43,30 @@ export function useTextProcessing() {
     setIsProcessing(true);
     setError(null);
     
-    console.log("Processing document with options:", options);
+    // Use updated default values (768 for chunk size, 80 for overlap)
+    const defaultOptions = {
+      chunkSize: 768,
+      chunkOverlap: 80,
+      splitBySentence: true
+    };
+    
+    // Merge with provided options (if any)
+    const mergedOptions = {
+      ...defaultOptions,
+      ...options
+    };
+    
+    console.log("Processing document with options:", mergedOptions);
     
     try {
       // 1. Preprocess the text
       const processedText = preprocessText(text);
       
       // 2. Split into chunks using provided options
-      const chunks = chunkText(processedText, options);
+      const chunks = chunkText(processedText, mergedOptions);
       
       console.log(`Created ${chunks.length} chunks with settings:`, 
-        options ? `chunk size: ${options.chunkSize}, overlap: ${options.chunkOverlap}` : "default settings");
+        `chunk size: ${mergedOptions.chunkSize}, overlap: ${mergedOptions.chunkOverlap}`);
       
       // 3. Add metadata to chunks
       const chunksWithMetadata = createChunkMetadata(processedText, chunks, documentId);
