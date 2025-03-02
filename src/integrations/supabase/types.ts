@@ -329,38 +329,6 @@ export type Database = {
           },
         ]
       }
-      whatsapp_connection_logs: {
-        Row: {
-          created_at: string
-          details: Json | null
-          id: string
-          instance_id: string
-          status: string
-        }
-        Insert: {
-          created_at?: string
-          details?: Json | null
-          id?: string
-          instance_id: string
-          status: string
-        }
-        Update: {
-          created_at?: string
-          details?: Json | null
-          id?: string
-          instance_id?: string
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "whatsapp_connection_logs_instance_id_fkey"
-            columns: ["instance_id"]
-            isOneToOne: false
-            referencedRelation: "whatsapp_instances"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       whatsapp_instances: {
         Row: {
           created_at: string
