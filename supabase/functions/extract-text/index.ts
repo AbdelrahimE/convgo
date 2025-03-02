@@ -1,6 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
-import { corsHeaders } from '../_shared/cors';
-import { DEFAULT_CHUNKING_OPTIONS } from '../../src/utils/documentProcessing';
+
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
 
 // Text processing utilities
 interface ChunkingOptions {
@@ -8,6 +9,13 @@ interface ChunkingOptions {
   chunkOverlap?: number;
   splitBySentence?: boolean;
 }
+
+// Default chunking options matching the frontend
+const DEFAULT_CHUNKING_OPTIONS: ChunkingOptions = {
+  chunkSize: 768,
+  chunkOverlap: 80,
+  splitBySentence: true
+};
 
 /**
  * Splits text into chunks suitable for embedding models
@@ -150,7 +158,7 @@ function createChunkMetadata(
   });
 }
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
