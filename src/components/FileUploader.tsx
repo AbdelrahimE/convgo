@@ -18,6 +18,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useDocumentEmbeddings } from "@/hooks/use-document-embeddings";
 
 interface UploadingFile {
   file: File;
@@ -54,6 +55,7 @@ export function FileUploader() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { generateEmbeddings } = useDocumentEmbeddings();
 
   const ALLOWED_FILE_TYPES = [
     'application/pdf',
@@ -159,6 +161,17 @@ export function FileUploader() {
           operation: 'extraction'
         }));
         throw extractError;
+      }
+
+      try {
+        await generateEmbeddings(fileId);
+      } catch (embeddingError) {
+        console.error('Error generating embeddings:', embeddingError);
+        toast({
+          variant: "warning",
+          title: "Embeddings Generation",
+          description: "Text extraction completed, but embeddings generation encountered an issue."
+        });
       }
 
       resetRetryState();

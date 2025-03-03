@@ -1,552 +1,350 @@
 import { useEffect, useState } from "react";
-import { Grid, List, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown } from "lucide-react";
+import { Grid, List, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown, Sparkles } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { FileMetadataForm } from "./FileMetadataForm";
-import { Tag } from "lucide-react";
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useDocumentEmbeddings } from "@/hooks/use-document-embeddings";
+import { Progress } from "@/components/ui/progress";
 
-type ValidationStatus = {
-  isValid: boolean;
-  chunks: Array<{
-    isValid: boolean;
-    errors: string[];
-  }>;
-};
-
-type FileItem = {
+interface File {
   id: string;
   filename: string;
-  size_bytes: number;
-  created_at: string;
+  original_name: string;
   mime_type: string;
+  size_bytes: number;
   path: string;
-  primary_language?: string;
-  text_direction?: string;
-  detected_languages?: string[];
-  text_validation_status?: ValidationStatus | null;
-  language_confidence?: Record<string, number>;
-  language_distribution?: Record<string, number>;
-  arabic_script_details?: {
-    containsArabicScript: boolean;
-    arabicScriptPercentage: number;
-    direction: string;
-  };
-};
+  profile_id: string;
+  created_at: string;
+  updated_at: string;
+  metadata: any;
+}
 
-type ViewMode = "list" | "grid";
-type SortField = "filename" | "created_at" | "size_bytes" | "mime_type" | "primary_language";
-type SortOrder = "asc" | "desc";
+const MAX_FILE_NAME_LENGTH = 30;
+
+type EmbeddingStatus = 'pending' | 'processing' | 'complete' | 'error' | 'partial';
+
+interface EmbeddingStatusDetails {
+  status: EmbeddingStatus;
+  started_at?: string;
+  completed_at?: string;
+  success_count?: number;
+  error_count?: number;
+  last_updated?: string;
+  error?: string;
+}
+
+interface FileWithMetadata {
+  id: string;
+  filename: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  path: string;
+  profile_id: string;
+  created_at: string;
+  updated_at: string;
+  metadata: any;
+  embedding_status?: EmbeddingStatusDetails;
+}
 
 export function FileList() {
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const [filteredFiles, setFilteredFiles] = useState<FileItem[]>([]);
+  const [files, setFiles] = useState<FileWithMetadata[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortField, setSortField] = useState<SortField>("created_at");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
-  const { user } = useAuth();
+  const [isGridView, setIsGridView] = useState(false);
   const { toast } = useToast();
+  const { generateEmbeddings, isGenerating, progress } = useDocumentEmbeddings();
+  const [processingFileId, setProcessingFileId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchFiles();
+  }, []);
 
   const fetchFiles = async () => {
+    setIsLoading(true);
     try {
-      console.log('Fetching files for user:', user?.id);
-      if (!user) {
-        console.log('No user found, skipping fetch');
-        setIsLoading(false);
-        return;
-      }
-
       const { data, error } = await supabase
         .from('files')
         .select('*')
-        .eq('profile_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching files:', error);
+        console.error("Error fetching files:", error);
         toast({
           variant: "destructive",
-          title: "Error fetching files",
-          description: error.message
+          title: "Error",
+          description: "Failed to load files. Please try again."
         });
-        throw error;
+      } else {
+        setFiles(data || []);
       }
-      
-      console.log('Fetched files:', data);
-      
-      const parsedFiles = data?.map(file => ({
-        ...file,
-        text_validation_status: file.text_validation_status ? 
-          (typeof file.text_validation_status === 'string' 
-            ? JSON.parse(file.text_validation_status) 
-            : file.text_validation_status) as ValidationStatus
-          : null,
-        language_confidence: file.language_confidence as Record<string, number>,
-        language_distribution: file.language_distribution as Record<string, number>,
-        arabic_script_details: file.arabic_script_details as FileItem['arabic_script_details']
-      })) || [];
-
-      setFiles(parsedFiles);
-      setFilteredFiles(parsedFiles);
-    } catch (error: any) {
-      console.error('Error in fetchFiles:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to fetch files. Please try refreshing the page."
-      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    console.log('FileList mounted, user:', user);
-    if (user) {
-      fetchFiles();
-    }
-  }, [user]);
-
-  const handleDelete = async (id: string, path: string) => {
+  const deleteFile = async (fileId: string) => {
     try {
-      console.log('Attempting to delete file:', { id, path });
-      
-      const { data, error: deleteError } = await supabase
+      const { error } = await supabase
         .from('files')
         .delete()
-        .eq('id', id)
-        .select()
-        .single();
+        .eq('id', fileId);
 
-      if (deleteError) {
-        console.error('Delete operation failed:', deleteError);
-        throw deleteError;
+      if (error) {
+        console.error("Error deleting file:", error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to delete file. Please try again."
+        });
+      } else {
+        setFiles(files.filter(file => file.id !== fileId));
+        toast({
+          title: "Success",
+          description: "File deleted successfully."
+        });
       }
-
-      console.log('File deleted successfully:', data);
-      
-      setFiles(prevFiles => prevFiles.filter(file => file.id !== id));
-      setFilteredFiles(prevFiltered => prevFiltered.filter(file => file.id !== id));
-      
-      toast({
-        title: "Success",
-        description: "File deleted successfully"
-      });
-    } catch (error: any) {
-      console.error('Delete operation failed:', error);
+    } catch (error) {
+      console.error("Error deleting file:", error);
       toast({
         variant: "destructive",
-        title: "Error deleting file",
-        description: error.message || "Failed to delete file"
+        title: "Error",
+        description: "Failed to delete file. Please try again."
       });
     }
   };
 
-  const getFileIcon = (mimeType: string | null) => {
-    if (!mimeType) return <FileIcon className="h-6 w-6" />;
-    if (mimeType.startsWith('image/')) return <FileImage className="h-6 w-6" />;
-    if (mimeType.includes('pdf')) return <FileText className="h-6 w-6" />;
-    return <FileIcon className="h-6 w-6" />;
-  };
-
-  const formatFileSize = (bytes: number) => {
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let size = bytes;
-    let unitIndex = 0;
-    
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024;
-      unitIndex++;
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.startsWith('image/')) {
+      return <FileImage className="w-4 h-4 mr-2" />;
+    } else if (mimeType === 'application/pdf') {
+      return <FileText className="w-4 h-4 mr-2" />;
+    } else if (mimeType === 'text/plain') {
+      return <FileText className="w-4 h-4 mr-2" />;
+    } else if (mimeType === 'text/csv') {
+      return <FileText className="w-4 h-4 mr-2" />;
+    } else if (
+      mimeType ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
+      return <FileText className="w-4 h-4 mr-2" />;
+    } else if (mimeType === 'application/msword') {
+      return <FileText className="w-4 h-4 mr-2" />;
     }
-    
-    return `${size.toFixed(1)} ${units[unitIndex]}`;
+    return <FileIcon className="w-4 h-4 mr-2" />;
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+  const getLanguageFromFilename = (filename: string) => {
+    const parts = filename.split('.');
+    const extension = parts.pop()?.toLowerCase();
+
+    switch (extension) {
+      case 'en': return 'English';
+      case 'es': return 'Spanish';
+      case 'fr': return 'French';
+      case 'de': return 'German';
+      case 'zh': return 'Chinese';
+      case 'ja': return 'Japanese';
+      default: return 'Unknown';
+    }
   };
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    const filtered = files.filter(file =>
-      file.filename.toLowerCase().includes(query.toLowerCase()) ||
-      file.mime_type.toLowerCase().includes(query.toLowerCase())
-    );
-    setFilteredFiles(filtered);
+  const handleGenerateEmbeddings = async (fileId: string) => {
+    setProcessingFileId(fileId);
+    const success = await generateEmbeddings(fileId);
+    if (success) {
+      // Refresh the file data to show updated embedding status
+      fetchFiles();
+    }
+    setProcessingFileId(null);
   };
 
-  const handleSort = (field: SortField) => {
-    const newOrder = field === sortField && sortOrder === "asc" ? "desc" : "asc";
-    setSortField(field);
-    setSortOrder(newOrder);
+  const renderFileCard = (file: FileWithMetadata) => {
+    const truncatedFilename =
+      file.filename.length > MAX_FILE_NAME_LENGTH
+        ? file.filename.substring(0, MAX_FILE_NAME_LENGTH) + '...'
+        : file.filename;
 
-    const sorted = [...filteredFiles].sort((a, b) => {
-      if (field === "size_bytes") {
-        return sortOrder === "asc" ? a[field] - b[field] : b[field] - a[field];
+    const renderEmbeddingStatus = () => {
+      if (!file.embedding_status) {
+        return (
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="ml-auto flex items-center gap-1"
+            onClick={() => handleGenerateEmbeddings(file.id)}
+            disabled={isGenerating && processingFileId === file.id}
+          >
+            <Sparkles className="h-3 w-3" />
+            <span>Generate Embeddings</span>
+          </Button>
+        );
       }
-      const valueA = String(a[field]).toLowerCase();
-      const valueB = String(b[field]).toLowerCase();
-      return sortOrder === "asc"
-        ? valueA.localeCompare(valueB)
-        : valueB.localeCompare(valueA);
-    });
-    setFilteredFiles(sorted);
-  };
 
-  const getLanguageDisplay = (file: FileItem) => {
-    if (!file.primary_language && (!file.detected_languages || file.detected_languages.length === 0)) {
-      return null;
-    }
-
-    const additionalLanguages = file.detected_languages?.filter(lang => lang !== file.primary_language) || [];
+      const status = file.embedding_status.status;
+      
+      if (status === 'processing' || (isGenerating && processingFileId === file.id)) {
+        return (
+          <div className="ml-auto flex flex-col gap-1 min-w-[150px]">
+            <span className="text-xs text-muted-foreground">Processing embeddings...</span>
+            <Progress value={progress} className="h-1" />
+          </div>
+        );
+      }
+      
+      if (status === 'complete') {
+        return (
+          <div className="ml-auto flex items-center gap-1 text-green-600">
+            <CheckCircle2 className="h-3 w-3" />
+            <span className="text-xs">Embeddings ready</span>
+          </div>
+        );
+      }
+      
+      if (status === 'partial') {
+        return (
+          <div className="ml-auto flex flex-col gap-1">
+            <span className="text-xs text-amber-600 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Partial embeddings
+            </span>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="text-xs h-6"
+              onClick={() => handleGenerateEmbeddings(file.id)}
+            >
+              Retry
+            </Button>
+          </div>
+        );
+      }
+      
+      if (status === 'error') {
+        return (
+          <div className="ml-auto flex flex-col gap-1">
+            <span className="text-xs text-destructive flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Embedding failed
+            </span>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="text-xs h-6"
+              onClick={() => handleGenerateEmbeddings(file.id)}
+            >
+              Retry
+            </Button>
+          </div>
+        );
+      }
+      
+      return (
+        <Button 
+          size="sm" 
+          variant="outline" 
+          className="ml-auto flex items-center gap-1"
+          onClick={() => handleGenerateEmbeddings(file.id)}
+        >
+          <Sparkles className="h-3 w-3" />
+          <span>Generate Embeddings</span>
+        </Button>
+      );
+    };
 
     return (
-      <div className="flex items-center gap-2">
-        <Languages className="h-4 w-4" />
-        <div className="flex flex-wrap gap-1 items-center">
-          {file.primary_language && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="secondary" className="text-xs">
-                    {file.primary_language.toUpperCase()}
-                    {file.language_confidence && file.language_confidence.all && file.language_confidence.all[file.primary_language] && (
-                      <span className="ml-1 opacity-75">
-                        {Math.round(file.language_confidence.all[file.primary_language] * 100)}%
-                      </span>
-                    )}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Primary Language</p>
-                  {file.arabic_script_details?.containsArabicScript && (
-                    <p className="text-xs text-muted-foreground">
-                      Contains Arabic Script ({Math.round(file.arabic_script_details.arabicScriptPercentage)}%)
-                    </p>
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {additionalLanguages.length > 0 && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-6 px-2 text-xs">
-                  +{additionalLanguages.length} more <ChevronDown className="h-3 w-3 ml-1" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64 p-2">
-                <div className="space-y-2">
-                  {additionalLanguages.map((lang, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <Badge variant="outline" className="text-xs">
-                        {lang.toUpperCase()}
-                      </Badge>
-                      {file.language_confidence && file.language_confidence.all && file.language_confidence.all[lang] && (
-                        <span className="text-xs text-muted-foreground">
-                          {Math.round(file.language_confidence.all[lang] * 100)}% confidence
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
-      </div>
+      <Card key={file.id} className="group relative">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            {getFileIcon(file.mime_type)}
+            {truncatedFilename}
+          </CardTitle>
+          <CardDescription>
+            {new Date(file.created_at).toLocaleDateString()}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Size: {(file.size_bytes / 1024).toFixed(2)} KB
+          </p>
+        </CardContent>
+        
+        <CardFooter className="flex justify-between items-center pt-2 gap-2">
+          {/* Language display */}
+          <div className="flex items-center">
+            <Languages className="h-3 w-3 mr-1 text-gray-500" />
+            <span className="text-xs text-gray-500">
+              {getLanguageFromFilename(file.filename)}
+            </span>
+          </div>
+          
+          {/* Embedding status */}
+          {renderEmbeddingStatus()}
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="ml-auto h-8 w-8 p-0 data-[state=open]:bg-muted">
+                <span className="sr-only">Open menu</span>
+                <ChevronDown className="h-4 w-4"/>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[160px]">
+              <DropdownMenuItem
+                onClick={() => deleteFile(file.id)}
+              >
+                <Trash2 className="h-3 w-3 mr-2"/>
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </CardFooter>
+      </Card>
     );
   };
-
-  const renderListView = () => (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="rounded-md border overflow-hidden"
-    >
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead 
-                className="w-[30%] cursor-pointer min-w-[200px]"
-                onClick={() => handleSort("filename")}
-              >
-                Name {sortField === "filename" && (sortOrder === "asc" ? "↑" : "↓")}
-              </TableHead>
-              <TableHead 
-                className="hidden md:table-cell cursor-pointer min-w-[150px]"
-                onClick={() => handleSort("mime_type")}
-              >
-                Type {sortField === "mime_type" && (sortOrder === "asc" ? "↑" : "↓")}
-              </TableHead>
-              <TableHead 
-                className="hidden sm:table-cell cursor-pointer min-w-[100px]"
-                onClick={() => handleSort("size_bytes")}
-              >
-                Size {sortField === "size_bytes" && (sortOrder === "asc" ? "↑" : "↓")}
-              </TableHead>
-              <TableHead 
-                className="hidden lg:table-cell cursor-pointer min-w-[120px]"
-                onClick={() => handleSort("primary_language")}
-              >
-                Language {sortField === "primary_language" && (sortOrder === "asc" ? "↑" : "↓")}
-              </TableHead>
-              <TableHead className="hidden xl:table-cell min-w-[100px]">
-                Validation
-              </TableHead>
-              <TableHead 
-                className="hidden xl:table-cell cursor-pointer min-w-[120px]"
-                onClick={() => handleSort("created_at")}
-              >
-                Date {sortField === "created_at" && (sortOrder === "asc" ? "↑" : "↓")}
-              </TableHead>
-              <TableHead className="text-right min-w-[100px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <AnimatePresence>
-              {filteredFiles.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                    >
-                      No files found
-                    </motion.div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredFiles.map((file) => (
-                  <motion.tr
-                    key={file.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    className="border-b transition-colors hover:bg-muted/50"
-                  >
-                    <TableCell className="font-medium">
-                      <div className={`flex items-center gap-2 ${file.text_direction === 'rtl' ? 'direction-rtl' : ''}`}>
-                        {getFileIcon(file.mime_type)}
-                        <span className="truncate">{file.filename}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      <span className="truncate">{file.mime_type}</span>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      {formatFileSize(file.size_bytes)}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      {getLanguageDisplay(file)}
-                    </TableCell>
-                    <TableCell className="hidden xl:table-cell">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <div className="flex items-center gap-2">
-                              {file.text_validation_status?.isValid ? (
-                                <CheckCircle2 className="h-5 w-5 text-green-500" />
-                              ) : (
-                                <AlertCircle className="h-5 w-5 text-yellow-500" />
-                              )}
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <div className="text-sm">
-                              {file.text_validation_status?.isValid 
-                                ? "Text validation passed"
-                                : "Some chunks have validation issues"}
-                            </div>
-                            {!file.text_validation_status?.isValid && file.text_validation_status?.chunks.map((chunk, idx) => (
-                              !chunk.isValid && (
-                                <div key={idx} className="text-xs text-red-400 mt-1">
-                                  {chunk.errors.join(", ")}
-                                </div>
-                              )
-                            ))}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </TableCell>
-                    <TableCell className="hidden xl:table-cell">
-                      {formatDate(file.created_at)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(file.id, file.path)}
-                        className="transition-all hover:scale-105"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="ml-2"
-                          >
-                            <Tag className="h-4 w-4 mr-2" />
-                            Metadata
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>File Metadata</DialogTitle>
-                          </DialogHeader>
-                          <FileMetadataForm fileId={file.id} />
-                        </DialogContent>
-                      </Dialog>
-                    </TableCell>
-                  </motion.tr>
-                ))
-              )}
-            </AnimatePresence>
-          </TableBody>
-        </Table>
-      </div>
-    </motion.div>
-  );
-
-  const renderGridView = () => (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
-    >
-      <AnimatePresence>
-        {filteredFiles.map((file) => (
-          <motion.div
-            key={file.id}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            whileHover={{ scale: 1.02 }}
-            className="p-4 border rounded-lg hover:border-primary transition-all duration-200"
-          >
-            <div className={`w-full text-left ${file.text_direction === 'rtl' ? 'direction-rtl' : ''}`}>
-              <div className="flex flex-col items-center gap-2">
-                {getFileIcon(file.mime_type)}
-                <p className="text-sm font-medium truncate w-full text-center">
-                  {file.filename}
-                </p>
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-xs text-gray-500">
-                    {formatFileSize(file.size_bytes)}
-                  </p>
-                  {getLanguageDisplay(file)}
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 flex justify-center gap-2">
-              <motion.div whileHover={{ scale: 1.1 }}>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleDelete(file.id, file.path)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </motion.div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <motion.div whileHover={{ scale: 1.1 }}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Tag className="h-4 w-4 mr-2" />
-                      Metadata
-                    </Button>
-                  </motion.div>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>File Metadata</DialogTitle>
-                  </DialogHeader>
-                  <FileMetadataForm fileId={file.id} />
-                </DialogContent>
-              </Dialog>
-            </div>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </motion.div>
-  );
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex-1 w-full sm:max-w-xs">
-          <Input
-            placeholder="Search files..."
-            value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="w-full"
-          />
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant={viewMode === "list" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("list")}
-          >
-            <List className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === "grid" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("grid")}
-          >
-            <Grid className="h-4 w-4" />
-          </Button>
-        </div>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">
+          Uploaded Files ({files.length})
+        </h2>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsGridView(!isGridView)}
+        >
+          {isGridView ? <List className="w-4 h-4 mr-2" /> : <Grid className="w-4 h-4 mr-2" />}
+          {isGridView ? 'List View' : 'Grid View'}
+        </Button>
       </div>
 
       {isLoading ? (
-        <div className="text-center py-8">Loading files...</div>
-      ) : !user ? (
-        <div className="text-center py-8">Please sign in to view your files</div>
-      ) : viewMode === "list" ? (
-        renderListView()
+        <p>Loading files...</p>
+      ) : files.length === 0 ? (
+        <p>No files uploaded yet.</p>
+      ) : isGridView ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {files.map(file => renderFileCard(file))}
+        </div>
       ) : (
-        renderGridView()
+        <div className="space-y-2">
+          {files.map(file => renderFileCard(file))}
+        </div>
       )}
     </div>
   );
