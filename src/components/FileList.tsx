@@ -34,7 +34,7 @@ interface File {
   profile_id: string;
   created_at: string;
   updated_at: string;
-  metadata: any;
+  metadata?: any;
 }
 
 const MAX_FILE_NAME_LENGTH = 30;
@@ -49,7 +49,7 @@ interface FileWithMetadata {
   profile_id: string;
   created_at: string;
   updated_at: string;
-  metadata: any;
+  metadata?: any;
   embedding_status?: EmbeddingStatusDetails;
   primary_language?: string;
   language_confidence?: any;
