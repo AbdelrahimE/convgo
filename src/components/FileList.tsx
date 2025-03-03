@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Grid, List, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown, Sparkles, Pencil } from "lucide-react";
 import {
   Tooltip,
@@ -231,26 +231,32 @@ export function FileList() {
     setProcessingFileId(null);
   };
 
-  const handleEditMetadata = (fileId: string) => {
+  const handleEditMetadata = useCallback((fileId: string) => {
     setSelectedFileId(fileId);
-    setIsMetadataDialogOpen(true);
-  };
-
-  const closeMetadataDialog = () => {
-    setIsMetadataDialogOpen(false);
-    setSelectedFileId(null);
-  };
-
-  const handleMetadataSaved = () => {
-    setRefreshTrigger(prev => prev + 1);
-    toast({
-      title: "Success",
-      description: "File metadata updated successfully"
-    });
     setTimeout(() => {
-      closeMetadataDialog();
-    }, 400);
-  };
+      setIsMetadataDialogOpen(true);
+    }, 0);
+  }, []);
+
+  const closeMetadataDialog = useCallback(() => {
+    setIsMetadataDialogOpen(false);
+    setTimeout(() => {
+      setSelectedFileId(null);
+    }, 300);
+  }, []);
+
+  const handleMetadataSaved = useCallback(() => {
+    const triggerRefresh = () => {
+      setRefreshTrigger(prev => prev + 1);
+      toast({
+        title: "Success",
+        description: "File metadata updated successfully"
+      });
+    };
+    
+    closeMetadataDialog();
+    setTimeout(triggerRefresh, 400);
+  }, [closeMetadataDialog, toast]);
 
   const renderFileCard = (file: FileWithMetadata) => {
     const truncatedFilename =
@@ -498,7 +504,7 @@ export function FileList() {
       )}
 
       <AlertDialog 
-        open={isMetadataDialogOpen} 
+        open={isMetadataDialogOpen}
         onOpenChange={(open) => {
           if (!open) {
             closeMetadataDialog();
