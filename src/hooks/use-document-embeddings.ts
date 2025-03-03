@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-type EmbeddingStatus = 'pending' | 'processing' | 'complete' | 'error' | 'partial';
+export type EmbeddingStatus = 'pending' | 'processing' | 'complete' | 'error' | 'partial';
 
-interface EmbeddingStatusDetails {
+export interface EmbeddingStatusDetails {
   status: EmbeddingStatus;
   started_at?: string;
   completed_at?: string;
@@ -81,12 +81,31 @@ export function useDocumentEmbeddings() {
         .select('embedding_status')
         .eq('id', fileId)
         .single();
-        
-      setStatus(statusData?.embedding_status || {
-        status: data.success ? 'complete' : 'error',
-        success_count: data.processed,
-        error_count: data.errors || 0
-      });
+      
+      // Parse the embedding status from JSON to our expected type
+      let embeddingStatus: EmbeddingStatusDetails;
+      
+      if (statusData?.embedding_status) {
+        // Convert from JSON to our expected type structure
+        embeddingStatus = {
+          status: statusData.embedding_status.status as EmbeddingStatus || 'error',
+          success_count: statusData.embedding_status.success_count,
+          error_count: statusData.embedding_status.error_count,
+          started_at: statusData.embedding_status.started_at,
+          completed_at: statusData.embedding_status.completed_at,
+          last_updated: statusData.embedding_status.last_updated,
+          error: statusData.embedding_status.error
+        };
+      } else {
+        // Fallback if data doesn't exist or has unexpected format
+        embeddingStatus = {
+          status: data.success ? 'complete' : 'error',
+          success_count: data.processed,
+          error_count: data.errors || 0
+        };
+      }
+      
+      setStatus(embeddingStatus);
         
       if (data.success) {
         toast.success('Embeddings generated successfully', {
@@ -130,8 +149,24 @@ export function useDocumentEmbeddings() {
         return null;
       }
       
-      setStatus(data?.embedding_status || null);
-      return data?.embedding_status || null;
+      // Parse the embedding status from JSON to our expected type
+      if (data?.embedding_status) {
+        // Convert from JSON to our expected type structure
+        const embeddingStatus: EmbeddingStatusDetails = {
+          status: data.embedding_status.status as EmbeddingStatus || 'pending',
+          success_count: data.embedding_status.success_count,
+          error_count: data.embedding_status.error_count,
+          started_at: data.embedding_status.started_at,
+          completed_at: data.embedding_status.completed_at,
+          last_updated: data.embedding_status.last_updated,
+          error: data.embedding_status.error
+        };
+        
+        setStatus(embeddingStatus);
+        return embeddingStatus;
+      }
+      
+      return null;
     } catch (err) {
       console.error('Exception fetching embedding status:', err);
       return null;

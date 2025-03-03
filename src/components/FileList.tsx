@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useDocumentEmbeddings } from "@/hooks/use-document-embeddings";
+import { useDocumentEmbeddings, EmbeddingStatus, EmbeddingStatusDetails } from "@/hooks/use-document-embeddings";
 import { Progress } from "@/components/ui/progress";
 
 interface File {
@@ -36,18 +36,6 @@ interface File {
 }
 
 const MAX_FILE_NAME_LENGTH = 30;
-
-type EmbeddingStatus = 'pending' | 'processing' | 'complete' | 'error' | 'partial';
-
-interface EmbeddingStatusDetails {
-  status: EmbeddingStatus;
-  started_at?: string;
-  completed_at?: string;
-  success_count?: number;
-  error_count?: number;
-  last_updated?: string;
-  error?: string;
-}
 
 interface FileWithMetadata {
   id: string;
@@ -97,13 +85,29 @@ export function FileList() {
           description: "Failed to load files. Please try again."
         });
       } else {
-        // Convert data to FileWithMetadata type
-        const filesWithMetadata = data.map(file => ({
-          ...file,
-          metadata: {},
-          primary_language: file.primary_language || 'unknown',
-          detected_languages: file.detected_languages || []
-        })) as FileWithMetadata[];
+        const filesWithMetadata: FileWithMetadata[] = data.map(file => {
+          let embeddingStatus: EmbeddingStatusDetails | undefined;
+          
+          if (file.embedding_status) {
+            embeddingStatus = {
+              status: (file.embedding_status.status as EmbeddingStatus) || 'pending',
+              started_at: file.embedding_status.started_at,
+              completed_at: file.embedding_status.completed_at,
+              success_count: file.embedding_status.success_count,
+              error_count: file.embedding_status.error_count,
+              last_updated: file.embedding_status.last_updated,
+              error: file.embedding_status.error
+            };
+          }
+          
+          return {
+            ...file,
+            metadata: {},
+            primary_language: file.primary_language || 'unknown',
+            detected_languages: file.detected_languages || [],
+            embedding_status: embeddingStatus
+          };
+        });
         
         setFiles(filesWithMetadata);
         setFilteredFiles(filesWithMetadata);
@@ -183,7 +187,6 @@ export function FileList() {
     setProcessingFileId(fileId);
     const success = await generateEmbeddings(fileId);
     if (success) {
-      // Refresh the file data to show updated embedding status
       fetchFiles();
     }
     setProcessingFileId(null);
@@ -300,7 +303,6 @@ export function FileList() {
         </CardContent>
         
         <CardFooter className="flex justify-between items-center pt-2 gap-2">
-          {/* Language display */}
           <div className="flex items-center">
             <Languages className="h-3 w-3 mr-1 text-gray-500" />
             <span className="text-xs text-gray-500">
@@ -308,7 +310,6 @@ export function FileList() {
             </span>
           </div>
           
-          {/* Embedding status */}
           {renderEmbeddingStatus()}
           
           <DropdownMenu>

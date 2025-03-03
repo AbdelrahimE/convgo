@@ -1,206 +1,226 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { corsHeaders } from '../_shared/cors.ts'
-import OpenAI from 'https://esm.sh/openai@4.11.1'
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-const openAIKey = Deno.env.get('OPENAI_API_KEY') || ''
+interface RequestBody {
+  fileId: string;
+}
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: openAIKey
-})
+interface ChunkData {
+  id: string;
+  content: string;
+  metadata?: any;
+}
 
-// Initialize Supabase client with the service role key
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
+const EMBEDDING_MODEL = 'text-embedding-3-small';
+const EMBEDDING_DIMENSIONS = 1536;
 
-const EMBEDDING_MODEL = 'text-embedding-3-small'
+// Create a Supabase client with the Admin key
+const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 serve(async (req) => {
-  // Handle CORS preflight request
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Parse request body
-    const { fileId } = await req.json()
+    const { fileId } = await req.json() as RequestBody;
 
     if (!fileId) {
       return new Response(
-        JSON.stringify({
-          error: 'File ID is required',
-          success: false,
+        JSON.stringify({ 
+          success: false, 
+          error: 'fileId is required' 
         }),
-        {
+        { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 400,
+          status: 400
         }
-      )
+      );
     }
 
-    // Update file status to processing
+    // Update file status to "processing"
     await supabase
       .from('files')
       .update({
         embedding_status: {
           status: 'processing',
           started_at: new Date().toISOString(),
-          last_updated: new Date().toISOString(),
-        },
+          error: null
+        }
       })
-      .eq('id', fileId)
+      .eq('id', fileId);
 
-    // Get all text chunks for the file
+    // Get text chunks for this file
     const { data: chunks, error: chunksError } = await supabase
       .from('text_chunks')
-      .select('id, content')
+      .select('id, content, metadata')
       .eq('file_id', fileId)
-      .order('chunk_order', { ascending: true })
+      .order('chunk_order', { ascending: true });
 
-    if (chunksError || !chunks || chunks.length === 0) {
-      await updateFileStatus(fileId, 'error', 'No text chunks found for file')
+    if (chunksError) {
+      throw new Error(`Error fetching text chunks: ${chunksError.message}`);
+    }
+
+    if (!chunks || chunks.length === 0) {
+      // Update file status to error
+      await supabase
+        .from('files')
+        .update({
+          embedding_status: {
+            status: 'error',
+            error: 'No text chunks found for this file',
+            last_updated: new Date().toISOString()
+          }
+        })
+        .eq('id', fileId);
+
       return new Response(
-        JSON.stringify({
-          error: 'No text chunks found',
-          success: false,
+        JSON.stringify({ 
+          success: false, 
+          error: 'No text chunks found for this file' 
         }),
-        {
+        { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 400,
+          status: 400
         }
-      )
+      );
     }
 
-    console.log(`Found ${chunks.length} text chunks for file ${fileId}`)
+    // Process chunks and generate embeddings
+    let processedCount = 0;
+    let errorCount = 0;
+    
+    // Process chunks in batches of 20 (to avoid rate limits)
+    const batchSize = 20;
+    const totalBatches = Math.ceil(chunks.length / batchSize);
+    
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const batchStart = batchIndex * batchSize;
+      const batchEnd = Math.min((batchIndex + 1) * batchSize, chunks.length);
+      const batchChunks = chunks.slice(batchStart, batchEnd);
+      
+      // Process each chunk in this batch in parallel
+      const batchPromises = batchChunks.map(async (chunk: ChunkData) => {
+        try {
+          // Call OpenAI API to generate embeddings
+          const response = await fetch('https://api.openai.com/v1/embeddings', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              input: chunk.content,
+              model: EMBEDDING_MODEL,
+              encoding_format: 'float',
+            }),
+          });
 
-    // Process chunks and create embeddings
-    let successCount = 0
-    let errorCount = 0
-    const errors = []
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
+          }
 
-    for (const chunk of chunks) {
-      try {
-        // Skip empty content
-        if (!chunk.content || chunk.content.trim() === '') {
-          console.log(`Skipping empty chunk ${chunk.id}`)
-          continue
+          const data = await response.json();
+          const embedding = data.data[0].embedding;
+
+          // Store the embedding in the database
+          const { error: insertError } = await supabase
+            .from('document_embeddings')
+            .insert({
+              file_id: fileId,
+              chunk_id: chunk.id,
+              embedding: JSON.stringify(embedding),
+              model_version: EMBEDDING_MODEL,
+              status: 'complete',
+              metadata: chunk.metadata
+            });
+
+          if (insertError) {
+            throw new Error(`Error storing embedding: ${insertError.message}`);
+          }
+
+          processedCount++;
+          return { success: true, chunkId: chunk.id };
+        } catch (error) {
+          console.error(`Error processing chunk ${chunk.id}:`, error);
+          errorCount++;
+          
+          // Record the error in the document_embeddings table
+          await supabase
+            .from('document_embeddings')
+            .insert({
+              file_id: fileId,
+              chunk_id: chunk.id,
+              status: 'error',
+              model_version: EMBEDDING_MODEL,
+              error_details: { 
+                error: error instanceof Error ? error.message : String(error),
+                timestamp: new Date().toISOString()
+              }
+            });
+            
+          return { success: false, chunkId: chunk.id, error };
         }
-
-        // Generate embedding with OpenAI
-        const embeddingResponse = await openai.embeddings.create({
-          model: EMBEDDING_MODEL,
-          input: chunk.content,
-          encoding_format: 'float'
-        })
-
-        // Extract the embedding vector
-        const embedding = embeddingResponse.data[0].embedding
-
-        // Store the embedding in the database
-        const { error: insertError } = await supabase
-          .from('document_embeddings')
-          .upsert({
-            file_id: fileId,
-            chunk_id: chunk.id,
-            embedding,
-            model_version: EMBEDDING_MODEL,
-            status: 'complete',
-            metadata: { 
-              dimensions: embedding.length,
-              processed_at: new Date().toISOString() 
-            }
-          })
-
-        if (insertError) {
-          console.error(`Error inserting embedding for chunk ${chunk.id}:`, insertError)
-          errorCount++
-          errors.push({ chunk_id: chunk.id, error: insertError.message })
-        } else {
-          successCount++
-        }
-      } catch (err) {
-        console.error(`Error processing chunk ${chunk.id}:`, err)
-        errorCount++
-        errors.push({ 
-          chunk_id: chunk.id, 
-          error: err instanceof Error ? err.message : 'Unknown error' 
-        })
+      });
+      
+      // Wait for all chunks in this batch to complete
+      await Promise.all(batchPromises);
+      
+      // Add a small delay between batches to avoid rate limits
+      if (batchIndex < totalBatches - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
 
-    // Update file status based on processing results
-    let status: 'complete' | 'partial' | 'error' = 'complete'
-    if (successCount === 0) {
-      status = 'error'
-    } else if (errorCount > 0) {
-      status = 'partial'
-    }
-
-    await updateFileStatus(fileId, status, null, successCount, errorCount)
+    // Update file status based on results
+    const finalStatus = errorCount === 0 ? 'complete' : 
+                         processedCount > 0 ? 'partial' : 'error';
+                         
+    await supabase
+      .from('files')
+      .update({
+        embedding_status: {
+          status: finalStatus,
+          completed_at: new Date().toISOString(),
+          success_count: processedCount,
+          error_count: errorCount,
+          last_updated: new Date().toISOString(),
+          error: errorCount > 0 ? `Failed to process ${errorCount} chunks` : null
+        }
+      })
+      .eq('id', fileId);
 
     return new Response(
       JSON.stringify({
-        success: status !== 'error',
-        processed: successCount,
+        success: finalStatus !== 'error',
+        status: finalStatus,
+        processed: processedCount,
         errors: errorCount,
-        message: status === 'partial' ? 'Some chunks failed to process' : 'All chunks processed successfully',
-        details: errors.length > 0 ? errors : undefined,
+        message: errorCount > 0 ? `Failed to process ${errorCount} chunks` : 'All chunks processed successfully'
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
-    )
+    );
   } catch (error) {
-    console.error('Error in generate-embeddings function:', error)
+    console.error('Error in generate-embeddings function:', error);
+    
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
         success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       }),
-      {
+      { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
+        status: 500
       }
-    )
+    );
   }
 })
-
-async function updateFileStatus(
-  fileId: string, 
-  status: 'processing' | 'complete' | 'error' | 'partial',
-  error?: string | null,
-  successCount: number = 0,
-  errorCount: number = 0
-) {
-  const statusUpdate: any = {
-    status,
-    last_updated: new Date().toISOString(),
-  }
-
-  if (status === 'complete' || status === 'partial' || status === 'error') {
-    statusUpdate.completed_at = new Date().toISOString()
-  }
-
-  if (error) {
-    statusUpdate.error = error
-  }
-
-  if (successCount > 0) {
-    statusUpdate.success_count = successCount
-  }
-
-  if (errorCount > 0) {
-    statusUpdate.error_count = errorCount
-  }
-
-  await supabase
-    .from('files')
-    .update({
-      embedding_status: statusUpdate,
-    })
-    .eq('id', fileId)
-}
