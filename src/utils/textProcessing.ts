@@ -451,11 +451,6 @@ const FRENCH_NER_PATTERNS = {
 
 /**
  * Calculates TF-IDF score for a word in the current document context
- * @param word The word to score
- * @param frequency Word frequency in current document
- * @param totalWords Total words in document
- * @param documentsWithWord Number of documents containing this word (estimated)
- * @param totalDocuments Total number of documents in corpus (estimated)
  */
 function calculateTfIdf(
   word: string,
@@ -475,8 +470,6 @@ function calculateTfIdf(
 
 /**
  * Detects if a word might be a named entity in Arabic
- * @param word The word to check
- * @param context The surrounding words (for pattern matching)
  */
 function detectArabicNamedEntity(word: string, context: string[] = []): {
   isEntity: boolean;
@@ -537,8 +530,6 @@ function detectArabicNamedEntity(word: string, context: string[] = []): {
 
 /**
  * Detects if a word might be a named entity in English
- * @param word The word to check
- * @param context The surrounding words (for pattern matching)
  */
 function detectEnglishNamedEntity(word: string, context: string[] = []): {
   isEntity: boolean;
@@ -607,8 +598,6 @@ function detectEnglishNamedEntity(word: string, context: string[] = []): {
 
 /**
  * Detects if a word might be a named entity in French
- * @param word The word to check
- * @param context The surrounding words (for pattern matching)
  */
 function detectFrenchNamedEntity(word: string, context: string[] = []): {
   isEntity: boolean;
@@ -861,8 +850,9 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
     
     // Filter out stopwords
     const filteredWords = allWords.filter(word => {
-      const normalized = word.toLowerCase();
-      return !stopWords.has(normalized) && normalized.length > 1;
+      // Add null/undefined check and make sure word is a string
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      return normalized && !stopWords.has(normalized) && normalized.length > 1;
     });
     
     // If we have very few words after filtering, return them all
@@ -873,8 +863,11 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
     // Calculate word frequencies
     const wordFrequency: Record<string, number> = {};
     filteredWords.forEach(word => {
-      const normalized = word.toLowerCase();
-      wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+      // Make sure word is a string
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      if (normalized) {
+        wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+      }
     });
     
     // Calculate scores using English NER enhanced scoring
@@ -885,7 +878,9 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
       // Find context for this word
       const originalIndexes: number[] = [];
       for (let i = 0; i < allWords.length; i++) {
-        if (allWords[i].toLowerCase() === word) {
+        // Make sure word is a string and comparable
+        const currentWord = typeof allWords[i] === 'string' ? allWords[i].toLowerCase() : '';
+        if (currentWord === word) {
           originalIndexes.push(i);
         }
       }
@@ -909,8 +904,9 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
     
     // Filter out stopwords
     const filteredWords = allWords.filter(word => {
-      const normalized = word.toLowerCase();
-      return !stopWords.has(normalized) && normalized.length > 1;
+      // Add null/undefined check and make sure word is a string
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      return normalized && !stopWords.has(normalized) && normalized.length > 1;
     });
     
     // If we have very few words after filtering, return them all
@@ -921,8 +917,11 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
     // Calculate word frequencies
     const wordFrequency: Record<string, number> = {};
     filteredWords.forEach(word => {
-      const normalized = word.toLowerCase();
-      wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+      // Make sure word is a string
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      if (normalized) {
+        wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+      }
     });
     
     // Calculate scores using French NER enhanced scoring
@@ -933,7 +932,9 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
       // Find context for this word
       const originalIndexes: number[] = [];
       for (let i = 0; i < allWords.length; i++) {
-        if (allWords[i].toLowerCase() === word) {
+        // Make sure word is a string and comparable
+        const currentWord = typeof allWords[i] === 'string' ? allWords[i].toLowerCase() : '';
+        if (currentWord === word) {
           originalIndexes.push(i);
         }
       }
@@ -955,10 +956,11 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
     // For non-Arabic/English/French languages, use the standard approach
     const stopWords = getStopWords(detectedLang);
     
-    // First filter out stopwords
+    // First filter out stopwords with proper type checking
     const filteredWords = allWords.filter(word => {
-      const normalized = word.toLowerCase();
-      return !stopWords.has(normalized) && normalized.length > 1;
+      // Add null/undefined check and make sure word is a string
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      return normalized && !stopWords.has(normalized) && normalized.length > 1;
     });
     
     // If we have very few words after filtering, return them all
@@ -969,8 +971,10 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
     // Calculate word frequencies (Term Frequency)
     const wordFrequency: Record<string, number> = {};
     filteredWords.forEach(word => {
-      const normalized = word.toLowerCase();
-      wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      if (normalized) {
+        wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+      }
     });
     
     // Calculate scores with TF-IDF inspired approach
