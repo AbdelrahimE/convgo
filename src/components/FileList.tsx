@@ -22,7 +22,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useDocumentEmbeddings, EmbeddingStatus, EmbeddingStatusDetails } from "@/hooks/use-document-embeddings";
 import { Progress } from "@/components/ui/progress";
 import { Json } from "@/integrations/supabase/types";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle 
+} from "@/components/ui/dialog";
 import { FileMetadataForm } from "@/components/FileMetadataForm";
 
 interface File {
@@ -58,7 +63,6 @@ interface FileWithMetadata {
   text_extraction_status?: any;
 }
 
-// Helper function to safely convert JSON to EmbeddingStatusDetails
 const parseEmbeddingStatus = (jsonData: Json | null): EmbeddingStatusDetails | undefined => {
   if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) {
     return undefined;
@@ -85,7 +89,7 @@ export function FileList() {
   const { generateEmbeddings, isGenerating, progress } = useDocumentEmbeddings();
   const [processingFileId, setProcessingFileId] = useState<string | null>(null);
   const [filteredFiles, setFilteredFiles] = useState<FileWithMetadata[]>([]);
-  const [isMetadataSheetOpen, setIsMetadataSheetOpen] = useState(false);
+  const [isMetadataDialogOpen, setIsMetadataDialogOpen] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -95,7 +99,6 @@ export function FileList() {
   const fetchFiles = async () => {
     setIsLoading(true);
     try {
-      // First, fetch the files
       const { data: filesData, error: filesError } = await supabase
         .from('files')
         .select('*')
@@ -112,13 +115,12 @@ export function FileList() {
         return;
       }
       
-      // Transform files into our expected format
       const filesWithMetadata: FileWithMetadata[] = filesData.map(file => {
         const embeddingStatus = parseEmbeddingStatus(file.embedding_status);
         
         return {
           ...file,
-          file_metadata: {}, // Initialize with empty object, will be populated later
+          file_metadata: {},
           primary_language: file.primary_language || 'unknown',
           language_confidence: file.language_confidence || {},
           detected_languages: file.detected_languages || [],
@@ -128,12 +130,9 @@ export function FileList() {
         };
       });
       
-      // Set files and filtered files with the data we have so far
       setFiles(filesWithMetadata);
       setFilteredFiles(filesWithMetadata);
       
-      // For each file, we'll fetch any associated metadata
-      // This could be optimized with a single query if needed
       for (const file of filesWithMetadata) {
         try {
           const { data: metadataData, error: metadataError } = await supabase
@@ -142,7 +141,6 @@ export function FileList() {
             .eq('file_id', file.id);
             
           if (!metadataError && metadataData) {
-            // Update the file with its metadata
             file.file_metadata = metadataData.reduce((acc, item) => {
               acc[item.field_id] = item.value;
               return acc;
@@ -153,7 +151,6 @@ export function FileList() {
         }
       }
       
-      // Update state with complete data
       setFiles([...filesWithMetadata]);
       setFilteredFiles([...filesWithMetadata]);
       
@@ -231,17 +228,17 @@ export function FileList() {
 
   const handleEditMetadata = (fileId: string) => {
     setSelectedFileId(fileId);
-    setIsMetadataSheetOpen(true);
+    setIsMetadataDialogOpen(true);
   };
 
-  const closeMetadataSheet = () => {
-    setIsMetadataSheetOpen(false);
+  const closeMetadataDialog = () => {
+    setIsMetadataDialogOpen(false);
     setSelectedFileId(null);
   };
 
   const handleMetadataSaved = () => {
     fetchFiles(); // Refresh files to get updated metadata
-    closeMetadataSheet();
+    closeMetadataDialog();
     toast({
       title: "Success",
       description: "File metadata updated successfully"
@@ -254,7 +251,6 @@ export function FileList() {
         ? file.filename.substring(0, MAX_FILE_NAME_LENGTH) + '...'
         : file.filename;
 
-    // Format file size nicely
     const formatFileSize = (sizeInBytes: number) => {
       if (sizeInBytes < 1024) {
         return `${sizeInBytes} B`;
@@ -275,7 +271,6 @@ export function FileList() {
         );
       }
 
-      // Show primary language with confidence if available
       const primaryLanguage = file.primary_language || file.detected_languages[0];
       const languageConfidence = file.language_confidence ? 
         (file.language_confidence[primaryLanguage] || 0) * 100 : 0;
@@ -495,20 +490,19 @@ export function FileList() {
         </div>
       )}
 
-      {/* Metadata Sheet */}
-      <Sheet open={isMetadataSheetOpen} onOpenChange={setIsMetadataSheetOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Edit File Metadata</SheetTitle>
-          </SheetHeader>
+      <Dialog open={isMetadataDialogOpen} onOpenChange={setIsMetadataDialogOpen}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit File Metadata</DialogTitle>
+          </DialogHeader>
           {selectedFileId && (
             <FileMetadataForm 
               fileId={selectedFileId}
               onSave={handleMetadataSaved}
             />
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
