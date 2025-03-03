@@ -1,6 +1,5 @@
-
 import { useEffect, useState } from "react";
-import { Grid, List, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown, Sparkles } from "lucide-react";
+import { Grid, List, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown, Sparkles, Pencil } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -23,6 +22,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useDocumentEmbeddings, EmbeddingStatus, EmbeddingStatusDetails } from "@/hooks/use-document-embeddings";
 import { Progress } from "@/components/ui/progress";
 import { Json } from "@/integrations/supabase/types";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { FileMetadataForm } from "@/components/FileMetadataForm";
 
 interface File {
   id: string;
@@ -84,6 +85,8 @@ export function FileList() {
   const { generateEmbeddings, isGenerating, progress } = useDocumentEmbeddings();
   const [processingFileId, setProcessingFileId] = useState<string | null>(null);
   const [filteredFiles, setFilteredFiles] = useState<FileWithMetadata[]>([]);
+  const [isMetadataSheetOpen, setIsMetadataSheetOpen] = useState(false);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchFiles();
@@ -224,6 +227,25 @@ export function FileList() {
       fetchFiles();
     }
     setProcessingFileId(null);
+  };
+
+  const handleEditMetadata = (fileId: string) => {
+    setSelectedFileId(fileId);
+    setIsMetadataSheetOpen(true);
+  };
+
+  const closeMetadataSheet = () => {
+    setIsMetadataSheetOpen(false);
+    setSelectedFileId(null);
+  };
+
+  const handleMetadataSaved = () => {
+    fetchFiles(); // Refresh files to get updated metadata
+    closeMetadataSheet();
+    toast({
+      title: "Success",
+      description: "File metadata updated successfully"
+    });
   };
 
   const renderFileCard = (file: FileWithMetadata) => {
@@ -425,6 +447,12 @@ export function FileList() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[160px]">
               <DropdownMenuItem
+                onClick={() => handleEditMetadata(file.id)}
+              >
+                <Pencil className="h-3 w-3 mr-2"/>
+                Edit Metadata
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 onClick={() => deleteFile(file.id)}
               >
                 <Trash2 className="h-3 w-3 mr-2"/>
@@ -466,6 +494,21 @@ export function FileList() {
           {files.map(file => renderFileCard(file))}
         </div>
       )}
+
+      {/* Metadata Sheet */}
+      <Sheet open={isMetadataSheetOpen} onOpenChange={setIsMetadataSheetOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Edit File Metadata</SheetTitle>
+          </SheetHeader>
+          {selectedFileId && (
+            <FileMetadataForm 
+              fileId={selectedFileId}
+              onSave={handleMetadataSaved}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
