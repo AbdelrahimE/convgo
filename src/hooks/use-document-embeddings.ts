@@ -103,8 +103,10 @@ export function useDocumentEmbeddings() {
         .single();
       
       // Parse the embedding status using our helper function
-      const embeddingStatus = parseEmbeddingStatus(statusData?.embedding_status);
-      setStatus(embeddingStatus);
+      if (statusData?.embedding_status) {
+        const embeddingStatus = parseEmbeddingStatus(statusData.embedding_status);
+        setStatus(embeddingStatus);
+      }
         
       if (data.success) {
         toast.success('Embeddings generated successfully', {

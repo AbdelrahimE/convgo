@@ -111,9 +111,12 @@ export function FileList() {
           
           return {
             ...file,
-            metadata: {},
+            metadata: file.metadata || {},
             primary_language: file.primary_language || 'unknown',
+            language_confidence: file.language_confidence || {},
             detected_languages: file.detected_languages || [],
+            language_detection_status: file.language_detection_status || { status: 'pending' },
+            text_extraction_status: file.text_extraction_status || { status: 'pending' },
             embedding_status: embeddingStatus
           };
         });
@@ -177,21 +180,6 @@ export function FileList() {
     return <FileIcon className="w-4 h-4 mr-2" />;
   };
 
-  const getLanguageFromFilename = (filename: string) => {
-    const parts = filename.split('.');
-    const extension = parts.pop()?.toLowerCase();
-
-    switch (extension) {
-      case 'en': return 'English';
-      case 'es': return 'Spanish';
-      case 'fr': return 'French';
-      case 'de': return 'German';
-      case 'zh': return 'Chinese';
-      case 'ja': return 'Japanese';
-      default: return 'Unknown';
-    }
-  };
-
   const handleGenerateEmbeddings = async (fileId: string) => {
     setProcessingFileId(fileId);
     const success = await generateEmbeddings(fileId);
@@ -206,6 +194,74 @@ export function FileList() {
       file.filename.length > MAX_FILE_NAME_LENGTH
         ? file.filename.substring(0, MAX_FILE_NAME_LENGTH) + '...'
         : file.filename;
+
+    // Format file size nicely
+    const formatFileSize = (sizeInBytes: number) => {
+      if (sizeInBytes < 1024) {
+        return `${sizeInBytes} B`;
+      } else if (sizeInBytes < 1024 * 1024) {
+        return `${(sizeInBytes / 1024).toFixed(2)} KB`;
+      } else {
+        return `${(sizeInBytes / (1024 * 1024)).toFixed(2)} MB`;
+      }
+    };
+
+    const renderLanguageInfo = () => {
+      if (!file.detected_languages || file.detected_languages.length === 0) {
+        return (
+          <div className="flex items-center">
+            <Languages className="h-3 w-3 mr-1 text-gray-500" />
+            <span className="text-xs text-gray-500">Unknown</span>
+          </div>
+        );
+      }
+
+      // Show primary language with confidence if available
+      const primaryLanguage = file.primary_language || file.detected_languages[0];
+      const languageConfidence = file.language_confidence ? 
+        (file.language_confidence[primaryLanguage] || 0) * 100 : 0;
+      
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1 cursor-help">
+                <Languages className="h-3 w-3 text-gray-500" />
+                <span className="text-xs">
+                  {primaryLanguage} 
+                  {languageConfidence > 0 && ` (${languageConfidence.toFixed(0)}%)`}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold">Detected Languages:</p>
+                {file.detected_languages.map(lang => {
+                  const confidence = file.language_confidence ? 
+                    (file.language_confidence[lang] || 0) * 100 : 0;
+                  return (
+                    <div key={lang} className="text-xs flex justify-between gap-2">
+                      <span>{lang}</span>
+                      {confidence > 0 && <span>{confidence.toFixed(0)}%</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    };
+
+    const renderFileType = () => {
+      return (
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-gray-500">
+            {file.mime_type}
+          </span>
+        </div>
+      );
+    };
 
     const renderEmbeddingStatus = () => {
       if (!file.embedding_status) {
@@ -306,17 +362,19 @@ export function FileList() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Size: {(file.size_bytes / 1024).toFixed(2)} KB
-          </p>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Size: {formatFileSize(file.size_bytes)}
+            </p>
+            <div className="flex items-center gap-2">
+              {renderFileType()}
+            </div>
+          </div>
         </CardContent>
         
         <CardFooter className="flex justify-between items-center pt-2 gap-2">
           <div className="flex items-center">
-            <Languages className="h-3 w-3 mr-1 text-gray-500" />
-            <span className="text-xs text-gray-500">
-              {getLanguageFromFilename(file.filename)}
-            </span>
+            {renderLanguageInfo()}
           </div>
           
           {renderEmbeddingStatus()}
