@@ -124,6 +124,7 @@ export type Database = {
           arabic_script_details: Json | null
           created_at: string | null
           detected_languages: string[] | null
+          embedding_status: Json | null
           encoding: string | null
           filename: string
           id: string
@@ -146,6 +147,7 @@ export type Database = {
           arabic_script_details?: Json | null
           created_at?: string | null
           detected_languages?: string[] | null
+          embedding_status?: Json | null
           encoding?: string | null
           filename: string
           id?: string
@@ -168,6 +170,7 @@ export type Database = {
           arabic_script_details?: Json | null
           created_at?: string | null
           detected_languages?: string[] | null
+          embedding_status?: Json | null
           encoding?: string | null
           filename?: string
           id?: string

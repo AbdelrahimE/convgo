@@ -168,7 +168,7 @@ export function FileUploader() {
       } catch (embeddingError) {
         console.error('Error generating embeddings:', embeddingError);
         toast({
-          variant: "warning",
+          variant: "destructive",
           title: "Embeddings Generation",
           description: "Text extraction completed, but embeddings generation encountered an issue."
         });

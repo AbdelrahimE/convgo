@@ -61,6 +61,11 @@ interface FileWithMetadata {
   updated_at: string;
   metadata: any;
   embedding_status?: EmbeddingStatusDetails;
+  primary_language?: string;
+  language_confidence?: any;
+  language_detection_status?: any;
+  detected_languages?: string[];
+  text_extraction_status?: any;
 }
 
 export function FileList() {
@@ -70,6 +75,7 @@ export function FileList() {
   const { toast } = useToast();
   const { generateEmbeddings, isGenerating, progress } = useDocumentEmbeddings();
   const [processingFileId, setProcessingFileId] = useState<string | null>(null);
+  const [filteredFiles, setFilteredFiles] = useState<FileWithMetadata[]>([]);
 
   useEffect(() => {
     fetchFiles();
@@ -91,7 +97,16 @@ export function FileList() {
           description: "Failed to load files. Please try again."
         });
       } else {
-        setFiles(data || []);
+        // Convert data to FileWithMetadata type
+        const filesWithMetadata = data.map(file => ({
+          ...file,
+          metadata: {},
+          primary_language: file.primary_language || 'unknown',
+          detected_languages: file.detected_languages || []
+        })) as FileWithMetadata[];
+        
+        setFiles(filesWithMetadata);
+        setFilteredFiles(filesWithMetadata);
       }
     } finally {
       setIsLoading(false);
