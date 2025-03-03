@@ -34,7 +34,6 @@ interface File {
   profile_id: string;
   created_at: string;
   updated_at: string;
-  metadata: Json | null;
 }
 
 const MAX_FILE_NAME_LENGTH = 30;
@@ -49,7 +48,7 @@ interface FileWithMetadata {
   profile_id: string;
   created_at: string;
   updated_at: string;
-  metadata: Json | null;
+  file_metadata?: Record<string, any>;
   embedding_status?: EmbeddingStatusDetails;
   primary_language?: string;
   language_confidence?: any;
@@ -93,37 +92,75 @@ export function FileList() {
   const fetchFiles = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      // First, fetch the files
+      const { data: filesData, error: filesError } = await supabase
         .from('files')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error("Error fetching files:", error);
+      if (filesError) {
+        console.error("Error fetching files:", filesError);
         toast({
           variant: "destructive",
           title: "Error",
           description: "Failed to load files. Please try again."
         });
-      } else {
-        const filesWithMetadata: FileWithMetadata[] = data.map(file => {
-          const embeddingStatus = parseEmbeddingStatus(file.embedding_status);
-          
-          return {
-            ...file,
-            metadata: file.metadata || null,
-            primary_language: file.primary_language || 'unknown',
-            language_confidence: file.language_confidence || {},
-            detected_languages: file.detected_languages || [],
-            language_detection_status: file.language_detection_status || { status: 'pending' },
-            text_extraction_status: file.text_extraction_status || { status: 'pending' },
-            embedding_status: embeddingStatus
-          };
-        });
-        
-        setFiles(filesWithMetadata);
-        setFilteredFiles(filesWithMetadata);
+        setIsLoading(false);
+        return;
       }
+      
+      // Transform files into our expected format
+      const filesWithMetadata: FileWithMetadata[] = filesData.map(file => {
+        const embeddingStatus = parseEmbeddingStatus(file.embedding_status);
+        
+        return {
+          ...file,
+          file_metadata: {}, // Initialize with empty object, will be populated later
+          primary_language: file.primary_language || 'unknown',
+          language_confidence: file.language_confidence || {},
+          detected_languages: file.detected_languages || [],
+          language_detection_status: file.language_detection_status || { status: 'pending' },
+          text_extraction_status: file.text_extraction_status || { status: 'pending' },
+          embedding_status: embeddingStatus
+        };
+      });
+      
+      // Set files and filtered files with the data we have so far
+      setFiles(filesWithMetadata);
+      setFilteredFiles(filesWithMetadata);
+      
+      // For each file, we'll fetch any associated metadata
+      // This could be optimized with a single query if needed
+      for (const file of filesWithMetadata) {
+        try {
+          const { data: metadataData, error: metadataError } = await supabase
+            .from('file_metadata')
+            .select('*')
+            .eq('file_id', file.id);
+            
+          if (!metadataError && metadataData) {
+            // Update the file with its metadata
+            file.file_metadata = metadataData.reduce((acc, item) => {
+              acc[item.field_id] = item.value;
+              return acc;
+            }, {} as Record<string, any>);
+          }
+        } catch (err) {
+          console.error(`Error fetching metadata for file ${file.id}:`, err);
+        }
+      }
+      
+      // Update state with complete data
+      setFiles([...filesWithMetadata]);
+      setFilteredFiles([...filesWithMetadata]);
+      
+    } catch (error) {
+      console.error("Error in fetchFiles:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "An unexpected error occurred while loading files."
+      });
     } finally {
       setIsLoading(false);
     }
