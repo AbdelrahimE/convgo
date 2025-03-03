@@ -237,12 +237,15 @@ export function FileList() {
   };
 
   const handleMetadataSaved = () => {
-    fetchFiles(); // Refresh files to get updated metadata
     closeMetadataDialog();
-    toast({
-      title: "Success",
-      description: "File metadata updated successfully"
-    });
+    
+    setTimeout(() => {
+      fetchFiles();
+      toast({
+        title: "Success",
+        description: "File metadata updated successfully"
+      });
+    }, 100);
   };
 
   const renderFileCard = (file: FileWithMetadata) => {
@@ -490,7 +493,12 @@ export function FileList() {
         </div>
       )}
 
-      <Dialog open={isMetadataDialogOpen} onOpenChange={setIsMetadataDialogOpen}>
+      <Dialog open={isMetadataDialogOpen} onOpenChange={(open) => {
+        setIsMetadataDialogOpen(open);
+        if (!open) {
+          setSelectedFileId(null);
+        }
+      }}>
         <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit File Metadata</DialogTitle>
