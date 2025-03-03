@@ -34,7 +34,7 @@ interface File {
   profile_id: string;
   created_at: string;
   updated_at: string;
-  metadata?: any;
+  metadata: Json | null;
 }
 
 const MAX_FILE_NAME_LENGTH = 30;
@@ -49,7 +49,7 @@ interface FileWithMetadata {
   profile_id: string;
   created_at: string;
   updated_at: string;
-  metadata?: any;
+  metadata: Json | null;
   embedding_status?: EmbeddingStatusDetails;
   primary_language?: string;
   language_confidence?: any;
@@ -111,7 +111,7 @@ export function FileList() {
           
           return {
             ...file,
-            metadata: file.metadata || {},
+            metadata: file.metadata || null,
             primary_language: file.primary_language || 'unknown',
             language_confidence: file.language_confidence || {},
             detected_languages: file.detected_languages || [],
