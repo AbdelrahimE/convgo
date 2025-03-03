@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { Grid, List, Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, ChevronDown, Sparkles } from "lucide-react";
 import {
@@ -21,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useDocumentEmbeddings, EmbeddingStatus, EmbeddingStatusDetails } from "@/hooks/use-document-embeddings";
 import { Progress } from "@/components/ui/progress";
+import { Json } from "@/integrations/supabase/types";
 
 interface File {
   id: string;
@@ -56,6 +58,25 @@ interface FileWithMetadata {
   text_extraction_status?: any;
 }
 
+// Helper function to safely convert JSON to EmbeddingStatusDetails
+const parseEmbeddingStatus = (jsonData: Json | null): EmbeddingStatusDetails | undefined => {
+  if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) {
+    return undefined;
+  }
+  
+  const statusObj = jsonData as Record<string, any>;
+  
+  return {
+    status: (statusObj.status as EmbeddingStatus) || 'pending',
+    started_at: typeof statusObj.started_at === 'string' ? statusObj.started_at : undefined,
+    completed_at: typeof statusObj.completed_at === 'string' ? statusObj.completed_at : undefined, 
+    success_count: typeof statusObj.success_count === 'number' ? statusObj.success_count : undefined,
+    error_count: typeof statusObj.error_count === 'number' ? statusObj.error_count : undefined,
+    last_updated: typeof statusObj.last_updated === 'string' ? statusObj.last_updated : undefined,
+    error: typeof statusObj.error === 'string' ? statusObj.error : undefined
+  };
+};
+
 export function FileList() {
   const [files, setFiles] = useState<FileWithMetadata[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -86,19 +107,7 @@ export function FileList() {
         });
       } else {
         const filesWithMetadata: FileWithMetadata[] = data.map(file => {
-          let embeddingStatus: EmbeddingStatusDetails | undefined;
-          
-          if (file.embedding_status) {
-            embeddingStatus = {
-              status: (file.embedding_status.status as EmbeddingStatus) || 'pending',
-              started_at: file.embedding_status.started_at,
-              completed_at: file.embedding_status.completed_at,
-              success_count: file.embedding_status.success_count,
-              error_count: file.embedding_status.error_count,
-              last_updated: file.embedding_status.last_updated,
-              error: file.embedding_status.error
-            };
-          }
+          const embeddingStatus = parseEmbeddingStatus(file.embedding_status);
           
           return {
             ...file,
