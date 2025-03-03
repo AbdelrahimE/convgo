@@ -23,11 +23,15 @@ import { useDocumentEmbeddings, EmbeddingStatus, EmbeddingStatusDetails } from "
 import { Progress } from "@/components/ui/progress";
 import { Json } from "@/integrations/supabase/types";
 import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle 
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { FileMetadataForm } from "@/components/FileMetadataForm";
 
 interface File {
@@ -91,10 +95,11 @@ export function FileList() {
   const [filteredFiles, setFilteredFiles] = useState<FileWithMetadata[]>([]);
   const [isMetadataDialogOpen, setIsMetadataDialogOpen] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     fetchFiles();
-  }, []);
+  }, [refreshTrigger]);
 
   const fetchFiles = async () => {
     setIsLoading(true);
@@ -233,19 +238,19 @@ export function FileList() {
 
   const closeMetadataDialog = () => {
     setIsMetadataDialogOpen(false);
-    setSelectedFileId(null);
   };
 
   const handleMetadataSaved = () => {
     closeMetadataDialog();
     
     setTimeout(() => {
-      fetchFiles();
+      setRefreshTrigger(prev => prev + 1);
+      
       toast({
         title: "Success",
         description: "File metadata updated successfully"
       });
-    }, 100);
+    }, 300);
   };
 
   const renderFileCard = (file: FileWithMetadata) => {
@@ -493,24 +498,26 @@ export function FileList() {
         </div>
       )}
 
-      <Dialog open={isMetadataDialogOpen} onOpenChange={(open) => {
-        setIsMetadataDialogOpen(open);
-        if (!open) {
-          setSelectedFileId(null);
-        }
-      }}>
-        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit File Metadata</DialogTitle>
-          </DialogHeader>
+      <AlertDialog 
+        open={isMetadataDialogOpen} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsMetadataDialogOpen(false);
+          }
+        }}
+      >
+        <AlertDialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit File Metadata</AlertDialogTitle>
+          </AlertDialogHeader>
           {selectedFileId && (
             <FileMetadataForm 
               fileId={selectedFileId}
               onSave={handleMetadataSaved}
             />
           )}
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
