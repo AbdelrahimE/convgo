@@ -33,6 +33,12 @@ export interface ChunkingOptions {
    * Whether to clean redundant data during preprocessing
    */
   cleanRedundantData?: boolean;
+  
+  /**
+   * Whether to use structure-aware chunking
+   * Considers document structure like headings, paragraphs, and lists
+   */
+  structureAware?: boolean;
 }
 
 /**
@@ -181,6 +187,7 @@ export function chunkText(text: string, options: ChunkingOptions = {}): string[]
   const chunkOverlap = options.chunkOverlap || 80;
   const splitBySentence = options.splitBySentence !== undefined ? options.splitBySentence : true;
   const preserveTables = options.preserveTables !== undefined ? options.preserveTables : true;
+  const structureAware = options.structureAware !== undefined ? options.structureAware : false;
 
   // Simple implementation that supports table preservation
   if (text.length <= chunkSize) {
