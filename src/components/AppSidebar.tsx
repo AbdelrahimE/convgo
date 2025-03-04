@@ -1,47 +1,36 @@
-
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "react-router-dom";
 import { FileText, Home, LogOut, MessageCircle } from "lucide-react";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-
 const FULL_NAME_MAX_LENGTH = 25;
-
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: Home },
-  { name: 'Files', href: '/files', icon: FileText },
-  { name: 'WhatsApp', href: '/whatsapp', icon: MessageCircle },
-];
-
+const navigation = [{
+  name: 'Dashboard',
+  href: '/dashboard',
+  icon: Home
+}, {
+  name: 'Files',
+  href: '/files',
+  icon: FileText
+}, {
+  name: 'WhatsApp',
+  href: '/whatsapp',
+  icon: MessageCircle
+}];
 function getInitials(name: string | null): string {
   if (!name) return '?';
-  return name
-    .split(' ')
-    .map(word => word[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+  return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
 }
-
 export function AppSidebar() {
-  const { user } = useAuth();
+  const {
+    user
+  } = useAuth();
   const location = useLocation();
   const isMobile = useIsMobile();
-
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -51,53 +40,38 @@ export function AppSidebar() {
       toast.error("Failed to log out");
     }
   };
-
   const profile = user ? {
     name: user.user_metadata?.full_name || 'User',
-    avatarUrl: user.user_metadata?.avatar_url,
+    avatarUrl: user.user_metadata?.avatar_url
   } : null;
-
-  const truncatedName = profile?.name && profile.name.length > FULL_NAME_MAX_LENGTH
-    ? `${profile.name.slice(0, FULL_NAME_MAX_LENGTH)}...`
-    : profile?.name;
-
-  return (
-    <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"}>
+  const truncatedName = profile?.name && profile.name.length > FULL_NAME_MAX_LENGTH ? `${profile.name.slice(0, FULL_NAME_MAX_LENGTH)}...` : profile?.name;
+  return <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"}>
       <SidebarHeader className="flex items-center justify-center p-4">
-        <div className="text-2xl font-bold text-primary">
-          MyApp
-        </div>
+        <div className="text-2xl font-bold text-primary">ConvGo.com</div>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navigation.map((item) => {
-                const isActive = location.pathname === item.href;
-                return (
-                  <SidebarMenuItem key={item.name}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive}
-                      tooltip={item.name}
-                    >
+              {navigation.map(item => {
+              const isActive = location.pathname === item.href;
+              return <SidebarMenuItem key={item.name}>
+                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.name}>
                       <Link to={item.href}>
                         <item.icon />
                         <span>{item.name}</span>
                       </Link>
                     </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+                  </SidebarMenuItem>;
+            })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter>
-        {profile && (
-          <>
+        {profile && <>
             <div className="flex items-center gap-3 px-4 pb-4">
               <Avatar>
                 <AvatarImage src={profile.avatarUrl || undefined} />
@@ -110,18 +84,12 @@ export function AppSidebar() {
               </div>
             </div>
             <div className="p-4 pt-0">
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-2"
-                onClick={handleLogout}
-              >
+              <Button variant="outline" className="w-full justify-start gap-2" onClick={handleLogout}>
                 <LogOut className="h-4 w-4" />
                 Logout
               </Button>
             </div>
-          </>
-        )}
+          </>}
       </SidebarFooter>
-    </Sidebar>
-  );
+    </Sidebar>;
 }
