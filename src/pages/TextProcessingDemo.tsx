@@ -20,6 +20,9 @@ export default function TextProcessingDemo() {
   const [chunkSize, setChunkSize] = useState(512);
   const [chunkOverlap, setChunkOverlap] = useState(50);
   const [splitBySentence, setSplitBySentence] = useState(true);
+  const [structureAware, setStructureAware] = useState(true);
+  const [preserveTables, setPreserveTables] = useState(true);
+  const [cleanRedundantData, setCleanRedundantData] = useState(true);
   const [activeTab, setActiveTab] = useState('chunks');
 
   const { processDocument, isProcessing, result } = useTextProcessing();
@@ -34,7 +37,10 @@ export default function TextProcessingDemo() {
       await processDocument(text, documentId, {
         chunkSize,
         chunkOverlap,
-        splitBySentence
+        splitBySentence,
+        structureAware,
+        preserveTables,
+        cleanRedundantData
       });
       toast.success('Text processed successfully');
     } catch (error) {
@@ -122,13 +128,42 @@ export default function TextProcessingDemo() {
                 </p>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="split-sentence"
-                  checked={splitBySentence}
-                  onCheckedChange={setSplitBySentence}
-                />
-                <Label htmlFor="split-sentence">Split by sentence boundaries</Label>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="split-sentence"
+                    checked={splitBySentence}
+                    onCheckedChange={setSplitBySentence}
+                  />
+                  <Label htmlFor="split-sentence">Split by sentence boundaries</Label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="structure-aware"
+                    checked={structureAware}
+                    onCheckedChange={setStructureAware}
+                  />
+                  <Label htmlFor="structure-aware">Structure-aware chunking</Label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="preserve-tables"
+                    checked={preserveTables}
+                    onCheckedChange={setPreserveTables}
+                  />
+                  <Label htmlFor="preserve-tables">Preserve table integrity</Label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="clean-redundant"
+                    checked={cleanRedundantData}
+                    onCheckedChange={setCleanRedundantData}
+                  />
+                  <Label htmlFor="clean-redundant">Clean redundant data</Label>
+                </div>
               </div>
             </div>
           </CardContent>

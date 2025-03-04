@@ -37,6 +37,7 @@ interface ChunkingSettings {
   chunkOverlap: number;
   splitBySentence?: boolean;
   structureAware?: boolean;
+  preserveTables?: boolean;
   cleanRedundantData?: boolean;
 }
 
@@ -56,6 +57,7 @@ export function FileUploader() {
     chunkOverlap: 80,
     splitBySentence: true,
     structureAware: true,
+    preserveTables: true,
     cleanRedundantData: true
   });
   const inputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +159,7 @@ export function FileUploader() {
             chunkOverlap: chunkingSettings.chunkOverlap,
             splitBySentence: chunkingSettings.splitBySentence,
             structureAware: chunkingSettings.structureAware,
+            preserveTables: chunkingSettings.preserveTables,
             cleanRedundantData: chunkingSettings.cleanRedundantData
           }
         }
@@ -353,6 +356,10 @@ export function FileUploader() {
     setChunkingSettings(prev => ({ ...prev, structureAware: !prev.structureAware }));
   };
 
+  const togglePreserveTables = () => {
+    setChunkingSettings(prev => ({ ...prev, preserveTables: !prev.preserveTables }));
+  };
+
   const toggleCleanRedundantData = () => {
     setChunkingSettings(prev => ({ ...prev, cleanRedundantData: !prev.cleanRedundantData }));
   };
@@ -537,6 +544,21 @@ export function FileUploader() {
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <Switch
+                  id="preserve-tables"
+                  checked={chunkingSettings.preserveTables}
+                  onCheckedChange={togglePreserveTables}
+                />
+                <Label htmlFor="preserve-tables" className="text-sm">Preserve Table Integrity</Label>
+              </div>
+              <p className="text-xs text-gray-500 pl-7">
+                Keeps tables intact during chunking by identifying tabular data and treating 
+                them as special elements. Prevents table rows from being split across chunks.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Switch
                   id="clean-redundant"
                   checked={chunkingSettings.cleanRedundantData}
                   onCheckedChange={toggleCleanRedundantData}
@@ -568,6 +590,7 @@ export function FileUploader() {
           <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
             <p className="text-xs text-blue-700">
               <strong>Recommended settings by document type:</strong><br/>
+              • Technical/Reference with Tables: Enable "Preserve Table Integrity" for best results<br/>
               • Technical/Reference: 512-768 chunk size, 40-60 overlap, Structure-Aware ON<br/>
               • Narrative/Conversational: 768-1024 chunk size, 80-100 overlap, Sentence Boundaries ON<br/>
               • Short Form Content: 256-512 chunk size, 20-40 overlap, Clean Redundant Data ON

@@ -47,7 +47,10 @@ export function useTextProcessing() {
     const defaultOptions = {
       chunkSize: 768,
       chunkOverlap: 80,
-      splitBySentence: true
+      splitBySentence: true,
+      structureAware: true,
+      preserveTables: true,
+      cleanRedundantData: true
     };
     
     // Merge with provided options (if any)
@@ -66,7 +69,7 @@ export function useTextProcessing() {
       const chunks = chunkText(processedText, mergedOptions);
       
       console.log(`Created ${chunks.length} chunks with settings:`, 
-        `chunk size: ${mergedOptions.chunkSize}, overlap: ${mergedOptions.chunkOverlap}`);
+        `chunk size: ${mergedOptions.chunkSize}, overlap: ${mergedOptions.chunkOverlap}, preserveTables: ${mergedOptions.preserveTables}`);
       
       // 3. Add metadata to chunks
       const chunksWithMetadata = createChunkMetadata(processedText, chunks, documentId);

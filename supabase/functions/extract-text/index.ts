@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { findTableSections, processTableForChunking, isTableContent } from '../utils/tableProcessing.ts';
 
 // Text processing utilities
 interface ChunkingOptions {
@@ -8,6 +9,7 @@ interface ChunkingOptions {
   chunkOverlap?: number;
   splitBySentence?: boolean;
   structureAware?: boolean;
+  preserveTables?: boolean;
   cleanRedundantData?: boolean;
 }
 
@@ -17,6 +19,7 @@ const DEFAULT_CHUNKING_OPTIONS: ChunkingOptions = {
   chunkOverlap: 80,
   splitBySentence: true,
   structureAware: true,
+  preserveTables: true,
   cleanRedundantData: true
 };
 
@@ -131,7 +134,7 @@ function isTableContent(text: string): boolean {
 }
 
 /**
- * Detects structural boundaries in text for improved chunking
+ * Enhanced function to detect structural boundaries in text for improved chunking
  */
 function findStructuralBoundaries(text: string): number[] {
   if (!text) return [];
@@ -155,13 +158,16 @@ function findStructuralBoundaries(text: string): number[] {
     // Check for section headings
     const isHeading = /^[#\s]*[A-Z\u0600-\u06FF][A-Z\u0600-\u06FF\s]*[:؟؛،-]?\s*$/.test(line) && line.trim().length < 100;
     
-    // Check for table start/end
+    // Check for table start/end - now handled by the dedicated table processing module
     if (!inTable && i < lines.length - 2) {
       // Look ahead to see if we're entering table content
       const potentialTable = lines.slice(i, Math.min(i + 10, lines.length)).join('\n');
       if (isTableContent(potentialTable)) {
         inTable = true;
         tableBuffer = '';
+        
+        // Add boundary at the start of table 
+        boundaries.push(currentPos);
       }
     }
     
@@ -287,8 +293,8 @@ function cleanRedundantData(text: string): string {
 }
 
 /**
- * Splits text into chunks suitable for embedding models
- * Enhanced with structure-aware chunking
+ * Enhanced function to split text into chunks suitable for embedding models
+ * Now with improved table handling
  */
 function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   // Merge provided options with defaults
@@ -296,8 +302,9 @@ function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   const chunkOverlap = options.chunkOverlap || DEFAULT_CHUNKING_OPTIONS.chunkOverlap;
   const splitBySentence = options.splitBySentence !== undefined ? options.splitBySentence : DEFAULT_CHUNKING_OPTIONS.splitBySentence;
   const structureAware = options.structureAware !== undefined ? options.structureAware : DEFAULT_CHUNKING_OPTIONS.structureAware;
+  const preserveTables = options.preserveTables !== undefined ? options.preserveTables : DEFAULT_CHUNKING_OPTIONS.preserveTables;
 
-  console.log(`Chunking text with size: ${chunkSize}, overlap: ${chunkOverlap}, splitBySentence: ${splitBySentence}, structureAware: ${structureAware}`);
+  console.log(`Chunking text with size: ${chunkSize}, overlap: ${chunkOverlap}, preserveTables: ${preserveTables}`);
 
   // Handle empty text
   if (!text || text.trim() === '') {
@@ -316,113 +323,192 @@ function chunkText(text: string, options: ChunkingOptions = {}): string[] {
     return [cleanedText];
   }
 
-  const chunks: string[] = [];
+  // Special table-preserving chunking
+  if (preserveTables) {
+    console.log('Using table-preserving chunking');
+    
+    // Find all table sections in the text
+    const tableSections = findTableSections(cleanedText);
+    
+    if (tableSections.length > 0) {
+      console.log(`Found ${tableSections.length} table sections to preserve`);
+      
+      // Process the text in segments, handling tables specially
+      const chunks: string[] = [];
+      let lastPos = 0;
+      
+      for (const [tableStart, tableEnd] of tableSections) {
+        // Process text before this table
+        if (tableStart > lastPos) {
+          const beforeTableText = cleanedText.substring(lastPos, tableStart);
+          if (beforeTableText.trim()) {
+            // Chunk the non-table text using regular methods
+            if (structureAware) {
+              const structuralChunks = chunkTextWithStructure(beforeTableText, chunkSize, chunkOverlap);
+              chunks.push(...structuralChunks);
+            } else if (splitBySentence) {
+              const sentenceChunks = chunkTextBySentence(beforeTableText, chunkSize, chunkOverlap);
+              chunks.push(...sentenceChunks);
+            } else {
+              const sizeChunks = splitTextBySize(beforeTableText, chunkSize, chunkOverlap);
+              chunks.push(...sizeChunks);
+            }
+          }
+        }
+        
+        // Process the table as a special element
+        const tableText = cleanedText.substring(tableStart, tableEnd);
+        const tableChunks = processTableForChunking(tableText, chunkSize);
+        chunks.push(...tableChunks);
+        
+        lastPos = tableEnd;
+      }
+      
+      // Process any text after the last table
+      if (lastPos < cleanedText.length) {
+        const afterTablesText = cleanedText.substring(lastPos);
+        if (afterTablesText.trim()) {
+          // Chunk the non-table text using regular methods
+          if (structureAware) {
+            const structuralChunks = chunkTextWithStructure(afterTablesText, chunkSize, chunkOverlap);
+            chunks.push(...structuralChunks);
+          } else if (splitBySentence) {
+            const sentenceChunks = chunkTextBySentence(afterTablesText, chunkSize, chunkOverlap);
+            chunks.push(...sentenceChunks);
+          } else {
+            const sizeChunks = splitTextBySize(afterTablesText, chunkSize, chunkOverlap);
+            chunks.push(...sizeChunks);
+          }
+        }
+      }
+      
+      return chunks;
+    }
+  }
+  
+  // If we're here, either there are no tables or preserveTables is false
   
   // Structure-aware chunking
   if (structureAware) {
-    console.log('Using structure-aware chunking');
-    const structuralBoundaries = findStructuralBoundaries(cleanedText);
-    
-    // If no structural boundaries found, fallback to regular chunking
-    if (structuralBoundaries.length === 0) {
-      return splitTextBySize(cleanedText, chunkSize, chunkOverlap);
-    }
-    
-    // Use structural boundaries to create chunks
-    let startPos = 0;
-    let currentChunk = '';
-    
-    for (let i = 0; i < structuralBoundaries.length; i++) {
-      const endPos = structuralBoundaries[i];
-      const section = cleanedText.substring(startPos, endPos);
-      
-      // If adding this section exceeds chunk size, save current chunk and start a new one
-      if (currentChunk.length + section.length > chunkSize) {
-        if (currentChunk) {
-          chunks.push(currentChunk.trim());
-        }
-        
-        // Large sections need further splitting
-        if (section.length > chunkSize) {
-          const subChunks = splitTextBySize(section, chunkSize, chunkOverlap);
-          chunks.push(...subChunks);
-        } else {
-          currentChunk = section;
-        }
-      } else {
-        currentChunk += (currentChunk ? '\n' : '') + section;
-      }
-      
-      startPos = endPos;
-    }
-    
-    // Add remaining text
-    if (startPos < cleanedText.length) {
-      const remainingText = cleanedText.substring(startPos);
-      
-      if (currentChunk.length + remainingText.length > chunkSize) {
-        if (currentChunk) {
-          chunks.push(currentChunk.trim());
-        }
-        
-        // Split remaining text if needed
-        if (remainingText.length > chunkSize) {
-          const subChunks = splitTextBySize(remainingText, chunkSize, chunkOverlap);
-          chunks.push(...subChunks);
-        } else {
-          chunks.push(remainingText.trim());
-        }
-      } else {
-        currentChunk += (currentChunk ? '\n' : '') + remainingText;
-        chunks.push(currentChunk.trim());
-      }
-    } else if (currentChunk) {
-      chunks.push(currentChunk.trim());
-    }
-    
-    return chunks;
+    return chunkTextWithStructure(cleanedText, chunkSize, chunkOverlap);
   }
   
-  // If splitting by sentence, we'll try to respect sentence boundaries
+  // Sentence-aware chunking
   if (splitBySentence) {
-    // Enhanced sentence splitting regex that works with Arabic and other scripts
-    // This pattern looks for sentence-ending punctuation followed by a space or end of string
-    const sentences = cleanedText.match(/[^.!?؟،]+[.!?؟،]+(\s|$)/g) || [cleanedText];
+    return chunkTextBySentence(cleanedText, chunkSize, chunkOverlap);
+  }
+  
+  // Simple size-based splitting
+  return splitTextBySize(cleanedText, chunkSize, chunkOverlap);
+}
+
+/**
+ * Helper function for structure-aware chunking
+ */
+function chunkTextWithStructure(text: string, chunkSize: number, chunkOverlap: number): string[] {
+  console.log('Using structure-aware chunking');
+  const structuralBoundaries = findStructuralBoundaries(text);
+  
+  // If no structural boundaries found, fallback to regular chunking
+  if (structuralBoundaries.length === 0) {
+    return splitTextBySize(text, chunkSize, chunkOverlap);
+  }
+  
+  // Use structural boundaries to create chunks
+  const chunks: string[] = [];
+  let startPos = 0;
+  let currentChunk = '';
+  
+  for (let i = 0; i < structuralBoundaries.length; i++) {
+    const endPos = structuralBoundaries[i];
+    const section = text.substring(startPos, endPos);
     
-    let currentChunk = '';
-    
-    for (const sentence of sentences) {
-      // If adding this sentence would exceed chunk size, save the current chunk and start a new one
-      if (currentChunk.length + sentence.length > chunkSize) {
-        if (currentChunk) {
-          chunks.push(currentChunk.trim());
-        }
-        
-        // If the sentence itself is longer than chunk size, we need to split it
-        if (sentence.length > chunkSize) {
-          const sentenceChunks = splitTextBySize(sentence, chunkSize, chunkOverlap);
-          chunks.push(...sentenceChunks);
-          currentChunk = '';
-          continue;
-        }
-        
-        // Start a new chunk with this sentence
-        currentChunk = sentence;
-      } else {
-        // Add sentence to current chunk
-        currentChunk += (currentChunk ? ' ' : '') + sentence;
+    // If adding this section exceeds chunk size, save current chunk and start a new one
+    if (currentChunk.length + section.length > chunkSize) {
+      if (currentChunk) {
+        chunks.push(currentChunk.trim());
       }
+      
+      // Large sections need further splitting
+      if (section.length > chunkSize) {
+        const subChunks = splitTextBySize(section, chunkSize, chunkOverlap);
+        chunks.push(...subChunks);
+      } else {
+        currentChunk = section;
+      }
+    } else {
+      currentChunk += (currentChunk ? '\n' : '') + section;
     }
     
-    // Add the last chunk if there's anything left
-    if (currentChunk.trim()) {
+    startPos = endPos;
+  }
+  
+  // Add remaining text
+  if (startPos < text.length) {
+    const remainingText = text.substring(startPos);
+    
+    if (currentChunk.length + remainingText.length > chunkSize) {
+      if (currentChunk) {
+        chunks.push(currentChunk.trim());
+      }
+      
+      // Split remaining text if needed
+      if (remainingText.length > chunkSize) {
+        const subChunks = splitTextBySize(remainingText, chunkSize, chunkOverlap);
+        chunks.push(...subChunks);
+      } else {
+        chunks.push(remainingText.trim());
+      }
+    } else {
+      currentChunk += (currentChunk ? '\n' : '') + remainingText;
       chunks.push(currentChunk.trim());
     }
-  } else {
-    // Simple size-based splitting without respecting semantic boundaries
-    return splitTextBySize(cleanedText, chunkSize, chunkOverlap);
+  } else if (currentChunk) {
+    chunks.push(currentChunk.trim());
   }
+  
+  return chunks;
+}
 
+/**
+ * Helper function for sentence-aware chunking
+ */
+function chunkTextBySentence(text: string, chunkSize: number, chunkOverlap: number): string[] {
+  // Enhanced sentence splitting regex that works with Arabic and other scripts
+  // This pattern looks for sentence-ending punctuation followed by a space or end of string
+  const sentences = text.match(/[^.!?؟،]+[.!?؟،]+(\s|$)/g) || [text];
+  
+  const chunks: string[] = [];
+  let currentChunk = '';
+  
+  for (const sentence of sentences) {
+    // If adding this sentence would exceed chunk size, save the current chunk and start a new one
+    if (currentChunk.length + sentence.length > chunkSize) {
+      if (currentChunk) {
+        chunks.push(currentChunk.trim());
+      }
+      
+      // If the sentence itself is longer than chunk size, we need to split it
+      if (sentence.length > chunkSize) {
+        const sentenceChunks = splitTextBySize(sentence, chunkSize, chunkOverlap);
+        chunks.push(...sentenceChunks);
+        currentChunk = '';
+        continue;
+      }
+      
+      // Start a new chunk with this sentence
+      currentChunk = sentence;
+    } else {
+      // Add sentence to current chunk
+      currentChunk += (currentChunk ? ' ' : '') + sentence;
+    }
+  }
+  
+  // Add the last chunk if there's anything left
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+  
   return chunks;
 }
 
@@ -547,7 +633,7 @@ serve(async (req) => {
   }
 
   try {
-    // Get the fileId from the request
+    // Get the fileId and chunking settings from the request
     const { fileId, chunkingSettings } = await req.json();
     
     if (!fileId) {
@@ -560,7 +646,7 @@ serve(async (req) => {
     // Log the request with chunking settings if provided
     console.log('Text extraction request for file:', fileId);
     if (chunkingSettings) {
-      console.log('With custom chunking settings:', chunkingSettings);
+      console.log('With custom chunking settings:', JSON.stringify(chunkingSettings));
     } else {
       console.log('Using default chunking settings');
     }
@@ -649,13 +735,19 @@ serve(async (req) => {
     }
 
     // Apply text chunking with provided settings or default
-    const chunkOptions = chunkingSettings || DEFAULT_CHUNKING_OPTIONS;
+    const chunkOptions = {
+      ...DEFAULT_CHUNKING_OPTIONS,
+      ...chunkingSettings
+    };
+    
+    console.log('Final chunking options:', JSON.stringify(chunkOptions));
+    
     const processedText = preprocessText(extractedText);
     const chunks = chunkText(processedText, chunkOptions);
     const chunksWithMetadata = createChunkMetadata(processedText, chunks, fileId);
     
     console.log(`Created ${chunks.length} chunks with settings:`, 
-      `chunk size: ${chunkOptions.chunkSize}, overlap: ${chunkOptions.chunkOverlap}`);
+      `chunk size: ${chunkOptions.chunkSize}, overlap: ${chunkOptions.chunkOverlap}, preserveTables: ${chunkOptions.preserveTables}`);
 
     // Store chunks in the text_chunks table with language detection for each chunk
     for (let i = 0; i < chunksWithMetadata.length; i++) {
