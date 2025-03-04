@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
@@ -8,13 +7,17 @@ interface ChunkingOptions {
   chunkSize?: number;
   chunkOverlap?: number;
   splitBySentence?: boolean;
+  structureAware?: boolean;
+  cleanRedundantData?: boolean;
 }
 
 // Default chunking options matching the frontend
 const DEFAULT_CHUNKING_OPTIONS: ChunkingOptions = {
   chunkSize: 768,
   chunkOverlap: 80,
-  splitBySentence: true
+  splitBySentence: true,
+  structureAware: true,
+  cleanRedundantData: true
 };
 
 /**
@@ -83,26 +86,230 @@ function getTextDirection(language: string): string {
 }
 
 /**
+ * Detects if a text segment appears to be a table
+ */
+function isTableContent(text: string): boolean {
+  // Count the number of consecutive lines that have similar patterns of
+  // delimiters like commas, tabs, or multiple spaces
+  const lines = text.split('\n');
+  if (lines.length < 3) return false;
+  
+  // Check for consistent separators like tabs, multiple spaces, or vertical bars
+  const delimiters = [/\t/, /\s{2,}/, /\|/];
+  let consistentFormat = false;
+  
+  for (const delimiter of delimiters) {
+    // Count delimiters in each line
+    const delimiterCounts = lines.map(line => (line.match(delimiter) || []).length);
+    
+    // Check if at least 3 consecutive lines have similar delimiter counts
+    let similarFormatCount = 0;
+    for (let i = 1; i < delimiterCounts.length; i++) {
+      if (Math.abs(delimiterCounts[i] - delimiterCounts[i-1]) <= 1 && delimiterCounts[i] > 0) {
+        similarFormatCount++;
+        if (similarFormatCount >= 2) {
+          consistentFormat = true;
+          break;
+        }
+      } else {
+        similarFormatCount = 0;
+      }
+    }
+    
+    if (consistentFormat) break;
+  }
+  
+  // Also check for content that has number patterns typical in tables
+  const numberPatterns = lines.map(line => (line.match(/\d+(\.\d+)?/) || []).length);
+  const hasConsistentNumbers = numberPatterns.filter(count => count > 0).length >= Math.floor(lines.length * 0.5);
+  
+  // Check for phone numbers, which often appear in tables
+  const phonePattern = /(\+?\d{1,4}[\s-]?)?(\(?\d{1,4}\)?[\s-]?)?\d{3}[\s-]?\d{3}[\s-]?\d{4}/;
+  const hasPhoneNumbers = lines.filter(line => phonePattern.test(line)).length >= 2;
+  
+  return consistentFormat || hasConsistentNumbers || hasPhoneNumbers;
+}
+
+/**
+ * Detects structural boundaries in text for improved chunking
+ */
+function findStructuralBoundaries(text: string): number[] {
+  if (!text) return [];
+  
+  const boundaries: number[] = [];
+  const lines = text.split('\n');
+  let currentPos = 0;
+  
+  let inTable = false;
+  let tableBuffer = '';
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Skip position calculation for empty lines
+    if (!line.trim()) {
+      currentPos += line.length + 1; // +1 for newline
+      continue;
+    }
+    
+    // Check for section headings
+    const isHeading = /^[#\s]*[A-Z\u0600-\u06FF][A-Z\u0600-\u06FF\s]*[:؟؛،-]?\s*$/.test(line) && line.trim().length < 100;
+    
+    // Check for table start/end
+    if (!inTable && i < lines.length - 2) {
+      // Look ahead to see if we're entering table content
+      const potentialTable = lines.slice(i, Math.min(i + 10, lines.length)).join('\n');
+      if (isTableContent(potentialTable)) {
+        inTable = true;
+        tableBuffer = '';
+      }
+    }
+    
+    if (inTable) {
+      tableBuffer += line + '\n';
+      
+      // Check if table section ends
+      if (i === lines.length - 1 || 
+          (i < lines.length - 1 && lines[i+1].trim() === '' && i < lines.length - 2 && lines[i+2].trim() === '')) {
+        inTable = false;
+        // Add boundary at end of table
+        boundaries.push(currentPos + line.length);
+      }
+    } else if (isHeading) {
+      // Add boundary before heading
+      boundaries.push(currentPos);
+    } else if (line.trim().endsWith('.') || line.trim().endsWith('؟') || line.trim().endsWith('!')) {
+      // End of paragraph or complete sentence - potential boundary
+      boundaries.push(currentPos + line.length);
+    }
+    
+    currentPos += line.length + 1; // +1 for newline
+  }
+  
+  return boundaries;
+}
+
+/**
+ * Clean redundant data from text to improve quality
+ */
+function cleanRedundantData(text: string): string {
+  if (!text) return '';
+  
+  // 1. Clean repeated contact information
+  const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const phonePattern = /(\+?\d{1,4}[\s-]?)?(\(?\d{1,4}\)?[\s-]?)?\d{3}[\s-]?\d{3}[\s-]?\d{4}/g;
+  const addressPattern = /([A-Za-z\u0600-\u06FF]+\s){2,}(\d+),\s([A-Za-z\u0600-\u06FF]+\s?)+,\s([A-Za-z\u0600-\u06FF]+\s?)+/g;
+  
+  // Extract all occurrences of patterns
+  const emails = text.match(emailPattern) || [];
+  const phones = text.match(phonePattern) || [];
+  const addresses = text.match(addressPattern) || [];
+  
+  // Keep track of seen items to remove duplicates
+  const seenEmails = new Set<string>();
+  const seenPhones = new Set<string>();
+  const seenAddresses = new Set<string>();
+  
+  // Replace repeated occurrences with empty string
+  let cleanedText = text;
+  
+  // Clean duplicate emails
+  for (const email of emails) {
+    if (seenEmails.has(email)) {
+      // Skip the first occurrence (already added to set)
+      const escapedEmail = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const emailRegex = new RegExp(`${escapedEmail}`, 'g');
+      let found = false;
+      cleanedText = cleanedText.replace(emailRegex, (match) => {
+        if (!found) {
+          found = true;
+          return match; // Keep the first occurrence
+        }
+        return ''; // Remove duplicates
+      });
+    } else {
+      seenEmails.add(email);
+    }
+  }
+  
+  // Clean duplicate phone numbers (similar approach)
+  for (const phone of phones) {
+    if (seenPhones.has(phone)) {
+      const escapedPhone = phone.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const phoneRegex = new RegExp(`${escapedPhone}`, 'g');
+      let found = false;
+      cleanedText = cleanedText.replace(phoneRegex, (match) => {
+        if (!found) {
+          found = true;
+          return match;
+        }
+        return '';
+      });
+    } else {
+      seenPhones.add(phone);
+    }
+  }
+  
+  // Clean duplicate addresses (similar approach)
+  for (const address of addresses) {
+    if (seenAddresses.has(address)) {
+      const escapedAddress = address.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const addressRegex = new RegExp(`${escapedAddress}`, 'g');
+      let found = false;
+      cleanedText = cleanedText.replace(addressRegex, (match) => {
+        if (!found) {
+          found = true;
+          return match;
+        }
+        return '';
+      });
+    } else {
+      seenAddresses.add(address);
+    }
+  }
+  
+  // 2. Normalize spaces and line breaks
+  cleanedText = cleanedText
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n');
+  
+  // 3. Format tables better - add proper spacing
+  if (isTableContent(cleanedText)) {
+    const lines = cleanedText.split('\n');
+    cleanedText = lines.map(line => {
+      // Add spaces around delimiter characters
+      return line.replace(/(\|)/g, ' $1 ').replace(/\s{3,}/g, '  ');
+    }).join('\n');
+  }
+  
+  return cleanedText;
+}
+
+/**
  * Splits text into chunks suitable for embedding models
+ * Enhanced with structure-aware chunking
  */
 function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   // Merge provided options with defaults
   const chunkSize = options.chunkSize || DEFAULT_CHUNKING_OPTIONS.chunkSize;
   const chunkOverlap = options.chunkOverlap || DEFAULT_CHUNKING_OPTIONS.chunkOverlap;
   const splitBySentence = options.splitBySentence !== undefined ? options.splitBySentence : DEFAULT_CHUNKING_OPTIONS.splitBySentence;
+  const structureAware = options.structureAware !== undefined ? options.structureAware : DEFAULT_CHUNKING_OPTIONS.structureAware;
 
-  console.log(`Chunking text with size: ${chunkSize}, overlap: ${chunkOverlap}, splitBySentence: ${splitBySentence}`);
+  console.log(`Chunking text with size: ${chunkSize}, overlap: ${chunkOverlap}, splitBySentence: ${splitBySentence}, structureAware: ${structureAware}`);
 
   // Handle empty text
   if (!text || text.trim() === '') {
     return [];
   }
 
-  // Clean the text - remove multiple spaces, normalize line breaks
-  const cleanedText = text
-    .replace(/\r\n/g, '\n')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // Apply cleaning if requested
+  let cleanedText = text;
+  if (options.cleanRedundantData) {
+    cleanedText = cleanRedundantData(text);
+    console.log('Applied redundant data cleaning');
+  }
 
   // If text is smaller than chunk size, return it as a single chunk
   if (cleanedText.length <= chunkSize) {
@@ -110,6 +317,71 @@ function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   }
 
   const chunks: string[] = [];
+  
+  // Structure-aware chunking
+  if (structureAware) {
+    console.log('Using structure-aware chunking');
+    const structuralBoundaries = findStructuralBoundaries(cleanedText);
+    
+    // If no structural boundaries found, fallback to regular chunking
+    if (structuralBoundaries.length === 0) {
+      return splitTextBySize(cleanedText, chunkSize, chunkOverlap);
+    }
+    
+    // Use structural boundaries to create chunks
+    let startPos = 0;
+    let currentChunk = '';
+    
+    for (let i = 0; i < structuralBoundaries.length; i++) {
+      const endPos = structuralBoundaries[i];
+      const section = cleanedText.substring(startPos, endPos);
+      
+      // If adding this section exceeds chunk size, save current chunk and start a new one
+      if (currentChunk.length + section.length > chunkSize) {
+        if (currentChunk) {
+          chunks.push(currentChunk.trim());
+        }
+        
+        // Large sections need further splitting
+        if (section.length > chunkSize) {
+          const subChunks = splitTextBySize(section, chunkSize, chunkOverlap);
+          chunks.push(...subChunks);
+        } else {
+          currentChunk = section;
+        }
+      } else {
+        currentChunk += (currentChunk ? '\n' : '') + section;
+      }
+      
+      startPos = endPos;
+    }
+    
+    // Add remaining text
+    if (startPos < cleanedText.length) {
+      const remainingText = cleanedText.substring(startPos);
+      
+      if (currentChunk.length + remainingText.length > chunkSize) {
+        if (currentChunk) {
+          chunks.push(currentChunk.trim());
+        }
+        
+        // Split remaining text if needed
+        if (remainingText.length > chunkSize) {
+          const subChunks = splitTextBySize(remainingText, chunkSize, chunkOverlap);
+          chunks.push(...subChunks);
+        } else {
+          chunks.push(remainingText.trim());
+        }
+      } else {
+        currentChunk += (currentChunk ? '\n' : '') + remainingText;
+        chunks.push(currentChunk.trim());
+      }
+    } else if (currentChunk) {
+      chunks.push(currentChunk.trim());
+    }
+    
+    return chunks;
+  }
   
   // If splitting by sentence, we'll try to respect sentence boundaries
   if (splitBySentence) {

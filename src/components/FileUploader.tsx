@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useDocumentEmbeddings } from "@/hooks/use-document-embeddings";
+import { Switch } from "@/components/ui/switch";
 
 interface UploadingFile {
   file: File;
@@ -35,6 +36,8 @@ interface ChunkingSettings {
   chunkSize: number;
   chunkOverlap: number;
   splitBySentence?: boolean;
+  structureAware?: boolean;
+  cleanRedundantData?: boolean;
 }
 
 const MAX_RETRY_ATTEMPTS = 3;
@@ -50,7 +53,10 @@ export function FileUploader() {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [chunkingSettings, setChunkingSettings] = useState<ChunkingSettings>({
     chunkSize: 768,
-    chunkOverlap: 80
+    chunkOverlap: 80,
+    splitBySentence: true,
+    structureAware: true,
+    cleanRedundantData: true
   });
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -149,7 +155,9 @@ export function FileUploader() {
           chunkingSettings: {
             chunkSize: chunkingSettings.chunkSize,
             chunkOverlap: chunkingSettings.chunkOverlap,
-            splitBySentence: true
+            splitBySentence: chunkingSettings.splitBySentence,
+            structureAware: chunkingSettings.structureAware,
+            cleanRedundantData: chunkingSettings.cleanRedundantData
           }
         }
       });
@@ -341,6 +349,18 @@ export function FileUploader() {
     }
   };
 
+  const toggleStructureAware = () => {
+    setChunkingSettings(prev => ({ ...prev, structureAware: !prev.structureAware }));
+  };
+
+  const toggleCleanRedundantData = () => {
+    setChunkingSettings(prev => ({ ...prev, cleanRedundantData: !prev.cleanRedundantData }));
+  };
+
+  const toggleSplitBySentence = () => {
+    setChunkingSettings(prev => ({ ...prev, splitBySentence: !prev.splitBySentence }));
+  };
+
   return (
     <>
       <motion.div
@@ -498,14 +518,59 @@ export function FileUploader() {
                 but creates more redundancy. Lower values (20-40) reduce redundancy but may cause context loss.
               </p>
             </div>
+
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="structure-aware"
+                  checked={chunkingSettings.structureAware}
+                  onCheckedChange={toggleStructureAware}
+                />
+                <Label htmlFor="structure-aware" className="text-sm">Structure-Aware Chunking</Label>
+              </div>
+              <p className="text-xs text-gray-500 pl-7">
+                Enables smart chunking that respects document structure like headings, paragraphs, and tables.
+                This helps keep related content together and improves context preservation.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="clean-redundant"
+                  checked={chunkingSettings.cleanRedundantData}
+                  onCheckedChange={toggleCleanRedundantData}
+                />
+                <Label htmlFor="clean-redundant" className="text-sm">Clean Redundant Data</Label>
+              </div>
+              <p className="text-xs text-gray-500 pl-7">
+                Removes repeated information like duplicate contact details, reformats tables for better readability, 
+                and normalizes spacing to improve overall text quality.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="split-sentence"
+                  checked={chunkingSettings.splitBySentence}
+                  onCheckedChange={toggleSplitBySentence}
+                />
+                <Label htmlFor="split-sentence" className="text-sm">Respect Sentence Boundaries</Label>
+              </div>
+              <p className="text-xs text-gray-500 pl-7">
+                Tries to keep complete sentences together when creating chunks, which helps maintain semantic meaning.
+                Disable this if you prefer strict size-based chunking.
+              </p>
+            </div>
           </div>
 
           <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
             <p className="text-xs text-blue-700">
               <strong>Recommended settings by document type:</strong><br/>
-              • Technical/Reference: 512-768 chunk size, 40-60 overlap<br/>
-              • Narrative/Conversational: 768-1024 chunk size, 80-100 overlap<br/>
-              • Short Form Content: 256-512 chunk size, 20-40 overlap
+              • Technical/Reference: 512-768 chunk size, 40-60 overlap, Structure-Aware ON<br/>
+              • Narrative/Conversational: 768-1024 chunk size, 80-100 overlap, Sentence Boundaries ON<br/>
+              • Short Form Content: 256-512 chunk size, 20-40 overlap, Clean Redundant Data ON
             </p>
           </div>
         </CollapsibleContent>
