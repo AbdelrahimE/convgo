@@ -18,6 +18,71 @@ const DEFAULT_CHUNKING_OPTIONS: ChunkingOptions = {
 };
 
 /**
+ * Detects the language of a text chunk
+ * Simple implementation based on character frequency and patterns
+ */
+function detectChunkLanguage(text: string): string {
+  if (!text || text.trim().length === 0) {
+    return 'unknown';
+  }
+  
+  // Sample of common characters in various scripts
+  const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+  const cyrillicPattern = /[\u0400-\u04FF]/;
+  const hanPattern = /[\u4E00-\u9FFF]/;
+  const devanagariPattern = /[\u0900-\u097F]/;
+  const thaiPattern = /[\u0E00-\u0E7F]/;
+  const hebrewPattern = /[\u0590-\u05FF]/;
+  
+  // Check for script patterns
+  const arabicCount = (text.match(arabicPattern) || []).length;
+  const cyrillicCount = (text.match(cyrillicPattern) || []).length;
+  const hanCount = (text.match(hanPattern) || []).length;
+  const devanagariCount = (text.match(devanagariPattern) || []).length;
+  const thaiCount = (text.match(thaiPattern) || []).length;
+  const hebrewCount = (text.match(hebrewPattern) || []).length;
+  
+  // Count Latin script (basic English/European languages)
+  const latinCount = (text.match(/[a-zA-Z]/) || []).length;
+  
+  // Determine primary script based on character count
+  const counts = [
+    { script: 'ar', count: arabicCount },
+    { script: 'ru', count: cyrillicCount },
+    { script: 'zh', count: hanCount },
+    { script: 'hi', count: devanagariCount },
+    { script: 'th', count: thaiCount },
+    { script: 'he', count: hebrewCount },
+    { script: 'en', count: latinCount }
+  ];
+  
+  // Sort by count in descending order
+  counts.sort((a, b) => b.count - a.count);
+  
+  // If the highest count is 0, we couldn't detect a specific script
+  if (counts[0].count === 0) {
+    return 'unknown';
+  }
+  
+  // Return the language code of the most frequent script
+  return counts[0].script;
+}
+
+/**
+ * Determines text direction based on detected language
+ */
+function getTextDirection(language: string): string {
+  // RTL languages
+  const rtlLanguages = ['ar', 'he', 'ur', 'fa', 'ps'];
+  
+  if (rtlLanguages.includes(language)) {
+    return 'rtl';
+  }
+  
+  return 'ltr';
+}
+
+/**
  * Splits text into chunks suitable for embedding models
  */
 function chunkText(text: string, options: ChunkingOptions = {}): string[] {
@@ -320,16 +385,26 @@ serve(async (req) => {
     console.log(`Created ${chunks.length} chunks with settings:`, 
       `chunk size: ${chunkOptions.chunkSize}, overlap: ${chunkOptions.chunkOverlap}`);
 
-    // Store chunks in the text_chunks table
+    // Store chunks in the text_chunks table with language detection for each chunk
     for (let i = 0; i < chunksWithMetadata.length; i++) {
       const chunk = chunksWithMetadata[i];
+      
+      // Detect language for this specific chunk
+      const chunkLanguage = detectChunkLanguage(chunk.text);
+      
+      // Determine text direction based on detected language
+      const textDirection = getTextDirection(chunkLanguage);
+      
+      // Insert chunk with language information
       const { error: chunkError } = await supabase
         .from('text_chunks')
         .insert({
           file_id: fileId,
           content: chunk.text,
           metadata: chunk.metadata,
-          chunk_order: i
+          chunk_order: i,
+          language: chunkLanguage,
+          direction: textDirection
         });
 
       if (chunkError) {
@@ -375,7 +450,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Text extracted and chunked successfully',
+        message: 'Text extracted and chunked successfully with language detection',
         chunkCount: chunks.length
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
