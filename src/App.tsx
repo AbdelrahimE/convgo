@@ -1,38 +1,41 @@
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Toaster } from '@/components/ui/sonner';
-import { AuthProvider } from '@/contexts/AuthContext';
-import Auth from '@/pages/Auth';
-import ProtectedRoute from '@/components/ProtectedRoute';
-import FileManagement from '@/pages/FileManagement';
-import { AppSidebar } from '@/components/AppSidebar';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { useLocation } from 'react-router-dom';
-import WhatsAppLink from '@/pages/WhatsAppLink';
-import OpenAITest from '@/pages/OpenAITest';
-import TextProcessingDemo from '@/pages/TextProcessingDemo';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
-import './App.css';
+import { useState } from 'react'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { Toaster } from '@/components/ui/sonner'
+import './App.css'
 
-function AppContent() {
-  const location = useLocation();
-  const isAuthPage = location.pathname === '/auth';
+import WhatsAppLink from './pages/WhatsAppLink'
+import TextProcessingDemo from './pages/TextProcessingDemo'
+import OpenAITest from './pages/OpenAITest'
+import FileManagement from './pages/FileManagement'
+import MetadataManagement from './pages/MetadataManagement'
+import Index from './pages/Index'
+import NotFound from './pages/NotFound'
+import SemanticSearchTest from './pages/SemanticSearchTest'
 
+// Auth components
+import { AuthProvider } from './contexts/AuthContext'
+import Auth from './pages/Auth'
+import ProtectedRoute from './components/ProtectedRoute'
+import NetworkErrorBoundary from './components/NetworkErrorBoundary'
+import ErrorBoundary from './components/ErrorBoundary'
+
+function App() {
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full">
-        {!isAuthPage && <AppSidebar />}
-        <main className="flex-1 px-4 py-8 overflow-auto">
-          <ErrorBoundary>
-            <NetworkErrorBoundary>
+    <Router>
+      <TooltipProvider>
+        <AuthProvider>
+          <NetworkErrorBoundary>
+            <ErrorBoundary>
               <Routes>
+                <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route
-                  path="/"
+                  path="/whatsapp"
                   element={
                     <ProtectedRoute>
-                      <div>Dashboard (coming soon)</div>
+                      <WhatsAppLink />
                     </ProtectedRoute>
                   }
                 />
@@ -45,10 +48,18 @@ function AppContent() {
                   }
                 />
                 <Route
-                  path="/whatsapp"
+                  path="/metadata"
                   element={
                     <ProtectedRoute>
-                      <WhatsAppLink />
+                      <MetadataManagement />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/text-processing"
+                  element={
+                    <ProtectedRoute>
+                      <TextProcessingDemo />
                     </ProtectedRoute>
                   }
                 />
@@ -61,35 +72,22 @@ function AppContent() {
                   }
                 />
                 <Route
-                  path="/text-processing"
+                  path="/semantic-search"
                   element={
                     <ProtectedRoute>
-                      <TextProcessingDemo />
+                      <SemanticSearchTest />
                     </ProtectedRoute>
                   }
                 />
+                <Route path="*" element={<NotFound />} />
               </Routes>
-            </NetworkErrorBoundary>
-          </ErrorBoundary>
-        </main>
-      </div>
-    </SidebarProvider>
-  );
-}
-
-function App() {
-  return (
-    <ErrorBoundary>
-      <NetworkErrorBoundary>
-        <AuthProvider>
-          <Router>
-            <AppContent />
-            <Toaster />
-          </Router>
+            </ErrorBoundary>
+          </NetworkErrorBoundary>
         </AuthProvider>
-      </NetworkErrorBoundary>
-    </ErrorBoundary>
-  );
+        <Toaster />
+      </TooltipProvider>
+    </Router>
+  )
 }
 
-export default App;
+export default App
