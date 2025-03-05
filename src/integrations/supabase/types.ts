@@ -395,12 +395,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      detect_language_simple: {
-        Args: {
-          text_input: string
-        }
-        Returns: string
-      }
       halfvec_avg: {
         Args: {
           "": number[]
@@ -519,24 +513,6 @@ export type Database = {
             }
             Returns: unknown
           }
-      match_document_chunks: {
-        Args: {
-          query_embedding: string
-          match_threshold: number
-          match_count: number
-          min_content_length?: number
-          filter_language?: string
-        }
-        Returns: {
-          id: string
-          chunk_id: string
-          file_id: string
-          content: string
-          metadata: Json
-          similarity: number
-          language: string
-        }[]
-      }
       sparsevec_out: {
         Args: {
           "": unknown
