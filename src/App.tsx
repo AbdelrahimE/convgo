@@ -11,6 +11,7 @@ import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
 import OpenAITest from '@/pages/OpenAITest';
 import TextProcessingDemo from '@/pages/TextProcessingDemo';
+import SemanticSearchTest from '@/pages/SemanticSearchTest';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import './App.css';
@@ -65,6 +66,14 @@ function AppContent() {
                   element={
                     <ProtectedRoute>
                       <TextProcessingDemo />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/semantic-search"
+                  element={
+                    <ProtectedRoute>
+                      <SemanticSearchTest />
                     </ProtectedRoute>
                   }
                 />
