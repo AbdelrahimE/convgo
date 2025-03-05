@@ -1,5 +1,4 @@
 
-import { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
@@ -18,8 +17,8 @@ import SemanticSearchTest from './pages/SemanticSearchTest'
 import { AuthProvider } from './contexts/AuthContext'
 import Auth from './pages/Auth'
 import ProtectedRoute from './components/ProtectedRoute'
-import NetworkErrorBoundary from './components/NetworkErrorBoundary'
-import ErrorBoundary from './components/ErrorBoundary'
+import { NetworkErrorBoundary } from './components/NetworkErrorBoundary'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 function App() {
   return (

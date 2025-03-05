@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export interface SearchResult {
   id: string;
@@ -31,6 +32,7 @@ export function useSemanticSearch() {
   ) => {
     if (!searchQuery || searchQuery.trim() === '') {
       setError(new Error('Search query cannot be empty'));
+      toast.error('Search query cannot be empty');
       return;
     }
 
@@ -52,6 +54,7 @@ export function useSemanticSearch() {
       if (error) {
         console.error('Error performing semantic search:', error);
         setError(error);
+        toast.error('Failed to perform search: ' + error.message);
         return;
       }
 
@@ -60,9 +63,16 @@ export function useSemanticSearch() {
       }
 
       setResults(data.results);
+      
+      if (data.results.length === 0) {
+        toast.info('No matching results found for your query');
+      } else {
+        toast.success(`Found ${data.results.length} relevant results`);
+      }
     } catch (err) {
       console.error('Exception during semantic search:', err);
       setError(err instanceof Error ? err : new Error('An unknown error occurred'));
+      toast.error('Search error: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setIsSearching(false);
     }
