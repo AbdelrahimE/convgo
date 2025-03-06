@@ -98,42 +98,59 @@ serve(async (req) => {
           return posA - posB;
         });
         
-        // Add contiguous chunks
-        let lastPosition = -2;
+        // MODIFIED: First pass - Add all chunks with similarity above threshold
+        // This ensures we include important chunks regardless of contiguity
+        chunksWithPosition.forEach(chunk => {
+          // Include chunks with sufficient similarity
+          if (!usedChunkIds.has(chunk.chunk_id) && chunk.similarity > 0.4) { // Lowered threshold to 0.4
+            assembledChunks.push(chunk);
+            usedChunkIds.add(chunk.chunk_id);
+            fileSource.chunk_ids.push(chunk.chunk_id);
+            console.log(`Including chunk with position ${chunk.metadata.chunk_index ?? chunk.metadata.position} and similarity ${chunk.similarity}`);
+          }
+        });
+        
+        // MODIFIED: Second pass - Try to include any remaining contiguous chunks
+        // that might have lower similarity but provide context
+        let lastAdded = -2;
         chunksWithPosition.forEach(chunk => {
           const position = chunk.metadata.chunk_index !== undefined ? 
             chunk.metadata.chunk_index : chunk.metadata.position;
           
-          // Only add if not already used and if it's contiguous or one of the high similarity chunks
-          // MODIFIED: Reduced similarity threshold from 0.8 to 0.6 for including non-contiguous chunks
-          if (!usedChunkIds.has(chunk.chunk_id) && 
-              (position === lastPosition + 1 || chunk.similarity > 0.6)) {
+          // Only add if not already used and if it's contiguous to previously added chunk
+          if (!usedChunkIds.has(chunk.chunk_id) && position === lastAdded + 1) {
             assembledChunks.push(chunk);
             usedChunkIds.add(chunk.chunk_id);
             fileSource.chunk_ids.push(chunk.chunk_id);
-            lastPosition = position;
+            lastAdded = position;
+            console.log(`Including contiguous chunk at position ${position}`);
           }
         });
       }
       
-      // Add remaining high similarity chunks that weren't contiguous
-      // MODIFIED: Reduced similarity threshold from 0.75 to 0.5 for including standalone chunks
+      // Add remaining high similarity chunks that weren't processed above
       chunks.forEach(chunk => {
-        if (!usedChunkIds.has(chunk.chunk_id) && chunk.similarity > 0.5) {
+        if (!usedChunkIds.has(chunk.chunk_id) && chunk.similarity > 0.4) { // Lowered threshold to 0.4
           assembledChunks.push(chunk);
           usedChunkIds.add(chunk.chunk_id);
           fileSource.chunk_ids.push(chunk.chunk_id);
+          console.log(`Including standalone chunk with similarity ${chunk.similarity}`);
         }
       });
       
-      // ADDED: Always include at least the top chunk from each file if no chunks were selected
+      // ADDED: Always include at least the top 3 chunks from each file if no chunks were selected
       if (fileSource.chunk_ids.length === 0 && chunks.length > 0) {
-        // Sort by similarity and take the top one
-        const topChunk = [...chunks].sort((a, b) => b.similarity - a.similarity)[0];
-        assembledChunks.push(topChunk);
-        usedChunkIds.add(topChunk.chunk_id);
-        fileSource.chunk_ids.push(topChunk.chunk_id);
-        console.log(`Including top chunk from file ${fileId} with similarity ${topChunk.similarity}`);
+        // Sort by similarity and take up to 3 top chunks
+        const topChunks = [...chunks]
+          .sort((a, b) => b.similarity - a.similarity)
+          .slice(0, Math.min(3, chunks.length));
+        
+        topChunks.forEach(chunk => {
+          assembledChunks.push(chunk);
+          usedChunkIds.add(chunk.chunk_id);
+          fileSource.chunk_ids.push(chunk.chunk_id);
+          console.log(`Including top chunk from file ${fileId} with similarity ${chunk.similarity}`);
+        });
       }
       
       if (fileSource.chunk_ids.length > 0) {
@@ -144,10 +161,10 @@ serve(async (req) => {
     // ADDED: If still no chunks were assembled, include at least some of the original results
     if (assembledChunks.length === 0 && results.length > 0) {
       console.log(`No chunks passed the filtering criteria. Including top results by default.`);
-      // Sort by similarity and take up to 3 top results
+      // Sort by similarity and take up to 5 top results (increased from 3)
       const topResults = [...results]
         .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, Math.min(3, results.length));
+        .slice(0, Math.min(5, results.length));
       
       for (const result of topResults) {
         assembledChunks.push(result);
@@ -165,6 +182,29 @@ serve(async (req) => {
         }
       }
     }
+    
+    // Now let's sort the assembled chunks to maintain the original document order
+    assembledChunks.sort((a, b) => {
+      // First sort by file_id
+      if (a.file_id !== b.file_id) {
+        return a.file_id.localeCompare(b.file_id);
+      }
+      
+      // Then by position/chunk_index if available
+      if (a.metadata && b.metadata) {
+        const posA = a.metadata.chunk_index !== undefined ? a.metadata.chunk_index : 
+                    (a.metadata.position !== undefined ? a.metadata.position : Number.MAX_SAFE_INTEGER);
+        const posB = b.metadata.chunk_index !== undefined ? b.metadata.chunk_index : 
+                    (b.metadata.position !== undefined ? b.metadata.position : Number.MAX_SAFE_INTEGER);
+        
+        if (posA !== Number.MAX_SAFE_INTEGER && posB !== Number.MAX_SAFE_INTEGER) {
+          return posA - posB;
+        }
+      }
+      
+      // Finally by similarity
+      return b.similarity - a.similarity;
+    });
     
     // Combine all chunks into a single context string, separated by markers
     let assembledContext = assembledChunks
