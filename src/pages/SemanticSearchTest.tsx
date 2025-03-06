@@ -6,13 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSemanticSearch, SearchResult } from '@/hooks/use-semantic-search';
+import { useContextAssembly, AssembledContext } from '@/hooks/use-context-assembly';
 
 export default function SemanticSearchTest() {
   const [query, setQuery] = useState('');
   const [resultLimit, setResultLimit] = useState(5);
   const [threshold, setThreshold] = useState(0.7);
   const [filterByLanguage, setFilterByLanguage] = useState(false);
+  const [activeTab, setActiveTab] = useState('search');
   
   const { 
     search, 
@@ -20,18 +23,29 @@ export default function SemanticSearchTest() {
     results, 
     queryInfo, 
     meta, 
-    error 
+    error: searchError 
   } = useSemanticSearch();
+
+  const {
+    assembleContext,
+    isAssembling,
+    assembledContext,
+    error: assemblyError,
+  } = useContextAssembly();
 
   const handleSearch = async () => {
     if (!query.trim()) return;
     
-    await search({
+    const searchResults = await search({
       query,
       limit: resultLimit,
       threshold,
       filterLanguage: filterByLanguage && queryInfo?.detectedLanguage ? queryInfo.detectedLanguage : undefined
     });
+
+    if (searchResults && searchResults.length > 0) {
+      await assembleContext(searchResults);
+    }
   };
 
   return (
@@ -117,38 +131,70 @@ export default function SemanticSearchTest() {
         <div className="lg:col-span-2">
           <Card className="h-full">
             <CardHeader>
-              <CardTitle>Search Results</CardTitle>
+              <CardTitle>Results</CardTitle>
               {meta && (
                 <CardDescription>
                   Found {meta.count} results with threshold {meta.threshold.toFixed(2)}
                 </CardDescription>
               )}
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="search">Search Results</TabsTrigger>
+                  <TabsTrigger value="assembled" disabled={!assembledContext}>
+                    Assembled Context {isAssembling && '(Building...)'}
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             </CardHeader>
+            
             <CardContent>
-              {error && (
-                <div className="bg-destructive/10 text-destructive p-4 rounded-md mb-4">
-                  <p className="font-semibold">Error</p>
-                  <p>{error.message}</p>
-                </div>
-              )}
+              <TabsContent value="search" className="mt-0">
+                {searchError && (
+                  <div className="bg-destructive/10 text-destructive p-4 rounded-md mb-4">
+                    <p className="font-semibold">Error</p>
+                    <p>{searchError.message}</p>
+                  </div>
+                )}
+                
+                {results.length === 0 && !searchError && !isSearching ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>No results found. Try a different query or adjust your search parameters.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {results.map((result, index) => (
+                      <SearchResultCard key={result.id} result={result} index={index + 1} />
+                    ))}
+                  </div>
+                )}
+                
+                {isSearching && (
+                  <div className="text-center py-8">
+                    <p>Searching...</p>
+                  </div>
+                )}
+              </TabsContent>
               
-              {results.length === 0 && !error && !isSearching ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p>No results found. Try a different query or adjust your search parameters.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {results.map((result, index) => (
-                    <SearchResultCard key={result.id} result={result} index={index + 1} />
-                  ))}
-                </div>
-              )}
-              
-              {isSearching && (
-                <div className="text-center py-8">
-                  <p>Searching...</p>
-                </div>
-              )}
+              <TabsContent value="assembled" className="mt-0">
+                {assemblyError && (
+                  <div className="bg-destructive/10 text-destructive p-4 rounded-md mb-4">
+                    <p className="font-semibold">Error</p>
+                    <p>{assemblyError.message}</p>
+                  </div>
+                )}
+                
+                {!assembledContext && !assemblyError && !isAssembling ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>No assembled context available. Perform a search first.</p>
+                  </div>
+                ) : isAssembling ? (
+                  <div className="text-center py-8">
+                    <p>Assembling context...</p>
+                  </div>
+                ) : (
+                  <AssembledContextDisplay context={assembledContext!} />
+                )}
+              </TabsContent>
             </CardContent>
           </Card>
         </div>
@@ -188,5 +234,48 @@ function SearchResultCard({ result, index }: { result: SearchResult; index: numb
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function AssembledContextDisplay({ context }: { context: AssembledContext }) {
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Assembled Context</CardTitle>
+          <CardDescription>
+            {context.stats.assembledChunks} of {context.stats.originalChunks} chunks assembled | 
+            Est. {context.stats.totalTokenEstimate} tokens
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-muted p-3 rounded-md overflow-auto max-h-[500px]">
+            <pre className="whitespace-pre-wrap text-sm">{context.context}</pre>
+          </div>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Sources</CardTitle>
+          <CardDescription>
+            {context.sources.length} documents referenced
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {context.sources.map((source, index) => (
+              <div key={index} className="bg-muted p-3 rounded-md">
+                <p className="font-semibold">Document: {source.file_id.substring(0, 8)}...</p>
+                <p className="text-sm">Chunks used: {source.chunk_ids.length}</p>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Chunk IDs: {source.chunk_ids.map(id => id.substring(0, 6) + '...').join(', ')}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
