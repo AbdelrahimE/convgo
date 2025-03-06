@@ -104,9 +104,10 @@ serve(async (req) => {
           const position = chunk.metadata.chunk_index !== undefined ? 
             chunk.metadata.chunk_index : chunk.metadata.position;
           
-          // Only add if not already used and if it's contiguous or one of the highest similarity chunks
+          // Only add if not already used and if it's contiguous or one of the high similarity chunks
+          // MODIFIED: Reduced similarity threshold from 0.8 to 0.6 for including non-contiguous chunks
           if (!usedChunkIds.has(chunk.chunk_id) && 
-              (position === lastPosition + 1 || chunk.similarity > 0.8)) {
+              (position === lastPosition + 1 || chunk.similarity > 0.6)) {
             assembledChunks.push(chunk);
             usedChunkIds.add(chunk.chunk_id);
             fileSource.chunk_ids.push(chunk.chunk_id);
@@ -116,18 +117,54 @@ serve(async (req) => {
       }
       
       // Add remaining high similarity chunks that weren't contiguous
+      // MODIFIED: Reduced similarity threshold from 0.75 to 0.5 for including standalone chunks
       chunks.forEach(chunk => {
-        if (!usedChunkIds.has(chunk.chunk_id) && chunk.similarity > 0.75) {
+        if (!usedChunkIds.has(chunk.chunk_id) && chunk.similarity > 0.5) {
           assembledChunks.push(chunk);
           usedChunkIds.add(chunk.chunk_id);
           fileSource.chunk_ids.push(chunk.chunk_id);
         }
       });
       
+      // ADDED: Always include at least the top chunk from each file if no chunks were selected
+      if (fileSource.chunk_ids.length === 0 && chunks.length > 0) {
+        // Sort by similarity and take the top one
+        const topChunk = [...chunks].sort((a, b) => b.similarity - a.similarity)[0];
+        assembledChunks.push(topChunk);
+        usedChunkIds.add(topChunk.chunk_id);
+        fileSource.chunk_ids.push(topChunk.chunk_id);
+        console.log(`Including top chunk from file ${fileId} with similarity ${topChunk.similarity}`);
+      }
+      
       if (fileSource.chunk_ids.length > 0) {
         sources.push(fileSource);
       }
     });
+    
+    // ADDED: If still no chunks were assembled, include at least some of the original results
+    if (assembledChunks.length === 0 && results.length > 0) {
+      console.log(`No chunks passed the filtering criteria. Including top results by default.`);
+      // Sort by similarity and take up to 3 top results
+      const topResults = [...results]
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, Math.min(3, results.length));
+      
+      for (const result of topResults) {
+        assembledChunks.push(result);
+        usedChunkIds.add(result.chunk_id);
+        
+        // Add to sources
+        const existingSource = sources.find(s => s.file_id === result.file_id);
+        if (existingSource) {
+          existingSource.chunk_ids.push(result.chunk_id);
+        } else {
+          sources.push({
+            file_id: result.file_id,
+            chunk_ids: [result.chunk_id]
+          });
+        }
+      }
+    }
     
     // Combine all chunks into a single context string, separated by markers
     let assembledContext = assembledChunks
