@@ -137,6 +137,9 @@ export default function SemanticSearchTest() {
                   Found {meta.count} results with threshold {meta.threshold.toFixed(2)}
                 </CardDescription>
               )}
+            </CardHeader>
+            
+            <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="search">Search Results</TabsTrigger>
@@ -144,57 +147,55 @@ export default function SemanticSearchTest() {
                     Assembled Context {isAssembling && '(Building...)'}
                   </TabsTrigger>
                 </TabsList>
+                
+                <TabsContent value="search" className="mt-4">
+                  {searchError && (
+                    <div className="bg-destructive/10 text-destructive p-4 rounded-md mb-4">
+                      <p className="font-semibold">Error</p>
+                      <p>{searchError.message}</p>
+                    </div>
+                  )}
+                  
+                  {results.length === 0 && !searchError && !isSearching ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>No results found. Try a different query or adjust your search parameters.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {results.map((result, index) => (
+                        <SearchResultCard key={result.id} result={result} index={index + 1} />
+                      ))}
+                    </div>
+                  )}
+                  
+                  {isSearching && (
+                    <div className="text-center py-8">
+                      <p>Searching...</p>
+                    </div>
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="assembled" className="mt-4">
+                  {assemblyError && (
+                    <div className="bg-destructive/10 text-destructive p-4 rounded-md mb-4">
+                      <p className="font-semibold">Error</p>
+                      <p>{assemblyError.message}</p>
+                    </div>
+                  )}
+                  
+                  {!assembledContext && !assemblyError && !isAssembling ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>No assembled context available. Perform a search first.</p>
+                    </div>
+                  ) : isAssembling ? (
+                    <div className="text-center py-8">
+                      <p>Assembling context...</p>
+                    </div>
+                  ) : (
+                    <AssembledContextDisplay context={assembledContext!} />
+                  )}
+                </TabsContent>
               </Tabs>
-            </CardHeader>
-            
-            <CardContent>
-              <TabsContent value="search" className="mt-0">
-                {searchError && (
-                  <div className="bg-destructive/10 text-destructive p-4 rounded-md mb-4">
-                    <p className="font-semibold">Error</p>
-                    <p>{searchError.message}</p>
-                  </div>
-                )}
-                
-                {results.length === 0 && !searchError && !isSearching ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <p>No results found. Try a different query or adjust your search parameters.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {results.map((result, index) => (
-                      <SearchResultCard key={result.id} result={result} index={index + 1} />
-                    ))}
-                  </div>
-                )}
-                
-                {isSearching && (
-                  <div className="text-center py-8">
-                    <p>Searching...</p>
-                  </div>
-                )}
-              </TabsContent>
-              
-              <TabsContent value="assembled" className="mt-0">
-                {assemblyError && (
-                  <div className="bg-destructive/10 text-destructive p-4 rounded-md mb-4">
-                    <p className="font-semibold">Error</p>
-                    <p>{assemblyError.message}</p>
-                  </div>
-                )}
-                
-                {!assembledContext && !assemblyError && !isAssembling ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <p>No assembled context available. Perform a search first.</p>
-                  </div>
-                ) : isAssembling ? (
-                  <div className="text-center py-8">
-                    <p>Assembling context...</p>
-                  </div>
-                ) : (
-                  <AssembledContextDisplay context={assembledContext!} />
-                )}
-              </TabsContent>
             </CardContent>
           </Card>
         </div>
