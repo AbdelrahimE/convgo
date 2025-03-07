@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSemanticSearch, SearchResult } from '@/hooks/use-semantic-search';
 import { useContextAssembly, AssembledContext } from '@/hooks/use-context-assembly';
+import { useAIResponse } from '@/hooks/use-ai-response';
 
 export default function SemanticSearchTest() {
   const [query, setQuery] = useState('');
@@ -33,6 +33,13 @@ export default function SemanticSearchTest() {
     error: assemblyError,
   } = useContextAssembly();
 
+  const {
+    generateResponse,
+    isGenerating,
+    responseResult,
+    error: responseError,
+  } = useAIResponse();
+
   const handleSearch = async () => {
     if (!query.trim()) return;
     
@@ -44,7 +51,10 @@ export default function SemanticSearchTest() {
     });
 
     if (searchResults && searchResults.length > 0) {
-      await assembleContext(searchResults);
+      const assembled = await assembleContext(searchResults);
+      if (assembled) {
+        await generateResponse(query, assembled.context);
+      }
     }
   };
 
@@ -141,10 +151,13 @@ export default function SemanticSearchTest() {
             
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="search">Search Results</TabsTrigger>
                   <TabsTrigger value="assembled" disabled={!assembledContext}>
                     Assembled Context {isAssembling && '(Building...)'}
+                  </TabsTrigger>
+                  <TabsTrigger value="ai-response" disabled={!responseResult}>
+                    AI Response {isGenerating && '(Generating...)'}
                   </TabsTrigger>
                 </TabsList>
                 
@@ -193,6 +206,27 @@ export default function SemanticSearchTest() {
                     </div>
                   ) : (
                     <AssembledContextDisplay context={assembledContext!} />
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="ai-response" className="mt-4">
+                  {responseError && (
+                    <div className="bg-destructive/10 text-destructive p-4 rounded-md mb-4">
+                      <p className="font-semibold">Error</p>
+                      <p>{responseError.message}</p>
+                    </div>
+                  )}
+                  
+                  {!responseResult && !responseError && !isGenerating ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>No AI response available. Perform a search first.</p>
+                    </div>
+                  ) : isGenerating ? (
+                    <div className="text-center py-8">
+                      <p>Generating AI response...</p>
+                    </div>
+                  ) : (
+                    <AIResponseDisplay response={responseResult!} query={query} />
                   )}
                 </TabsContent>
               </Tabs>
@@ -274,6 +308,47 @@ function AssembledContextDisplay({ context }: { context: AssembledContext }) {
                 </div>
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function AIResponseDisplay({ response, query }: { 
+  response: { 
+    answer: string;
+    model: string;
+    usage: {
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+    }
+  }; 
+  query: string 
+}) {
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">AI Response</CardTitle>
+          <CardDescription>
+            Model: {response.model} | 
+            Tokens: {response.usage.total_tokens} total
+            ({response.usage.prompt_tokens} prompt, {response.usage.completion_tokens} completion)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-primary/5 p-3 rounded-md mb-4">
+            <p className="font-semibold text-sm mb-1">Query:</p>
+            <p className="text-sm">{query}</p>
+          </div>
+          <div className="bg-muted p-4 rounded-md">
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              {response.answer.split('\n').map((paragraph, i) => 
+                paragraph ? <p key={i}>{paragraph}</p> : <br key={i} />
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
