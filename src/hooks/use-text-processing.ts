@@ -21,6 +21,7 @@ interface ProcessingResult {
     processedLength: number;
     chunkCount: number;
     averageChunkSize: number;
+    isCSV?: boolean;
   };
 }
 
@@ -68,9 +69,6 @@ export function useTextProcessing() {
       // 2. Split into chunks using provided options
       const chunks = chunkText(processedText, mergedOptions);
       
-      console.log(`Created ${chunks.length} chunks with settings:`, 
-        `chunk size: ${mergedOptions.chunkSize}, overlap: ${mergedOptions.chunkOverlap}, preserveTables: ${mergedOptions.preserveTables}`);
-      
       // 3. Add metadata to chunks
       const chunksWithMetadata = createChunkMetadata(processedText, chunks, documentId);
       
@@ -78,14 +76,22 @@ export function useTextProcessing() {
       const keywords = extractKeywords(processedText);
       
       // 5. Calculate stats
+      // Check if any chunk has CSV metadata to determine if content is CSV
+      const hasCSVMetadata = chunksWithMetadata.some(chunk => 
+        chunk.metadata && chunk.metadata.is_csv === true
+      );
+      
       const stats = {
         originalLength: text.length,
         processedLength: processedText.length,
         chunkCount: chunks.length,
         averageChunkSize: chunks.length > 0 
           ? Math.round(chunks.reduce((sum, chunk) => sum + chunk.length, 0) / chunks.length) 
-          : 0
+          : 0,
+        isCSV: hasCSVMetadata
       };
+      
+      console.log(`Created ${chunks.length} chunks. CSV content: ${hasCSVMetadata}`);
       
       const result = {
         chunks: chunksWithMetadata,

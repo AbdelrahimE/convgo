@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { findTableSections, processTableForChunking, isTableContent } from '../utils/tableProcessing.ts';
+import { isCSVContent, chunkCSVContent, createCSVChunkMetadata } from '../utils/csvProcessing.ts';
 
 // Text processing utilities
 interface ChunkingOptions {
@@ -294,7 +295,7 @@ function cleanRedundantData(text: string): string {
 
 /**
  * Enhanced function to split text into chunks suitable for embedding models
- * Now with improved table handling
+ * Now with improved table handling and CSV-specific processing
  */
 function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   // Merge provided options with defaults
@@ -321,6 +322,12 @@ function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   // If text is smaller than chunk size, return it as a single chunk
   if (cleanedText.length <= chunkSize) {
     return [cleanedText];
+  }
+  
+  // Check if content is CSV and use specialized handling
+  if (isCSVContent(cleanedText)) {
+    console.log('Detected CSV content, using specialized CSV chunking');
+    return chunkCSVContent(cleanedText, chunkSize);
   }
 
   // Special table-preserving chunking
@@ -557,12 +564,20 @@ function preprocessText(text: string): string {
 
 /**
  * Creates metadata for text chunks
+ * Now with special handling for CSV content
  */
 function createChunkMetadata(
   text: string,
   chunks: string[],
   documentId: string
 ): Array<{ text: string; metadata: Record<string, any> }> {
+  // Check if content is CSV first
+  if (isCSVContent(text)) {
+    console.log('Creating CSV-specific metadata for chunks');
+    return createCSVChunkMetadata(text, chunks, documentId);
+  }
+  
+  // Original metadata creation for non-CSV content
   return chunks.map((chunk, index) => {
     // Calculate position of chunk in original document
     const position = text.indexOf(chunk);
@@ -743,11 +758,18 @@ serve(async (req) => {
     console.log('Final chunking options:', JSON.stringify(chunkOptions));
     
     const processedText = preprocessText(extractedText);
+    
+    // Check if content is CSV for logging purposes
+    const isCSV = isCSVContent(processedText, fileData.mime_type);
+    if (isCSV) {
+      console.log('CSV content detected, using specialized CSV processing');
+    }
+    
     const chunks = chunkText(processedText, chunkOptions);
     const chunksWithMetadata = createChunkMetadata(processedText, chunks, fileId);
     
     console.log(`Created ${chunks.length} chunks with settings:`, 
-      `chunk size: ${chunkOptions.chunkSize}, overlap: ${chunkOptions.chunkOverlap}, preserveTables: ${chunkOptions.preserveTables}`);
+      `chunk size: ${chunkOptions.chunkSize}, overlap: ${chunkOptions.chunkOverlap}, preserveTables: ${chunkOptions.preserveTables}, isCSV: ${isCSV}`);
 
     // Store chunks in the text_chunks table with language detection for each chunk
     for (let i = 0; i < chunksWithMetadata.length; i++) {
