@@ -11,6 +11,17 @@ import { useSemanticSearch, SearchResult } from '@/hooks/use-semantic-search';
 import { useContextAssembly, AssembledContext } from '@/hooks/use-context-assembly';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { Textarea } from '@/components/ui/textarea';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter 
+} from '@/components/ui/dialog';
+import { toast } from 'sonner';
+import { Loader2, Lightbulb } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function SemanticSearchTest() {
   const [query, setQuery] = useState('');
@@ -21,6 +32,11 @@ export default function SemanticSearchTest() {
   const [temperature, setTemperature] = useState(0.3);
   const [customSystemPrompt, setCustomSystemPrompt] = useState('');
   const [useCustomPrompt, setUseCustomPrompt] = useState(false);
+  
+  // Prompt generator state
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+  const [userDescription, setUserDescription] = useState('');
+  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   
   const { 
     search, 
@@ -63,6 +79,38 @@ export default function SemanticSearchTest() {
           systemPrompt: useCustomPrompt ? customSystemPrompt : undefined
         });
       }
+    }
+  };
+
+  const handleGenerateSystemPrompt = async () => {
+    if (!userDescription.trim()) {
+      toast.error('Please enter a description of what you want the AI to do');
+      return;
+    }
+
+    try {
+      setIsGeneratingPrompt(true);
+      
+      const { data, error } = await supabase.functions.invoke('generate-system-prompt', {
+        body: { description: userDescription }
+      });
+
+      if (error) throw error;
+      
+      if (data.success && data.prompt) {
+        setCustomSystemPrompt(data.prompt);
+        setUseCustomPrompt(true);
+        setPromptDialogOpen(false);
+        setUserDescription('');
+        toast.success('System prompt generated successfully');
+      } else {
+        throw new Error('Failed to generate system prompt');
+      }
+    } catch (error) {
+      console.error('Error generating system prompt:', error);
+      toast.error('Failed to generate system prompt. Please try again.');
+    } finally {
+      setIsGeneratingPrompt(false);
     }
   };
 
@@ -182,13 +230,23 @@ export default function SemanticSearchTest() {
                 {useCustomPrompt && (
                   <div className="space-y-2 mt-2">
                     <Label htmlFor="system-prompt">System Prompt</Label>
-                    <Textarea
-                      id="system-prompt"
-                      placeholder="Enter custom system prompt..."
-                      value={customSystemPrompt}
-                      onChange={(e) => setCustomSystemPrompt(e.target.value)}
-                      className="min-h-[120px]"
-                    />
+                    <div className="flex flex-col gap-2">
+                      <Textarea
+                        id="system-prompt"
+                        placeholder="Enter custom system prompt..."
+                        value={customSystemPrompt}
+                        onChange={(e) => setCustomSystemPrompt(e.target.value)}
+                        className="min-h-[120px]"
+                      />
+                      <Button 
+                        variant="outline" 
+                        className="w-full mt-1"
+                        onClick={() => setPromptDialogOpen(true)}
+                      >
+                        <Lightbulb className="mr-2 h-4 w-4" />
+                        Generate System Prompt
+                      </Button>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       This controls how the AI behaves. Leave blank to use the default WhatsApp assistant prompt.
                     </p>
@@ -295,6 +353,64 @@ export default function SemanticSearchTest() {
           </Card>
         </div>
       </div>
+
+      {/* Prompt Generator Dialog */}
+      <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>AI Prompt Generator</DialogTitle>
+            <DialogDescription>
+              Describe what you want the AI to do in your own words, and we'll create a powerful system prompt for you.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="description" className="text-sm font-medium">
+                Your Description
+              </Label>
+              <Textarea
+                id="description"
+                placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone."
+                value={userDescription}
+                onChange={(e) => setUserDescription(e.target.value)}
+                className="min-h-[120px]"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Example Descriptions:</p>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>• I need an AI bot that helps customers troubleshoot technical issues with our software</p>
+                <p>• I want an assistant that provides factual information about our company policies</p>
+                <p>• I need a sales assistant that can answer questions about our products and pricing</p>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPromptDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleGenerateSystemPrompt}
+              disabled={isGeneratingPrompt || !userDescription.trim()}
+            >
+              {isGeneratingPrompt ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                  Generating...
+                </>
+              ) : (
+                'Generate Prompt'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
