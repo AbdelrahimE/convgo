@@ -192,6 +192,11 @@ export default function TextProcessingDemo() {
             <CardTitle>Processing Results</CardTitle>
             <CardDescription>
               Stats: {result.stats.chunkCount} chunks, Avg {result.stats.averageChunkSize} chars/chunk
+              {result.stats.isCSV && result.stats.productCount !== undefined && (
+                <span className="ml-2 text-green-600">
+                  CSV data with ~{result.stats.productCount} products
+                </span>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -209,6 +214,11 @@ export default function TextProcessingDemo() {
                         <h4 className="font-medium">Chunk {index + 1}</h4>
                         <span className="text-sm text-muted-foreground">
                           {chunk.text.length} chars, {chunk.text.split(/\s+/).filter(Boolean).length} words
+                          {chunk.metadata.is_csv && chunk.metadata.product_count && (
+                            <span className="ml-2 text-green-600">
+                              ({chunk.metadata.product_count} products)
+                            </span>
+                          )}
                         </span>
                       </div>
                       <p className="text-sm whitespace-pre-wrap">{chunk.text}</p>

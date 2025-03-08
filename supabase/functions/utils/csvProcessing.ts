@@ -1,4 +1,3 @@
-
 /**
  * CSV-specific processing utilities to improve handling of tabular data
  * This module provides specialized handling for CSV files in the text extraction process
@@ -85,8 +84,66 @@ export function extractCSVHeader(csvText: string): string {
 }
 
 /**
- * Processes CSV text into semantic chunks while preserving row integrity
- * and maintaining header context
+ * Identifies product groups in e-commerce CSV data
+ * Groups products based on shared attributes like base product name
+ * @param rows Array of CSV rows (excluding header)
+ * @returns Array of product groups with their row indices
+ */
+function identifyProductGroups(rows: string[]): number[][] {
+  if (rows.length === 0) return [];
+  
+  const productGroups: number[][] = [];
+  let currentGroup: number[] = [0]; // Start with first row
+  
+  // Helper to extract potential product base name from a row
+  const extractBaseProductName = (row: string): string => {
+    const cells = row.split(',');
+    // First column usually contains product name or SKU
+    let baseName = cells[0] || '';
+    
+    // Remove size/color variations like "- Small", "- Blue", etc.
+    baseName = baseName.replace(/\s+-\s+\w+(\s*,.*)?$/i, '');
+    
+    // Clean up quoted strings
+    return baseName.replace(/^["'](.*)["']$/, '$1').trim();
+  };
+  
+  const baseProductName = extractBaseProductName(rows[0]);
+  
+  // Group products with similar names
+  for (let i = 1; i < rows.length; i++) {
+    const currentRowProductName = extractBaseProductName(rows[i]);
+    
+    // Check if this row is part of the same product group
+    // Consider it same group if names are similar or previous row doesn't end with period
+    // (indicating incomplete description)
+    const previousRow = rows[i-1];
+    const previousRowEndsWithPeriod = /[.!?][\s"']*$/.test(previousRow);
+    const isSameProduct = currentRowProductName === baseProductName || 
+                          !previousRowEndsWithPeriod ||
+                          // Check for size/variant pattern (common in e-commerce CSVs)
+                          rows[i].match(/\b(Small|Medium|Large|XL|XXL|\d+x\d+|Blue|Red|Green|Yellow|Black|White)\b/i);
+    
+    if (isSameProduct) {
+      currentGroup.push(i);
+    } else {
+      // Start a new product group
+      productGroups.push([...currentGroup]);
+      currentGroup = [i];
+    }
+  }
+  
+  // Add the last group if not empty
+  if (currentGroup.length > 0) {
+    productGroups.push(currentGroup);
+  }
+  
+  return productGroups;
+}
+
+/**
+ * Improved function to process CSV text into semantic chunks while preserving
+ * product integrity and maintaining context between related products
  * @param csvText The CSV text content
  * @param chunkSize Maximum desired chunk size
  * @returns Array of chunks with preserved CSV structure
@@ -94,36 +151,105 @@ export function extractCSVHeader(csvText: string): string {
 export function chunkCSVContent(csvText: string, chunkSize: number): string[] {
   if (!csvText || csvText.trim().length === 0) return [];
   
+  // Split content into lines, preserving non-empty lines
   const lines = csvText.split('\n').filter(line => line.trim().length > 0);
   if (lines.length < 2) return [csvText]; // If very small, return as is
   
-  // Extract header row(s)
+  // Extract header row for later inclusion in each chunk
   const headerRow = extractCSVHeader(csvText);
+  const dataRows = lines.slice(1); // All rows except header
   
-  // Initialize result array and current chunk
+  // Initialize result array
   const chunks: string[] = [];
+  
+  // Group products to keep related items together
+  const productGroups = identifyProductGroups(dataRows);
+  
+  // If we couldn't identify distinct product groups, fall back to simpler chunking
+  if (productGroups.length === 0) {
+    // Build chunks of rows ensuring no row is split
+    let currentChunk: string[] = [headerRow];
+    let currentSize = headerRow.length + 1; // +1 for newline
+    
+    for (const row of dataRows) {
+      const rowSize = row.length + 1; // +1 for newline
+      
+      // If adding this row would exceed chunk size and we have more than just the header,
+      // start a new chunk
+      if (currentSize + rowSize > chunkSize && currentChunk.length > 1) {
+        chunks.push(currentChunk.join('\n'));
+        currentChunk = [headerRow];
+        currentSize = headerRow.length + 1;
+      }
+      
+      // Add the row to current chunk
+      currentChunk.push(row);
+      currentSize += rowSize;
+    }
+    
+    // Add the last chunk if not empty
+    if (currentChunk.length > 1) { // > 1 to ensure we have more than just the header
+      chunks.push(currentChunk.join('\n'));
+    }
+    
+    return chunks;
+  }
+  
+  // Process each product group while respecting chunk size limits
   let currentChunk: string[] = [headerRow];
   let currentSize = headerRow.length + 1; // +1 for newline
   
-  // Process data rows (skip header)
-  for (let i = 1; i < lines.length; i++) {
-    const row = lines[i];
+  for (const group of productGroups) {
+    // Calculate size of this entire product group
+    const groupRows = group.map(idx => dataRows[idx]);
+    const groupSize = groupRows.reduce((sum, row) => sum + row.length + 1, 0); // +1 for each newline
     
-    // If adding this row would exceed chunk size, start a new chunk
-    // But only if we already have some content beyond the header
-    if (currentSize + row.length + 1 > chunkSize && currentChunk.length > 1) {
-      chunks.push(currentChunk.join('\n'));
-      currentChunk = [headerRow]; // Start new chunk with header
-      currentSize = headerRow.length + 1;
+    // If this group alone exceeds chunk size, we need to split it
+    // But we'll still try to keep as much together as possible
+    if (groupSize > chunkSize) {
+      // If current chunk has content beyond header, save it first
+      if (currentChunk.length > 1) {
+        chunks.push(currentChunk.join('\n'));
+        currentChunk = [headerRow];
+        currentSize = headerRow.length + 1;
+      }
+      
+      // Add as many rows from this group as possible
+      for (const rowIdx of group) {
+        const row = dataRows[rowIdx];
+        
+        if (currentSize + row.length + 1 > chunkSize && currentChunk.length > 1) {
+          chunks.push(currentChunk.join('\n'));
+          currentChunk = [headerRow];
+          currentSize = headerRow.length + 1;
+        }
+        
+        currentChunk.push(row);
+        currentSize += row.length + 1;
+      }
+    } 
+    // If this group fits in current chunk, add it
+    else if (currentSize + groupSize <= chunkSize) {
+      for (const rowIdx of group) {
+        currentChunk.push(dataRows[rowIdx]);
+      }
+      currentSize += groupSize;
+    } 
+    // If group doesn't fit in current chunk but can be its own chunk
+    else {
+      // Save current chunk if it has content
+      if (currentChunk.length > 1) {
+        chunks.push(currentChunk.join('\n'));
+      }
+      
+      // Start fresh chunk with this group
+      currentChunk = [headerRow, ...group.map(idx => dataRows[idx])];
+      currentSize = headerRow.length + 1 + groupSize;
     }
-    
-    // Add the row to current chunk
-    currentChunk.push(row);
-    currentSize += row.length + 1;
   }
   
-  // Add the last chunk
-  if (currentChunk.length > 0) {
+  // Add the last chunk if it has content beyond just the header
+  if (currentChunk.length > 1) {
     chunks.push(currentChunk.join('\n'));
   }
   
@@ -156,8 +282,27 @@ export function createCSVChunkMetadata(
     const endPercent = Math.floor(((index + 1) / chunks.length) * 100);
     
     // Find position of this chunk in original document
+    // This is trickier with our new chunking approach, as chunks may contain
+    // non-consecutive rows from the original CSV
     const chunkWithoutHeader = chunk.split('\n').slice(1).join('\n');
     const position = csvText.indexOf(chunkWithoutHeader);
+    
+    // Determine what products are contained in this chunk
+    const productNames = new Set<string>();
+    const chunkRows = chunk.split('\n').slice(1); // Skip header
+    
+    for (const row of chunkRows) {
+      const cells = row.split(',');
+      if (cells.length > 0 && cells[0]) {
+        // Clean product name (remove quotes, trim)
+        const productName = cells[0].replace(/^["'](.*)["']$/, '$1').trim();
+        // Remove variation details to get base product name
+        const baseProductName = productName.replace(/\s+-\s+\w+(\s*,.*)?$/i, '');
+        if (baseProductName) {
+          productNames.add(baseProductName);
+        }
+      }
+    }
     
     return {
       text: chunk,
@@ -173,7 +318,9 @@ export function createCSVChunkMetadata(
         column_headers: headers,
         data_segment: `${startPercent}%-${endPercent}%`,
         data_format: 'tabular',
-        total_rows: totalRows
+        total_rows: totalRows,
+        product_count: productNames.size,
+        products: Array.from(productNames).slice(0, 10) // Include up to 10 product names
       }
     };
   });

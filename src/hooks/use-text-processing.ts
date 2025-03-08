@@ -22,6 +22,7 @@ interface ProcessingResult {
     chunkCount: number;
     averageChunkSize: number;
     isCSV?: boolean;
+    productCount?: number;
   };
 }
 
@@ -81,6 +82,12 @@ export function useTextProcessing() {
         chunk.metadata && chunk.metadata.is_csv === true
       );
       
+      // Get product count if this is CSV product data
+      const productCount = hasCSVMetadata 
+        ? chunksWithMetadata.reduce((count, chunk) => 
+            count + (chunk.metadata?.product_count || 0), 0)
+        : undefined;
+      
       const stats = {
         originalLength: text.length,
         processedLength: processedText.length,
@@ -88,10 +95,14 @@ export function useTextProcessing() {
         averageChunkSize: chunks.length > 0 
           ? Math.round(chunks.reduce((sum, chunk) => sum + chunk.length, 0) / chunks.length) 
           : 0,
-        isCSV: hasCSVMetadata
+        isCSV: hasCSVMetadata,
+        productCount
       };
       
       console.log(`Created ${chunks.length} chunks. CSV content: ${hasCSVMetadata}`);
+      if (hasCSVMetadata) {
+        console.log(`Detected approximately ${productCount} products`);
+      }
       
       const result = {
         chunks: chunksWithMetadata,
