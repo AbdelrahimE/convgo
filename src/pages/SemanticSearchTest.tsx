@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSemanticSearch, SearchResult } from '@/hooks/use-semantic-search';
 import { useContextAssembly, AssembledContext } from '@/hooks/use-context-assembly';
 import { useAIResponse } from '@/hooks/use-ai-response';
+import { Textarea } from '@/components/ui/textarea';
 
 export default function SemanticSearchTest() {
   const [query, setQuery] = useState('');
@@ -16,6 +18,9 @@ export default function SemanticSearchTest() {
   const [threshold, setThreshold] = useState(0.7);
   const [filterByLanguage, setFilterByLanguage] = useState(false);
   const [activeTab, setActiveTab] = useState('search');
+  const [temperature, setTemperature] = useState(0.3);
+  const [customSystemPrompt, setCustomSystemPrompt] = useState('');
+  const [useCustomPrompt, setUseCustomPrompt] = useState(false);
   
   const { 
     search, 
@@ -53,7 +58,10 @@ export default function SemanticSearchTest() {
     if (searchResults && searchResults.length > 0) {
       const assembled = await assembleContext(searchResults);
       if (assembled) {
-        await generateResponse(query, assembled.context);
+        await generateResponse(query, assembled.context, {
+          temperature,
+          systemPrompt: useCustomPrompt ? customSystemPrompt : undefined
+        });
       }
     }
   };
@@ -135,6 +143,59 @@ export default function SemanticSearchTest() {
                 </div>
               )}
             </CardFooter>
+          </Card>
+          
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>AI Response Settings</CardTitle>
+              <CardDescription>Customize how the AI responds to queries</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <Label>Temperature: {temperature.toFixed(2)}</Label>
+                </div>
+                <Slider
+                  value={[temperature]}
+                  onValueChange={(values) => setTemperature(values[0])}
+                  max={1.0}
+                  min={0.0}
+                  step={0.05}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Lower values (0.0) are more focused and deterministic, higher values (1.0) are more creative.
+                </p>
+              </div>
+              
+              <div className="pt-2 space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="custom-prompt"
+                    checked={useCustomPrompt}
+                    onCheckedChange={setUseCustomPrompt}
+                  />
+                  <Label htmlFor="custom-prompt">
+                    Use custom system prompt
+                  </Label>
+                </div>
+                
+                {useCustomPrompt && (
+                  <div className="space-y-2 mt-2">
+                    <Label htmlFor="system-prompt">System Prompt</Label>
+                    <Textarea
+                      id="system-prompt"
+                      placeholder="Enter custom system prompt..."
+                      value={customSystemPrompt}
+                      onChange={(e) => setCustomSystemPrompt(e.target.value)}
+                      className="min-h-[120px]"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This controls how the AI behaves. Leave blank to use the default WhatsApp assistant prompt.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
           </Card>
         </div>
         
