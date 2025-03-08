@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 interface GenerateResponseOptions {
   model?: string;
   temperature?: number;
+  systemPrompt?: string;
 }
 
 interface ResponseResult {
@@ -43,7 +44,8 @@ export function useAIResponse() {
           query,
           context,
           model: options?.model || 'gpt-4o-mini',
-          temperature: options?.temperature || 0.3
+          temperature: options?.temperature || 0.3,
+          systemPrompt: options?.systemPrompt
         }
       });
       

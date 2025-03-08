@@ -7,18 +7,31 @@ interface GenerateResponseRequest {
   context: string;
   model?: string;
   temperature?: number;
+  systemPrompt?: string;
 }
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 
+// Default system prompt if none is provided
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful WhatsApp AI assistant that answers questions based on the provided context. 
+If the information to answer the question is not in the context, say "I don't have enough information to answer that question."
+If the question is not related to the context, still try to be helpful but make it clear that you're providing general knowledge.
+Always be concise, professional, and accurate. Don't make things up.`;
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { query, context, model = 'gpt-4o-mini', temperature = 0.3 } = await req.json() as GenerateResponseRequest;
+    const { 
+      query, 
+      context, 
+      model = 'gpt-4o-mini', 
+      temperature = 0.3,
+      systemPrompt 
+    } = await req.json() as GenerateResponseRequest;
 
     if (!query || !context) {
       return new Response(
@@ -33,12 +46,10 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Generating response for query: "${query}" with model: ${model}`);
+    console.log(`Generating response for query: "${query}" with model: ${model}, temperature: ${temperature}`);
 
-    const systemPrompt = `You are a helpful WhatsApp AI assistant that answers questions based on the provided context. 
-If the information to answer the question is not in the context, say "I don't have enough information to answer that question."
-If the question is not related to the context, still try to be helpful but make it clear that you're providing general knowledge.
-Always be concise, professional, and accurate. Don't make things up.`;
+    // Use the provided system prompt or fall back to the default
+    const finalSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
     // Call OpenAI API to generate response
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -50,7 +61,7 @@ Always be concise, professional, and accurate. Don't make things up.`;
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: finalSystemPrompt },
           { role: 'user', content: `Context:\n${context}\n\nQuestion: ${query}` }
         ],
         temperature,
