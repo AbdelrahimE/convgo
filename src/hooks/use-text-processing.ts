@@ -52,7 +52,8 @@ export function useTextProcessing() {
       splitBySentence: true,
       structureAware: true,
       preserveTables: true,
-      cleanRedundantData: true
+      cleanRedundantData: true,
+      ensureHeaderInChunks: true // New option to ensure header row is included in each chunk
     };
     
     // Merge with provided options (if any)
