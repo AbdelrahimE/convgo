@@ -7,7 +7,7 @@ import {
   isCSVContent, 
   chunkCSVContent, 
   createCSVChunkMetadata 
-} from '../../../supabase/functions/utils/csvProcessing';
+} from '../../supabase/functions/utils/csvProcessing';
 
 /**
  * Configuration options for text chunking
