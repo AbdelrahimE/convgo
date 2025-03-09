@@ -311,6 +311,17 @@ export function chunkCSVContent(
     chunks.push(chunkContent);
   }
   
+  // Additional validation to ensure all chunks have headers when requested
+  if (ensureHeaderInChunks) {
+    // Verify each chunk starts with the header row
+    for (let i = 0; i < chunks.length; i++) {
+      if (!chunks[i].startsWith(headerRow)) {
+        console.log(`Fixing missing header in chunk ${i}`);
+        chunks[i] = headerRow + '\n' + chunks[i];
+      }
+    }
+  }
+  
   console.log(`Created ${chunks.length} chunks from ${productGroups.length} product groups`);
   
   return chunks;
@@ -362,6 +373,17 @@ function fallbackCSVChunking(
       : currentChunk.join('\n');
     
     chunks.push(chunkContent);
+  }
+  
+  // Additional validation to ensure all chunks have headers when requested
+  if (ensureHeaderInChunks) {
+    // Verify each chunk starts with the header row
+    for (let i = 0; i < chunks.length; i++) {
+      if (!chunks[i].startsWith(headerRow)) {
+        console.log(`Fixing missing header in fallback chunk ${i}`);
+        chunks[i] = headerRow + '\n' + chunks[i];
+      }
+    }
   }
   
   return chunks;
