@@ -222,9 +222,14 @@ function identifyProductGroups(rows: string[], headerRow: string): number[][] {
  * Now ensures header row is included in every chunk
  * @param csvText The CSV text content
  * @param chunkSize Target chunk size guideline (will be exceeded to preserve products)
+ * @param ensureHeaderInChunks Whether to include the header row in each chunk
  * @returns Array of chunks with preserved CSV structure
  */
-export function chunkCSVContent(csvText: string, chunkSize: number): string[] {
+export function chunkCSVContent(
+  csvText: string, 
+  chunkSize: number,
+  ensureHeaderInChunks: boolean = true // Default to true
+): string[] {
   if (!csvText || csvText.trim().length === 0) return [];
   
   // Split content into lines, preserving non-empty lines
@@ -235,7 +240,7 @@ export function chunkCSVContent(csvText: string, chunkSize: number): string[] {
   const headerRow = lines[0];
   const dataRows = lines.slice(1); // All rows except header
   
-  console.log(`Processing CSV with ${dataRows.length} data rows`);
+  console.log(`Processing CSV with ${dataRows.length} data rows. Include headers: ${ensureHeaderInChunks}`);
   
   // Initialize result array
   const chunks: string[] = [];
@@ -248,7 +253,7 @@ export function chunkCSVContent(csvText: string, chunkSize: number): string[] {
   // If we couldn't identify product groups, use a more conservative approach
   if (productGroups.length === 0) {
     console.log('No product groups identified, using fallback chunking');
-    return fallbackCSVChunking(csvText, headerRow, dataRows, chunkSize);
+    return fallbackCSVChunking(csvText, headerRow, dataRows, chunkSize, ensureHeaderInChunks);
   }
   
   // Process each product group, ensuring we NEVER split a product group
@@ -266,7 +271,11 @@ export function chunkCSVContent(csvText: string, chunkSize: number): string[] {
     // finish the current chunk and start a new one
     if (currentEstimatedSize + groupSize > chunkSize * 2 && currentChunkRows.length > 0) {
       // Add header to this chunk and finalize it
-      chunks.push(headerRow + '\n' + currentChunkRows.join('\n'));
+      const chunkContent = ensureHeaderInChunks 
+        ? headerRow + '\n' + currentChunkRows.join('\n')
+        : currentChunkRows.join('\n');
+      
+      chunks.push(chunkContent);
       currentChunkRows = []; // Start new chunk without header
       currentEstimatedSize = 0;
     }
@@ -282,7 +291,11 @@ export function chunkCSVContent(csvText: string, chunkSize: number): string[] {
     // This is a safety check to prevent extremely large chunks
     if (currentEstimatedSize > chunkSize * 3 && groupIdx < productGroups.length - 1) {
       // Add header to this chunk and finalize it
-      chunks.push(headerRow + '\n' + currentChunkRows.join('\n'));
+      const chunkContent = ensureHeaderInChunks 
+        ? headerRow + '\n' + currentChunkRows.join('\n')
+        : currentChunkRows.join('\n');
+      
+      chunks.push(chunkContent);
       currentChunkRows = []; // Start new chunk without header
       currentEstimatedSize = 0;
     }
@@ -291,7 +304,11 @@ export function chunkCSVContent(csvText: string, chunkSize: number): string[] {
   // Add the last chunk if it has content
   if (currentChunkRows.length > 0) {
     // Add header to this chunk and finalize it
-    chunks.push(headerRow + '\n' + currentChunkRows.join('\n'));
+    const chunkContent = ensureHeaderInChunks 
+      ? headerRow + '\n' + currentChunkRows.join('\n')
+      : currentChunkRows.join('\n');
+    
+    chunks.push(chunkContent);
   }
   
   console.log(`Created ${chunks.length} chunks from ${productGroups.length} product groups`);
@@ -308,7 +325,8 @@ function fallbackCSVChunking(
   csvText: string, 
   headerRow: string, 
   dataRows: string[], 
-  chunkSize: number
+  chunkSize: number,
+  ensureHeaderInChunks: boolean = true // Default to true
 ): string[] {
   const chunks: string[] = [];
   let currentChunk: string[] = [];
@@ -322,7 +340,11 @@ function fallbackCSVChunking(
     // start a new chunk - but always keep rows intact
     if (currentSize + rowSize > chunkSize * 1.5 && currentChunk.length > 0) {
       // Add header to this chunk and finalize it
-      chunks.push(headerRow + '\n' + currentChunk.join('\n'));
+      const chunkContent = ensureHeaderInChunks 
+        ? headerRow + '\n' + currentChunk.join('\n')
+        : currentChunk.join('\n');
+      
+      chunks.push(chunkContent);
       currentChunk = [];
       currentSize = 0;
     }
@@ -335,7 +357,11 @@ function fallbackCSVChunking(
   // Add the last chunk if not empty
   if (currentChunk.length > 0) {
     // Add header to this chunk and finalize it
-    chunks.push(headerRow + '\n' + currentChunk.join('\n'));
+    const chunkContent = ensureHeaderInChunks 
+      ? headerRow + '\n' + currentChunk.join('\n')
+      : currentChunk.join('\n');
+    
+    chunks.push(chunkContent);
   }
   
   return chunks;

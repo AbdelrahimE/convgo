@@ -39,6 +39,11 @@ export interface ChunkingOptions {
    * Considers document structure like headings, paragraphs, and lists
    */
   structureAware?: boolean;
+  
+  /**
+   * Whether to ensure that header rows are included in chunks
+   */
+  ensureHeaderInChunks?: boolean;
 }
 
 /**
@@ -182,12 +187,22 @@ export function formatTableText(tableText: string): string {
  * @returns Array of text chunks
  */
 export function chunkText(text: string, options: ChunkingOptions = {}): string[] {
-  // Default values
-  const chunkSize = options.chunkSize || 768;
-  const chunkOverlap = options.chunkOverlap || 80;
-  const splitBySentence = options.splitBySentence !== undefined ? options.splitBySentence : true;
-  const preserveTables = options.preserveTables !== undefined ? options.preserveTables : true;
-  const structureAware = options.structureAware !== undefined ? options.structureAware : false;
+  // Default options
+  const {
+    chunkSize = 1024,
+    chunkOverlap = 120,
+    splitBySentence = true,
+    structureAware = true,
+    preserveTables = true,
+    ensureHeaderInChunks = true
+  } = options;
+
+  // CSV detection and special handling
+  if (isCSVContent(text)) {
+    console.log("CSV content detected, using specialized CSV chunking");
+    // Pass the ensureHeaderInChunks option to chunkCSVContent
+    return chunkCSVContent(text, chunkSize, ensureHeaderInChunks);
+  }
 
   // Simple implementation that supports table preservation
   if (text.length <= chunkSize) {
