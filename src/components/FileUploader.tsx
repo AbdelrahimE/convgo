@@ -53,8 +53,8 @@ export function FileUploader() {
   const [isLoading, setIsLoading] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [chunkingSettings, setChunkingSettings] = useState<ChunkingSettings>({
-    chunkSize: 768,
-    chunkOverlap: 80,
+    chunkSize: 1024,
+    chunkOverlap: 120,
     splitBySentence: true,
     structureAware: true,
     preserveTables: true,
@@ -618,3 +618,4 @@ export function FileUploader() {
     </>
   );
 }
+

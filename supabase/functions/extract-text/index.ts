@@ -16,8 +16,8 @@ interface ChunkingOptions {
 
 // Default chunking options matching the frontend
 const DEFAULT_CHUNKING_OPTIONS: ChunkingOptions = {
-  chunkSize: 768,
-  chunkOverlap: 80,
+  chunkSize: 1024, // Updated to 1024 to match frontend defaults and better handle product data
+  chunkOverlap: 120, // Updated to match frontend
   splitBySentence: true,
   structureAware: true,
   preserveTables: true,

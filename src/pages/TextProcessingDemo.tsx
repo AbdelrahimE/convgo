@@ -17,8 +17,8 @@ import { toast } from 'sonner';
 export default function TextProcessingDemo() {
   const [text, setText] = useState('');
   const [documentId, setDocumentId] = useState(`doc-${Math.random().toString(36).substring(2, 9)}`);
-  const [chunkSize, setChunkSize] = useState(512);
-  const [chunkOverlap, setChunkOverlap] = useState(50);
+  const [chunkSize, setChunkSize] = useState(1024); // Updated to 1024 to match system-wide default
+  const [chunkOverlap, setChunkOverlap] = useState(120); // Updated to match system-wide default
   const [splitBySentence, setSplitBySentence] = useState(true);
   const [structureAware, setStructureAware] = useState(true);
   const [preserveTables, setPreserveTables] = useState(true);
