@@ -3,6 +3,12 @@
  * Handles document chunking and preprocessing for embeddings
  */
 
+import { 
+  isCSVContent, 
+  chunkCSVContent, 
+  createCSVChunkMetadata 
+} from '../../../supabase/functions/utils/csvProcessing';
+
 /**
  * Configuration options for text chunking
  */
