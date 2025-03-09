@@ -45,10 +45,10 @@ export function useTextProcessing() {
     setIsProcessing(true);
     setError(null);
     
-    // Use updated default values (768 for chunk size, 80 for overlap)
+    // Adjusted defaults: increasing chunk size to handle larger product entries
     const defaultOptions = {
-      chunkSize: 768,
-      chunkOverlap: 80,
+      chunkSize: 1024, // Increased from 768 to better handle product entries
+      chunkOverlap: 120, // Increased from 80 to provide more context between chunks
       splitBySentence: true,
       structureAware: true,
       preserveTables: true,
