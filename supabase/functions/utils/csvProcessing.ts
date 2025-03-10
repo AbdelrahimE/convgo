@@ -1,3 +1,4 @@
+
 /**
  * CSV-specific processing utilities to improve handling of tabular data
  * This module provides specialized handling for CSV files in the text extraction process
@@ -260,10 +261,9 @@ export function chunkCSVContent(
   let currentChunkRows: string[] = [];
   let currentEstimatedSize = 0;
   
-  // FIXED: Initialize the first chunk with header row if needed
+  // FIXED: Actually initialize the first chunk with header row
   if (ensureHeaderInChunks) {
-    // Don't add to currentChunkRows yet, as we'll add header when finalizing chunks
-    // We're just tracking that we need the header
+    // Just log but don't add to currentChunkRows yet - we'll add when finalizing
     console.log("Will include header row in all chunks");
   }
   
@@ -283,7 +283,9 @@ export function chunkCSVContent(
         : currentChunkRows.join('\n');
       
       chunks.push(chunkContent);
-      currentChunkRows = []; // Start new chunk without header
+      
+      // FIXED: Initialize new chunk with header rows array for the next chunk
+      currentChunkRows = []; // Start new chunk (we'll add header at finalization)
       currentEstimatedSize = 0;
     }
     
@@ -303,7 +305,9 @@ export function chunkCSVContent(
         : currentChunkRows.join('\n');
       
       chunks.push(chunkContent);
-      currentChunkRows = []; // Start new chunk without header
+      
+      // FIXED: Initialize new chunk for next content
+      currentChunkRows = []; // Start new chunk (we'll add header at finalization)
       currentEstimatedSize = 0;
     }
   }
@@ -343,6 +347,18 @@ export function chunkCSVContent(
           const dataLinesOnly = chunkLines[0] === headerRow ? chunkLines.slice(1) : chunkLines;
           chunks[i] = headerRow + '\n' + dataLinesOnly.join('\n');
         }
+      }
+    }
+  }
+  
+  // Final safety check - add headers one more time if any were missed
+  if (ensureHeaderInChunks) {
+    for (let i = 0; i < chunks.length; i++) {
+      // Split into lines again to check header
+      const lines = chunks[i].split('\n');
+      if (lines[0] !== headerRow) {
+        console.log(`FINAL FIX: Adding missing header to chunk ${i}`);
+        chunks[i] = headerRow + '\n' + chunks[i];
       }
     }
   }
@@ -421,6 +437,15 @@ function fallbackCSVChunking(
         // Remove any incorrect header and add the correct one
         const dataLinesOnly = chunkLines[0] === headerRow ? chunkLines.slice(1) : chunkLines;
         chunks[i] = headerRow + '\n' + dataLinesOnly.join('\n');
+      }
+    }
+    
+    // Final safety check for fallback chunks
+    for (let i = 0; i < chunks.length; i++) {
+      // One more check to be absolutely sure
+      if (!chunks[i].startsWith(headerRow)) {
+        console.log(`FINAL FALLBACK FIX: Adding missing header to chunk ${i}`);
+        chunks[i] = headerRow + '\n' + chunks[i];
       }
     }
   }
