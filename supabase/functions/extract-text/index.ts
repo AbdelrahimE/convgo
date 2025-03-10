@@ -332,7 +332,7 @@ function chunkText(text: string, options: ChunkingOptions = {}): string[] {
       // Try using Papa Parse for better CSV handling
       const parsedCSV = parseCSVContent(cleanedText);
       const csvChunks = chunkParsedCSV(parsedCSV, chunkSize);
-      console.log(`Created ${csvChunks.length} CSV chunks using Papa Parse`);
+      console.log(`Created ${csvChunks.length} CSV chunks using Papa Parse with chunk size ${chunkSize}`);
       return csvChunks;
     } catch (error) {
       console.error('Error using Papa Parse for CSV:', error);
@@ -799,12 +799,12 @@ serve(async (req) => {
         const parsedCSV = parseCSVContent(extractedText);
         
         // Create chunks with header in each chunk
-        const csvChunks = chunkParsedCSV(parsedCSV, chunkOptions.chunkSize / 20); // Rough estimate of rows per chunk
+        const csvChunks = chunkParsedCSV(parsedCSV, chunkOptions.chunkSize);
         
         // Create metadata for chunks
         chunksWithMetadata = createParsedCSVChunkMetadata(parsedCSV, csvChunks, fileId);
         
-        console.log(`Created ${csvChunks.length} CSV chunks with Papa Parse`);
+        console.log(`Created ${csvChunks.length} CSV chunks with Papa Parse using chunk size ${chunkOptions.chunkSize}`);
       } catch (error) {
         console.error('Error using Papa Parse for CSV, falling back to normal processing:', error);
         // If Papa Parse fails, fall back to the existing CSV processing
