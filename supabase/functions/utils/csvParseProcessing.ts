@@ -35,11 +35,12 @@ export function parseCSVContent(fileContent: string): any {
 
 /**
  * Chunks CSV data with header row included in each chunk
+ * Uses row size estimation to better approximate the target chunk size
  * @param parsedResult The parsed CSV result from Papa Parse
- * @param chunkSize Target chunk size (approximate number of rows per chunk)
+ * @param chunkSize Target chunk size (approximate character count per chunk)
  * @returns Array of CSV chunks with headers in each chunk
  */
-export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50): string[] {
+export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50000): string[] {
   if (!parsedResult.data || parsedResult.data.length === 0) {
     console.log('No CSV data to chunk');
     return [];
@@ -53,13 +54,37 @@ export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50): strin
     throw new Error('No headers found in CSV data');
   }
   
-  console.log(`Chunking CSV with ${data.length} rows into chunks of ~${chunkSize} rows`);
+  // Calculate average row size to better estimate how many rows per chunk
+  const headerRow = headers.join(',');
   
-  // Calculate how many chunks we'll need
-  const chunks: string[] = [];
-  const rowsPerChunk = Math.max(1, chunkSize);
+  // Sample up to 100 rows to calculate average row size
+  const sampleSize = Math.min(data.length, 100);
+  let totalSize = 0;
+  
+  for (let i = 0; i < sampleSize; i++) {
+    const rowString = Papa.unparse({
+      fields: headers,
+      data: [data[i]]
+    });
+    totalSize += rowString.length - headerRow.length - 1; // Subtract header and newline
+  }
+  
+  // Calculate average row size and header size
+  const avgRowSize = sampleSize > 0 ? totalSize / sampleSize : 100;
+  const headerSize = headerRow.length + 1; // +1 for newline
+  
+  console.log(`Average row size: ${avgRowSize} chars, Header size: ${headerSize} chars`);
+  
+  // Calculate optimal rows per chunk to approach target chunk size
+  // Accounting for header size and average row size
+  const rowsPerChunk = Math.max(1, Math.floor((chunkSize - headerSize) / avgRowSize));
+  
+  console.log(`Chunking CSV with ${data.length} rows into chunks of ~${rowsPerChunk} rows (target: ~${chunkSize} chars)`);
   
   // Split data into chunks
+  const chunks: string[] = [];
+  
+  // Split data into chunks based on the calculated optimal rows per chunk
   for (let i = 0; i < data.length; i += rowsPerChunk) {
     const chunkData = data.slice(i, i + rowsPerChunk);
     
@@ -70,7 +95,7 @@ export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50): strin
     });
     
     chunks.push(csvString);
-    console.log(`Created chunk ${chunks.length} with ${chunkData.length} rows`);
+    console.log(`Created chunk ${chunks.length} with ${chunkData.length} rows, approximately ${csvString.length} chars`);
   }
   
   return chunks;
