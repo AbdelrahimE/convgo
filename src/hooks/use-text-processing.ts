@@ -59,7 +59,9 @@ export function useTextProcessing() {
     // Merge with provided options (if any)
     const mergedOptions = {
       ...defaultOptions,
-      ...options
+      ...options,
+      // Force ensureHeaderInChunks to true regardless of what was passed
+      ensureHeaderInChunks: true
     };
     
     console.log("Processing document with options:", mergedOptions);

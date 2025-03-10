@@ -205,9 +205,10 @@ export function chunkText(text: string, options: ChunkingOptions = {}): string[]
 
   // CSV detection and special handling
   if (isCSVContent(text)) {
-    console.log("CSV content detected, using specialized CSV chunking");
-    // Pass the ensureHeaderInChunks option to chunkCSVContent
-    return chunkCSVContent(text, chunkSize, ensureHeaderInChunks);
+    console.log("CSV content detected, using specialized CSV chunking with headers");
+    // Explicitly pass the ensureHeaderInChunks option to chunkCSVContent
+    // and force it to true for consistency
+    return chunkCSVContent(text, chunkSize, true); // Force headers to be included
   }
 
   // Simple implementation that supports table preservation
@@ -1131,3 +1132,4 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
       .map(([word]) => word);
   }
 }
+
