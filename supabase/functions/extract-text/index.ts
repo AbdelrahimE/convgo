@@ -328,7 +328,17 @@ function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   // Check if content is CSV and use specialized handling
   if (isCSVContent(cleanedText)) {
     console.log('Detected CSV content, using specialized CSV chunking');
-    return chunkCSVContent(cleanedText, chunkSize);
+    try {
+      // Try using Papa Parse for better CSV handling
+      const parsedCSV = parseCSVContent(cleanedText);
+      const csvChunks = chunkParsedCSV(parsedCSV, chunkSize);
+      console.log(`Created ${csvChunks.length} CSV chunks using Papa Parse`);
+      return csvChunks;
+    } catch (error) {
+      console.error('Error using Papa Parse for CSV:', error);
+      console.log('Falling back to regular CSV chunking');
+      return chunkCSVContent(cleanedText, chunkSize);
+    }
   }
 
   // Special table-preserving chunking
