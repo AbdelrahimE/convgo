@@ -5,7 +5,7 @@
  */
 
 // Import Papa Parse from a CDN URL that's compatible with Deno
-import { parse } from 'https://esm.sh/papaparse@5.4.1';
+import Papa from 'https://esm.sh/papaparse@5.4.1';
 
 /**
  * Extracts text from CSV using Papa Parse
@@ -17,7 +17,7 @@ export function parseCSVContent(fileContent: string): any {
   
   try {
     // Use Papa Parse to parse the CSV with header detection
-    const result = parse(fileContent, {
+    const result = Papa.parse(fileContent, {
       header: true,        // First row is treated as headers
       skipEmptyLines: true, // Skip empty lines
       dynamicTyping: false, // Keep everything as strings
@@ -50,7 +50,7 @@ export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50): strin
   
   if (headers.length === 0) {
     console.log('No headers found in CSV');
-    return [stringify(data)]; // Return as single chunk if no headers
+    throw new Error('No headers found in CSV data');
   }
   
   console.log(`Chunking CSV with ${data.length} rows into chunks of ~${chunkSize} rows`);
@@ -64,7 +64,7 @@ export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50): strin
     const chunkData = data.slice(i, i + rowsPerChunk);
     
     // Convert chunk back to CSV string with headers
-    const csvString = unparse({
+    const csvString = Papa.unparse({
       fields: headers,
       data: chunkData
     });
@@ -74,52 +74,6 @@ export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50): strin
   }
   
   return chunks;
-}
-
-/**
- * Converts CSV data back to string format
- * @param data The data to convert to CSV
- * @returns CSV formatted string
- */
-function stringify(data: any[]): string {
-  if (!data || data.length === 0) return '';
-  
-  // Get all possible fields from all objects
-  const allFields = new Set<string>();
-  data.forEach(row => {
-    Object.keys(row).forEach(key => allFields.add(key));
-  });
-  
-  const fields = Array.from(allFields);
-  
-  // Build CSV string manually if needed
-  const header = fields.join(',');
-  const rows = data.map(row => {
-    return fields.map(field => {
-      const value = row[field] === undefined ? '' : row[field];
-      // Escape quotes and wrap in quotes if contains comma
-      if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-        return `"${value.replace(/"/g, '""')}"`;
-      }
-      return value;
-    }).join(',');
-  });
-  
-  return [header, ...rows].join('\n');
-}
-
-/**
- * Convenience function that wraps Papa Parse's unparse
- * @param data Object with fields and data for CSV generation
- * @returns CSV string
- */
-function unparse(data: { fields: string[], data: any[] }): string {
-  try {
-    return parse.unparse(data);
-  } catch (error) {
-    console.error('Error unparsing CSV data:', error);
-    return stringify(data.data); // Fallback to manual stringify
-  }
 }
 
 /**
@@ -139,7 +93,7 @@ export function createParsedCSVChunkMetadata(
   
   return chunks.map((chunk, index) => {
     // Parse this chunk to count rows (subtract 1 for header)
-    const chunkData = parse(chunk, { header: true });
+    const chunkData = Papa.parse(chunk, { header: true });
     const rowCount = chunkData.data.length;
     
     // Calculate position in the original dataset
