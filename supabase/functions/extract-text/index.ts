@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { findTableSections, processTableForChunking, isTableContent } from '../utils/tableProcessing.ts';
 import { isCSVContent, chunkCSVContent, createCSVChunkMetadata } from '../utils/csvProcessing.ts';
+import { parseCSVContent, chunkParsedCSV, createParsedCSVChunkMetadata } from '../utils/csvParseProcessing.ts';
 
 // Text processing utilities
 interface ChunkingOptions {
@@ -613,7 +614,21 @@ async function extractTextFromFile(fileUrl: string, mimeType: string): Promise<s
     // Get file buffer
     const fileBuffer = await fileResponse.arrayBuffer();
     
-    // Call Tika server to extract text
+    // Check if this is a CSV file based on mime type
+    const isCSV = mimeType && (
+      mimeType.includes('csv') || 
+      mimeType.includes('text/comma-separated-values') ||
+      mimeType.includes('text/csv')
+    );
+    
+    if (isCSV) {
+      console.log('CSV file detected, returning raw content for specialized processing');
+      // For CSV files, return the raw content for specialized processing with Papa Parse
+      const decoder = new TextDecoder('utf-8');
+      return decoder.decode(fileBuffer);
+    }
+    
+    // For non-CSV files, use Tika as before
     const tikaUrl = 'https://tika.convgo.com/tika';
     console.log(`Calling Tika server at ${tikaUrl}`);
     
@@ -632,7 +647,7 @@ async function extractTextFromFile(fileUrl: string, mimeType: string): Promise<s
     
     // Get extracted text
     const extractedText = await tikaResponse.text();
-    console.log(`Successfully extracted ${extractedText.length} characters of text`);
+    console.log(`Successfully extracted ${extractedText.length} characters of text using Tika`);
     
     return extractedText || 'No text content could be extracted from this file.';
   } catch (error) {
@@ -724,7 +739,14 @@ serve(async (req) => {
       );
     }
 
-    // Extract text from file using Tika
+    // Check if this is a CSV file based on mime type
+    const isCSV = fileData.mime_type && (
+      fileData.mime_type.includes('csv') || 
+      fileData.mime_type.includes('text/comma-separated-values') ||
+      fileData.mime_type.includes('text/csv')
+    );
+    
+    // Extract text from file - this now handles CSV files differently
     let extractedText;
     try {
       extractedText = await extractTextFromFile(signedUrl.signedUrl, fileData.mime_type);
@@ -757,19 +779,36 @@ serve(async (req) => {
     
     console.log('Final chunking options:', JSON.stringify(chunkOptions));
     
-    const processedText = preprocessText(extractedText);
+    let chunksWithMetadata;
     
-    // Check if content is CSV for logging purposes
-    const isCSV = isCSVContent(processedText, fileData.mime_type);
+    // Use different processing paths for CSV vs non-CSV files
     if (isCSV) {
-      console.log('CSV content detected, using specialized CSV processing');
+      console.log('Processing CSV file with Papa Parse for better header handling');
+      try {
+        // For CSV files, use Papa Parse to preserve structure
+        const parsedCSV = parseCSVContent(extractedText);
+        
+        // Create chunks with header in each chunk
+        const csvChunks = chunkParsedCSV(parsedCSV, chunkOptions.chunkSize / 20); // Rough estimate of rows per chunk
+        
+        // Create metadata for chunks
+        chunksWithMetadata = createParsedCSVChunkMetadata(parsedCSV, csvChunks, fileId);
+        
+        console.log(`Created ${csvChunks.length} CSV chunks with Papa Parse`);
+      } catch (error) {
+        console.error('Error using Papa Parse for CSV, falling back to normal processing:', error);
+        // If Papa Parse fails, fall back to the existing CSV processing
+        const processedText = preprocessText(extractedText);
+        const chunks = chunkText(processedText, chunkOptions);
+        chunksWithMetadata = createChunkMetadata(processedText, chunks, fileId);
+      }
+    } else {
+      // For non-CSV files, use the regular processing
+      const processedText = preprocessText(extractedText);
+      const chunks = chunkText(processedText, chunkOptions);
+      chunksWithMetadata = createChunkMetadata(processedText, chunks, fileId);
+      console.log(`Created ${chunks.length} chunks for non-CSV file`);
     }
-    
-    const chunks = chunkText(processedText, chunkOptions);
-    const chunksWithMetadata = createChunkMetadata(processedText, chunks, fileId);
-    
-    console.log(`Created ${chunks.length} chunks with settings:`, 
-      `chunk size: ${chunkOptions.chunkSize}, overlap: ${chunkOptions.chunkOverlap}, preserveTables: ${chunkOptions.preserveTables}, isCSV: ${isCSV}`);
 
     // Store chunks in the text_chunks table with language detection for each chunk
     for (let i = 0; i < chunksWithMetadata.length; i++) {
@@ -836,8 +875,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Text extracted and chunked successfully with language detection',
-        chunkCount: chunks.length
+        message: isCSV ? 'CSV file processed with Papa Parse' : 'Text extracted and chunked successfully with language detection',
+        chunkCount: chunksWithMetadata.length
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

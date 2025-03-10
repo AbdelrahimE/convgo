@@ -53,7 +53,7 @@ export function useTextProcessing() {
       structureAware: true,
       preserveTables: true,
       cleanRedundantData: true,
-      ensureHeaderInChunks: true // Explicitly set to true to include header row in each chunk
+      ensureHeaderInChunks: true // Explicitly ensure header row is included in each chunk
     };
     
     // Merge with provided options (if any)
@@ -71,6 +71,7 @@ export function useTextProcessing() {
       const processedText = preprocessText(text);
       
       // 2. Split into chunks using provided options (including ensureHeaderInChunks)
+      // This will now use Papa Parse for CSV content through the Edge Function
       const chunks = chunkText(processedText, mergedOptions);
       
       // 3. Add metadata to chunks
