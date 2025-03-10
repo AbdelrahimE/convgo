@@ -1,17 +1,18 @@
 
-import { parse, ParseResult } from 'papaparse';
-
 /**
  * CSV processing utilities using Papa Parse for more reliable handling
  * This module provides specialized handling for CSV files with proper header support
  */
+
+// Import Papa Parse from a CDN URL that's compatible with Deno
+import { parse } from 'https://esm.sh/papaparse@5.4.1';
 
 /**
  * Extracts text from CSV using Papa Parse
  * @param fileContent The raw CSV file content
  * @returns Parsed CSV content with preserved structure
  */
-export function parseCSVContent(fileContent: string): ParseResult<any> {
+export function parseCSVContent(fileContent: string): any {
   console.log('Parsing CSV content with Papa Parse');
   
   try {
@@ -38,7 +39,7 @@ export function parseCSVContent(fileContent: string): ParseResult<any> {
  * @param chunkSize Target chunk size (approximate number of rows per chunk)
  * @returns Array of CSV chunks with headers in each chunk
  */
-export function chunkParsedCSV(parsedResult: ParseResult<any>, chunkSize: number = 50): string[] {
+export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50): string[] {
   if (!parsedResult.data || parsedResult.data.length === 0) {
     console.log('No CSV data to chunk');
     return [];
@@ -129,7 +130,7 @@ function unparse(data: { fields: string[], data: any[] }): string {
  * @returns Array of chunks with enhanced metadata
  */
 export function createParsedCSVChunkMetadata(
-  parsedResult: ParseResult<any>,
+  parsedResult: any,
   chunks: string[],
   documentId: string
 ): Array<{ text: string; metadata: Record<string, any> }> {
