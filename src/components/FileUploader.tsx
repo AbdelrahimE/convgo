@@ -134,7 +134,7 @@ export function FileUploader() {
       toast({
         variant: "destructive",
         title: "Invalid file type",
-        description: "Please upload a PDF, DOC, DOCX, TXT, CSV, XLSX, or CSV file"
+        description: "Please upload a PDF, DOC, DOCX, TXT, CSV, or XLSX file"
       });
       return false;
     }
@@ -411,7 +411,7 @@ export function FileUploader() {
             </p>
             <div className="flex items-center gap-2">
               <p className="text-xs sm:text-sm text-gray-500 text-center">
-                PDF, DOC, DOCX, TXT, CSV, XLSX, CSV (max 10MB)
+                PDF, DOC, DOCX, TXT, CSV, XLSX (max 10MB)
                 {retryState.lastError && retryState.attempts > 0 && (
                   <span className="text-destructive ml-2">
                     Retry attempt {retryState.attempts}/{MAX_RETRY_ATTEMPTS}
