@@ -12,6 +12,7 @@ import WhatsAppLink from '@/pages/WhatsAppLink';
 import OpenAITest from '@/pages/OpenAITest';
 import TextProcessingDemo from '@/pages/TextProcessingDemo';
 import SemanticSearchTest from '@/pages/SemanticSearchTest';
+import WhatsAppFileConfig from '@/pages/WhatsAppFileConfig';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import './App.css';
@@ -50,6 +51,14 @@ function AppContent() {
                   element={
                     <ProtectedRoute>
                       <WhatsAppLink />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/whatsapp-file-config"
+                  element={
+                    <ProtectedRoute>
+                      <WhatsAppFileConfig />
                     </ProtectedRoute>
                   }
                 />
