@@ -8,7 +8,6 @@ interface SearchRequest {
   limit?: number;
   threshold?: number;
   filterLanguage?: string;
-  fileIds?: string[];
 }
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
@@ -26,7 +25,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, limit = 5, threshold = 0.7, filterLanguage, fileIds } = await req.json() as SearchRequest;
+    const { query, limit = 5, threshold = 0.7, filterLanguage } = await req.json() as SearchRequest;
 
     if (!query) {
       return new Response(
@@ -41,7 +40,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Processing query: "${query}" (limit: ${limit}, threshold: ${threshold}, language: ${filterLanguage || 'any'}, fileIds: ${fileIds ? fileIds.join(', ') : 'all'})`);
+    console.log(`Processing query: "${query}" (limit: ${limit}, threshold: ${threshold}, language: ${filterLanguage || 'any'})`);
 
     // Generate embedding for the query using OpenAI API
     const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
@@ -65,47 +64,17 @@ serve(async (req) => {
     const embeddingData = await embeddingResponse.json();
     const queryEmbedding = embeddingData.data[0].embedding;
 
-    // Prepare the RPC function call
-    const rpcParams: Record<string, any> = {
-      query_embedding: queryEmbedding,
-      match_threshold: threshold,
-      match_count: limit,
-      min_content_length: 20,
-      filter_language: filterLanguage || null
-    };
-
-    // If fileIds are provided, we need to use a different approach
-    let matchingChunks;
-    let matchError;
-
-    if (fileIds && fileIds.length > 0) {
-      // Get chunks for specific files using SQL query
-      const fileIdsString = fileIds.map(id => `'${id}'`).join(',');
-      
-      const { data, error } = await supabase.rpc(
-        'match_document_chunks_by_files',
-        {
-          query_embedding: queryEmbedding,
-          match_threshold: threshold,
-          match_count: limit,
-          min_content_length: 20,
-          filter_language: filterLanguage || null,
-          file_ids: fileIds
-        }
-      );
-      
-      matchingChunks = data;
-      matchError = error;
-    } else {
-      // Use the original function for all files
-      const { data, error } = await supabase.rpc(
-        'match_document_chunks',
-        rpcParams
-      );
-      
-      matchingChunks = data;
-      matchError = error;
-    }
+    // Execute SQL function to find similar chunks
+    const { data: matchingChunks, error: matchError } = await supabase.rpc(
+      'match_document_chunks',
+      {
+        query_embedding: queryEmbedding,
+        match_threshold: threshold,
+        match_count: limit,
+        min_content_length: 20,
+        filter_language: filterLanguage || null
+      }
+    );
 
     if (matchError) {
       throw new Error(`Error searching for matching chunks: ${matchError.message}`);
@@ -137,8 +106,7 @@ serve(async (req) => {
         meta: {
           count: matchingChunks?.length || 0,
           threshold,
-          limit,
-          fileIds: fileIds || 'all'
+          limit
         }
       }),
       { 

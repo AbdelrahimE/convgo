@@ -9,7 +9,6 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
-import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
 import OpenAITest from '@/pages/OpenAITest';
 import TextProcessingDemo from '@/pages/TextProcessingDemo';
 import SemanticSearchTest from '@/pages/SemanticSearchTest';
@@ -51,14 +50,6 @@ function AppContent() {
                   element={
                     <ProtectedRoute>
                       <WhatsAppLink />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/whatsapp-ai"
-                  element={
-                    <ProtectedRoute>
-                      <WhatsAppAIConfig />
                     </ProtectedRoute>
                   }
                 />
