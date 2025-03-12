@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -125,8 +124,6 @@ serve(async (req) => {
     };
 
     if (fileIds && fileIds.length > 0) {
-      // Convert JavaScript array to PostgreSQL UUID array format
-      // This ensures compatibility with the SQL function's ANY operator
       rpcParams.file_ids = fileIds;
       
       console.log('Database RPC parameters:', {
@@ -144,40 +141,32 @@ serve(async (req) => {
       const rpcFunction = fileIds && fileIds.length > 0 ? 'match_document_chunks_by_files' : 'match_document_chunks';
       console.log(`Calling Supabase RPC function: ${rpcFunction}`);
       
-      const { data, error: matchError } = await supabase.rpc(
+      const { data: rpcData, error: rpcError } = await supabase.rpc(
         rpcFunction,
         rpcParams
       );
 
-      if (matchError) {
+      if (rpcError) {
         console.error('Database RPC error details:', {
           function: rpcFunction,
-          error: matchError,
-          message: matchError.message,
-          details: matchError.details,
-          hint: matchError.hint
+          error: rpcError,
+          message: rpcError.message,
+          details: rpcError.details,
+          hint: rpcError.hint,
+          parameters: rpcParams
         });
-        throw new Error(`Error searching for matching chunks: ${matchError.message}`);
+        throw new Error(`Error searching for matching chunks: ${rpcError.message}`);
       }
 
-      matchingChunks = data;
+      matchingChunks = rpcData;
       console.log(`Found ${matchingChunks?.length || 0} matching chunks`);
     } catch (error) {
       console.error('Database query error:', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
+        stack: error instanceof Error ? error.stack : undefined,
+        parameters: rpcParams
       });
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Failed to search database',
-          details: error instanceof Error ? error.message : 'Unknown database error'
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500
-        }
-      );
+      throw error;
     }
 
     let queryLanguage = null;

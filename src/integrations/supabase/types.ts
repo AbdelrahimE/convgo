@@ -620,6 +620,25 @@ export type Database = {
           language: string
         }[]
       }
+      match_document_chunks_by_files: {
+        Args: {
+          query_embedding: string
+          match_threshold: number
+          match_count: number
+          min_content_length?: number
+          filter_language?: string
+          file_ids?: string[]
+        }
+        Returns: {
+          id: string
+          chunk_id: string
+          file_id: string
+          content: string
+          metadata: Json
+          similarity: number
+          language: string
+        }[]
+      }
       sparsevec_out: {
         Args: {
           "": unknown
