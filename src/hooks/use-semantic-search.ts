@@ -18,6 +18,7 @@ export interface SearchQueryParams {
   limit?: number;
   threshold?: number;
   filterLanguage?: string;
+  fileIds?: string[];
 }
 
 interface SearchResponse {

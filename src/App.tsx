@@ -13,6 +13,7 @@ import OpenAITest from '@/pages/OpenAITest';
 import TextProcessingDemo from '@/pages/TextProcessingDemo';
 import SemanticSearchTest from '@/pages/SemanticSearchTest';
 import WhatsAppFileConfig from '@/pages/WhatsAppFileConfig';
+import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import './App.css';
@@ -59,6 +60,14 @@ function AppContent() {
                   element={
                     <ProtectedRoute>
                       <WhatsAppFileConfig />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/whatsapp-ai-config"
+                  element={
+                    <ProtectedRoute>
+                      <WhatsAppAIConfig />
                     </ProtectedRoute>
                   }
                 />
