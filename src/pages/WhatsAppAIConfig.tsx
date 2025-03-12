@@ -252,15 +252,15 @@ const WhatsAppAIConfig = () => {
         limit: 5
       });
       
-      if (results.length === 0) {
-        setConversation(prev => [...prev, { role: 'assistant', content: 'I could not find relevant information in the associated files to answer your question.' }]);
-        return;
+      // Prepare context from search results or use empty context if no results
+      let context = '';
+      if (results.length > 0) {
+        context = results.map(result => result.content).join('\n\n');
+      } else {
+        console.log('No relevant content found, proceeding with empty context');
       }
       
-      // Prepare context from search results
-      const context = results.map(result => result.content).join('\n\n');
-      
-      // Generate AI response
+      // Generate AI response with whatever context we have (might be empty)
       const response = await generateResponse(testQuery, context, {
         systemPrompt,
         temperature: 1.0
