@@ -26,7 +26,13 @@ serve(async (req) => {
   }
 
   try {
-    const { query, limit = 5, threshold = 0.7, filterLanguage, fileIds } = await req.json() as SearchRequest;
+    // Parse and validate request body
+    const requestBody = await req.json().catch((error) => {
+      console.error('Error parsing request body:', error);
+      throw new Error('Invalid request body format');
+    });
+
+    const { query, limit = 5, threshold = 0.7, filterLanguage, fileIds } = requestBody as SearchRequest;
 
     if (!query) {
       return new Response(
@@ -44,25 +50,42 @@ serve(async (req) => {
     console.log(`Processing query: "${query}" (limit: ${limit}, threshold: ${threshold}, language: ${filterLanguage || 'any'}, fileIds: ${fileIds ? fileIds.join(',') : 'all'})`);
 
     // Generate embedding for the query using OpenAI API
-    const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        input: query,
-        model: EMBEDDING_MODEL,
-        encoding_format: 'float',
-      }),
-    });
+    let embeddingData;
+    try {
+      const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: query,
+          model: EMBEDDING_MODEL,
+          encoding_format: 'float',
+        }),
+      });
 
-    if (!embeddingResponse.ok) {
-      const errorData = await embeddingResponse.json();
-      throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
+      if (!embeddingResponse.ok) {
+        const errorData = await embeddingResponse.json();
+        throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown OpenAI API error'}`);
+      }
+
+      embeddingData = await embeddingResponse.json();
+    } catch (error) {
+      console.error('Error generating embeddings:', error);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Failed to generate embeddings',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500
+        }
+      );
     }
 
-    const embeddingData = await embeddingResponse.json();
     const queryEmbedding = embeddingData.data[0].embedding;
 
     // Build RPC parameters
@@ -80,27 +103,51 @@ serve(async (req) => {
     }
 
     // Execute SQL function to find similar chunks with optional file filtering
-    const { data: matchingChunks, error: matchError } = await supabase.rpc(
-      fileIds && fileIds.length > 0 ? 'match_document_chunks_by_files' : 'match_document_chunks',
-      rpcParams
-    );
+    let matchingChunks;
+    try {
+      const { data, error: matchError } = await supabase.rpc(
+        fileIds && fileIds.length > 0 ? 'match_document_chunks_by_files' : 'match_document_chunks',
+        rpcParams
+      );
 
-    if (matchError) {
-      throw new Error(`Error searching for matching chunks: ${matchError.message}`);
+      if (matchError) {
+        throw new Error(`Error searching for matching chunks: ${matchError.message}`);
+      }
+
+      matchingChunks = data;
+    } catch (error) {
+      console.error('Database query error:', error);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Failed to search database',
+          details: error instanceof Error ? error.message : 'Unknown database error'
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500
+        }
+      );
     }
 
     // Get language of the query for potential filtering
     let queryLanguage = null;
     if (!filterLanguage) {
       try {
-        const { data: languageData } = await supabase.rpc(
+        const { data: languageData, error: langError } = await supabase.rpc(
           'detect_language_simple',
           { text_input: query }
         );
-        queryLanguage = languageData;
-        console.log(`Detected query language: ${queryLanguage}`);
+
+        if (langError) {
+          console.warn('Language detection failed:', langError);
+        } else {
+          queryLanguage = languageData;
+          console.log(`Detected query language: ${queryLanguage}`);
+        }
       } catch (langError) {
-        console.error("Error detecting query language:", langError);
+        console.warn("Error detecting query language:", langError);
+        // Don't fail the whole request if language detection fails
       }
     }
 
@@ -123,12 +170,13 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Error in semantic-search function:', error);
+    console.error('Unhandled error in semantic-search function:', error);
     
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
