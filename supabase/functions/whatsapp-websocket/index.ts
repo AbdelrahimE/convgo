@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -241,8 +240,8 @@ async function connectToEvolutionWebSocket(instanceName: string): Promise<void> 
   try {
     console.log(`Connecting to WebSocket for instance: ${instanceName}`);
     
-    // Construct the WebSocket URL
-    const wsUrl = `wss://api.convgo.com/v1/webhook/ws/${instanceName}?apikey=${EVOLUTION_API_KEY}`;
+    // Construct the WebSocket URL - Using the correct format from documentation
+    const wsUrl = `wss://api.convgo.com/${instanceName}`;
     
     // Create WebSocket connection
     const ws = new WebSocket(wsUrl);
