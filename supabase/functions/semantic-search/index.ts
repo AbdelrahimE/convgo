@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -124,9 +125,12 @@ serve(async (req) => {
     };
 
     if (fileIds && fileIds.length > 0) {
+      // Convert JavaScript array to PostgreSQL UUID array format
+      // This ensures compatibility with the SQL function's ANY operator
       rpcParams.file_ids = fileIds;
+      
       console.log('Database RPC parameters:', {
-        functionName: fileIds && fileIds.length > 0 ? 'match_document_chunks_by_files' : 'match_document_chunks',
+        functionName: 'match_document_chunks_by_files',
         params: {
           ...rpcParams,
           query_embedding: '[embedding vector]',
