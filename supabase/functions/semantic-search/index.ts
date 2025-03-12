@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -14,7 +13,6 @@ interface SearchRequest {
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 
-// Create a Supabase client with the Admin key
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -23,7 +21,6 @@ serve(async (req) => {
   console.log("=== Semantic Search Function Started ===");
   console.log(`Request method: ${req.method}`);
   
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     console.log("Handling CORS preflight request");
     return new Response('ok', { headers: corsHeaders });
@@ -31,13 +28,20 @@ serve(async (req) => {
 
   try {
     console.log("Attempting to parse request body");
-    // Parse and validate request body
     const requestBody = await req.json().catch((error) => {
       console.error('Error parsing request body:', error);
       throw new Error('Invalid request body format');
     });
 
     const { query, limit = 5, threshold = 0.7, filterLanguage, fileIds } = requestBody as SearchRequest;
+
+    console.log('File IDs received:', {
+      value: fileIds,
+      type: fileIds ? typeof fileIds : 'undefined',
+      isArray: Array.isArray(fileIds),
+      length: fileIds?.length,
+      rawValue: JSON.stringify(fileIds)
+    });
 
     if (!query) {
       console.error('Missing required field: query');
@@ -58,7 +62,6 @@ serve(async (req) => {
     console.log(`Supabase URL available: ${!!supabaseUrl}`);
     console.log(`Supabase key available: ${!!supabaseKey}`);
 
-    // Generate embedding for the query using OpenAI API
     let embeddingData;
     try {
       console.log("Calling OpenAI API to generate embeddings");
@@ -112,7 +115,6 @@ serve(async (req) => {
     const queryEmbedding = embeddingData.data[0].embedding;
     console.log(`Embedding vector generated with length: ${queryEmbedding.length}`);
 
-    // Build RPC parameters
     const rpcParams: Record<string, any> = {
       query_embedding: queryEmbedding,
       match_threshold: threshold,
@@ -121,13 +123,18 @@ serve(async (req) => {
       filter_language: filterLanguage || null
     };
 
-    // Add file IDs to filter if provided
     if (fileIds && fileIds.length > 0) {
       rpcParams.file_ids = fileIds;
-      console.log(`Filtering by ${fileIds.length} file IDs`);
+      console.log('Database RPC parameters:', {
+        functionName: fileIds && fileIds.length > 0 ? 'match_document_chunks_by_files' : 'match_document_chunks',
+        params: {
+          ...rpcParams,
+          query_embedding: '[embedding vector]',
+          file_ids: fileIds
+        }
+      });
     }
 
-    // Execute SQL function to find similar chunks with optional file filtering
     let matchingChunks;
     try {
       const rpcFunction = fileIds && fileIds.length > 0 ? 'match_document_chunks_by_files' : 'match_document_chunks';
@@ -139,14 +146,23 @@ serve(async (req) => {
       );
 
       if (matchError) {
-        console.error(`Database RPC error for ${rpcFunction}:`, matchError);
+        console.error('Database RPC error details:', {
+          function: rpcFunction,
+          error: matchError,
+          message: matchError.message,
+          details: matchError.details,
+          hint: matchError.hint
+        });
         throw new Error(`Error searching for matching chunks: ${matchError.message}`);
       }
 
       matchingChunks = data;
       console.log(`Found ${matchingChunks?.length || 0} matching chunks`);
     } catch (error) {
-      console.error('Database query error:', error);
+      console.error('Database query error:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       return new Response(
         JSON.stringify({
           success: false,
@@ -160,7 +176,6 @@ serve(async (req) => {
       );
     }
 
-    // Get language of the query for potential filtering
     let queryLanguage = null;
     if (!filterLanguage) {
       try {
@@ -178,7 +193,6 @@ serve(async (req) => {
         }
       } catch (langError) {
         console.warn("Error detecting query language:", langError);
-        // Don't fail the whole request if language detection fails
       }
     }
 
@@ -202,8 +216,11 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Unhandled error in semantic-search function:', error);
-    console.error('Error stack trace:', error instanceof Error ? error.stack : 'No stack trace available');
+    console.error('Unhandled error in semantic-search function:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      type: error instanceof Error ? error.constructor.name : typeof error
+    });
     
     return new Response(
       JSON.stringify({
