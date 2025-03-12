@@ -20,12 +20,17 @@ const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 serve(async (req) => {
+  console.log("=== Semantic Search Function Started ===");
+  console.log(`Request method: ${req.method}`);
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log("Handling CORS preflight request");
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    console.log("Attempting to parse request body");
     // Parse and validate request body
     const requestBody = await req.json().catch((error) => {
       console.error('Error parsing request body:', error);
@@ -35,6 +40,7 @@ serve(async (req) => {
     const { query, limit = 5, threshold = 0.7, filterLanguage, fileIds } = requestBody as SearchRequest;
 
     if (!query) {
+      console.error('Missing required field: query');
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -48,10 +54,14 @@ serve(async (req) => {
     }
 
     console.log(`Processing query: "${query}" (limit: ${limit}, threshold: ${threshold}, language: ${filterLanguage || 'any'}, fileIds: ${fileIds ? fileIds.join(',') : 'all'})`);
+    console.log(`OPENAI_API_KEY available: ${!!OPENAI_API_KEY}`);
+    console.log(`Supabase URL available: ${!!supabaseUrl}`);
+    console.log(`Supabase key available: ${!!supabaseKey}`);
 
     // Generate embedding for the query using OpenAI API
     let embeddingData;
     try {
+      console.log("Calling OpenAI API to generate embeddings");
       const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
         method: 'POST',
         headers: {
@@ -65,12 +75,25 @@ serve(async (req) => {
         }),
       });
 
+      console.log(`OpenAI API response status: ${embeddingResponse.status}`);
+      
       if (!embeddingResponse.ok) {
-        const errorData = await embeddingResponse.json();
-        throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown OpenAI API error'}`);
+        const errorText = await embeddingResponse.text();
+        console.error('OpenAI API error response:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (parseError) {
+          console.error('Failed to parse OpenAI error response as JSON:', parseError);
+          errorData = { error: { message: errorText } };
+        }
+        
+        throw new Error(`OpenAI API error (${embeddingResponse.status}): ${errorData.error?.message || errorText || 'Unknown OpenAI API error'}`);
       }
 
       embeddingData = await embeddingResponse.json();
+      console.log("Successfully received embedding data from OpenAI");
     } catch (error) {
       console.error('Error generating embeddings:', error);
       return new Response(
@@ -87,6 +110,7 @@ serve(async (req) => {
     }
 
     const queryEmbedding = embeddingData.data[0].embedding;
+    console.log(`Embedding vector generated with length: ${queryEmbedding.length}`);
 
     // Build RPC parameters
     const rpcParams: Record<string, any> = {
@@ -100,21 +124,27 @@ serve(async (req) => {
     // Add file IDs to filter if provided
     if (fileIds && fileIds.length > 0) {
       rpcParams.file_ids = fileIds;
+      console.log(`Filtering by ${fileIds.length} file IDs`);
     }
 
     // Execute SQL function to find similar chunks with optional file filtering
     let matchingChunks;
     try {
+      const rpcFunction = fileIds && fileIds.length > 0 ? 'match_document_chunks_by_files' : 'match_document_chunks';
+      console.log(`Calling Supabase RPC function: ${rpcFunction}`);
+      
       const { data, error: matchError } = await supabase.rpc(
-        fileIds && fileIds.length > 0 ? 'match_document_chunks_by_files' : 'match_document_chunks',
+        rpcFunction,
         rpcParams
       );
 
       if (matchError) {
+        console.error(`Database RPC error for ${rpcFunction}:`, matchError);
         throw new Error(`Error searching for matching chunks: ${matchError.message}`);
       }
 
       matchingChunks = data;
+      console.log(`Found ${matchingChunks?.length || 0} matching chunks`);
     } catch (error) {
       console.error('Database query error:', error);
       return new Response(
@@ -134,6 +164,7 @@ serve(async (req) => {
     let queryLanguage = null;
     if (!filterLanguage) {
       try {
+        console.log("Attempting to detect query language");
         const { data: languageData, error: langError } = await supabase.rpc(
           'detect_language_simple',
           { text_input: query }
@@ -151,6 +182,7 @@ serve(async (req) => {
       }
     }
 
+    console.log("Preparing final response");
     return new Response(
       JSON.stringify({
         success: true,
@@ -171,12 +203,14 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Unhandled error in semantic-search function:', error);
+    console.error('Error stack trace:', error instanceof Error ? error.stack : 'No stack trace available');
     
     return new Response(
       JSON.stringify({
         success: false,
         error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : null
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
