@@ -12,6 +12,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { useSemanticSearch } from '@/hooks/use-semantic-search';
 import { useAIResponse } from '@/hooks/use-ai-response';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter 
+} from '@/components/ui/dialog';
+import { Loader2, Lightbulb } from 'lucide-react';
 
 interface WhatsAppInstance {
   id: string;
@@ -42,6 +51,11 @@ const WhatsAppAIConfig = () => {
   // Test conversation
   const [testQuery, setTestQuery] = useState('');
   const [conversation, setConversation] = useState<{role: string, content: string}[]>([]);
+
+  // Prompt generator state
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+  const [userDescription, setUserDescription] = useState('');
+  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -165,62 +179,37 @@ const WhatsAppAIConfig = () => {
   };
 
   const generateSystemPrompt = async () => {
+    setPromptDialogOpen(true);
+  };
+
+  const handleGenerateSystemPrompt = async () => {
+    if (!userDescription.trim()) {
+      toast.error('Please enter a description of what you want the AI to do');
+      return;
+    }
+
     try {
-      setIsLoading(true);
+      setIsGeneratingPrompt(true);
       
-      // Get files associated with the selected WhatsApp instance
-      const { data: fileMappings, error: mappingError } = await supabase
-        .from('whatsapp_file_mappings')
-        .select('file_id')
-        .eq('whatsapp_instance_id', selectedInstance)
-        .eq('user_id', user?.id);
-        
-      if (mappingError) throw mappingError;
-      
-      if (!fileMappings || fileMappings.length === 0) {
-        toast.error('No files associated with this WhatsApp instance');
-        return;
-      }
-      
-      // Get example content from the files
-      const fileIds = fileMappings.map(mapping => mapping.file_id);
-      const { data: files, error: filesError } = await supabase
-        .from('files')
-        .select('id, original_name, primary_language')
-        .in('id', fileIds)
-        .limit(3);
-        
-      if (filesError) throw filesError;
-      
-      if (!files || files.length === 0) {
-        toast.error('Could not retrieve file information');
-        return;
-      }
-      
-      // Generate a prompt based on the files
-      const fileNames = files.map(f => f.original_name).join(', ');
-      const languages = [...new Set(files.map(f => f.primary_language).filter(Boolean))].join(', ');
-      
-      const generatedPrompt = `You are a helpful assistant specialized in answering questions based on the content from these documents: ${fileNames}. 
-      
-Your responses should be:
-1. Accurate and based only on the context provided
-2. Clear and concise
-3. Professional in tone
-${languages ? `4. Available in these languages if needed: ${languages}` : ''}
+      const { data, error } = await supabase.functions.invoke('generate-system-prompt', {
+        body: { description: userDescription }
+      });
 
-When you don't know the answer or if the information isn't in the provided context, acknowledge your limitations and don't make up information.
-
-For customer service inquiries, be helpful, empathetic, and solution-oriented.`;
+      if (error) throw error;
       
-      setSystemPrompt(generatedPrompt);
-      toast.success('System prompt generated');
-      
+      if (data.success && data.prompt) {
+        setSystemPrompt(data.prompt);
+        setPromptDialogOpen(false);
+        setUserDescription('');
+        toast.success('System prompt generated successfully');
+      } else {
+        throw new Error('Failed to generate system prompt');
+      }
     } catch (error) {
       console.error('Error generating system prompt:', error);
-      toast.error('Failed to generate system prompt');
+      toast.error('Failed to generate system prompt. Please try again.');
     } finally {
-      setIsLoading(false);
+      setIsGeneratingPrompt(false);
     }
   };
 
@@ -353,6 +342,7 @@ For customer service inquiries, be helpful, empathetic, and solution-oriented.`;
                           onClick={generateSystemPrompt}
                           disabled={isLoading || !selectedInstance}
                         >
+                          <Lightbulb className="mr-2 h-4 w-4" />
                           Auto-Generate Prompt
                         </Button>
                       </div>
@@ -432,6 +422,64 @@ For customer service inquiries, be helpful, empathetic, and solution-oriented.`;
           )}
         </div>
       </div>
+
+      {/* Prompt Generator Dialog */}
+      <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>AI Prompt Generator</DialogTitle>
+            <DialogDescription>
+              Describe what you want the AI to do in your own words, and we'll create a powerful system prompt for you.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="description" className="text-sm font-medium">
+                Your Description
+              </Label>
+              <Textarea
+                id="description"
+                placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone."
+                value={userDescription}
+                onChange={(e) => setUserDescription(e.target.value)}
+                className="min-h-[120px]"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Example Descriptions:</p>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>• I need an AI bot that helps customers troubleshoot technical issues with our software</p>
+                <p>• I want an assistant that provides factual information about our company policies</p>
+                <p>• I need a sales assistant that can answer questions about our products and pricing</p>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPromptDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleGenerateSystemPrompt}
+              disabled={isGeneratingPrompt || !userDescription.trim()}
+            >
+              {isGeneratingPrompt ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                  Generating...
+                </>
+              ) : (
+                'Generate Prompt'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
