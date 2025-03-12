@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -57,6 +58,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Get API key for EVOLUTION API
 const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY') || '';
 
+// Track active WebSocket connections
+const activeConnections = new Map<string, WebSocket>();
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -71,6 +75,10 @@ serve(async (req) => {
     switch (action) {
       case 'start':
         return handleStart();
+      case 'stop':
+        return handleStop();
+      case 'status':
+        return handleStatus();
       default:
         return new Response(
           JSON.stringify({ 
@@ -112,27 +120,41 @@ async function handleStart(): Promise<Response> {
       );
     }
 
-    // Create WebSocket worker for each active instance
+    // Create WebSocket connections for each active instance
     const instanceNames = instances.map(inst => inst.instance_name);
+    const connectedInstances = [];
     
-    // Create edge function URL for WebSocket worker
-    const url = new URL(req.url);
-    const webSocketWorkerUrl = `${url.origin}/functions/v1/whatsapp-websocket`;
-    
-    const webSocketConfig: WebSocketConfig = {
-      apiKey: EVOLUTION_API_KEY,
-      server: "https://api.convgo.com",
-      instances: instanceNames
-    };
+    for (const instance of instanceNames) {
+      // Skip if a connection already exists
+      if (activeConnections.has(instance)) {
+        connectedInstances.push(instance);
+        continue;
+      }
+      
+      try {
+        // Connect to the EVOLUTION API WebSocket endpoint
+        await connectToEvolutionWebSocket(instance);
+        connectedInstances.push(instance);
+      } catch (error) {
+        console.error(`Failed to connect to WebSocket for instance ${instance}:`, error);
+      }
+    }
 
-    // Initiate WebSocket connection in a worker
-    startWebSocketWorker(webSocketConfig);
+    if (connectedInstances.length === 0) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'Failed to connect to any WhatsApp instances' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'WebSocket connection initiated for all active instances',
-        instances: instanceNames
+        message: 'WebSocket connections established',
+        instances: connectedInstances
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -141,7 +163,7 @@ async function handleStart(): Promise<Response> {
     return new Response(
       JSON.stringify({
         success: false,
-        error: 'Failed to start WebSocket connection',
+        error: 'Failed to start WebSocket connections',
         details: error instanceof Error ? error.message : 'Unknown error'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -149,51 +171,142 @@ async function handleStart(): Promise<Response> {
   }
 }
 
-// This function will initiate a WebSocket connection to the EVOLUTION API
-// Note: This is a simplified implementation. In a production environment,
-// you would need a separate worker or a persistent connection mechanism.
-function startWebSocketWorker(config: WebSocketConfig) {
-  console.log(`Starting WebSocket worker for instances: ${config.instances.join(', ')}`);
-  
-  // Due to the stateless nature of edge functions, we're using a background worker approach
-  // In a more robust implementation, this would be handled by a separate service
-  
-  (async () => {
-    try {
-      // In a real implementation, this would connect to the EVOLUTION API WebSocket
-      // We're simulating the process here
-      console.log(`Would connect to WebSocket at: ${config.server}/v1/webhook/ws?apikey=${config.apiKey}`);
-      console.log('WebSocket worker would listen for messages and process them');
-      
-      // Simulate processing messages
-      await processMessages(config);
-    } catch (error) {
-      console.error('WebSocket worker error:', error);
+async function handleStop(): Promise<Response> {
+  try {
+    // Close all active WebSocket connections
+    for (const [instance, ws] of activeConnections.entries()) {
+      try {
+        ws.close();
+        activeConnections.delete(instance);
+        console.log(`Closed WebSocket connection for instance: ${instance}`);
+      } catch (error) {
+        console.error(`Error closing WebSocket for instance ${instance}:`, error);
+      }
     }
-  })();
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        message: 'All WebSocket connections closed' 
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Error in handleStop:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Failed to stop WebSocket connections',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
+  }
 }
 
-async function processMessages(config: WebSocketConfig) {
-  // In a real implementation, this would handle incoming WebSocket messages
-  console.log('Started message processing simulation');
-  
-  // This function illustrates the flow of how messages would be processed
-  // but doesn't establish an actual WebSocket connection due to edge function limitations
-  
-  // The logic would be:
-  // 1. Receive message from WebSocket
-  // 2. Identify the WhatsApp instance from the message
-  // 3. Get the AI configuration for that instance
-  // 4. Get file associations for that instance
-  // 5. Perform semantic search on the associated files
-  // 6. Generate AI response
-  // 7. Send response back through WebSocket
-  
-  console.log('Message processing would follow these steps:');
-  console.log('1. Receive message -> 2. Identify instance -> 3. Get AI config -> 4. Get file associations -> 5. Perform semantic search -> 6. Generate response -> 7. Send response');
+async function handleStatus(): Promise<Response> {
+  try {
+    const connectionStatus = {};
+    
+    for (const [instance, ws] of activeConnections.entries()) {
+      connectionStatus[instance] = {
+        connected: ws.readyState === WebSocket.OPEN,
+        readyState: ws.readyState
+      };
+    }
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        activeConnections: connectionStatus,
+        count: activeConnections.size
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Error in handleStatus:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Failed to get WebSocket connection status',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
+  }
 }
 
-// Function to handle an incoming WhatsApp message (would be called from WebSocket handler)
+// Function to establish a WebSocket connection to the EVOLUTION API
+async function connectToEvolutionWebSocket(instanceName: string): Promise<void> {
+  try {
+    console.log(`Connecting to WebSocket for instance: ${instanceName}`);
+    
+    // Construct the WebSocket URL
+    const wsUrl = `wss://api.convgo.com/v1/webhook/ws/${instanceName}?apikey=${EVOLUTION_API_KEY}`;
+    
+    // Create WebSocket connection
+    const ws = new WebSocket(wsUrl);
+    
+    // Set up event handlers
+    ws.onopen = () => {
+      console.log(`WebSocket connection established for instance: ${instanceName}`);
+      activeConnections.set(instanceName, ws);
+    };
+    
+    ws.onmessage = async (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        console.log(`Received message for instance ${instanceName}:`, JSON.stringify(message));
+        
+        // Only process message events
+        if (message.event === 'messages.upsert') {
+          await handleWhatsAppMessage(message as EvolutionMessage);
+        }
+      } catch (error) {
+        console.error(`Error processing WebSocket message for ${instanceName}:`, error);
+      }
+    };
+    
+    ws.onerror = (error) => {
+      console.error(`WebSocket error for instance ${instanceName}:`, error);
+      activeConnections.delete(instanceName);
+    };
+    
+    ws.onclose = () => {
+      console.log(`WebSocket connection closed for instance: ${instanceName}`);
+      activeConnections.delete(instanceName);
+    };
+    
+    // Wait for the connection to establish or fail
+    return new Promise((resolve, reject) => {
+      // Set a timeout for the connection attempt
+      const timeout = setTimeout(() => {
+        ws.close();
+        reject(new Error(`Connection timeout for instance: ${instanceName}`));
+      }, 10000); // 10 second timeout
+      
+      // Success handler
+      ws.onopen = () => {
+        clearTimeout(timeout);
+        console.log(`WebSocket connection established for instance: ${instanceName}`);
+        activeConnections.set(instanceName, ws);
+        resolve();
+      };
+      
+      // Error handler
+      ws.onerror = (error) => {
+        clearTimeout(timeout);
+        console.error(`WebSocket error for instance ${instanceName}:`, error);
+        reject(error);
+      };
+    });
+  } catch (error) {
+    console.error(`Error establishing WebSocket connection for ${instanceName}:`, error);
+    throw error;
+  }
+}
+
+// Function to handle an incoming WhatsApp message
 async function handleWhatsAppMessage(message: EvolutionMessage): Promise<void> {
   try {
     console.log(`Processing message from instance: ${message.instance}`);
