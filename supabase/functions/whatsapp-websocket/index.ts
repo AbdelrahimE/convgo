@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -100,7 +99,7 @@ async function handleStart(): Promise<Response> {
     const { data: instances, error: instanceError } = await supabase
       .from('whatsapp_instances')
       .select('id, instance_name, status')
-      .eq('status', 'connected');
+      .eq('status', 'CONNECTED');
 
     if (instanceError) {
       throw new Error(`Error fetching WhatsApp instances: ${instanceError.message}`);
