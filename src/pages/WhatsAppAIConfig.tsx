@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,6 +20,7 @@ import {
   DialogFooter 
 } from '@/components/ui/dialog';
 import { Loader2, Lightbulb } from 'lucide-react';
+import WhatsAppWebSocketManager from '@/components/WhatsAppWebSocketManager';
 
 interface WhatsAppInstance {
   id: string;
@@ -48,11 +48,9 @@ const WhatsAppAIConfig = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('config');
   
-  // Test conversation
   const [testQuery, setTestQuery] = useState('');
   const [conversation, setConversation] = useState<{role: string, content: string}[]>([]);
 
-  // Prompt generator state
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const [userDescription, setUserDescription] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
@@ -105,7 +103,6 @@ const WhatsAppAIConfig = () => {
 
       if (error) {
         if (error.code === 'PGRST116') {
-          // No config found, use default
           setSystemPrompt('You are a helpful AI assistant. Answer questions based on the context provided.');
           return;
         }
@@ -130,7 +127,6 @@ const WhatsAppAIConfig = () => {
     try {
       setIsSaving(true);
       
-      // Check if config already exists
       const { data: existingConfig, error: checkError } = await supabase
         .from('whatsapp_ai_config')
         .select('id')
@@ -143,7 +139,6 @@ const WhatsAppAIConfig = () => {
       }
 
       if (existingConfig) {
-        // Update existing config
         const { error } = await supabase
           .from('whatsapp_ai_config')
           .update({
@@ -155,7 +150,6 @@ const WhatsAppAIConfig = () => {
 
         if (error) throw error;
       } else {
-        // Create new config
         const { error } = await supabase
           .from('whatsapp_ai_config')
           .insert({
@@ -225,11 +219,9 @@ const WhatsAppAIConfig = () => {
     }
 
     try {
-      // Add user message to conversation
       const userMessage = { role: 'user', content: testQuery };
       setConversation(prev => [...prev, userMessage]);
       
-      // Get files associated with the selected WhatsApp instance
       const { data: fileMappings, error: mappingError } = await supabase
         .from('whatsapp_file_mappings')
         .select('file_id')
@@ -244,7 +236,6 @@ const WhatsAppAIConfig = () => {
         return;
       }
       
-      // Search for relevant content
       const fileIds = fileMappings.map(mapping => mapping.file_id);
       const results = await search({ 
         query: testQuery,
@@ -252,7 +243,6 @@ const WhatsAppAIConfig = () => {
         limit: 5
       });
       
-      // Prepare context from search results or use empty context if no results
       let context = '';
       if (results.length > 0) {
         context = results.map(result => result.content).join('\n\n');
@@ -260,7 +250,6 @@ const WhatsAppAIConfig = () => {
         console.log('No relevant content found, proceeding with empty context');
       }
       
-      // Generate AI response with whatever context we have (might be empty)
       const response = await generateResponse(testQuery, context, {
         systemPrompt,
         temperature: 1.0
@@ -272,7 +261,6 @@ const WhatsAppAIConfig = () => {
         setConversation(prev => [...prev, { role: 'assistant', content: 'Sorry, I was unable to generate a response at this time.' }]);
       }
 
-      // Clear the input
       setTestQuery('');
       
     } catch (error) {
@@ -306,6 +294,10 @@ const WhatsAppAIConfig = () => {
               ))
             )}
           </select>
+          
+          <div className="mt-6">
+            <WhatsAppWebSocketManager />
+          </div>
         </div>
         
         <div className="flex-1">
@@ -423,7 +415,6 @@ const WhatsAppAIConfig = () => {
         </div>
       </div>
 
-      {/* Prompt Generator Dialog */}
       <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
