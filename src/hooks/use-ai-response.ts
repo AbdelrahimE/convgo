@@ -29,8 +29,8 @@ export function useAIResponse() {
     context: string,
     options?: GenerateResponseOptions
   ) => {
-    if (!query || !context) {
-      setError(new Error('Query and context are required'));
+    if (!query) {
+      setError(new Error('Query is required'));
       return null;
     }
 
