@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,7 +21,7 @@ import {
   DialogFooter 
 } from '@/components/ui/dialog';
 import { Loader2, Lightbulb } from 'lucide-react';
-import WhatsAppWebSocketManager from '@/components/WhatsAppWebSocketManager';
+import WhatsAppWebhookManager from '@/components/WhatsAppWebhookManager';
 import WhatsAppWebhookTester from '@/components/WhatsAppWebhookTester';
 
 interface WhatsAppInstance {
@@ -297,7 +298,11 @@ const WhatsAppAIConfig = () => {
           </select>
           
           <div className="mt-6">
-            <WhatsAppWebSocketManager />
+            {selectedInstance && instances.length > 0 && (
+              <WhatsAppWebhookManager 
+                instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} 
+              />
+            )}
           </div>
           
           {selectedInstance && instances.length > 0 && (
