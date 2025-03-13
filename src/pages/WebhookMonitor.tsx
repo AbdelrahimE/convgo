@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import WebhookEndpointInfo from '@/components/WebhookEndpointInfo';
 
 interface WebhookMessage {
   id: string;
@@ -51,7 +51,6 @@ const WebhookMonitor = () => {
   }, [user]);
 
   const startPolling = () => {
-    // Poll for new messages every 15 seconds
     pollingRef.current = window.setInterval(() => {
       fetchMessages(false);
     }, 15000);
@@ -70,7 +69,6 @@ const WebhookMonitor = () => {
       
       setMessages(data || []);
       
-      // Check if we've received messages in the last 5 minutes
       const counts: Record<string, number> = {};
       data?.forEach(message => {
         counts[message.event] = (counts[message.event] || 0) + 1;
@@ -109,7 +107,7 @@ const WebhookMonitor = () => {
       const { error } = await supabase
         .from('webhook_messages')
         .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all messages
+        .neq('id', '00000000-0000-0000-0000-000000000000');
       
       if (error) throw error;
       
@@ -183,10 +181,8 @@ const WebhookMonitor = () => {
   
   const filteredMessages = messages
     .filter(message => {
-      // Filter by tab selection
       if (activeTab !== 'all' && message.event !== activeTab) return false;
       
-      // Filter by search term
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
         return (
@@ -287,6 +283,8 @@ const WebhookMonitor = () => {
           </Button>
         </Alert>
       )}
+      
+      <WebhookEndpointInfo />
       
       <Card>
         <CardHeader>

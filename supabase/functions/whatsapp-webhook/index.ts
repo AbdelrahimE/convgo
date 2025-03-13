@@ -84,10 +84,14 @@ serve(async (req) => {
   
   console.log(`[${new Date().toISOString()}] Processing request with path segments: ${JSON.stringify(pathSegments)}, last: ${lastSegment}, second last: ${secondLastSegment}`);
   
-  // For webhook callbacks from EVOLUTION API
-  if (req.method === 'POST' && secondLastSegment === 'webhook-callback') {
+  // For webhook callbacks from EVOLUTION API - direct webhook callback handling
+  if (req.method === 'POST' && (
+      (secondLastSegment === 'webhook-callback') || 
+      (lastSegment === 'webhook-callback') ||
+      (path.endsWith('/whatsapp-webhook'))
+  )) {
     try {
-      console.log(`[${new Date().toISOString()}] Processing webhook callback, event type: ${lastSegment}`);
+      console.log(`[${new Date().toISOString()}] Processing direct webhook callback`);
       
       const requestBody = await req.text();
       console.log(`[${new Date().toISOString()}] Webhook callback received. Body length: ${requestBody.length} bytes`);
@@ -132,7 +136,20 @@ serve(async (req) => {
         // Continue processing even if storing fails
       }
       
-      return handleWebhookCallback(req, message);
+      // Process the message if it's a proper webhook message
+      if (message && message.event && message.instance) {
+        return handleWebhookCallback(req, message);
+      } else {
+        console.error(`[${new Date().toISOString()}] Invalid webhook message format`);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Invalid webhook message format",
+            details: "Message must contain event and instance fields"
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
     } catch (error) {
       console.error(`[${new Date().toISOString()}] Error processing webhook callback: ${error.message}`);
       console.error(`[${new Date().toISOString()}] Stack trace: ${error.stack}`);
@@ -148,7 +165,7 @@ serve(async (req) => {
   }
   
   try {
-    // For API requests from our frontend
+    // For API requests from our frontend with action parameter
     if (req.method === 'POST') {
       let body;
       try {
@@ -156,13 +173,31 @@ serve(async (req) => {
         console.log(`[${new Date().toISOString()}] Received POST request with action: ${body.action}`);
       } catch (parseError) {
         console.error(`[${new Date().toISOString()}] Error parsing request JSON: ${parseError.message}`);
-        return new Response(
-          JSON.stringify({ success: false, error: 'Invalid JSON in request body' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
+        // Try to handle as a webhook if JSON parsing fails
+        const rawText = await req.text();
+        try {
+          const webhookMessage = JSON.parse(rawText);
+          if (webhookMessage.event && webhookMessage.instance) {
+            console.log(`[${new Date().toISOString()}] Handling as webhook message instead`);
+            // Store the webhook message
+            await supabase.from('webhook_messages').insert({
+              instance: webhookMessage.instance || 'unknown',
+              event: webhookMessage.event || 'unknown',
+              data: webhookMessage
+            });
+            
+            return handleWebhookCallback(req, webhookMessage);
+          }
+        } catch (secondParseError) {
+          // If both attempts fail, return error
+          return new Response(
+            JSON.stringify({ success: false, error: 'Invalid JSON in request body' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          );
+        }
       }
       
-      const { action } = body;
+      const { action } = body || {};
 
       // Main actions this endpoint supports
       switch (action) {
@@ -175,11 +210,23 @@ serve(async (req) => {
         case 'test':
           return handleWebhookTest(body);
         default:
+          // If no action is specified, try to handle as a webhook message
+          if (body && body.event && body.instance) {
+            console.log(`[${new Date().toISOString()}] No action specified, but message looks like a webhook. Handling as webhook.`);
+            await supabase.from('webhook_messages').insert({
+              instance: body.instance || 'unknown',
+              event: body.event || 'unknown',
+              data: body
+            });
+            
+            return handleWebhookCallback(req, body);
+          }
+          
           console.log(`[${new Date().toISOString()}] Invalid action: ${action}`);
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: 'Invalid action' 
+              error: 'Invalid action or missing webhook data' 
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
           );
