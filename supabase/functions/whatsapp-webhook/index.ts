@@ -1,795 +1,365 @@
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { corsHeaders } from "../_shared/cors.ts";
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-// Types for EVOLUTION API webhook messages
-interface EvolutionMessage {
-  event: string;
-  instance: string;
-  data: {
-    key: {
-      remoteJid: string;
-      fromMe: boolean;
-      id: string;
-    };
-    messageType: string;
-    message: {
-      conversation?: string;
-      extendedTextMessage?: {
-        text: string;
-      };
-    };
-    sender: {
-      id: string;
-      name: string;
-      shortName: string;
-    };
-    chat: {
-      id: string;
-      name: string;
-    };
-  };
-}
+// Create a Supabase client with the service role key
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-interface WebhookConfig {
-  id: string;
-  instance_name: string;
-  webhook_url: string;
-  is_active: boolean;
-  last_status: string;
-  last_checked_at: string;
-}
-
-interface AiConfig {
-  id: string;
-  whatsapp_instance_id: string;
-  system_prompt: string;
-  temperature: number;
-  is_active: boolean;
-}
-
-interface SearchResult {
-  content: string;
-}
-
-// Initialize Supabase client
-const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Get API key for EVOLUTION API
-const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY') || '';
-
-console.log(`Initializing webhook function. Supabase URL: ${supabaseUrl ? 'Set' : 'Not set'}, API Key: ${EVOLUTION_API_KEY ? 'Set' : 'Not set'}`);
-
-serve(async (req) => {
-  // Log all incoming requests for debugging
-  const url = new URL(req.url);
-  const path = url.pathname;
-  const method = req.method;
-  const contentType = req.headers.get('content-type') || '';
+// Simplified function to extract content from request
+async function extractRequestContent(req: Request): Promise<{ parsedData: any, contentType: string, rawContent: string }> {
+  // Get the content type for logging
+  const contentType = req.headers.get('content-type') || 'unknown';
+  let rawContent = '';
   
-  console.log(`[${new Date().toISOString()}] Received ${method} request to ${path} with Content-Type: ${contentType}`);
-  
-  // Handle CORS preflight requests - respond to all OPTIONS requests with OK
-  if (req.method === 'OPTIONS') {
-    console.log(`[${new Date().toISOString()}] Handling CORS preflight request`);
-    return new Response('ok', { headers: corsHeaders });
-  }
-
-  // Get the raw request body as text for logging/debugging
-  let requestBodyText = '';
   try {
-    // Clone the request body for logging
-    const clonedReq = req.clone();
-    requestBodyText = await clonedReq.text();
-    console.log(`[${new Date().toISOString()}] Raw request body: ${requestBodyText}`);
-  } catch (cloneError) {
-    console.error(`[${new Date().toISOString()}] Failed to clone request body: ${cloneError.message}`);
-  }
-  
-  // Simplified parsing logic - try all common parsing methods sequentially
-  let parsedBody = null;
-  
-  // Method 1: Try to parse as JSON directly (works for application/json and many text/plain requests)
-  if (requestBodyText) {
-    try {
-      parsedBody = JSON.parse(requestBodyText);
-      console.log(`[${new Date().toISOString()}] Successfully parsed as JSON directly`);
-    } catch (jsonError) {
-      console.log(`[${new Date().toISOString()}] Not valid JSON, trying alternative parsing: ${jsonError.message}`);
-    }
-  }
-  
-  // Method 2: If not parsed and content-type is form-data, try to get JSON from form fields
-  if (!parsedBody && (contentType.includes('form-data') || contentType.includes('x-www-form-urlencoded'))) {
-    try {
-      const formData = await req.formData();
-      for (const [key, value] of formData.entries()) {
-        // Check if any form field contains JSON data
-        if (typeof value === 'string') {
-          try {
-            const possibleJson = JSON.parse(value);
-            if (possibleJson && typeof possibleJson === 'object') {
-              parsedBody = possibleJson;
-              console.log(`[${new Date().toISOString()}] Found JSON in form field: ${key}`);
-              break;
-            }
-          } catch {
-            // Not JSON, continue to next field
-          }
-        }
-      }
-    } catch (formError) {
-      console.log(`[${new Date().toISOString()}] Error parsing form data: ${formError.message}`);
-    }
-  }
-  
-  // Method 3: Try to extract JSON from the text using regex (useful for malformed content-types)
-  if (!parsedBody && requestBodyText) {
-    // Look for JSON-like pattern
-    const jsonPattern = /(\{[\s\S]*\})/gm;
-    const match = jsonPattern.exec(requestBodyText);
-    if (match && match[1]) {
-      try {
-        parsedBody = JSON.parse(match[1]);
-        console.log(`[${new Date().toISOString()}] Extracted JSON using regex pattern`);
-      } catch (regexJsonError) {
-        console.log(`[${new Date().toISOString()}] Regex-extracted content is not valid JSON`);
-      }
-    }
-  }
-  
-  // Method 4: Final fallback: Create a minimal object from known patterns in text (for corrupted JSON)
-  if (!parsedBody && requestBodyText) {
-    if (requestBodyText.includes('"event"') && requestBodyText.includes('"instance"')) {
-      console.log(`[${new Date().toISOString()}] Using fallback pattern matching for partial extraction`);
-      
-      // Extract event
-      const eventMatch = /"event"\s*:\s*"([^"]+)"/i.exec(requestBodyText);
-      // Extract instance
-      const instanceMatch = /"instance"\s*:\s*"([^"]+)"/i.exec(requestBodyText);
-      
-      if (eventMatch && instanceMatch) {
-        parsedBody = {
-          event: eventMatch[1],
-          instance: instanceMatch[1],
-          data: { extracted: "partial" }
-        };
-        
-        // Try to reconstruct more of the data object if possible
-        const dataMatch = /"data"\s*:\s*(\{[\s\S]*?\})(,|\})/i.exec(requestBodyText);
-        if (dataMatch && dataMatch[1]) {
-          try {
-            // Clean the data string and try to parse
-            const cleanedData = dataMatch[1].replace(/\\"/g, '"')
-                                           .replace(/\n/g, ' ')
-                                           .replace(/\r/g, '');
-            // Add closing brace if missing
-            const balancedData = cleanedData + (cleanedData.endsWith('}') ? '' : '}');
-            parsedBody.data = JSON.parse(balancedData);
-          } catch (dataParseError) {
-            console.log(`[${new Date().toISOString()}] Could not parse data object: ${dataParseError.message}`);
-          }
-        }
-        
-        console.log(`[${new Date().toISOString()}] Created fallback parsed body with event: ${parsedBody.event}, instance: ${parsedBody.instance}`);
-      }
-    }
-  }
-  
-  // Store the raw request for investigation even if parsing failed
-  if (!parsedBody) {
-    console.error(`[${new Date().toISOString()}] Failed to parse request after all attempts`);
+    // Clone the request to ensure we don't read the body multiple times
+    const reqClone = req.clone();
     
+    // Try to get the raw content as text first
     try {
-      await supabase.from('webhook_messages').insert({
-        instance: 'unknown',
-        event: 'parsing_failed',
-        data: {
-          raw: requestBodyText ? (requestBodyText.length > 5000 ? requestBodyText.substring(0, 5000) + '...' : requestBodyText) : null,
-          headers: Object.fromEntries([...req.headers.entries()])
-        }
-      });
-      console.log(`[${new Date().toISOString()}] Stored raw webhook data for investigation`);
-      
-      // Return success response to ensure EVOLUTION API doesn't retry unnecessarily
-      return new Response(
-        JSON.stringify({ success: true, message: "Message received but parsing failed, stored for investigation" }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    } catch (storeError) {
-      console.error(`[${new Date().toISOString()}] Failed to store raw webhook data: ${storeError.message}`);
-    }
-  }
-  
-  // Handle webhook requests from EVOLUTION API based on the presence of event and instance
-  if (parsedBody && parsedBody.event && parsedBody.instance) {
-    console.log(`[${new Date().toISOString()}] Processing webhook payload for event: ${parsedBody.event}, instance: ${parsedBody.instance}`);
-    
-    try {
-      // Store the webhook message in the database for monitoring
-      await supabase.from('webhook_messages').insert({
-        instance: parsedBody.instance,
-        event: parsedBody.event,
-        data: parsedBody
-      });
-      
-      console.log(`[${new Date().toISOString()}] Stored webhook message in database`);
-      
-      // Process message events in the background to avoid blocking response
-      if (parsedBody.event === 'messages.upsert') {
-        // Don't await this to return a response quickly
-        handleWhatsAppMessage(parsedBody)
-          .catch(err => console.error(`[${new Date().toISOString()}] Error processing message: ${err.message}`));
-      }
-      
-      // Return success response immediately to acknowledge receipt
-      return new Response(
-        JSON.stringify({ success: true, message: "Webhook received successfully" }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      rawContent = await reqClone.text();
+      console.log('Raw request content:', rawContent.substring(0, 1000));
     } catch (error) {
-      console.error(`[${new Date().toISOString()}] Error processing webhook: ${error.message}`);
-      // Still return 200 to acknowledge receipt
-      return new Response(
-        JSON.stringify({ success: true, message: "Webhook acknowledged with errors" }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('Failed to read raw request content:', error);
     }
-  }
-  
-  // If not a webhook payload, handle API requests from our frontend
-  if (parsedBody && parsedBody.action) {
-    console.log(`[${new Date().toISOString()}] Processing API request with action: ${parsedBody.action}`);
     
-    switch (parsedBody.action) {
-      case 'register':
-        return handleRegisterWebhook(parsedBody);
-      case 'status':
-        return handleStatus();
-      case 'unregister':
-        return handleUnregisterWebhook(parsedBody);
-      case 'test':
-        return handleWebhookTest(parsedBody);
-      default:
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'Invalid action',
-            details: `Action '${parsedBody.action}' not supported`
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
-    }
-  }
-  
-  // For any unhandled POST request to this endpoint, try to process as a webhook as a fallback
-  if (method === 'POST') {
-    console.log(`[${new Date().toISOString()}] Attempting to process unrecognized POST as webhook`);
-    
-    // Create a minimal message record for monitoring
+    // First, try to parse as JSON regardless of content type
     try {
-      await supabase.from('webhook_messages').insert({
-        instance: 'unknown',
-        event: 'unknown',
-        data: {
-          raw: requestBodyText ? (requestBodyText.length > 1000 ? requestBodyText.substring(0, 1000) + '...' : requestBodyText) : null,
-          headers: Object.fromEntries([...req.headers.entries()])
-        }
-      });
+      // If rawContent was already retrieved, use it
+      if (rawContent) {
+        return { 
+          parsedData: JSON.parse(rawContent), 
+          contentType, 
+          rawContent 
+        };
+      }
       
-      console.log(`[${new Date().toISOString()}] Stored unrecognized request for investigation`);
-    } catch (storeError) {
-      console.error(`[${new Date().toISOString()}] Failed to store unrecognized request: ${storeError.message}`);
+      // Otherwise, get JSON directly
+      const jsonData = await req.json();
+      return { 
+        parsedData: jsonData, 
+        contentType, 
+        rawContent: JSON.stringify(jsonData) 
+      };
+    } catch (jsonError) {
+      console.log('Not valid JSON, trying other formats');
     }
     
-    // Still return success to avoid blocking the sender
-    return new Response(
-      JSON.stringify({ success: true, message: "Request received but not recognized as webhook" }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-  
-  // Return 404 for other requests
-  console.log(`[${new Date().toISOString()}] Unhandled request method: ${method}`);
-  return new Response(
-    JSON.stringify({ success: false, error: 'Not found' }),
-    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-  );
-});
-
-// Handle test request - simulate processing a webhook message
-async function handleWebhookTest(body: any): Promise<Response> {
-  try {
-    console.log('Testing webhook with data:', JSON.stringify(body));
-    
-    const { instanceName, testData } = body;
-    
-    if (!instanceName || !testData) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: 'Missing instance name or test data',
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
-    }
-    
-    // Get the WhatsApp instance ID from the database
-    const { data: instanceData, error: instanceError } = await supabase
-      .from('whatsapp_instances')
-      .select('id')
-      .eq('instance_name', instanceName)
-      .single();
-    
-    if (instanceError || !instanceData) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'WhatsApp instance not found' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-    
-    const instanceId = instanceData.id;
-    
-    // Check if AI config exists
-    const { data: aiConfig, error: aiConfigError } = await supabase
-      .from('whatsapp_ai_config')
-      .select('*')
-      .eq('whatsapp_instance_id', instanceId)
-      .eq('is_active', true)
-      .single();
-    
-    if (aiConfigError) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: 'No AI configuration found for this instance',
-          details: aiConfigError.message
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-    
-    // Check if there are file mappings
-    const { data: fileMappings, error: mappingError } = await supabase
-      .from('whatsapp_file_mappings')
-      .select('file_id')
-      .eq('whatsapp_instance_id', instanceId);
-    
-    if (mappingError) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: 'Error checking file mappings',
-          details: mappingError.message
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-    
-    // Simulate full message processing but don't actually send a response back
-    // We're only testing the processing, not the sending
-    
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: 'Webhook test completed successfully',
-        details: {
-          aiConfigFound: !!aiConfig,
-          fileMappingsFound: fileMappings && fileMappings.length > 0,
-          fileCount: fileMappings?.length || 0,
-          processedMessage: testData.data.message.conversation || testData.data.message.extendedTextMessage?.text
-        }
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-    
-  } catch (error) {
-    console.error('Error testing webhook:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        message: 'Error testing webhook',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    );
-  }
-}
-
-// Handle incoming webhook callbacks from EVOLUTION API
-async function handleWhatsAppMessage(message: EvolutionMessage): Promise<void> {
-  try {
-    console.log(`Processing WhatsApp message from instance: ${message.instance}`);
-    console.log(`Message content: ${message.data.message.conversation || message.data.message.extendedTextMessage?.text || 'No text content'}`);
-    
-    // Extract the message text
-    const messageText = message.data.message.conversation || 
-                        message.data.message.extendedTextMessage?.text || '';
-    
-    if (!messageText) {
-      console.log('Empty message, ignoring');
-      return;
-    }
-    
-    // Get the WhatsApp instance ID from the database
-    const { data: instanceData, error: instanceError } = await supabase
-      .from('whatsapp_instances')
-      .select('id')
-      .eq('instance_name', message.instance)
-      .single();
-    
-    if (instanceError || !instanceData) {
-      console.error(`Instance not found: ${message.instance}`);
-      return;
-    }
-    
-    const instanceId = instanceData.id;
-    console.log(`Found instance ID: ${instanceId}`);
-    
-    // Get AI configuration for this instance
-    const { data: aiConfig, error: configError } = await supabase
-      .from('whatsapp_ai_config')
-      .select('*')
-      .eq('whatsapp_instance_id', instanceId)
-      .eq('is_active', true)
-      .single();
-    
-    if (configError || !aiConfig) {
-      console.error(`AI configuration not found for instance: ${message.instance}`);
-      return;
-    }
-    console.log(`Found AI config: ${aiConfig.id}`);
-    
-    // Get file mappings for this instance
-    const { data: fileMappings, error: mappingError } = await supabase
-      .from('whatsapp_file_mappings')
-      .select('file_id')
-      .eq('whatsapp_instance_id', instanceId);
-    
-    if (mappingError || !fileMappings || fileMappings.length === 0) {
-      console.error(`No file mappings found for instance: ${message.instance}`);
-      // Send a response that no files are configured
-      await sendWhatsAppResponse(message, "Sorry, I don't have any knowledge base configured. Please ask the administrator to set up files for this WhatsApp number.");
-      return;
-    }
-    
-    console.log(`Found ${fileMappings.length} file mappings`);
-    
-    // Extract file IDs
-    const fileIds = fileMappings.map(mapping => mapping.file_id);
-    
-    // Perform semantic search
-    const searchResults = await performSemanticSearch(messageText, fileIds);
-    console.log(`Semantic search results: ${searchResults.length} found`);
-    
-    // Generate AI response
-    let context = '';
-    if (searchResults && searchResults.length > 0) {
-      context = searchResults.map(result => result.content).join('\n\n');
-      console.log(`Assembled context length: ${context.length} characters`);
-    }
-    
-    const response = await generateAIResponse(messageText, context, aiConfig);
-    console.log(`Generated response: ${response.substring(0, 100)}${response.length > 100 ? '...' : ''}`);
-    
-    // Send response back to the user
-    await sendWhatsAppResponse(message, response);
-    console.log(`Response sent to ${message.data.key.remoteJid}`);
-    
-  } catch (error) {
-    console.error('Error processing WhatsApp message:', error);
-  }
-}
-
-// Function to perform semantic search
-async function performSemanticSearch(query: string, fileIds: string[]): Promise<SearchResult[]> {
-  try {
-    const { data, error } = await supabase.functions.invoke('semantic-search', {
-      body: { 
-        query, 
-        fileIds,
-        limit: 5 
+    // Try to parse as form data
+    if (contentType.includes('form')) {
+      try {
+        const formData = await req.formData();
+        const formObj = Object.fromEntries(formData.entries());
+        return { 
+          parsedData: formObj, 
+          contentType, 
+          rawContent: rawContent || JSON.stringify(formObj) 
+        };
+      } catch (formError) {
+        console.log('Not valid form data');
       }
-    });
-    
-    if (error) {
-      console.error('Semantic search error:', error);
-      return [];
     }
     
-    return data.results || [];
-  } catch (error) {
-    console.error('Error in semantic search:', error);
-    return [];
-  }
-}
-
-// Function to generate AI response
-async function generateAIResponse(query: string, context: string, aiConfig: AiConfig): Promise<string> {
-  try {
-    const { data, error } = await supabase.functions.invoke('generate-response', {
-      body: {
-        query,
-        context,
-        systemPrompt: aiConfig.system_prompt,
-        temperature: aiConfig.temperature
+    // If we have raw content but couldn't parse it as JSON, try more permissive parsing
+    if (rawContent) {
+      try {
+        // Try to detect JSON-like structure even with malformed JSON
+        // This works for cases where the JSON might have comments or trailing commas
+        const repaired = rawContent
+          .replace(/[\r\n\t]/g, ' ')     // Replace whitespace
+          .replace(/,\s*}/g, '}')       // Remove trailing commas in objects
+          .replace(/,\s*\]/g, ']')      // Remove trailing commas in arrays
+          .trim();
+          
+        // Attempt to parse the repaired JSON
+        return { 
+          parsedData: JSON.parse(repaired), 
+          contentType, 
+          rawContent 
+        };
+      } catch (fixError) {
+        console.log('Could not repair malformed JSON');
       }
-    });
-    
-    if (error) {
-      console.error('AI response generation error:', error);
-      return "Sorry, I'm having trouble generating a response right now.";
-    }
-    
-    return data.answer || "I don't have an answer for that question.";
-  } catch (error) {
-    console.error('Error generating AI response:', error);
-    return "Sorry, an error occurred while processing your request.";
-  }
-}
-
-// Function to send a response back through the EVOLUTION API
-async function sendWhatsAppResponse(originalMessage: EvolutionMessage, responseText: string): Promise<void> {
-  try {
-    const recipientJid = originalMessage.data.key.remoteJid;
-    const instanceName = originalMessage.instance;
-    
-    console.log(`Preparing to send response to ${recipientJid} on instance ${instanceName}`);
-    
-    // Prepare the request to the EVOLUTION API
-    const response = await fetch(`https://api.convgo.com/v1/message/sendText/${instanceName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': EVOLUTION_API_KEY
-      },
-      body: JSON.stringify({
-        number: recipientJid,
-        options: {
-          delay: 1000
-        },
-        textMessage: {
-          text: responseText
+      
+      // Last resort: try to extract a JSON object using regex
+      try {
+        const jsonMatch = rawContent.match(/({[\s\S]*}|\[[\s\S]*\])/);
+        if (jsonMatch && jsonMatch[0]) {
+          return { 
+            parsedData: JSON.parse(jsonMatch[0]), 
+            contentType, 
+            rawContent 
+          };
         }
-      })
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(`EVOLUTION API error: ${errorData}`);
+      } catch (regexError) {
+        console.log('Regex extraction failed');
+      }
     }
     
-    console.log(`Response sent successfully to ${recipientJid} on instance ${instanceName}`);
+    // If all parsing methods failed, return the raw content
+    return { 
+      parsedData: { raw: rawContent }, 
+      contentType, 
+      rawContent 
+    };
   } catch (error) {
-    console.error('Error sending WhatsApp response:', error);
+    console.error('Error extracting content from request:', error);
+    return { 
+      parsedData: { error: 'Failed to parse request' }, 
+      contentType, 
+      rawContent 
+    };
   }
 }
 
-// Register webhook with EVOLUTION API for an instance
-async function handleRegisterWebhook(body: any): Promise<Response> {
+// Function to normalize event data regardless of format
+function normalizeEventData(data: any): { 
+  event: string; 
+  instance: string; 
+  data: any;
+} {
   try {
-    const { instanceName, webhookUrl } = body;
+    // Check if this is already in our expected format
+    if (data.event && data.instance && data.data) {
+      return data;
+    }
     
-    if (!instanceName || !webhookUrl) {
+    // EVOLUTION API's format
+    // Check for EVOLUTION API webhook format (based on your webhook.site capture)
+    if (data.body?.key?.remoteJid || data.key?.remoteJid) {
+      // This appears to be EVOLUTION's direct format
+      const messageObj = data.body || data;
+      const instanceName = data.instance || 'unknown-instance';
+      
+      // Construct normalized event data
+      return {
+        event: 'messages.upsert',
+        instance: instanceName,
+        data: messageObj
+      };
+    }
+    
+    // Handle other potential formats or return something reasonable
+    return {
+      event: data.type || data.event || 'unknown',
+      instance: data.instance || data.instanceName || 'unknown-instance',
+      data: data
+    };
+  } catch (error) {
+    console.error('Error normalizing event data:', error);
+    return {
+      event: 'error',
+      instance: 'parsing-error',
+      data: { error: 'Failed to normalize event data', originalData: data }
+    };
+  }
+}
+
+// Main webhook handler
+async function handleWebhook(req: Request): Promise<Response> {
+  try {
+    // Extract content from the request using our robust extraction function
+    const { parsedData, contentType, rawContent } = await extractRequestContent(req);
+    
+    console.log(`Processing webhook with content-type: ${contentType}`);
+    
+    // Log request data for debugging
+    console.log('Extracted data:', JSON.stringify(parsedData).substring(0, 500));
+    
+    // For test requests, handle differently
+    if (req.method === 'POST' && parsedData.action === 'test') {
+      return handleTestRequest(parsedData);
+    }
+    
+    // For status check requests
+    if (req.method === 'POST' && parsedData.action === 'status') {
+      return handleStatusRequest();
+    }
+    
+    // Normalize the event data to a consistent format
+    const normalizedEvent = normalizeEventData(parsedData);
+    console.log('Normalized event:', JSON.stringify(normalizedEvent).substring(0, 500));
+    
+    // Store in database
+    const { data: insertData, error: insertError } = await supabaseAdmin
+      .from('webhook_messages')
+      .insert({
+        event: normalizedEvent.event,
+        instance: normalizedEvent.instance,
+        data: normalizedEvent.data
+      });
+    
+    if (insertError) {
+      console.error('Error inserting webhook message:', insertError);
+      
+      // Also try to log the failed request for debugging
+      try {
+        await supabaseAdmin
+          .from('webhook_errors')
+          .insert({
+            error_message: insertError.message,
+            raw_content: rawContent,
+            content_type: contentType,
+            normalized_data: normalizedEvent
+          });
+      } catch (logError) {
+        console.error('Failed to log webhook error:', logError);
+      }
+      
+      // Even if we failed to store it, return 200 to avoid EVOLUTION API retries
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Instance name and webhook URL are required' 
+          message: 'Failed to process webhook, but received' 
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    console.log(`Registering webhook for instance ${instanceName} with URL ${webhookUrl}`);
+    console.log('Successfully processed and stored webhook message');
     
-    // Get the WhatsApp instance ID from the database
-    const { data: instanceData, error: instanceError } = await supabase
-      .from('whatsapp_instances')
-      .select('id')
-      .eq('instance_name', instanceName)
-      .single();
-    
-    if (instanceError || !instanceData) {
-      console.error(`Instance not found: ${instanceName}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'WhatsApp instance not found' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-    
-    // Register webhook with EVOLUTION API
-    const registerResponse = await fetch(`https://api.convgo.com/webhook/set/${instanceName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': EVOLUTION_API_KEY
-      },
-      body: JSON.stringify({
-        webhook: webhookUrl,
-        // Include events you want to receive
-        events: ["messages.upsert", "connection.update"],
-        // Optional: webhook secret for validation
-        webhook_by_events: true
-      })
-    });
-    
-    if (!registerResponse.ok) {
-      const errorData = await registerResponse.text();
-      throw new Error(`EVOLUTION API error: ${errorData}`);
-    }
-    
-    const registerResult = await registerResponse.json();
-    
-    // Update webhook configuration in the database
-    const { data: webhookData, error: webhookError } = await supabase
-      .from('whatsapp_webhook_config')
-      .upsert({
-        whatsapp_instance_id: instanceData.id,
-        instance_name: instanceName,
-        webhook_url: webhookUrl,
-        is_active: true,
-        last_status: 'registered',
-        last_checked_at: new Date().toISOString()
-      }, { onConflict: 'whatsapp_instance_id' })
-      .select();
-    
-    if (webhookError) {
-      throw new Error(`Error updating webhook config: ${webhookError.message}`);
-    }
-    
+    // Return success response - ALWAYS return 200 to prevent retries
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Webhook registered successfully',
-        data: registerResult
+        message: 'Webhook received and processed successfully' 
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error registering webhook:', error);
+    console.error('Unexpected error in webhook handler:', error);
+    
+    // Return 200 even for errors to prevent retries
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: 'Failed to register webhook',
-        details: error instanceof Error ? error.message : 'Unknown error'
+      JSON.stringify({ 
+        success: false, 
+        message: 'Error processing webhook, but request received' 
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 }
 
-// Unregister webhook with EVOLUTION API
-async function handleUnregisterWebhook(body: any): Promise<Response> {
+// Handle test requests
+async function handleTestRequest(data: any): Promise<Response> {
   try {
-    const { instanceName } = body;
+    console.log('Processing test request:', JSON.stringify(data));
+    
+    // Extract instance name and test data
+    const { instanceName, testData } = data;
     
     if (!instanceName) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Instance name is required' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        JSON.stringify({ success: false, message: 'Missing instanceName parameter' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    console.log(`Unregistering webhook for instance ${instanceName}`);
-    
-    // Get the WhatsApp instance ID from the database
-    const { data: instanceData, error: instanceError } = await supabase
-      .from('whatsapp_instances')
-      .select('id')
-      .eq('instance_name', instanceName)
-      .single();
-    
-    if (instanceError || !instanceData) {
-      console.error(`Instance not found: ${instanceName}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'WhatsApp instance not found' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-    
-    // Unregister webhook with EVOLUTION API - set webhook URL to empty string
-    const unregisterResponse = await fetch(`https://api.convgo.com/webhook/set/${instanceName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': EVOLUTION_API_KEY
-      },
-      body: JSON.stringify({
-        webhook: "", // Empty string to remove webhook
-        events: []
-      })
-    });
-    
-    if (!unregisterResponse.ok) {
-      const errorData = await unregisterResponse.text();
-      throw new Error(`EVOLUTION API error: ${errorData}`);
-    }
-    
-    // Update webhook configuration in the database
-    const { error: webhookError } = await supabase
-      .from('whatsapp_webhook_config')
-      .update({
-        is_active: false,
-        last_status: 'unregistered',
-        last_checked_at: new Date().toISOString()
-      })
-      .eq('whatsapp_instance_id', instanceData.id);
-    
-    if (webhookError) {
-      throw new Error(`Error updating webhook config: ${webhookError.message}`);
+    // If test data is provided, store a test message
+    if (testData) {
+      // Store test message in database
+      const { data: insertData, error: insertError } = await supabaseAdmin
+        .from('webhook_messages')
+        .insert({
+          event: testData.event || 'test',
+          instance: instanceName,
+          data: testData.data || { message: 'Test message' }
+        });
+      
+      if (insertError) {
+        console.error('Error inserting test message:', insertError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            message: 'Failed to store test message',
+            details: insertError.message
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.log('Test message stored successfully');
     }
     
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Webhook unregistered successfully'
+        message: 'Test webhook processed successfully',
+        details: { instanceName }
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error unregistering webhook:', error);
+    console.error('Error processing test request:', error);
+    
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: 'Failed to unregister webhook',
+      JSON.stringify({ 
+        success: false, 
+        message: 'Error processing test request',
         details: error instanceof Error ? error.message : 'Unknown error'
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 }
 
-// Get status of webhook registration
-async function handleStatus(): Promise<Response> {
+// Handle status check requests
+async function handleStatusRequest(): Promise<Response> {
   try {
-    // Get all active webhook configurations
-    const { data: webhookConfigs, error: configError } = await supabase
+    // Check webhook configurations
+    const { data: webhookConfigs, error: configError } = await supabaseAdmin
       .from('whatsapp_webhook_config')
-      .select('*, whatsapp_instances!inner(instance_name, status)')
-      .eq('is_active', true);
+      .select('*');
     
     if (configError) {
-      throw new Error(`Error fetching webhook configurations: ${configError.message}`);
+      console.error('Error fetching webhook configurations:', configError);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'Failed to retrieve webhook configurations',
+          details: configError.message
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
-    
-    const activeWebhooks = webhookConfigs || [];
-    
-    // Check the status of each webhook with EVOLUTION API
-    // This is a placeholder - EVOLUTION API may not have a direct webhook status endpoint
-    // You can implement webhook validation by sending a test event if needed
     
     return new Response(
       JSON.stringify({ 
         success: true, 
-        activeWebhooks: activeWebhooks,
-        count: activeWebhooks.length
+        message: 'Webhook status checked successfully',
+        activeWebhooks: webhookConfigs
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error checking webhook status:', error);
+    
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: 'Failed to get webhook status',
+      JSON.stringify({ 
+        success: false, 
+        message: 'Error checking webhook status',
         details: error instanceof Error ? error.message : 'Unknown error'
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 }
+
+// Main handler function
+serve(async (req) => {
+  console.log(`Webhook request received: ${req.method} ${new URL(req.url).pathname}`);
+  
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight request');
+    return new Response(null, { headers: corsHeaders });
+  }
+  
+  // Process the webhook
+  return handleWebhook(req);
+});

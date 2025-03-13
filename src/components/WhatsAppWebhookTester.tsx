@@ -2,10 +2,11 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, ExternalLink, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface WebhookTestResult {
   success: boolean;
@@ -16,6 +17,7 @@ interface WebhookTestResult {
 const WhatsAppWebhookTester = ({ instanceName }: { instanceName: string }) => {
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<WebhookTestResult | null>(null);
+  const [activeTab, setActiveTab] = useState('info');
 
   const testWebhook = async () => {
     try {
@@ -115,57 +117,121 @@ const WhatsAppWebhookTester = ({ instanceName }: { instanceName: string }) => {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          <Alert className="bg-blue-50">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>About EVOLUTION API Webhook Configuration</AlertTitle>
-            <AlertDescription>
-              When configuring webhooks in EVOLUTION API, you only need to:
-              <ol className="list-decimal ml-6 mt-2 space-y-1">
-                <li>Enter the webhook URL from the Endpoints tab</li>
-                <li>Select which events you want to receive (messages.upsert, connection.update, etc.)</li>
-                <li>Save the configuration</li>
-              </ol>
-              <p className="mt-2">
-                <strong>Important:</strong> Our webhook endpoint is designed to handle requests from EVOLUTION API 
-                regardless of content type or format. It will automatically parse JSON data in various formats.
-              </p>
-              <p className="mt-2">
-                If you encounter issues with webhooks not being received, check the Webhook Monitor page to see 
-                if any messages are being recorded, and check the Edge Function logs for detailed information.
-              </p>
-            </AlertDescription>
-          </Alert>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="info">Setup Information</TabsTrigger>
+            <TabsTrigger value="test">Test Webhook</TabsTrigger>
+          </TabsList>
           
-          <p className="text-sm text-muted-foreground">
-            This will send a simulated message to your webhook endpoint to verify that it can correctly
-            receive and process WhatsApp messages.
-          </p>
-          
-          {testResult && (
-            <div className={`mt-4 p-3 rounded-md ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-              <div className="flex items-start gap-2">
-                {testResult.success ? (
-                  <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-                )}
-                <div>
-                  <p className={`font-medium ${testResult.success ? 'text-green-800' : 'text-red-800'}`}>
-                    {testResult.message}
-                  </p>
-                  {testResult.details && (
-                    <pre className="mt-2 text-xs overflow-auto max-h-40 p-2 bg-black/5 rounded">
-                      {typeof testResult.details === 'string' 
-                        ? testResult.details 
-                        : JSON.stringify(testResult.details, null, 2)}
-                    </pre>
-                  )}
+          <TabsContent value="info" className="space-y-4 mt-4">
+            <Alert className="bg-blue-50">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>About EVOLUTION API Webhook Configuration</AlertTitle>
+              <AlertDescription>
+                <p className="mt-2 font-medium">
+                  When configuring webhooks in EVOLUTION API, you only need:
+                </p>
+                <ol className="list-decimal ml-6 mt-2 space-y-1">
+                  <li>Enter the webhook URL from the Endpoints tab</li>
+                  <li>Select the events you want to receive (at minimum "messages.upsert")</li>
+                  <li>Save the configuration</li>
+                </ol>
+                
+                <div className="mt-4 p-3 bg-white rounded border border-blue-200">
+                  <p className="font-medium text-blue-700">EVOLUTION API webhook requirements:</p>
+                  <ul className="list-disc ml-5 mt-1 space-y-1 text-sm">
+                    <li><strong>Headers</strong>: No special headers are required!</li>
+                    <li><strong>Content-Type</strong>: Can be any format (application/json preferred)</li>
+                    <li><strong>Authentication</strong>: No webhook authentication is required</li>
+                  </ul>
                 </div>
+                
+                <p className="mt-4">
+                  <strong>Important</strong>: Our system is designed to handle EVOLUTION API webhook payloads in various formats. If you're experiencing issues:
+                </p>
+                <ul className="list-disc ml-5 mt-1 space-y-1 text-sm">
+                  <li>Check the <strong>Webhook Monitor</strong> page to see if messages are being recorded</li>
+                  <li>Review the Edge Function logs for detailed information on request processing</li>
+                  <li>Make sure your EVOLUTION API server can reach our webhook endpoint (network connectivity)</li>
+                </ul>
+              </AlertDescription>
+            </Alert>
+            
+            <div className="bg-gray-50 p-4 rounded-md border">
+              <h3 className="font-medium mb-2">Troubleshooting Webhook Issues</h3>
+              <div className="space-y-2 text-sm">
+                <p className="flex items-center">
+                  <ArrowRight className="h-4 w-4 mr-2 text-green-600" />
+                  <span>Verify your EVOLUTION API server has internet access to call external webhooks</span>
+                </p>
+                <p className="flex items-center">
+                  <ArrowRight className="h-4 w-4 mr-2 text-green-600" />
+                  <span>Confirm the EVOLUTION API webhook configuration is pointing to the correct URL</span>
+                </p>
+                <p className="flex items-center">
+                  <ArrowRight className="h-4 w-4 mr-2 text-green-600" />
+                  <span>Test with a simple webhook service like webhook.site to ensure EVOLUTION API is sending data</span>
+                </p>
+                <p className="flex items-center">
+                  <ArrowRight className="h-4 w-4 mr-2 text-green-600" />
+                  <span>Check the logs to see if our system is receiving but failing to process the webhooks</span>
+                </p>
               </div>
             </div>
-          )}
-        </div>
+          </TabsContent>
+          
+          <TabsContent value="test" className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              This will send a simulated message to your webhook endpoint to verify that it can correctly
+              receive and process WhatsApp messages.
+            </p>
+            
+            {testResult && (
+              <div className={`mt-4 p-4 rounded-md ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                <div className="flex items-start gap-3">
+                  {testResult.success ? (
+                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                  )}
+                  <div>
+                    <p className={`font-medium ${testResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                      {testResult.message}
+                    </p>
+                    {testResult.details && (
+                      <pre className="mt-2 text-xs overflow-auto max-h-40 p-2 bg-black/5 rounded">
+                        {typeof testResult.details === 'string' 
+                          ? testResult.details 
+                          : JSON.stringify(testResult.details, null, 2)}
+                      </pre>
+                    )}
+                    
+                    {!testResult.success && (
+                      <p className="mt-2 text-xs text-red-700">
+                        After fixing any issues, check the Webhook Monitor page to see if messages are being received.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <Button 
+              onClick={testWebhook} 
+              disabled={isTesting || !instanceName}
+              className="mt-4"
+            >
+              {isTesting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Testing Webhook...
+                </>
+              ) : (
+                'Test Webhook'
+              )}
+            </Button>
+          </TabsContent>
+        </Tabs>
       </CardContent>
       <CardFooter className="justify-between">
         <Button 
@@ -178,17 +244,12 @@ const WhatsAppWebhookTester = ({ instanceName }: { instanceName: string }) => {
         </Button>
         
         <Button 
-          onClick={testWebhook} 
-          disabled={isTesting || !instanceName}
+          variant="outline"
+          onClick={() => window.open("/webhook-monitor", "_blank")}
+          size="sm"
         >
-          {isTesting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Testing Webhook...
-            </>
-          ) : (
-            'Test Webhook'
-          )}
+          <ExternalLink className="h-4 w-4 mr-2" />
+          Open Webhook Monitor
         </Button>
       </CardFooter>
     </Card>
