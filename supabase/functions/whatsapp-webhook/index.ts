@@ -61,45 +61,81 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Get API key for EVOLUTION API
 const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY') || '';
 
+console.log(`Initializing webhook function. Supabase URL: ${supabaseUrl ? 'Set' : 'Not set'}, API Key: ${EVOLUTION_API_KEY ? 'Set' : 'Not set'}`);
+
 serve(async (req) => {
   // Log all incoming requests for debugging
-  console.log(`Received ${req.method} request to ${req.url}`);
+  const url = new URL(req.url);
+  const path = url.pathname;
+  const method = req.method;
+  
+  console.log(`[${new Date().toISOString()}] Received ${method} request to ${path}`);
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log(`[${new Date().toISOString()}] Handling CORS preflight request`);
     return new Response('ok', { headers: corsHeaders });
   }
 
   // Handle different request types based on method and path
-  const url = new URL(req.url);
-  const path = url.pathname.split('/').pop();
+  const pathSegments = path.split('/');
+  const lastSegment = pathSegments.pop() || '';
+  const secondLastSegment = pathSegments.pop() || '';
   
-  console.log(`Processing request with path: ${path}`);
+  console.log(`[${new Date().toISOString()}] Processing request with path segments: ${JSON.stringify(pathSegments)}, last: ${lastSegment}, second last: ${secondLastSegment}`);
   
   // For webhook callbacks from EVOLUTION API
-  if (req.method === 'POST' && path === 'webhook-callback') {
+  if (req.method === 'POST' && secondLastSegment === 'webhook-callback') {
     try {
+      console.log(`[${new Date().toISOString()}] Processing webhook callback, event type: ${lastSegment}`);
+      
       const requestBody = await req.text();
-      console.log(`Webhook callback received. Body: ${requestBody}`);
+      console.log(`[${new Date().toISOString()}] Webhook callback received. Body length: ${requestBody.length} bytes`);
+      console.log(`[${new Date().toISOString()}] Webhook payload preview: ${requestBody.substring(0, 200)}...`);
       
       // Parse the request body
-      const message = JSON.parse(requestBody);
+      let message;
+      try {
+        message = JSON.parse(requestBody);
+        console.log(`[${new Date().toISOString()}] Successfully parsed webhook payload. Event: ${message.event}, Instance: ${message.instance}`);
+      } catch (parseError) {
+        console.error(`[${new Date().toISOString()}] Error parsing webhook JSON: ${parseError.message}`);
+        console.error(`[${new Date().toISOString()}] Raw payload causing parse error: ${requestBody}`);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Invalid JSON payload",
+            details: parseError.message
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
       
       // Store the message in the database for monitoring
       try {
-        await supabase.from('webhook_messages').insert({
+        console.log(`[${new Date().toISOString()}] Attempting to store webhook message in database`);
+        const { data: insertData, error: insertError } = await supabase.from('webhook_messages').insert({
           instance: message.instance || 'unknown',
           event: message.event || 'unknown',
           data: message
         });
+        
+        if (insertError) {
+          console.error(`[${new Date().toISOString()}] Database insertion error: ${insertError.message}`);
+          console.error(`[${new Date().toISOString()}] Error details: ${JSON.stringify(insertError)}`);
+        } else {
+          console.log(`[${new Date().toISOString()}] Successfully stored webhook message in database`);
+        }
       } catch (dbError) {
-        console.error('Error storing webhook message:', dbError);
+        console.error(`[${new Date().toISOString()}] Exception during database insertion: ${dbError.message}`);
+        console.error(`[${new Date().toISOString()}] Stack trace: ${dbError.stack}`);
         // Continue processing even if storing fails
       }
       
       return handleWebhookCallback(req, message);
     } catch (error) {
-      console.error(`Error processing webhook callback: ${error.message}`);
+      console.error(`[${new Date().toISOString()}] Error processing webhook callback: ${error.message}`);
+      console.error(`[${new Date().toISOString()}] Stack trace: ${error.stack}`);
       return new Response(
         JSON.stringify({
           success: false,
@@ -114,10 +150,19 @@ serve(async (req) => {
   try {
     // For API requests from our frontend
     if (req.method === 'POST') {
-      const body = await req.json();
-      const { action } = body;
+      let body;
+      try {
+        body = await req.json();
+        console.log(`[${new Date().toISOString()}] Received POST request with action: ${body.action}`);
+      } catch (parseError) {
+        console.error(`[${new Date().toISOString()}] Error parsing request JSON: ${parseError.message}`);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid JSON in request body' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
       
-      console.log(`Processing action: ${action}`);
+      const { action } = body;
 
       // Main actions this endpoint supports
       switch (action) {
@@ -130,7 +175,7 @@ serve(async (req) => {
         case 'test':
           return handleWebhookTest(body);
         default:
-          console.log(`Invalid action: ${action}`);
+          console.log(`[${new Date().toISOString()}] Invalid action: ${action}`);
           return new Response(
             JSON.stringify({ 
               success: false, 
@@ -142,13 +187,14 @@ serve(async (req) => {
     }
     
     // Return 404 for other methods or paths
-    console.log(`Unhandled request method: ${req.method} or path: ${path}`);
+    console.log(`[${new Date().toISOString()}] Unhandled request method: ${req.method} or path: ${path}`);
     return new Response(
       JSON.stringify({ success: false, error: 'Not found' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
     );
   } catch (error) {
-    console.error('Error processing request:', error);
+    console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`);
+    console.error(`[${new Date().toISOString()}] Stack trace: ${error.stack}`);
     return new Response(
       JSON.stringify({
         success: false,
@@ -266,13 +312,13 @@ async function handleWebhookTest(body: any): Promise<Response> {
 // Handle incoming webhook callbacks from EVOLUTION API
 async function handleWebhookCallback(req: Request, message: any): Promise<Response> {
   try {
-    console.log(`Processing webhook callback for event: ${message.event}, instance: ${message.instance}`);
+    console.log(`[${new Date().toISOString()}] Processing webhook callback for event: ${message.event}, instance: ${message.instance}`);
     
     // Only process message events
     if (message.event === 'messages.upsert') {
       await handleWhatsAppMessage(message as EvolutionMessage);
     } else {
-      console.log(`Ignoring non-message event: ${message.event}`);
+      console.log(`[${new Date().toISOString()}] Ignoring non-message event: ${message.event}`);
     }
     
     // Always return a 200 response quickly to the webhook
@@ -281,7 +327,8 @@ async function handleWebhookCallback(req: Request, message: any): Promise<Respon
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error processing webhook callback:', error);
+    console.error(`[${new Date().toISOString()}] Error processing webhook callback: ${error.message}`);
+    console.error(`[${new Date().toISOString()}] Stack trace: ${error.stack}`);
     // Still return 200 to acknowledge receipt
     return new Response(
       JSON.stringify({ success: true }),
