@@ -1,14 +1,19 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { Loader2, RefreshCw, Trash2, AlertTriangle, Info, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useNavigate } from 'react-router-dom';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface WebhookMessage {
   id: string;
@@ -24,14 +29,35 @@ const WebhookMonitor = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  const [lastMessageTime, setLastMessageTime] = useState<Date | null>(null);
+  const [receivingStatus, setReceivingStatus] = useState<'active' | 'inactive' | 'unknown'>('unknown');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [eventCounts, setEventCounts] = useState<Record<string, number>>({});
+  const [showIntroAlert, setShowIntroAlert] = useState(true);
+  const navigate = useNavigate();
+  const pollingRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchMessages();
+      startPolling();
     }
+    
+    return () => {
+      if (pollingRef.current) {
+        window.clearInterval(pollingRef.current);
+      }
+    };
   }, [user]);
 
-  const fetchMessages = async () => {
+  const startPolling = () => {
+    // Poll for new messages every 15 seconds
+    pollingRef.current = window.setInterval(() => {
+      fetchMessages(false);
+    }, 15000);
+  };
+
+  const fetchMessages = async (showToast = true) => {
     try {
       setIsLoading(true);
       const { data, error } = await supabase
@@ -43,9 +69,34 @@ const WebhookMonitor = () => {
       if (error) throw error;
       
       setMessages(data || []);
+      
+      // Check if we've received messages in the last 5 minutes
+      const counts: Record<string, number> = {};
+      data?.forEach(message => {
+        counts[message.event] = (counts[message.event] || 0) + 1;
+      });
+      setEventCounts(counts);
+      
+      if (data && data.length > 0) {
+        const mostRecentDate = new Date(data[0].received_at);
+        setLastMessageTime(mostRecentDate);
+        
+        const fiveMinutesAgo = new Date();
+        fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
+        
+        setReceivingStatus(mostRecentDate > fiveMinutesAgo ? 'active' : 'inactive');
+      } else {
+        setReceivingStatus('inactive');
+      }
+      
+      if (showToast) {
+        toast.success('Webhook messages refreshed');
+      }
     } catch (error) {
       console.error('Error fetching webhook messages:', error);
-      toast.error('Failed to load webhook messages');
+      if (showToast) {
+        toast.error('Failed to load webhook messages');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -64,6 +115,8 @@ const WebhookMonitor = () => {
       
       setMessages([]);
       toast.success('Webhook message history cleared');
+      setReceivingStatus('inactive');
+      setLastMessageTime(null);
     } catch (error) {
       console.error('Error clearing webhook messages:', error);
       toast.error('Failed to clear webhook messages');
@@ -74,7 +127,6 @@ const WebhookMonitor = () => {
 
   const handleRefresh = () => {
     fetchMessages();
-    toast.success('Webhook messages refreshed');
   };
 
   const getEventColor = (event: string) => {
@@ -95,17 +147,87 @@ const WebhookMonitor = () => {
         return 'bg-gray-500';
     }
   };
-  
-  // Filter messages based on active tab
-  const filteredMessages = messages.filter(message => {
-    if (activeTab === 'all') return true;
-    return message.event === activeTab;
-  });
 
+  const getEventIcon = (event: string) => {
+    switch (event) {
+      case 'messages.upsert':
+        return <span className="mr-1">💬</span>;
+      case 'connection.update':
+        return <span className="mr-1">🔌</span>;
+      case 'qrcode.updated':
+        return <span className="mr-1">📱</span>;
+      case 'send.message':
+        return <span className="mr-1">📤</span>;
+      case 'call':
+        return <span className="mr-1">📞</span>;
+      case 'errors':
+        return <span className="mr-1">⚠️</span>;
+      default:
+        return <span className="mr-1">📋</span>;
+    }
+  };
+  
+  const downloadJson = () => {
+    const jsonStr = JSON.stringify(messages, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `webhook-messages-${new Date().toISOString()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(href);
+    toast.success('Webhook messages downloaded');
+  };
+  
+  const filteredMessages = messages
+    .filter(message => {
+      // Filter by tab selection
+      if (activeTab !== 'all' && message.event !== activeTab) return false;
+      
+      // Filter by search term
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        return (
+          message.instance.toLowerCase().includes(searchLower) ||
+          message.event.toLowerCase().includes(searchLower) ||
+          JSON.stringify(message.data).toLowerCase().includes(searchLower)
+        );
+      }
+      
+      return true;
+    });
+  
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Webhook Message Monitor</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Webhook Monitor</h1>
+          <div className="flex items-center mt-2">
+            <div 
+              className={`w-3 h-3 rounded-full mr-2 ${
+                receivingStatus === 'active' 
+                  ? 'bg-green-500' 
+                  : receivingStatus === 'inactive' 
+                    ? 'bg-red-500' 
+                    : 'bg-yellow-500'
+              }`}
+            />
+            <span className="text-sm text-muted-foreground">
+              {receivingStatus === 'active' 
+                ? 'Receiving webhook messages' 
+                : receivingStatus === 'inactive' 
+                  ? 'No recent messages received' 
+                  : 'Status unknown'}
+            </span>
+            {lastMessageTime && (
+              <span className="text-sm text-muted-foreground ml-2">
+                Last message: {lastMessageTime.toLocaleString()}
+              </span>
+            )}
+          </div>
+        </div>
         <div className="flex space-x-2">
           <Button 
             variant="outline" 
@@ -115,6 +237,15 @@ const WebhookMonitor = () => {
           >
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             <span className="ml-2">Refresh</span>
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={downloadJson}
+            disabled={messages.length === 0}
+          >
+            <Download className="h-4 w-4" />
+            <span className="ml-2">Export</span>
           </Button>
           <Button 
             variant="destructive" 
@@ -128,23 +259,95 @@ const WebhookMonitor = () => {
         </div>
       </div>
       
+      {showIntroAlert && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Monitor WhatsApp Webhook Messages</AlertTitle>
+          <AlertDescription>
+            This page displays incoming webhook messages from the EVOLUTION API server. Use this to debug and monitor your WhatsApp integrations.
+            {messages.length === 0 && (
+              <div className="mt-2">
+                <Button 
+                  variant="link" 
+                  className="p-0 h-auto" 
+                  onClick={() => navigate('/whatsapp-link')}
+                >
+                  Go to WhatsApp Setup
+                </Button> to configure your instances.
+              </div>
+            )}
+          </AlertDescription>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="absolute top-3 right-3" 
+            onClick={() => setShowIntroAlert(false)}
+          >
+            Dismiss
+          </Button>
+        </Alert>
+      )}
+      
       <Card>
         <CardHeader>
           <CardTitle>Webhook Messages</CardTitle>
           <CardDescription>
             View incoming messages from the EVOLUTION API server
           </CardDescription>
+          <div className="mt-4">
+            <Input 
+              placeholder="Search messages..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList className="grid grid-cols-7">
-              <TabsTrigger value="all">All Events</TabsTrigger>
-              <TabsTrigger value="messages.upsert">Messages</TabsTrigger>
-              <TabsTrigger value="connection.update">Connection</TabsTrigger>
-              <TabsTrigger value="qrcode.updated">QR Code</TabsTrigger>
-              <TabsTrigger value="send.message">Sent</TabsTrigger>
-              <TabsTrigger value="call">Calls</TabsTrigger>
-              <TabsTrigger value="errors">Errors</TabsTrigger>
+              <TabsTrigger value="all">
+                All Events
+                {messages.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">{messages.length}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="messages.upsert">
+                Messages
+                {eventCounts['messages.upsert'] > 0 && (
+                  <Badge variant="secondary" className="ml-2">{eventCounts['messages.upsert']}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="connection.update">
+                Connection
+                {eventCounts['connection.update'] > 0 && (
+                  <Badge variant="secondary" className="ml-2">{eventCounts['connection.update']}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="qrcode.updated">
+                QR Code
+                {eventCounts['qrcode.updated'] > 0 && (
+                  <Badge variant="secondary" className="ml-2">{eventCounts['qrcode.updated']}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="send.message">
+                Sent
+                {eventCounts['send.message'] > 0 && (
+                  <Badge variant="secondary" className="ml-2">{eventCounts['send.message']}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="call">
+                Calls
+                {eventCounts['call'] > 0 && (
+                  <Badge variant="secondary" className="ml-2">{eventCounts['call']}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="errors">
+                Errors
+                {eventCounts['errors'] > 0 && (
+                  <Badge variant="secondary" className="ml-2">{eventCounts['errors']}</Badge>
+                )}
+              </TabsTrigger>
             </TabsList>
             
             <TabsContent value={activeTab} className="mt-0">
@@ -154,7 +357,23 @@ const WebhookMonitor = () => {
                 </div>
               ) : filteredMessages.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No webhook messages found
+                  {messages.length === 0 ? (
+                    <div className="space-y-4">
+                      <AlertTriangle className="h-12 w-12 mx-auto text-yellow-500" />
+                      <div>No webhook messages found</div>
+                      <div className="text-sm max-w-lg mx-auto">
+                        If you haven't received any webhook messages, make sure your webhook URL is properly configured in your WhatsApp instance settings.
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => navigate('/whatsapp-link')}
+                      >
+                        Go to WhatsApp Setup
+                      </Button>
+                    </div>
+                  ) : (
+                    <div>No messages matching your filters</div>
+                  )}
                 </div>
               ) : (
                 <ScrollArea className="h-[600px] pr-4">
@@ -166,7 +385,7 @@ const WebhookMonitor = () => {
                             <div className="space-y-1">
                               <div className="flex items-center space-x-2">
                                 <Badge className={getEventColor(message.event)}>
-                                  {message.event}
+                                  {getEventIcon(message.event)} {message.event}
                                 </Badge>
                                 <span className="text-sm font-medium">
                                   Instance: {message.instance}
@@ -176,11 +395,33 @@ const WebhookMonitor = () => {
                                 {new Date(message.received_at).toLocaleString()}
                               </p>
                             </div>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <Info className="h-4 w-4" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80">
+                                <div className="space-y-2">
+                                  <h4 className="font-medium text-sm">Message Details</h4>
+                                  <div className="grid grid-cols-2 gap-1 text-xs">
+                                    <div className="font-medium">ID:</div>
+                                    <div className="truncate">{message.id}</div>
+                                    <div className="font-medium">Instance:</div>
+                                    <div>{message.instance}</div>
+                                    <div className="font-medium">Event Type:</div>
+                                    <div>{message.event}</div>
+                                    <div className="font-medium">Received:</div>
+                                    <div>{new Date(message.received_at).toLocaleString()}</div>
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </div>
                         </CardHeader>
                         <CardContent>
                           <div className="bg-muted p-2 rounded overflow-x-auto">
-                            <pre className="text-xs">{JSON.stringify(message.data, null, 2)}</pre>
+                            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(message.data, null, 2)}</pre>
                           </div>
                         </CardContent>
                       </Card>
@@ -191,6 +432,11 @@ const WebhookMonitor = () => {
             </TabsContent>
           </Tabs>
         </CardContent>
+        <CardFooter>
+          <div className="text-xs text-muted-foreground">
+            Showing {filteredMessages.length} of {messages.length} messages
+          </div>
+        </CardFooter>
       </Card>
     </div>
   );
