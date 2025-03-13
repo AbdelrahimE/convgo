@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -72,7 +71,7 @@ serve(async (req) => {
   
   console.log(`[${new Date().toISOString()}] Received ${method} request to ${path} with Content-Type: ${contentType}`);
   
-  // Handle CORS preflight requests
+  // Handle CORS preflight requests - respond to all OPTIONS requests with OK
   if (req.method === 'OPTIONS') {
     console.log(`[${new Date().toISOString()}] Handling CORS preflight request`);
     return new Response('ok', { headers: corsHeaders });
@@ -96,254 +95,146 @@ serve(async (req) => {
   
   console.log(`[${new Date().toISOString()}] Path segments: ${JSON.stringify(pathSegments)}, last: ${lastSegment}, second last: ${secondLastSegment}`);
   
-  // For webhook callbacks from EVOLUTION API - direct webhook callback handling
-  if (req.method === 'POST' && (
-      (secondLastSegment === 'webhook-callback') || 
-      (lastSegment === 'webhook-callback') ||
-      (path.includes('/whatsapp-webhook'))
-  )) {
+  // Try to parse the request body in various formats
+  let requestBody;
+  let parsedBody;
+  
+  try {
+    // First try to read the raw body
+    requestBody = await req.text();
+    console.log(`[${new Date().toISOString()}] Request body length: ${requestBody.length} bytes`);
+    
+    // Then try to parse as JSON
     try {
-      console.log(`[${new Date().toISOString()}] Processing direct webhook callback`);
+      parsedBody = JSON.parse(requestBody);
+      console.log(`[${new Date().toISOString()}] Successfully parsed request as JSON`);
+    } catch (jsonError) {
+      console.log(`[${new Date().toISOString()}] Not valid JSON, will process as text: ${jsonError.message}`);
       
-      let requestBody;
-      try {
-        // First try to parse as JSON
-        requestBody = await req.text();
-        console.log(`[${new Date().toISOString()}] Webhook callback received. Body length: ${requestBody.length} bytes`);
-        console.log(`[${new Date().toISOString()}] Webhook payload preview: ${requestBody.substring(0, 200)}...`);
-      } catch (bodyError) {
-        console.error(`[${new Date().toISOString()}] Failed to read request body: ${bodyError.message}`);
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: "Failed to read request body",
-            details: bodyError.message
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
-      }
-      
-      // Parse the request body
-      let message;
-      try {
-        message = JSON.parse(requestBody);
-        console.log(`[${new Date().toISOString()}] Successfully parsed webhook payload. Event: ${message.event}, Instance: ${message.instance}`);
-      } catch (parseError) {
-        console.error(`[${new Date().toISOString()}] Error parsing webhook JSON: ${parseError.message}`);
-        console.error(`[${new Date().toISOString()}] Raw payload causing parse error: ${requestBody}`);
+      // Try to extract JSON-like patterns from the text
+      if (requestBody.includes('event') && requestBody.includes('instance')) {
+        console.log(`[${new Date().toISOString()}] Request contains 'event' and 'instance', treating as webhook payload`);
         
-        // Since Evolution API may not send proper JSON, try to extract event and instance from raw body
-        let extractedMessage = null;
         try {
-          // Try to match basic JSON structure from the string
+          // Try to extract using regex
           const eventMatch = requestBody.match(/"event"\s*:\s*"([^"]+)"/);
           const instanceMatch = requestBody.match(/"instance"\s*:\s*"([^"]+)"/);
           
           if (eventMatch && instanceMatch) {
-            extractedMessage = {
+            parsedBody = {
               event: eventMatch[1],
               instance: instanceMatch[1],
-              data: { extracted: "from malformed JSON" }
+              data: { extracted: "from text payload" }
             };
-            console.log(`[${new Date().toISOString()}] Extracted partial data from malformed JSON: ${JSON.stringify(extractedMessage)}`);
+            console.log(`[${new Date().toISOString()}] Extracted basic webhook data: event=${parsedBody.event}, instance=${parsedBody.instance}`);
           }
         } catch (extractError) {
-          console.error(`[${new Date().toISOString()}] Failed to extract data from malformed JSON: ${extractError.message}`);
+          console.error(`[${new Date().toISOString()}] Failed to extract data from text: ${extractError.message}`);
         }
-        
-        if (extractedMessage) {
-          message = extractedMessage;
-        } else {
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: "Invalid JSON payload",
-              details: parseError.message
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-          );
-        }
+      }
+    }
+  } catch (bodyError) {
+    console.error(`[${new Date().toISOString()}] Failed to read request body: ${bodyError.message}`);
+  }
+  
+  // Handle webhook requests from EVOLUTION API
+  // First, check if this looks like a webhook payload by checking for event and instance
+  if (parsedBody && parsedBody.event && parsedBody.instance) {
+    console.log(`[${new Date().toISOString()}] Processing webhook payload for event: ${parsedBody.event}, instance: ${parsedBody.instance}`);
+    
+    try {
+      // Store the webhook message in the database for monitoring
+      await supabase.from('webhook_messages').insert({
+        instance: parsedBody.instance,
+        event: parsedBody.event,
+        data: parsedBody
+      });
+      
+      console.log(`[${new Date().toISOString()}] Stored webhook message in database`);
+      
+      // Process message events in the background to avoid blocking response
+      if (parsedBody.event === 'messages.upsert') {
+        // Don't await this to return a response quickly
+        handleWhatsAppMessage(parsedBody)
+          .catch(err => console.error(`[${new Date().toISOString()}] Error processing message: ${err.message}`));
       }
       
-      // Store the message in the database for monitoring
-      try {
-        console.log(`[${new Date().toISOString()}] Attempting to store webhook message in database`);
-        const { data: insertData, error: insertError } = await supabase.from('webhook_messages').insert({
-          instance: message.instance || 'unknown',
-          event: message.event || 'unknown',
-          data: message
-        });
-        
-        if (insertError) {
-          console.error(`[${new Date().toISOString()}] Database insertion error: ${insertError.message}`);
-          console.error(`[${new Date().toISOString()}] Error details: ${JSON.stringify(insertError)}`);
-        } else {
-          console.log(`[${new Date().toISOString()}] Successfully stored webhook message in database`);
-        }
-      } catch (dbError) {
-        console.error(`[${new Date().toISOString()}] Exception during database insertion: ${dbError.message}`);
-        console.error(`[${new Date().toISOString()}] Stack trace: ${dbError.stack}`);
-        // Continue processing even if storing fails
-      }
-      
-      // Process the message if it's a proper webhook message
-      if (message && message.event && message.instance) {
-        return handleWebhookCallback(req, message);
-      } else {
-        console.error(`[${new Date().toISOString()}] Invalid webhook message format`);
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: "Invalid webhook message format",
-            details: "Message must contain event and instance fields"
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
-      }
-    } catch (error) {
-      console.error(`[${new Date().toISOString()}] Error processing webhook callback: ${error.message}`);
-      console.error(`[${new Date().toISOString()}] Stack trace: ${error.stack}`);
+      // Return success response immediately to acknowledge receipt
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Error processing webhook callback",
-          details: error.message
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        JSON.stringify({ success: true, message: "Webhook received" }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] Error processing webhook: ${error.message}`);
+      // Still return 200 to acknowledge receipt
+      return new Response(
+        JSON.stringify({ success: true, message: "Webhook acknowledged with errors" }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
   }
   
-  try {
-    // For API requests from our frontend with action parameter
-    if (req.method === 'POST') {
-      let body;
-      try {
-        if (contentType.includes('application/json')) {
-          body = await req.json();
-          console.log(`[${new Date().toISOString()}] Received POST request with action: ${body?.action}`);
-        } else {
-          // Try to handle as plain text and parse as JSON
-          const rawText = await req.text();
-          console.log(`[${new Date().toISOString()}] Received non-JSON POST with Content-Type: ${contentType}, body length: ${rawText.length}`);
-          
-          try {
-            body = JSON.parse(rawText);
-            console.log(`[${new Date().toISOString()}] Successfully parsed non-JSON POST body as JSON`);
-          } catch (textParseError) {
-            console.error(`[${new Date().toISOString()}] Failed to parse non-JSON POST body: ${textParseError.message}`);
-            // Return error for unparseable non-JSON requests
-            return new Response(
-              JSON.stringify({ 
-                success: false, 
-                error: 'Invalid request format. Expected JSON.',
-                details: {
-                  contentType,
-                  bodyPreview: rawText.substring(0, 100)
-                }
-              }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-            );
-          }
+  // If not a webhook payload, handle API requests from our frontend
+  if (parsedBody && parsedBody.action) {
+    console.log(`[${new Date().toISOString()}] Processing API request with action: ${parsedBody.action}`);
+    
+    switch (parsedBody.action) {
+      case 'register':
+        return handleRegisterWebhook(parsedBody);
+      case 'status':
+        return handleStatus();
+      case 'unregister':
+        return handleUnregisterWebhook(parsedBody);
+      case 'test':
+        return handleWebhookTest(parsedBody);
+      default:
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Invalid action',
+            details: `Action '${parsedBody.action}' not supported`
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+    }
+  }
+  
+  // If we got here, it's not a webhook or a known API request
+  console.log(`[${new Date().toISOString()}] Request doesn't match expected formats`);
+  
+  // For any unhandled POST request to this endpoint, try to process as a webhook as a fallback
+  if (method === 'POST') {
+    console.log(`[${new Date().toISOString()}] Attempting to process unrecognized POST as webhook`);
+    
+    // Create a minimal message record for monitoring
+    try {
+      await supabase.from('webhook_messages').insert({
+        instance: 'unknown',
+        event: 'unknown',
+        data: {
+          raw: requestBody ? (requestBody.length > 1000 ? requestBody.substring(0, 1000) + '...' : requestBody) : null,
+          headers: Object.fromEntries([...req.headers.entries()].map(([k, v]) => [k, v]))
         }
-      } catch (parseError) {
-        console.error(`[${new Date().toISOString()}] Error parsing request data: ${parseError.message}`);
-        
-        // Try to handle as a webhook if JSON parsing fails
-        const rawText = await req.text();
-        console.log(`[${new Date().toISOString()}] Trying to handle as webhook message: ${rawText.substring(0, 200)}`);
-        
-        try {
-          const webhookMessage = JSON.parse(rawText);
-          if (webhookMessage.event && webhookMessage.instance) {
-            console.log(`[${new Date().toISOString()}] Handling as webhook message instead`);
-            // Store the webhook message
-            await supabase.from('webhook_messages').insert({
-              instance: webhookMessage.instance || 'unknown',
-              event: webhookMessage.event || 'unknown',
-              data: webhookMessage
-            });
-            
-            return handleWebhookCallback(req, webhookMessage);
-          }
-        } catch (secondParseError) {
-          // If both attempts fail, return error
-          console.error(`[${new Date().toISOString()}] Second parse attempt failed: ${secondParseError.message}`);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Invalid JSON in request body',
-              details: {
-                originalError: parseError.message,
-                secondError: secondParseError.message,
-                bodyPreview: rawText.substring(0, 100)
-              }
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-          );
-        }
-      }
+      });
       
-      const { action } = body || {};
-
-      // Main actions this endpoint supports
-      switch (action) {
-        case 'register':
-          return handleRegisterWebhook(req);
-        case 'status':
-          return handleStatus();
-        case 'unregister':
-          return handleUnregisterWebhook(req);
-        case 'test':
-          return handleWebhookTest(body);
-        default:
-          // If no action is specified, try to handle as a webhook message
-          if (body && body.event && body.instance) {
-            console.log(`[${new Date().toISOString()}] No action specified, but message looks like a webhook. Handling as webhook.`);
-            await supabase.from('webhook_messages').insert({
-              instance: body.instance || 'unknown',
-              event: body.event || 'unknown',
-              data: body
-            });
-            
-            return handleWebhookCallback(req, body);
-          }
-          
-          console.log(`[${new Date().toISOString()}] Invalid action: ${action}`);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Invalid action or missing webhook data',
-              details: {
-                action,
-                isBodyObject: typeof body === 'object',
-                hasEvent: body?.event ? true : false,
-                hasInstance: body?.instance ? true : false
-              }
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-          );
-      }
+      console.log(`[${new Date().toISOString()}] Stored unrecognized request for investigation`);
+    } catch (storeError) {
+      console.error(`[${new Date().toISOString()}] Failed to store unrecognized request: ${storeError.message}`);
     }
     
-    // Return 404 for other methods or paths
-    console.log(`[${new Date().toISOString()}] Unhandled request method: ${req.method} or path: ${path}`);
+    // Still return success to avoid blocking the sender
     return new Response(
-      JSON.stringify({ success: false, error: 'Not found' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-    );
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`);
-    console.error(`[${new Date().toISOString()}] Stack trace: ${error.stack}`);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify({ success: true, message: "Request received but not processed" }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
+  
+  // Return 404 for other requests
+  console.log(`[${new Date().toISOString()}] Unhandled request method: ${method}`);
+  return new Response(
+    JSON.stringify({ success: false, error: 'Not found' }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+  );
 });
 
 // Handle test request - simulate processing a webhook message
@@ -372,10 +263,9 @@ async function handleWebhookTest(body: any): Promise<Response> {
     
     if (instanceError || !instanceData) {
       return new Response(
-        JSON.stringify({
-          success: false,
-          message: 'Instance not found in database',
-          details: instanceError?.message || 'No instance found with that name'
+        JSON.stringify({ 
+          success: false, 
+          error: 'WhatsApp instance not found' 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );
@@ -450,263 +340,6 @@ async function handleWebhookTest(body: any): Promise<Response> {
 }
 
 // Handle incoming webhook callbacks from EVOLUTION API
-async function handleWebhookCallback(req: Request, message: any): Promise<Response> {
-  try {
-    console.log(`[${new Date().toISOString()}] Processing webhook callback for event: ${message.event}, instance: ${message.instance}`);
-    
-    // Always acknowledge the webhook quickly to avoid timeouts
-    // This is important for the EVOLUTION API which may have short timeouts
-    const response = new Response(
-      JSON.stringify({ success: true }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-    
-    // Process message events in the background
-    if (message.event === 'messages.upsert') {
-      // Don't await this to avoid blocking the response
-      handleWhatsAppMessage(message as EvolutionMessage)
-        .catch(err => console.error(`[${new Date().toISOString()}] Error in background message processing: ${err.message}`));
-    } else {
-      console.log(`[${new Date().toISOString()}] Ignoring non-message event: ${message.event}`);
-    }
-    
-    // Return success immediately
-    return response;
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error processing webhook callback: ${error.message}`);
-    console.error(`[${new Date().toISOString()}] Stack trace: ${error.stack}`);
-    // Still return 200 to acknowledge receipt
-    return new Response(
-      JSON.stringify({ success: true }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-}
-
-// Register webhook with EVOLUTION API for an instance
-async function handleRegisterWebhook(req: Request): Promise<Response> {
-  try {
-    const { instanceName, webhookUrl } = await req.json();
-    
-    if (!instanceName || !webhookUrl) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Instance name and webhook URL are required' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
-    }
-    
-    console.log(`Registering webhook for instance ${instanceName} with URL ${webhookUrl}`);
-    
-    // Get the WhatsApp instance ID from the database
-    const { data: instanceData, error: instanceError } = await supabase
-      .from('whatsapp_instances')
-      .select('id')
-      .eq('instance_name', instanceName)
-      .single();
-    
-    if (instanceError || !instanceData) {
-      console.error(`Instance not found: ${instanceName}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'WhatsApp instance not found' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-    
-    // Register webhook with EVOLUTION API
-    const registerResponse = await fetch(`https://api.convgo.com/webhook/set/${instanceName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': EVOLUTION_API_KEY
-      },
-      body: JSON.stringify({
-        webhook: webhookUrl,
-        // Include events you want to receive
-        events: ["messages.upsert", "connection.update"],
-        // Optional: webhook secret for validation
-        webhook_by_events: true
-      })
-    });
-    
-    if (!registerResponse.ok) {
-      const errorData = await registerResponse.text();
-      throw new Error(`EVOLUTION API error: ${errorData}`);
-    }
-    
-    const registerResult = await registerResponse.json();
-    
-    // Update webhook configuration in the database
-    const { data: webhookData, error: webhookError } = await supabase
-      .from('whatsapp_webhook_config')
-      .upsert({
-        whatsapp_instance_id: instanceData.id,
-        instance_name: instanceName,
-        webhook_url: webhookUrl,
-        is_active: true,
-        last_status: 'registered',
-        last_checked_at: new Date().toISOString()
-      }, { onConflict: 'whatsapp_instance_id' })
-      .select();
-    
-    if (webhookError) {
-      throw new Error(`Error updating webhook config: ${webhookError.message}`);
-    }
-    
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Webhook registered successfully',
-        data: registerResult
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  } catch (error) {
-    console.error('Error registering webhook:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: 'Failed to register webhook',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    );
-  }
-}
-
-// Unregister webhook with EVOLUTION API
-async function handleUnregisterWebhook(req: Request): Promise<Response> {
-  try {
-    const { instanceName } = await req.json();
-    
-    if (!instanceName) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Instance name is required' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
-    }
-    
-    console.log(`Unregistering webhook for instance ${instanceName}`);
-    
-    // Get the WhatsApp instance ID from the database
-    const { data: instanceData, error: instanceError } = await supabase
-      .from('whatsapp_instances')
-      .select('id')
-      .eq('instance_name', instanceName)
-      .single();
-    
-    if (instanceError || !instanceData) {
-      console.error(`Instance not found: ${instanceName}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'WhatsApp instance not found' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-    
-    // Unregister webhook with EVOLUTION API - set webhook URL to empty string
-    const unregisterResponse = await fetch(`https://api.convgo.com/webhook/set/${instanceName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': EVOLUTION_API_KEY
-      },
-      body: JSON.stringify({
-        webhook: "", // Empty string to remove webhook
-        events: []
-      })
-    });
-    
-    if (!unregisterResponse.ok) {
-      const errorData = await unregisterResponse.text();
-      throw new Error(`EVOLUTION API error: ${errorData}`);
-    }
-    
-    // Update webhook configuration in the database
-    const { error: webhookError } = await supabase
-      .from('whatsapp_webhook_config')
-      .update({
-        is_active: false,
-        last_status: 'unregistered',
-        last_checked_at: new Date().toISOString()
-      })
-      .eq('whatsapp_instance_id', instanceData.id);
-    
-    if (webhookError) {
-      throw new Error(`Error updating webhook config: ${webhookError.message}`);
-    }
-    
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Webhook unregistered successfully'
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  } catch (error) {
-    console.error('Error unregistering webhook:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: 'Failed to unregister webhook',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    );
-  }
-}
-
-// Get status of webhook registration
-async function handleStatus(): Promise<Response> {
-  try {
-    // Get all active webhook configurations
-    const { data: webhookConfigs, error: configError } = await supabase
-      .from('whatsapp_webhook_config')
-      .select('*, whatsapp_instances!inner(instance_name, status)')
-      .eq('is_active', true);
-    
-    if (configError) {
-      throw new Error(`Error fetching webhook configurations: ${configError.message}`);
-    }
-    
-    const activeWebhooks = webhookConfigs || [];
-    
-    // Check the status of each webhook with EVOLUTION API
-    // This is a placeholder - EVOLUTION API may not have a direct webhook status endpoint
-    // You can implement webhook validation by sending a test event if needed
-    
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        activeWebhooks: activeWebhooks,
-        count: activeWebhooks.length
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  } catch (error) {
-    console.error('Error checking webhook status:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: 'Failed to get webhook status',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    );
-  }
-}
-
-// Handle an incoming WhatsApp message
 async function handleWhatsAppMessage(message: EvolutionMessage): Promise<void> {
   try {
     console.log(`Processing WhatsApp message from instance: ${message.instance}`);
@@ -872,5 +505,228 @@ async function sendWhatsAppResponse(originalMessage: EvolutionMessage, responseT
     console.log(`Response sent successfully to ${recipientJid} on instance ${instanceName}`);
   } catch (error) {
     console.error('Error sending WhatsApp response:', error);
+  }
+}
+
+// Register webhook with EVOLUTION API for an instance
+async function handleRegisterWebhook(body: any): Promise<Response> {
+  try {
+    const { instanceName, webhookUrl } = body;
+    
+    if (!instanceName || !webhookUrl) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Instance name and webhook URL are required' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+    
+    console.log(`Registering webhook for instance ${instanceName} with URL ${webhookUrl}`);
+    
+    // Get the WhatsApp instance ID from the database
+    const { data: instanceData, error: instanceError } = await supabase
+      .from('whatsapp_instances')
+      .select('id')
+      .eq('instance_name', instanceName)
+      .single();
+    
+    if (instanceError || !instanceData) {
+      console.error(`Instance not found: ${instanceName}`);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'WhatsApp instance not found' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+    
+    // Register webhook with EVOLUTION API
+    const registerResponse = await fetch(`https://api.convgo.com/webhook/set/${instanceName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': EVOLUTION_API_KEY
+      },
+      body: JSON.stringify({
+        webhook: webhookUrl,
+        // Include events you want to receive
+        events: ["messages.upsert", "connection.update"],
+        // Optional: webhook secret for validation
+        webhook_by_events: true
+      })
+    });
+    
+    if (!registerResponse.ok) {
+      const errorData = await registerResponse.text();
+      throw new Error(`EVOLUTION API error: ${errorData}`);
+    }
+    
+    const registerResult = await registerResponse.json();
+    
+    // Update webhook configuration in the database
+    const { data: webhookData, error: webhookError } = await supabase
+      .from('whatsapp_webhook_config')
+      .upsert({
+        whatsapp_instance_id: instanceData.id,
+        instance_name: instanceName,
+        webhook_url: webhookUrl,
+        is_active: true,
+        last_status: 'registered',
+        last_checked_at: new Date().toISOString()
+      }, { onConflict: 'whatsapp_instance_id' })
+      .select();
+    
+    if (webhookError) {
+      throw new Error(`Error updating webhook config: ${webhookError.message}`);
+    }
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        message: 'Webhook registered successfully',
+        data: registerResult
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Error registering webhook:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Failed to register webhook',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
+  }
+}
+
+// Unregister webhook with EVOLUTION API
+async function handleUnregisterWebhook(body: any): Promise<Response> {
+  try {
+    const { instanceName } = body;
+    
+    if (!instanceName) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Instance name is required' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+    
+    console.log(`Unregistering webhook for instance ${instanceName}`);
+    
+    // Get the WhatsApp instance ID from the database
+    const { data: instanceData, error: instanceError } = await supabase
+      .from('whatsapp_instances')
+      .select('id')
+      .eq('instance_name', instanceName)
+      .single();
+    
+    if (instanceError || !instanceData) {
+      console.error(`Instance not found: ${instanceName}`);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'WhatsApp instance not found' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+    
+    // Unregister webhook with EVOLUTION API - set webhook URL to empty string
+    const unregisterResponse = await fetch(`https://api.convgo.com/webhook/set/${instanceName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': EVOLUTION_API_KEY
+      },
+      body: JSON.stringify({
+        webhook: "", // Empty string to remove webhook
+        events: []
+      })
+    });
+    
+    if (!unregisterResponse.ok) {
+      const errorData = await unregisterResponse.text();
+      throw new Error(`EVOLUTION API error: ${errorData}`);
+    }
+    
+    // Update webhook configuration in the database
+    const { error: webhookError } = await supabase
+      .from('whatsapp_webhook_config')
+      .update({
+        is_active: false,
+        last_status: 'unregistered',
+        last_checked_at: new Date().toISOString()
+      })
+      .eq('whatsapp_instance_id', instanceData.id);
+    
+    if (webhookError) {
+      throw new Error(`Error updating webhook config: ${webhookError.message}`);
+    }
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        message: 'Webhook unregistered successfully'
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Error unregistering webhook:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Failed to unregister webhook',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
+  }
+}
+
+// Get status of webhook registration
+async function handleStatus(): Promise<Response> {
+  try {
+    // Get all active webhook configurations
+    const { data: webhookConfigs, error: configError } = await supabase
+      .from('whatsapp_webhook_config')
+      .select('*, whatsapp_instances!inner(instance_name, status)')
+      .eq('is_active', true);
+    
+    if (configError) {
+      throw new Error(`Error fetching webhook configurations: ${configError.message}`);
+    }
+    
+    const activeWebhooks = webhookConfigs || [];
+    
+    // Check the status of each webhook with EVOLUTION API
+    // This is a placeholder - EVOLUTION API may not have a direct webhook status endpoint
+    // You can implement webhook validation by sending a test event if needed
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        activeWebhooks: activeWebhooks,
+        count: activeWebhooks.length
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Error checking webhook status:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Failed to get webhook status',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
   }
 }

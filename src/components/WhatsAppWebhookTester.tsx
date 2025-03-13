@@ -116,7 +116,7 @@ const WhatsAppWebhookTester = ({ instanceName }: { instanceName: string }) => {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <Alert>
+          <Alert className="bg-blue-50">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>About EVOLUTION API Webhook Configuration</AlertTitle>
             <AlertDescription>
@@ -127,8 +127,9 @@ const WhatsAppWebhookTester = ({ instanceName }: { instanceName: string }) => {
                 <li>Save the configuration</li>
               </ol>
               <p className="mt-2">
-                EVOLUTION API handles all the headers and authentication automatically - you don't
-                need to configure Content-Type or Authorization headers.
+                <strong>Important:</strong> EVOLUTION API handles all the headers and authentication automatically - you don't
+                need to configure Content-Type or Authorization headers. Our webhook endpoint is designed to accept
+                requests directly from EVOLUTION API without additional authentication.
               </p>
             </AlertDescription>
           </Alert>
