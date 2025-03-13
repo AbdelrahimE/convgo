@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -79,7 +78,8 @@ serve(async (req) => {
   try {
     // For API requests from our frontend
     if (req.method === 'POST') {
-      const { action } = await req.json();
+      const body = await req.json();
+      const { action } = body;
 
       // Main actions this endpoint supports
       switch (action) {
@@ -89,6 +89,8 @@ serve(async (req) => {
           return handleStatus();
         case 'unregister':
           return handleUnregisterWebhook(req);
+        case 'test':
+          return handleWebhookTest(body);
         default:
           return new Response(
             JSON.stringify({ 
@@ -117,6 +119,109 @@ serve(async (req) => {
     );
   }
 });
+
+// Handle test request - simulate processing a webhook message
+async function handleWebhookTest(body: any): Promise<Response> {
+  try {
+    console.log('Testing webhook with data:', JSON.stringify(body));
+    
+    const { instanceName, testData } = body;
+    
+    if (!instanceName || !testData) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: 'Missing instance name or test data',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+    
+    // Get the WhatsApp instance ID from the database
+    const { data: instanceData, error: instanceError } = await supabase
+      .from('whatsapp_instances')
+      .select('id')
+      .eq('instance_name', instanceName)
+      .single();
+    
+    if (instanceError || !instanceData) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: 'Instance not found in database',
+          details: instanceError?.message || 'No instance found with that name'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+    
+    const instanceId = instanceData.id;
+    
+    // Check if AI config exists
+    const { data: aiConfig, error: aiConfigError } = await supabase
+      .from('whatsapp_ai_config')
+      .select('*')
+      .eq('whatsapp_instance_id', instanceId)
+      .eq('is_active', true)
+      .single();
+    
+    if (aiConfigError) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: 'No AI configuration found for this instance',
+          details: aiConfigError.message
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+    
+    // Check if there are file mappings
+    const { data: fileMappings, error: mappingError } = await supabase
+      .from('whatsapp_file_mappings')
+      .select('file_id')
+      .eq('whatsapp_instance_id', instanceId);
+    
+    if (mappingError) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: 'Error checking file mappings',
+          details: mappingError.message
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+    
+    // Simulate full message processing but don't actually send a response back
+    // We're only testing the processing, not the sending
+    
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Webhook test completed successfully',
+        details: {
+          aiConfigFound: !!aiConfig,
+          fileMappingsFound: fileMappings && fileMappings.length > 0,
+          fileCount: fileMappings?.length || 0,
+          processedMessage: testData.data.message.conversation || testData.data.message.extendedTextMessage?.text
+        }
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+    
+  } catch (error) {
+    console.error('Error testing webhook:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        message: 'Error testing webhook',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
+  }
+}
 
 // Handle incoming webhook callbacks from EVOLUTION API
 async function handleWebhookCallback(req: Request): Promise<Response> {

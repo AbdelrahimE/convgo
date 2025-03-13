@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { Loader2, Lightbulb } from 'lucide-react';
 import WhatsAppWebSocketManager from '@/components/WhatsAppWebSocketManager';
+import WhatsAppWebhookTester from '@/components/WhatsAppWebhookTester';
 
 interface WhatsAppInstance {
   id: string;
@@ -298,6 +299,14 @@ const WhatsAppAIConfig = () => {
           <div className="mt-6">
             <WhatsAppWebSocketManager />
           </div>
+          
+          {selectedInstance && instances.length > 0 && (
+            <div className="mt-6">
+              <WhatsAppWebhookTester 
+                instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} 
+              />
+            </div>
+          )}
         </div>
         
         <div className="flex-1">
