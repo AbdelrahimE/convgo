@@ -85,6 +85,18 @@ serve(async (req) => {
       // Parse the request body
       const message = JSON.parse(requestBody);
       
+      // Store the message in the database for monitoring
+      try {
+        await supabase.from('webhook_messages').insert({
+          instance: message.instance || 'unknown',
+          event: message.event || 'unknown',
+          data: message
+        });
+      } catch (dbError) {
+        console.error('Error storing webhook message:', dbError);
+        // Continue processing even if storing fails
+      }
+      
       return handleWebhookCallback(req, message);
     } catch (error) {
       console.error(`Error processing webhook callback: ${error.message}`);

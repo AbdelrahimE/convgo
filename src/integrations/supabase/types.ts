@@ -332,6 +332,30 @@ export type Database = {
           },
         ]
       }
+      webhook_messages: {
+        Row: {
+          data: Json
+          event: string
+          id: string
+          instance: string
+          received_at: string
+        }
+        Insert: {
+          data: Json
+          event: string
+          id?: string
+          instance: string
+          received_at?: string
+        }
+        Update: {
+          data?: Json
+          event?: string
+          id?: string
+          instance?: string
+          received_at?: string
+        }
+        Relationships: []
+      }
       whatsapp_ai_config: {
         Row: {
           created_at: string
