@@ -66,7 +66,8 @@ const WebhookEndpointInfo = () => {
           <AlertTitle>Webhook Configuration Help</AlertTitle>
           <AlertDescription>
             When configuring your webhook in EVOLUTION API, you only need to provide the URL - 
-            the Content-Type and Authorization headers are handled automatically by the server.
+            <strong className="text-blue-800"> no authorization headers or special configuration is required</strong>. 
+            The endpoint accepts all content types and formats automatically.
           </AlertDescription>
         </Alert>
         
@@ -96,7 +97,7 @@ const WebhookEndpointInfo = () => {
               </div>
               <p className="text-xs text-muted-foreground">
                 This is the URL you should enter in the EVOLUTION API webhook configuration. 
-                No additional headers are required as they are handled by the server.
+                <strong> No authorization headers are required</strong> and the endpoint accepts all content types.
               </p>
             </div>
             
@@ -111,6 +112,7 @@ const WebhookEndpointInfo = () => {
                   <li>Paste the URL above into the webhook field</li>
                   <li>Make sure to select the events you want to receive (messages.upsert, connection.update, etc.)</li>
                   <li>Save your configuration</li>
+                  <li className="font-medium text-blue-700">No additional headers or auth configuration is needed</li>
                 </ol>
               </AlertDescription>
             </Alert>
