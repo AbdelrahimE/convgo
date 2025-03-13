@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -61,6 +62,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY') || '';
 
 serve(async (req) => {
+  // Log all incoming requests for debugging
+  console.log(`Received ${req.method} request to ${req.url}`);
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -70,9 +74,29 @@ serve(async (req) => {
   const url = new URL(req.url);
   const path = url.pathname.split('/').pop();
   
+  console.log(`Processing request with path: ${path}`);
+  
   // For webhook callbacks from EVOLUTION API
   if (req.method === 'POST' && path === 'webhook-callback') {
-    return handleWebhookCallback(req);
+    try {
+      const requestBody = await req.text();
+      console.log(`Webhook callback received. Body: ${requestBody}`);
+      
+      // Parse the request body
+      const message = JSON.parse(requestBody);
+      
+      return handleWebhookCallback(req, message);
+    } catch (error) {
+      console.error(`Error processing webhook callback: ${error.message}`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Error processing webhook callback",
+          details: error.message
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
   }
   
   try {
@@ -80,6 +104,8 @@ serve(async (req) => {
     if (req.method === 'POST') {
       const body = await req.json();
       const { action } = body;
+      
+      console.log(`Processing action: ${action}`);
 
       // Main actions this endpoint supports
       switch (action) {
@@ -92,6 +118,7 @@ serve(async (req) => {
         case 'test':
           return handleWebhookTest(body);
         default:
+          console.log(`Invalid action: ${action}`);
           return new Response(
             JSON.stringify({ 
               success: false, 
@@ -103,6 +130,7 @@ serve(async (req) => {
     }
     
     // Return 404 for other methods or paths
+    console.log(`Unhandled request method: ${req.method} or path: ${path}`);
     return new Response(
       JSON.stringify({ success: false, error: 'Not found' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
@@ -224,14 +252,15 @@ async function handleWebhookTest(body: any): Promise<Response> {
 }
 
 // Handle incoming webhook callbacks from EVOLUTION API
-async function handleWebhookCallback(req: Request): Promise<Response> {
+async function handleWebhookCallback(req: Request, message: any): Promise<Response> {
   try {
-    const message = await req.json();
-    console.log('Received webhook callback:', JSON.stringify(message));
+    console.log(`Processing webhook callback for event: ${message.event}, instance: ${message.instance}`);
     
     // Only process message events
     if (message.event === 'messages.upsert') {
       await handleWhatsAppMessage(message as EvolutionMessage);
+    } else {
+      console.log(`Ignoring non-message event: ${message.event}`);
     }
     
     // Always return a 200 response quickly to the webhook
@@ -475,7 +504,8 @@ async function handleStatus(): Promise<Response> {
 // Handle an incoming WhatsApp message
 async function handleWhatsAppMessage(message: EvolutionMessage): Promise<void> {
   try {
-    console.log(`Processing message from instance: ${message.instance}`);
+    console.log(`Processing WhatsApp message from instance: ${message.instance}`);
+    console.log(`Message content: ${message.data.message.conversation || message.data.message.extendedTextMessage?.text || 'No text content'}`);
     
     // Extract the message text
     const messageText = message.data.message.conversation || 
@@ -499,6 +529,7 @@ async function handleWhatsAppMessage(message: EvolutionMessage): Promise<void> {
     }
     
     const instanceId = instanceData.id;
+    console.log(`Found instance ID: ${instanceId}`);
     
     // Get AI configuration for this instance
     const { data: aiConfig, error: configError } = await supabase
@@ -512,6 +543,7 @@ async function handleWhatsAppMessage(message: EvolutionMessage): Promise<void> {
       console.error(`AI configuration not found for instance: ${message.instance}`);
       return;
     }
+    console.log(`Found AI config: ${aiConfig.id}`);
     
     // Get file mappings for this instance
     const { data: fileMappings, error: mappingError } = await supabase
@@ -526,22 +558,28 @@ async function handleWhatsAppMessage(message: EvolutionMessage): Promise<void> {
       return;
     }
     
+    console.log(`Found ${fileMappings.length} file mappings`);
+    
     // Extract file IDs
     const fileIds = fileMappings.map(mapping => mapping.file_id);
     
     // Perform semantic search
     const searchResults = await performSemanticSearch(messageText, fileIds);
+    console.log(`Semantic search results: ${searchResults.length} found`);
     
     // Generate AI response
     let context = '';
     if (searchResults && searchResults.length > 0) {
       context = searchResults.map(result => result.content).join('\n\n');
+      console.log(`Assembled context length: ${context.length} characters`);
     }
     
     const response = await generateAIResponse(messageText, context, aiConfig);
+    console.log(`Generated response: ${response.substring(0, 100)}${response.length > 100 ? '...' : ''}`);
     
     // Send response back to the user
     await sendWhatsAppResponse(message, response);
+    console.log(`Response sent to ${message.data.key.remoteJid}`);
     
   } catch (error) {
     console.error('Error processing WhatsApp message:', error);
@@ -601,6 +639,8 @@ async function sendWhatsAppResponse(originalMessage: EvolutionMessage, responseT
     const recipientJid = originalMessage.data.key.remoteJid;
     const instanceName = originalMessage.instance;
     
+    console.log(`Preparing to send response to ${recipientJid} on instance ${instanceName}`);
+    
     // Prepare the request to the EVOLUTION API
     const response = await fetch(`https://api.convgo.com/v1/message/sendText/${instanceName}`, {
       method: 'POST',
@@ -624,7 +664,7 @@ async function sendWhatsAppResponse(originalMessage: EvolutionMessage, responseT
       throw new Error(`EVOLUTION API error: ${errorData}`);
     }
     
-    console.log(`Response sent to ${recipientJid} on instance ${instanceName}`);
+    console.log(`Response sent successfully to ${recipientJid} on instance ${instanceName}`);
   } catch (error) {
     console.error('Error sending WhatsApp response:', error);
   }
