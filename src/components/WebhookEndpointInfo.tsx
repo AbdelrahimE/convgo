@@ -60,7 +60,7 @@ const WebhookEndpointInfo = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Alert variant="info" className="bg-blue-50">
+        <Alert className="bg-blue-50">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Webhook Configuration Help</AlertTitle>
           <AlertDescription>
