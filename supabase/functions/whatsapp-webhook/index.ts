@@ -68,8 +68,9 @@ serve(async (req) => {
   const url = new URL(req.url);
   const path = url.pathname;
   const method = req.method;
+  const contentType = req.headers.get('content-type') || '';
   
-  console.log(`[${new Date().toISOString()}] Received ${method} request to ${path}`);
+  console.log(`[${new Date().toISOString()}] Received ${method} request to ${path} with Content-Type: ${contentType}`);
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -77,25 +78,50 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // First, try to get raw request body for logging
+  let requestBodyClone;
+  try {
+    // Clone the request body for logging
+    const clonedReq = req.clone();
+    requestBodyClone = await clonedReq.text();
+    console.log(`[${new Date().toISOString()}] Raw request body (first 500 chars): ${requestBodyClone.substring(0, 500)}`);
+  } catch (cloneError) {
+    console.error(`[${new Date().toISOString()}] Failed to clone request body: ${cloneError.message}`);
+  }
+  
   // Handle different request types based on method and path
   const pathSegments = path.split('/');
   const lastSegment = pathSegments.pop() || '';
   const secondLastSegment = pathSegments.pop() || '';
   
-  console.log(`[${new Date().toISOString()}] Processing request with path segments: ${JSON.stringify(pathSegments)}, last: ${lastSegment}, second last: ${secondLastSegment}`);
+  console.log(`[${new Date().toISOString()}] Path segments: ${JSON.stringify(pathSegments)}, last: ${lastSegment}, second last: ${secondLastSegment}`);
   
   // For webhook callbacks from EVOLUTION API - direct webhook callback handling
   if (req.method === 'POST' && (
       (secondLastSegment === 'webhook-callback') || 
       (lastSegment === 'webhook-callback') ||
-      (path.endsWith('/whatsapp-webhook'))
+      (path.includes('/whatsapp-webhook'))
   )) {
     try {
       console.log(`[${new Date().toISOString()}] Processing direct webhook callback`);
       
-      const requestBody = await req.text();
-      console.log(`[${new Date().toISOString()}] Webhook callback received. Body length: ${requestBody.length} bytes`);
-      console.log(`[${new Date().toISOString()}] Webhook payload preview: ${requestBody.substring(0, 200)}...`);
+      let requestBody;
+      try {
+        // First try to parse as JSON
+        requestBody = await req.text();
+        console.log(`[${new Date().toISOString()}] Webhook callback received. Body length: ${requestBody.length} bytes`);
+        console.log(`[${new Date().toISOString()}] Webhook payload preview: ${requestBody.substring(0, 200)}...`);
+      } catch (bodyError) {
+        console.error(`[${new Date().toISOString()}] Failed to read request body: ${bodyError.message}`);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Failed to read request body",
+            details: bodyError.message
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
       
       // Parse the request body
       let message;
@@ -105,14 +131,38 @@ serve(async (req) => {
       } catch (parseError) {
         console.error(`[${new Date().toISOString()}] Error parsing webhook JSON: ${parseError.message}`);
         console.error(`[${new Date().toISOString()}] Raw payload causing parse error: ${requestBody}`);
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: "Invalid JSON payload",
-            details: parseError.message
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
+        
+        // Since Evolution API may not send proper JSON, try to extract event and instance from raw body
+        let extractedMessage = null;
+        try {
+          // Try to match basic JSON structure from the string
+          const eventMatch = requestBody.match(/"event"\s*:\s*"([^"]+)"/);
+          const instanceMatch = requestBody.match(/"instance"\s*:\s*"([^"]+)"/);
+          
+          if (eventMatch && instanceMatch) {
+            extractedMessage = {
+              event: eventMatch[1],
+              instance: instanceMatch[1],
+              data: { extracted: "from malformed JSON" }
+            };
+            console.log(`[${new Date().toISOString()}] Extracted partial data from malformed JSON: ${JSON.stringify(extractedMessage)}`);
+          }
+        } catch (extractError) {
+          console.error(`[${new Date().toISOString()}] Failed to extract data from malformed JSON: ${extractError.message}`);
+        }
+        
+        if (extractedMessage) {
+          message = extractedMessage;
+        } else {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "Invalid JSON payload",
+              details: parseError.message
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          );
+        }
       }
       
       // Store the message in the database for monitoring
@@ -169,12 +219,40 @@ serve(async (req) => {
     if (req.method === 'POST') {
       let body;
       try {
-        body = await req.json();
-        console.log(`[${new Date().toISOString()}] Received POST request with action: ${body.action}`);
+        if (contentType.includes('application/json')) {
+          body = await req.json();
+          console.log(`[${new Date().toISOString()}] Received POST request with action: ${body?.action}`);
+        } else {
+          // Try to handle as plain text and parse as JSON
+          const rawText = await req.text();
+          console.log(`[${new Date().toISOString()}] Received non-JSON POST with Content-Type: ${contentType}, body length: ${rawText.length}`);
+          
+          try {
+            body = JSON.parse(rawText);
+            console.log(`[${new Date().toISOString()}] Successfully parsed non-JSON POST body as JSON`);
+          } catch (textParseError) {
+            console.error(`[${new Date().toISOString()}] Failed to parse non-JSON POST body: ${textParseError.message}`);
+            // Return error for unparseable non-JSON requests
+            return new Response(
+              JSON.stringify({ 
+                success: false, 
+                error: 'Invalid request format. Expected JSON.',
+                details: {
+                  contentType,
+                  bodyPreview: rawText.substring(0, 100)
+                }
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+            );
+          }
+        }
       } catch (parseError) {
-        console.error(`[${new Date().toISOString()}] Error parsing request JSON: ${parseError.message}`);
+        console.error(`[${new Date().toISOString()}] Error parsing request data: ${parseError.message}`);
+        
         // Try to handle as a webhook if JSON parsing fails
         const rawText = await req.text();
+        console.log(`[${new Date().toISOString()}] Trying to handle as webhook message: ${rawText.substring(0, 200)}`);
+        
         try {
           const webhookMessage = JSON.parse(rawText);
           if (webhookMessage.event && webhookMessage.instance) {
@@ -190,8 +268,17 @@ serve(async (req) => {
           }
         } catch (secondParseError) {
           // If both attempts fail, return error
+          console.error(`[${new Date().toISOString()}] Second parse attempt failed: ${secondParseError.message}`);
           return new Response(
-            JSON.stringify({ success: false, error: 'Invalid JSON in request body' }),
+            JSON.stringify({ 
+              success: false, 
+              error: 'Invalid JSON in request body',
+              details: {
+                originalError: parseError.message,
+                secondError: secondParseError.message,
+                bodyPreview: rawText.substring(0, 100)
+              }
+            }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
           );
         }
@@ -226,7 +313,13 @@ serve(async (req) => {
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: 'Invalid action or missing webhook data' 
+              error: 'Invalid action or missing webhook data',
+              details: {
+                action,
+                isBodyObject: typeof body === 'object',
+                hasEvent: body?.event ? true : false,
+                hasInstance: body?.instance ? true : false
+              }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
           );
@@ -361,18 +454,24 @@ async function handleWebhookCallback(req: Request, message: any): Promise<Respon
   try {
     console.log(`[${new Date().toISOString()}] Processing webhook callback for event: ${message.event}, instance: ${message.instance}`);
     
-    // Only process message events
+    // Always acknowledge the webhook quickly to avoid timeouts
+    // This is important for the EVOLUTION API which may have short timeouts
+    const response = new Response(
+      JSON.stringify({ success: true }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+    
+    // Process message events in the background
     if (message.event === 'messages.upsert') {
-      await handleWhatsAppMessage(message as EvolutionMessage);
+      // Don't await this to avoid blocking the response
+      handleWhatsAppMessage(message as EvolutionMessage)
+        .catch(err => console.error(`[${new Date().toISOString()}] Error in background message processing: ${err.message}`));
     } else {
       console.log(`[${new Date().toISOString()}] Ignoring non-message event: ${message.event}`);
     }
     
-    // Always return a 200 response quickly to the webhook
-    return new Response(
-      JSON.stringify({ success: true }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // Return success immediately
+    return response;
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Error processing webhook callback: ${error.message}`);
     console.error(`[${new Date().toISOString()}] Stack trace: ${error.stack}`);

@@ -2,13 +2,14 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Copy, Check, AlertCircle, ExternalLink } from 'lucide-react';
+import { Copy, Check, AlertCircle, ExternalLink, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 const WebhookEndpointInfo = () => {
   const [copied, setCopied] = useState(false);
@@ -64,8 +65,8 @@ const WebhookEndpointInfo = () => {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Webhook Configuration Help</AlertTitle>
           <AlertDescription>
-            When testing or configuring your webhook, make sure to use the correct endpoint format.
-            You can send webhook messages directly to the callback endpoint for testing.
+            When configuring your webhook in EVOLUTION API, you only need to provide the URL - 
+            the Content-Type and Authorization headers are handled automatically by the server.
           </AlertDescription>
         </Alert>
         
@@ -78,7 +79,7 @@ const WebhookEndpointInfo = () => {
           
           <TabsContent value="endpoints" className="space-y-4">
             <div className="space-y-2">
-              <Label>Main Webhook Endpoint</Label>
+              <Label>Main Webhook URL for EVOLUTION API</Label>
               <div className="flex items-center gap-2">
                 <Input 
                   value={webhookEndpoint} 
@@ -94,61 +95,56 @@ const WebhookEndpointInfo = () => {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                For general webhook management and registration with EVOLUTION API
+                This is the URL you should enter in the EVOLUTION API webhook configuration. 
+                No additional headers are required as they are handled by the server.
               </p>
             </div>
             
-            <div className="space-y-2">
-              <Label>Direct Callback Endpoint</Label>
-              <div className="flex items-center gap-2">
-                <Input 
-                  value={webhookCallbackEndpoint} 
-                  readOnly 
-                  className="font-mono text-sm"
-                />
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => copyToClipboard(webhookCallbackEndpoint)}
-                >
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Use this URL in EVOLUTION API to receive webhook callbacks
-              </p>
-            </div>
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>How to Configure in EVOLUTION API</AlertTitle>
+              <AlertDescription>
+                <ol className="list-decimal ml-4 space-y-2 mt-2">
+                  <li>Go to your EVOLUTION API admin panel</li>
+                  <li>Find your instance settings</li>
+                  <li>Look for the webhook configuration section</li>
+                  <li>Paste the URL above into the webhook field</li>
+                  <li>Make sure to select the events you want to receive (messages.upsert, connection.update, etc.)</li>
+                  <li>Save your configuration</li>
+                </ol>
+              </AlertDescription>
+            </Alert>
           </TabsContent>
           
           <TabsContent value="testing" className="space-y-4">
             <p className="text-sm">
-              You can test your webhook by sending a POST request with the following format to either endpoint:
+              You can test your webhook by sending a POST request with the following format using tools like Postman:
             </p>
             
             <div className="bg-muted p-3 rounded-md">
               <pre className="text-xs overflow-x-auto">{jsonExample}</pre>
             </div>
             
-            <p className="text-sm">
-              Make sure to set the Content-Type header to <code className="bg-muted px-1 py-0.5 rounded">application/json</code>
-            </p>
+            <div className="space-y-2">
+              <h5 className="font-medium">Important Headers for Testing:</h5>
+              <div className="bg-muted p-3 rounded-md">
+                <p className="text-xs font-mono">Content-Type: application/json</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When manually testing with Postman or similar tools, make sure to set the Content-Type header.
+                <br />
+                When using the EVOLUTION API, you don't need to set any headers - just provide the webhook URL.
+              </p>
+            </div>
             
             <Alert>
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Testing Tools</AlertTitle>
+              <AlertTitle>Note About Testing vs. Real Usage</AlertTitle>
               <AlertDescription>
-                Use tools like Postman or curl to send test requests to your webhook endpoints.
-                <div className="mt-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="text-xs"
-                    onClick={() => window.open("https://www.postman.com", "_blank")}
-                  >
-                    <ExternalLink className="h-3 w-3 mr-1" />
-                    Open Postman
-                  </Button>
-                </div>
+                When testing with tools like Postman, you need to set the Content-Type header manually.
+                <br /><br />
+                When using the EVOLUTION API, you only need to provide the URL - the server automatically
+                handles the headers and message format.
               </AlertDescription>
             </Alert>
           </TabsContent>
@@ -158,39 +154,55 @@ const WebhookEndpointInfo = () => {
             
             <div className="space-y-4">
               <div>
-                <h5 className="font-medium text-sm">"Invalid action" Error</h5>
-                <p className="text-sm text-muted-foreground">
-                  If you get an "Invalid action" error, make sure:
-                </p>
-                <ul className="list-disc list-inside text-sm text-muted-foreground ml-4 mt-1">
-                  <li>Your JSON has the correct format with "event" and "instance" fields</li>
-                  <li>You're sending to the correct endpoint (main or callback)</li>
-                  <li>Your Content-Type header is set to application/json</li>
-                </ul>
-              </div>
-              
-              <div>
                 <h5 className="font-medium text-sm">No Messages Appearing</h5>
                 <p className="text-sm text-muted-foreground">
                   If webhook messages don't show up in the monitor:
                 </p>
                 <ul className="list-disc list-inside text-sm text-muted-foreground ml-4 mt-1">
-                  <li>Check the webhook registration status in EVOLUTION API</li>
-                  <li>Verify that your instance name matches exactly what's configured</li>
-                  <li>Check if your WhatsApp instance is properly connected</li>
+                  <li>Check that the webhook URL is correctly entered in EVOLUTION API</li>
+                  <li>Verify that the instance name matches exactly what's configured</li>
+                  <li>Ensure that your WhatsApp instance is properly connected</li>
+                  <li>Check that you've selected the correct events to receive (messages.upsert, etc.)</li>
                 </ul>
               </div>
               
               <div>
-                <h5 className="font-medium text-sm">Authorization Issues</h5>
+                <h5 className="font-medium text-sm">Connection Issues</h5>
                 <p className="text-sm text-muted-foreground">
-                  If EVOLUTION API can't connect to your webhook:
+                  If EVOLUTION API reports connection issues:
                 </p>
                 <ul className="list-disc list-inside text-sm text-muted-foreground ml-4 mt-1">
-                  <li>Ensure your URL is publicly accessible</li>
-                  <li>Check if any authorization headers are required</li>
-                  <li>Verify EVOLUTION API is properly configured with your API key</li>
+                  <li>Check your internet connection</li>
+                  <li>Verify that the webhook URL is accessible from the server</li>
+                  <li>Make sure there are no firewall rules blocking the connection</li>
                 </ul>
+              </div>
+              
+              <div>
+                <h5 className="font-medium text-sm">Webhook Format Issues</h5>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-xs">
+                      View Server Logs Format
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="space-y-2">
+                      <h6 className="text-sm font-medium">Server Logs Format</h6>
+                      <p className="text-xs">The webhook URL is sent without additional headers in the EVOLUTION API logs:</p>
+                      <div className="bg-black text-green-400 p-2 rounded text-xs font-mono">
+                        local: 'ChannelStartupService.sendData-Webhook-Global',<br />
+                        url: 'https://okoaoguvtjauiecfajri.supabase.co/functions/v1/whatsapp-webhook',<br />
+                        event: 'messages.upsert',<br />
+                        instance: '201018090094',
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <p className="text-sm text-muted-foreground mt-2">
+                  The EVOLUTION API server automatically formats the webhook requests correctly.
+                  You don't need to configure any headers or authentication when setting up the webhook URL.
+                </p>
               </div>
             </div>
           </TabsContent>

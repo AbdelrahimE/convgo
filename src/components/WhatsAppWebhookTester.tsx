@@ -2,9 +2,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface WebhookTestResult {
   success: boolean;
@@ -114,7 +115,24 @@ const WhatsAppWebhookTester = ({ instanceName }: { instanceName: string }) => {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-2">
+        <div className="space-y-4">
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>About EVOLUTION API Webhook Configuration</AlertTitle>
+            <AlertDescription>
+              When configuring webhooks in EVOLUTION API, you only need to:
+              <ol className="list-decimal ml-6 mt-2 space-y-1">
+                <li>Enter the webhook URL from the Endpoints tab</li>
+                <li>Select which events you want to receive (messages.upsert, connection.update, etc.)</li>
+                <li>Save the configuration</li>
+              </ol>
+              <p className="mt-2">
+                EVOLUTION API handles all the headers and authentication automatically - you don't
+                need to configure Content-Type or Authorization headers.
+              </p>
+            </AlertDescription>
+          </Alert>
+          
           <p className="text-sm text-muted-foreground">
             This will send a simulated message to your webhook endpoint to verify that it can correctly
             receive and process WhatsApp messages.
@@ -145,11 +163,19 @@ const WhatsAppWebhookTester = ({ instanceName }: { instanceName: string }) => {
           )}
         </div>
       </CardContent>
-      <CardFooter>
+      <CardFooter className="justify-between">
+        <Button 
+          variant="outline"
+          onClick={() => window.open("https://doc.evolution-api.com/v2/api-reference/set-webhook", "_blank")}
+          size="sm"
+        >
+          <ExternalLink className="h-4 w-4 mr-2" />
+          Webhook Docs
+        </Button>
+        
         <Button 
           onClick={testWebhook} 
           disabled={isTesting || !instanceName}
-          className="w-full"
         >
           {isTesting ? (
             <>
