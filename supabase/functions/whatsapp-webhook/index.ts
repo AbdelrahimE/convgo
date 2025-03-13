@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -70,6 +71,7 @@ serve(async (req) => {
   const contentType = req.headers.get('content-type') || '';
   
   console.log(`[${new Date().toISOString()}] Received ${method} request to ${path} with Content-Type: ${contentType}`);
+  console.log(`[${new Date().toISOString()}] Request headers: ${JSON.stringify(Object.fromEntries([...req.headers]))}`);
   
   // Handle CORS preflight requests - respond to all OPTIONS requests with OK
   if (req.method === 'OPTIONS') {
@@ -77,68 +79,125 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // First, try to get raw request body for logging
-  let requestBodyClone;
+  // First, get the raw request body for logging
+  let requestBodyText;
   try {
     // Clone the request body for logging
     const clonedReq = req.clone();
-    requestBodyClone = await clonedReq.text();
-    console.log(`[${new Date().toISOString()}] Raw request body (first 500 chars): ${requestBodyClone.substring(0, 500)}`);
+    requestBodyText = await clonedReq.text();
+    console.log(`[${new Date().toISOString()}] Raw request body: ${requestBodyText}`);
   } catch (cloneError) {
     console.error(`[${new Date().toISOString()}] Failed to clone request body: ${cloneError.message}`);
   }
   
-  // Handle different request types based on method and path
-  const pathSegments = path.split('/');
-  const lastSegment = pathSegments.pop() || '';
-  const secondLastSegment = pathSegments.pop() || '';
-  
-  console.log(`[${new Date().toISOString()}] Path segments: ${JSON.stringify(pathSegments)}, last: ${lastSegment}, second last: ${secondLastSegment}`);
-  
-  // Try to parse the request body in various formats
-  let requestBody;
+  // Parse the request body in various formats
   let parsedBody;
   
   try {
-    // First try to read the raw body
-    requestBody = await req.text();
-    console.log(`[${new Date().toISOString()}] Request body length: ${requestBody.length} bytes`);
-    
-    // Then try to parse as JSON
-    try {
-      parsedBody = JSON.parse(requestBody);
-      console.log(`[${new Date().toISOString()}] Successfully parsed request as JSON`);
-    } catch (jsonError) {
-      console.log(`[${new Date().toISOString()}] Not valid JSON, will process as text: ${jsonError.message}`);
-      
-      // Try to extract JSON-like patterns from the text
-      if (requestBody.includes('event') && requestBody.includes('instance')) {
-        console.log(`[${new Date().toISOString()}] Request contains 'event' and 'instance', treating as webhook payload`);
+    // First try direct JSON parsing
+    if (contentType.includes('application/json')) {
+      parsedBody = JSON.parse(requestBodyText);
+      console.log(`[${new Date().toISOString()}] Parsed JSON directly: ${JSON.stringify(parsedBody).substring(0, 200)}...`);
+    } 
+    // If content type is form data, try to extract the JSON
+    else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+      console.log(`[${new Date().toISOString()}] Trying to parse form data`);
+      const formData = await req.formData();
+      const jsonData = formData.get('json') || formData.get('data') || formData.get('payload');
+      if (jsonData) {
+        parsedBody = JSON.parse(jsonData.toString());
+        console.log(`[${new Date().toISOString()}] Parsed form data JSON: ${JSON.stringify(parsedBody).substring(0, 200)}...`);
+      }
+    }
+    // If content type is text/plain or not specified, try different approaches
+    else {
+      // Try direct JSON parse first
+      try {
+        parsedBody = JSON.parse(requestBodyText);
+        console.log(`[${new Date().toISOString()}] Parsed plain text as JSON: ${JSON.stringify(parsedBody).substring(0, 200)}...`);
+      } catch (jsonError) {
+        // Text doesn't parse as JSON, look for patterns
+        console.log(`[${new Date().toISOString()}] Text doesn't parse as JSON, looking for patterns`);
         
-        try {
-          // Try to extract using regex
-          const eventMatch = requestBody.match(/"event"\s*:\s*"([^"]+)"/);
-          const instanceMatch = requestBody.match(/"instance"\s*:\s*"([^"]+)"/);
+        if (requestBodyText && requestBodyText.includes('"event"') && requestBodyText.includes('"instance"')) {
+          console.log(`[${new Date().toISOString()}] Found event and instance in text, trying to extract manually`);
           
-          if (eventMatch && instanceMatch) {
-            parsedBody = {
-              event: eventMatch[1],
-              instance: instanceMatch[1],
-              data: { extracted: "from text payload" }
-            };
-            console.log(`[${new Date().toISOString()}] Extracted basic webhook data: event=${parsedBody.event}, instance=${parsedBody.instance}`);
+          // Try to extract the JSON manually using regex
+          const match = requestBodyText.match(/({.*})/s);
+          if (match && match[1]) {
+            try {
+              parsedBody = JSON.parse(match[1]);
+              console.log(`[${new Date().toISOString()}] Extracted JSON using regex: ${JSON.stringify(parsedBody).substring(0, 200)}...`);
+            } catch (extractError) {
+              console.error(`[${new Date().toISOString()}] Failed to parse extracted JSON: ${extractError.message}`);
+            }
           }
-        } catch (extractError) {
-          console.error(`[${new Date().toISOString()}] Failed to extract data from text: ${extractError.message}`);
+        }
+      }
+    }
+    
+    // Final fallback: Try to determine if this looks like an EVOLUTION API webhook
+    if (!parsedBody && requestBodyText) {
+      // Check for common patterns in EVOLUTION API webhooks
+      const hasEvent = requestBodyText.includes('"event"');
+      const hasInstance = requestBodyText.includes('"instance"');
+      const hasData = requestBodyText.includes('"data"');
+      
+      if (hasEvent && hasInstance && hasData) {
+        console.log(`[${new Date().toISOString()}] Looks like EVOLUTION API webhook, attempting best-effort parsing`);
+        
+        // Build a minimal parsedBody with the key fields
+        const eventMatch = requestBodyText.match(/"event"\s*:\s*"([^"]+)"/);
+        const instanceMatch = requestBodyText.match(/"instance"\s*:\s*"([^"]+)"/);
+        
+        if (eventMatch && instanceMatch) {
+          parsedBody = {
+            event: eventMatch[1],
+            instance: instanceMatch[1],
+            data: { extracted: "partial data, best effort" }
+          };
+          
+          // Try to extract more details about the message if possible
+          const messageMatch = requestBodyText.match(/"message"\s*:\s*({[^}]+})/);
+          if (messageMatch) {
+            try {
+              parsedBody.data.message = JSON.parse(messageMatch[1]);
+            } catch (e) {
+              console.log(`[${new Date().toISOString()}] Could not parse message details: ${e.message}`);
+            }
+          }
+          
+          console.log(`[${new Date().toISOString()}] Created fallback parsedBody: ${JSON.stringify(parsedBody).substring(0, 200)}...`);
         }
       }
     }
   } catch (bodyError) {
-    console.error(`[${new Date().toISOString()}] Failed to read request body: ${bodyError.message}`);
+    console.error(`[${new Date().toISOString()}] Failed to process request body: ${bodyError.message}`);
   }
   
-  // Handle webhook requests from EVOLUTION API
-  // First, check if this looks like a webhook payload by checking for event and instance
+  // Log the parsed body for debugging
+  if (parsedBody) {
+    console.log(`[${new Date().toISOString()}] Successfully parsed request body`);
+  } else {
+    console.error(`[${new Date().toISOString()}] Failed to parse request body`);
+    
+    // Store the raw request for investigation even if parsing failed
+    try {
+      await supabase.from('webhook_messages').insert({
+        instance: 'unknown',
+        event: 'unknown',
+        data: {
+          raw: requestBodyText ? (requestBodyText.length > 5000 ? requestBodyText.substring(0, 5000) + '...' : requestBodyText) : null,
+          headers: Object.fromEntries([...req.headers.entries()].map(([k, v]) => [k, v]))
+        }
+      });
+      console.log(`[${new Date().toISOString()}] Stored raw webhook data for investigation`);
+    } catch (storeError) {
+      console.error(`[${new Date().toISOString()}] Failed to store raw webhook data: ${storeError.message}`);
+    }
+  }
+  
+  // Handle webhook requests from EVOLUTION API based on the presence of event and instance
   if (parsedBody && parsedBody.event && parsedBody.instance) {
     console.log(`[${new Date().toISOString()}] Processing webhook payload for event: ${parsedBody.event}, instance: ${parsedBody.instance}`);
     
@@ -161,7 +220,7 @@ serve(async (req) => {
       
       // Return success response immediately to acknowledge receipt
       return new Response(
-        JSON.stringify({ success: true, message: "Webhook received" }),
+        JSON.stringify({ success: true, message: "Webhook received successfully" }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } catch (error) {
@@ -199,9 +258,6 @@ serve(async (req) => {
     }
   }
   
-  // If we got here, it's not a webhook or a known API request
-  console.log(`[${new Date().toISOString()}] Request doesn't match expected formats`);
-  
   // For any unhandled POST request to this endpoint, try to process as a webhook as a fallback
   if (method === 'POST') {
     console.log(`[${new Date().toISOString()}] Attempting to process unrecognized POST as webhook`);
@@ -212,7 +268,7 @@ serve(async (req) => {
         instance: 'unknown',
         event: 'unknown',
         data: {
-          raw: requestBody ? (requestBody.length > 1000 ? requestBody.substring(0, 1000) + '...' : requestBody) : null,
+          raw: requestBodyText ? (requestBodyText.length > 1000 ? requestBodyText.substring(0, 1000) + '...' : requestBodyText) : null,
           headers: Object.fromEntries([...req.headers.entries()].map(([k, v]) => [k, v]))
         }
       });
@@ -224,7 +280,7 @@ serve(async (req) => {
     
     // Still return success to avoid blocking the sender
     return new Response(
-      JSON.stringify({ success: true, message: "Request received but not processed" }),
+      JSON.stringify({ success: true, message: "Request received but not processed as webhook" }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
