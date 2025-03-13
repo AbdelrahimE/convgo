@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,8 +20,7 @@ import {
   DialogFooter 
 } from '@/components/ui/dialog';
 import { Loader2, Lightbulb } from 'lucide-react';
-import WhatsAppWebhookManager from '@/components/WhatsAppWebhookManager';
-import WhatsAppWebhookTester from '@/components/WhatsAppWebhookTester';
+import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
 
 interface WhatsAppInstance {
   id: string;
@@ -299,19 +297,12 @@ const WhatsAppAIConfig = () => {
           
           <div className="mt-6">
             {selectedInstance && instances.length > 0 && (
-              <WhatsAppWebhookManager 
-                instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} 
+              <WhatsAppAIToggle 
+                instanceId={selectedInstance}
+                instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''}
               />
             )}
           </div>
-          
-          {selectedInstance && instances.length > 0 && (
-            <div className="mt-6">
-              <WhatsAppWebhookTester 
-                instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} 
-              />
-            </div>
-          )}
         </div>
         
         <div className="flex-1">
