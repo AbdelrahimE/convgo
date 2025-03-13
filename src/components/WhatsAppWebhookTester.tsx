@@ -127,12 +127,12 @@ const WhatsAppWebhookTester = ({ instanceName }: { instanceName: string }) => {
                 <li>Save the configuration</li>
               </ol>
               <p className="mt-2">
-                <strong>Important:</strong> EVOLUTION API sends webhook requests with minimal headers. Our webhook endpoint is designed to 
-                accept these requests without requiring specific Content-Type or Authorization headers.
+                <strong>Important:</strong> Our webhook endpoint is designed to handle requests from EVOLUTION API 
+                regardless of content type or format. It will automatically parse JSON data in various formats.
               </p>
               <p className="mt-2">
-                If you encounter issues with webhooks not being received, check the Edge Function logs for detailed information
-                about incoming requests.
+                If you encounter issues with webhooks not being received, check the Webhook Monitor page to see 
+                if any messages are being recorded, and check the Edge Function logs for detailed information.
               </p>
             </AlertDescription>
           </Alert>
