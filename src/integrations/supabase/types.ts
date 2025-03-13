@@ -445,6 +445,50 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_webhook_config: {
+        Row: {
+          created_at: string
+          id: string
+          instance_name: string
+          is_active: boolean
+          last_checked_at: string | null
+          last_status: string | null
+          updated_at: string
+          webhook_url: string
+          whatsapp_instance_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          instance_name: string
+          is_active?: boolean
+          last_checked_at?: string | null
+          last_status?: string | null
+          updated_at?: string
+          webhook_url: string
+          whatsapp_instance_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          instance_name?: string
+          is_active?: boolean
+          last_checked_at?: string | null
+          last_status?: string | null
+          updated_at?: string
+          webhook_url?: string
+          whatsapp_instance_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_webhook_config_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
