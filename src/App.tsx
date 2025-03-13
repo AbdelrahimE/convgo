@@ -14,6 +14,7 @@ import TextProcessingDemo from '@/pages/TextProcessingDemo';
 import SemanticSearchTest from '@/pages/SemanticSearchTest';
 import WhatsAppFileConfig from '@/pages/WhatsAppFileConfig';
 import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
+import WebhookMonitor from '@/pages/WebhookMonitor';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import './App.css';
@@ -68,6 +69,14 @@ function AppContent() {
                   element={
                     <ProtectedRoute>
                       <WhatsAppAIConfig />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/webhook-monitor"
+                  element={
+                    <ProtectedRoute>
+                      <WebhookMonitor />
                     </ProtectedRoute>
                   }
                 />
