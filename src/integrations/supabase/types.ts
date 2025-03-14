@@ -397,6 +397,62 @@ export type Database = {
           },
         ]
       }
+      whatsapp_ai_interactions: {
+        Row: {
+          ai_response: string
+          completion_tokens: number | null
+          context_token_count: number | null
+          created_at: string
+          id: string
+          prompt_tokens: number | null
+          response_model: string | null
+          search_result_count: number | null
+          total_tokens: number | null
+          updated_at: string
+          user_message: string
+          user_phone: string
+          whatsapp_instance_id: string
+        }
+        Insert: {
+          ai_response: string
+          completion_tokens?: number | null
+          context_token_count?: number | null
+          created_at?: string
+          id?: string
+          prompt_tokens?: number | null
+          response_model?: string | null
+          search_result_count?: number | null
+          total_tokens?: number | null
+          updated_at?: string
+          user_message: string
+          user_phone: string
+          whatsapp_instance_id: string
+        }
+        Update: {
+          ai_response?: string
+          completion_tokens?: number | null
+          context_token_count?: number | null
+          created_at?: string
+          id?: string
+          prompt_tokens?: number | null
+          response_model?: string | null
+          search_result_count?: number | null
+          total_tokens?: number | null
+          updated_at?: string
+          user_message?: string
+          user_phone?: string
+          whatsapp_instance_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_ai_interactions_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_file_mappings: {
         Row: {
           created_at: string

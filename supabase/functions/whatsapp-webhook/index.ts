@@ -216,7 +216,7 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
     // Get the instance ID from the instance name
     const { data: instanceData, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
-      .select('id, instance_url')
+      .select('id, instance_url, instance_name')
       .eq('instance_name', instanceName)
       .single();
       
@@ -226,8 +226,37 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
     }
     
     const instanceId = instanceData.id;
-    const instanceUrl = instanceData.instance_url;
-    console.log(`✅ Found instance ID: ${instanceId} with URL: ${instanceUrl}`);
+    const instanceName2 = instanceData.instance_name;
+
+    // Find the EVOLUTION API instance URL
+    let instanceBaseUrl = '';
+    
+    // Try to determine the base URL for this instance
+    try {
+      const { data: webhookConfig, error: webhookError } = await supabaseAdmin
+        .from('whatsapp_webhook_config')
+        .select('webhook_url')
+        .eq('whatsapp_instance_id', instanceId)
+        .single();
+        
+      if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
+        // Extract base URL from webhook URL
+        // Example: If webhook URL is http://api.example.com/webhook/instance1
+        // We want http://api.example.com
+        const url = new URL(webhookConfig.webhook_url);
+        instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+        console.log(`ℹ️ Using instance base URL from webhook config: ${instanceBaseUrl}`);
+      } else {
+        console.warn('⚠️ No webhook URL found, using fallback method to determine instance URL');
+        // If we couldn't get it from webhook URL, use a default pattern or environment variable
+        // This needs to be configured based on your EVOLUTION API setup
+        instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'http://localhost:8080';
+      }
+    } catch (error) {
+      console.error('❌ Error determining instance base URL:', error);
+      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'http://localhost:8080';
+    }
+    console.log(`🌐 Using EVOLUTION API base URL: ${instanceBaseUrl}`);
     
     // Check if AI is enabled for this instance
     const { data: aiConfigData, error: aiConfigError } = await supabaseAdmin
@@ -367,11 +396,56 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
         console.log(`✅ Stored AI interaction with ID: ${interactionData?.id}`);
       }
       
-      // TODO: Phase 3 - Send the response back via EVOLUTION API
+      // PHASE 3: Send the AI response back via EVOLUTION API
+      console.log('📤 Phase 3: Sending AI response back to user via EVOLUTION API');
       
-      return true;
+      try {
+        // Build the URL for the message sending endpoint
+        const sendMessageUrl = `${instanceBaseUrl}/api/v1/message/sendText/${instanceName2}`;
+        console.log(`🔗 Sending message to URL: ${sendMessageUrl}`);
+        
+        // Format the number correctly - remove any non-digit characters
+        const phoneNumber = remoteJid.split('@')[0].replace(/\D/g, '');
+        
+        // Prepare the request body
+        const sendMessageBody = {
+          number: phoneNumber,
+          options: {
+            delay: 1000, // 1 second delay
+            presence: "composing" // Show "typing" indicator
+          },
+          textMessage: {
+            text: aiAnswer
+          }
+        };
+        
+        console.log('📨 Request body:', JSON.stringify(sendMessageBody));
+        
+        // Send the message using fetch
+        const response = await fetch(sendMessageUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': EVOLUTION_API_KEY
+          },
+          body: JSON.stringify(sendMessageBody)
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Failed to send message: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        
+        const responseData = await response.json();
+        console.log('✅ Message sent successfully:', JSON.stringify(responseData));
+        
+        return true;
+      } catch (error) {
+        console.error('❌ Error sending message via EVOLUTION API:', error);
+        return false;
+      }
     } catch (error) {
-      console.error('❌ Error during Phase 2 processing:', error);
+      console.error('❌ Error during AI response processing:', error);
       return false;
     }
   } catch (error) {
