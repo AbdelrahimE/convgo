@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
@@ -5,6 +6,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY') || '';
 
 // Create a Supabase client with the service role key
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -214,7 +216,7 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
     // Get the instance ID from the instance name
     const { data: instanceData, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
-      .select('id')
+      .select('id, instance_url')
       .eq('instance_name', instanceName)
       .single();
       
@@ -224,7 +226,8 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
     }
     
     const instanceId = instanceData.id;
-    console.log(`✅ Found instance ID: ${instanceId}`);
+    const instanceUrl = instanceData.instance_url;
+    console.log(`✅ Found instance ID: ${instanceId} with URL: ${instanceUrl}`);
     
     // Check if AI is enabled for this instance
     const { data: aiConfigData, error: aiConfigError } = await supabaseAdmin
@@ -257,28 +260,120 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
     
     const fileIds = fileMappings?.map(mapping => mapping.file_id) || [];
     console.log(`✅ Found ${fileIds.length} file mappings for this instance`);
+
+    // PHASE 2: Call semantic-search to find relevant content
+    console.log('🔍 Phase 2.1: Calling semantic-search with query:', messageText.substring(0, 50) + '...');
     
-    // Store all the necessary data for AI processing
-    const aiProcessingData = {
-      messageText,
-      remoteJid,
-      instanceName,
-      instanceId,
-      systemPrompt: aiConfigData.system_prompt,
-      temperature: aiConfigData.temperature,
-      fileIds
-    };
-    
-    console.log('✅ AI processing data prepared:', {
-      messageText: aiProcessingData.messageText.substring(0, 50) + '...',
-      remoteJid: aiProcessingData.remoteJid,
-      fileIds: aiProcessingData.fileIds.length
-    });
-    
-    // TODO: Phase 2 - Call semantic search, context assembly, and response generation
-    // TODO: Phase 3 - Send the response back via EVOLUTION API
-    
-    return true;
+    try {
+      // Step 1: Call semantic-search edge function
+      const { data: searchData, error: searchError } = await supabaseAdmin.functions.invoke('semantic-search', {
+        body: {
+          query: messageText,
+          limit: 8, // Increased from default 5 to get more context
+          threshold: 0.6, // Slightly lower threshold to get more results
+          fileIds: fileIds.length > 0 ? fileIds : undefined
+        }
+      });
+      
+      if (searchError) {
+        console.error('❌ Error calling semantic-search:', searchError);
+        return false;
+      }
+      
+      if (!searchData.success) {
+        console.error('❌ Semantic search failed:', searchData.error);
+        return false;
+      }
+      
+      const searchResults = searchData.results;
+      console.log(`✅ Semantic search returned ${searchResults.length} results`);
+      
+      if (searchResults.length === 0) {
+        console.log('⚠️ No relevant content found. Will try generating response with empty context.');
+      }
+      
+      // Step 2: Call assemble-context edge function
+      console.log('📝 Phase 2.2: Calling assemble-context to compile knowledge base information');
+      
+      const { data: assembleData, error: assembleError } = await supabaseAdmin.functions.invoke('assemble-context', {
+        body: {
+          results: searchResults,
+          maxContextLength: 6000 // Adjust based on your model's context window
+        }
+      });
+      
+      if (assembleError) {
+        console.error('❌ Error calling assemble-context:', assembleError);
+        return false;
+      }
+      
+      if (!assembleData.success) {
+        console.error('❌ Context assembly failed:', assembleData.error);
+        return false;
+      }
+      
+      const assembledContext = assembleData.assembled.context || '';
+      console.log(`✅ Context assembled: ${assembledContext.length} characters`);
+      console.log(`📊 Context stats:`, assembleData.assembled.stats);
+      
+      // Step 3: Call generate-response edge function
+      console.log('🧠 Phase 2.3: Calling generate-response to create AI response');
+      
+      const { data: responseData, error: responseError } = await supabaseAdmin.functions.invoke('generate-response', {
+        body: {
+          query: messageText,
+          context: assembledContext,
+          systemPrompt: aiConfigData.system_prompt,
+          temperature: aiConfigData.temperature || 0.3,
+          model: aiConfigData.model || 'gpt-4o-mini'
+        }
+      });
+      
+      if (responseError) {
+        console.error('❌ Error calling generate-response:', responseError);
+        return false;
+      }
+      
+      if (!responseData.success) {
+        console.error('❌ Response generation failed:', responseData.error);
+        return false;
+      }
+      
+      const aiAnswer = responseData.answer;
+      console.log(`✅ Generated AI response: ${aiAnswer.substring(0, 100)}${aiAnswer.length > 100 ? '...' : ''}`);
+      
+      // Store the AI interaction in the database for history/analytics
+      const { data: interactionData, error: interactionError } = await supabaseAdmin
+        .from('whatsapp_ai_interactions')
+        .insert({
+          whatsapp_instance_id: instanceId,
+          user_message: messageText,
+          user_phone: remoteJid.split('@')[0],
+          ai_response: aiAnswer,
+          context_token_count: assembleData.assembled.stats.totalTokenEstimate || 0,
+          search_result_count: searchResults.length,
+          response_model: responseData.model,
+          prompt_tokens: responseData.usage?.prompt_tokens || 0,
+          completion_tokens: responseData.usage?.completion_tokens || 0,
+          total_tokens: responseData.usage?.total_tokens || 0
+        })
+        .select('id')
+        .single();
+        
+      if (interactionError) {
+        console.warn('⚠️ Failed to store AI interaction:', interactionError);
+        // Continue despite error - this is non-critical
+      } else {
+        console.log(`✅ Stored AI interaction with ID: ${interactionData?.id}`);
+      }
+      
+      // TODO: Phase 3 - Send the response back via EVOLUTION API
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error during Phase 2 processing:', error);
+      return false;
+    }
   } catch (error) {
     console.error('❌ Error processing message for AI:', error);
     return false;
