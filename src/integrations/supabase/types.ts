@@ -332,6 +332,30 @@ export type Database = {
           },
         ]
       }
+      webhook_debug_logs: {
+        Row: {
+          category: string
+          created_at: string
+          data: Json | null
+          id: string
+          message: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          data?: Json | null
+          id?: string
+          message: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          data?: Json | null
+          id?: string
+          message?: string
+        }
+        Relationships: []
+      }
       webhook_messages: {
         Row: {
           data: Json
