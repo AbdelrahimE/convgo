@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
@@ -168,6 +167,124 @@ function normalizeEventData(data: any): {
   }
 }
 
+// Process WhatsApp message for AI response
+async function processMessageForAI(messageData: any, instanceName: string): Promise<boolean> {
+  try {
+    console.log('🤖 Processing message for AI response...');
+    
+    // Check if this is a message we should process
+    // Only process messages from individual chats, not groups
+    // EVOLUTION API format check based on the data structure
+    const remoteJid = messageData?.key?.remoteJid || '';
+    const messageType = messageData?.message ? Object.keys(messageData.message)[0] : null;
+    const isFromMe = messageData?.key?.fromMe || false;
+    
+    // Skip processing if:
+    // 1. Message is from a group chat (contains @g.us)
+    // 2. Message is from the bot itself (fromMe is true)
+    // 3. No text message content is available
+    if (remoteJid.includes('@g.us') || isFromMe) {
+      console.log('⏭️ Skipping AI processing: Group message or sent by bot');
+      return false;
+    }
+    
+    // Extract the actual message text
+    let messageText = '';
+    
+    // Handle different message types (text, image with caption, etc)
+    if (messageType === 'conversation') {
+      messageText = messageData.message.conversation || '';
+    } else if (messageType === 'extendedTextMessage') {
+      messageText = messageData.message.extendedTextMessage.text || '';
+    } else if (messageData.message?.imageMessage?.caption) {
+      messageText = messageData.message.imageMessage.caption || '';
+    } else if (messageData.message?.videoMessage?.caption) {
+      messageText = messageData.message.videoMessage.caption || '';
+    }
+    
+    // If no usable text was found, skip processing
+    if (!messageText.trim()) {
+      console.log('⏭️ Skipping AI processing: No text content');
+      return false;
+    }
+    
+    // Log the message we're processing
+    console.log(`📝 Processing message text: ${messageText.substring(0, 100)}${messageText.length > 100 ? '...' : ''}`);
+    
+    // Get the instance ID from the instance name
+    const { data: instanceData, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('id')
+      .eq('instance_name', instanceName)
+      .single();
+      
+    if (instanceError || !instanceData) {
+      console.error('❌ Instance not found:', instanceName, instanceError);
+      return false;
+    }
+    
+    const instanceId = instanceData.id;
+    console.log(`✅ Found instance ID: ${instanceId}`);
+    
+    // Check if AI is enabled for this instance
+    const { data: aiConfigData, error: aiConfigError } = await supabaseAdmin
+      .from('whatsapp_ai_config')
+      .select('*')
+      .eq('whatsapp_instance_id', instanceId)
+      .eq('is_active', true)
+      .single();
+      
+    if (aiConfigError || !aiConfigData) {
+      console.log('⏭️ AI is not enabled for this instance or config not found');
+      return false;
+    }
+    
+    console.log('✅ AI is enabled for this instance', {
+      systemPrompt: aiConfigData.system_prompt?.substring(0, 50) + '...',
+      temperature: aiConfigData.temperature
+    });
+    
+    // Get file mappings for this instance
+    const { data: fileMappings, error: fileMappingsError } = await supabaseAdmin
+      .from('whatsapp_file_mappings')
+      .select('file_id')
+      .eq('whatsapp_instance_id', instanceId);
+      
+    if (fileMappingsError) {
+      console.error('❌ Error fetching file mappings:', fileMappingsError);
+      return false;
+    }
+    
+    const fileIds = fileMappings?.map(mapping => mapping.file_id) || [];
+    console.log(`✅ Found ${fileIds.length} file mappings for this instance`);
+    
+    // Store all the necessary data for AI processing
+    const aiProcessingData = {
+      messageText,
+      remoteJid,
+      instanceName,
+      instanceId,
+      systemPrompt: aiConfigData.system_prompt,
+      temperature: aiConfigData.temperature,
+      fileIds
+    };
+    
+    console.log('✅ AI processing data prepared:', {
+      messageText: aiProcessingData.messageText.substring(0, 50) + '...',
+      remoteJid: aiProcessingData.remoteJid,
+      fileIds: aiProcessingData.fileIds.length
+    });
+    
+    // TODO: Phase 2 - Call semantic search, context assembly, and response generation
+    // TODO: Phase 3 - Send the response back via EVOLUTION API
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Error processing message for AI:', error);
+    return false;
+  }
+}
+
 // Main webhook handler
 async function handleWebhook(req: Request): Promise<Response> {
   try {
@@ -207,6 +324,19 @@ async function handleWebhook(req: Request): Promise<Response> {
       );
     }
     
+    // Check if this is a messages.upsert event and attempt to process for AI
+    let aiProcessed = false;
+    if (normalizedEvent.event === 'messages.upsert' && normalizedEvent.data) {
+      const messageData = normalizedEvent.data.messages ? normalizedEvent.data.messages[0] : normalizedEvent.data;
+      
+      if (messageData) {
+        aiProcessed = await processMessageForAI(messageData, normalizedEvent.instance);
+        if (aiProcessed) {
+          console.log('✅ Message successfully processed for AI');
+        }
+      }
+    }
+    
     // Store in database
     console.log('💾 Attempting to insert webhook message into database...');
     
@@ -239,7 +369,8 @@ async function handleWebhook(req: Request): Promise<Response> {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'Webhook received and processed successfully' 
+          message: 'Webhook received and processed successfully',
+          aiProcessed: aiProcessed
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
