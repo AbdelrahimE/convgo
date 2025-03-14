@@ -445,17 +445,48 @@ serve(async (req) => {
   });
   
   try {
-    // Check if this is an API call that uses the instance name in the path
-    // Format: /api/:instanceName/webhook
     const url = new URL(req.url);
     const pathParts = url.pathname.split('/').filter(Boolean);
     
-    // Log path analysis
-    await logDebug('PATH_ANALYSIS', 'Analyzing request path', { pathParts });
+    // Log full path analysis for debugging
+    await logDebug('PATH_ANALYSIS', 'Full request path analysis', { 
+      fullPath: url.pathname,
+      pathParts 
+    });
     
+    // Check different possible path patterns
+    // Pattern 1: Direct API call to edge function with /api/:instanceName/webhook
+    // Pattern 2: Called through Supabase with /functions/v1/whatsapp-webhook/api/:instanceName/webhook
+    
+    let instanceName = null;
+    
+    // Pattern 1: Direct path format
     if (pathParts.length >= 3 && pathParts[0] === 'api') {
-      const instanceName = pathParts[1];
-      await logDebug('WEBHOOK_INSTANCE', `Webhook for instance: ${instanceName}`);
+      instanceName = pathParts[1];
+      await logDebug('WEBHOOK_PATH_DIRECT', `Direct webhook path detected for instance: ${instanceName}`);
+    }
+    // Pattern 2: Supabase prefixed path format
+    else if (pathParts.length >= 6 && 
+             pathParts[0] === 'functions' && 
+             pathParts[1] === 'v1' && 
+             pathParts[2] === 'whatsapp-webhook' && 
+             pathParts[3] === 'api') {
+      instanceName = pathParts[4];
+      await logDebug('WEBHOOK_PATH_SUPABASE', `Supabase prefixed webhook path detected for instance: ${instanceName}`);
+    }
+    // Pattern 3: Another possible edge function URL format with just the instance in the path
+    else if (pathParts.length >= 4 && 
+             pathParts[0] === 'functions' && 
+             pathParts[1] === 'v1' && 
+             pathParts[2] === 'whatsapp-webhook') {
+      // Try to extract instance from the next path part
+      instanceName = pathParts[3];
+      await logDebug('WEBHOOK_PATH_ALTERNATIVE', `Alternative webhook path detected, using: ${instanceName}`);
+    }
+    
+    // If we have identified an instance name, process the webhook
+    if (instanceName) {
+      await logDebug('WEBHOOK_INSTANCE', `Processing webhook for instance: ${instanceName}`);
       
       const data = await req.json();
       
@@ -511,7 +542,13 @@ serve(async (req) => {
       });
     }
     
-    return new Response(JSON.stringify({ success: false, error: 'Invalid webhook path' }), {
+    // If no valid instance name could be extracted, log this and return an error
+    await logDebug('WEBHOOK_PATH_ERROR', 'No valid instance name could be extracted from path', { 
+      fullPath: url.pathname,
+      pathParts 
+    });
+    
+    return new Response(JSON.stringify({ success: false, error: 'Invalid webhook path or missing instance name' }), {
       status: 400,
       headers: {
         ...corsHeaders,
