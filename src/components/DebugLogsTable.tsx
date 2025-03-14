@@ -55,13 +55,15 @@ export function DebugLogsTable() {
     }
   });
   
-  // Fetch unique categories for filter
+  // Fetch unique categories directly from the webhook_debug_logs table
   const { data: categories } = useQuery({
     queryKey: ['debugLogCategories'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .rpc('get_unique_debug_categories')
-        .select();
+        .from('webhook_debug_logs')
+        .select('category')
+        .order('category')
+        .distinctOn('category');
       
       if (error) {
         console.error('Error fetching categories:', error);
