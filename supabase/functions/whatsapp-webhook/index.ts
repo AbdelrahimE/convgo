@@ -454,10 +454,7 @@ serve(async (req) => {
       pathParts 
     });
     
-    // Check different possible path patterns
-    // Pattern 1: Direct API call to edge function with /api/:instanceName/webhook
-    // Pattern 2: Called through Supabase with /functions/v1/whatsapp-webhook/api/:instanceName/webhook
-    
+    // Try to extract the instance name from the path first (for backward compatibility)
     let instanceName = null;
     
     // Pattern 1: Direct path format
@@ -484,19 +481,45 @@ serve(async (req) => {
       await logDebug('WEBHOOK_PATH_ALTERNATIVE', `Alternative webhook path detected, using: ${instanceName}`);
     }
     
+    // Get the request body for further processing
+    let data;
+    try {
+      data = await req.json();
+      await logDebug('WEBHOOK_PAYLOAD', 'Webhook payload received', { data });
+    } catch (error) {
+      await logDebug('WEBHOOK_PAYLOAD_ERROR', 'Failed to parse webhook payload', { error });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid JSON payload' }),
+        { 
+          status: 400, 
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+    
+    // If instance name is not found in the path, try to extract it from the payload
+    // This handles the simple path format that EVOLUTION API is using
+    if (!instanceName && data) {
+      if (data.instance) {
+        instanceName = data.instance;
+        await logDebug('WEBHOOK_INSTANCE_FROM_PAYLOAD', `Extracted instance from payload: ${instanceName}`);
+      } else if (data.instanceId) {
+        instanceName = data.instanceId;
+        await logDebug('WEBHOOK_INSTANCE_FROM_PAYLOAD', `Extracted instanceId from payload: ${instanceName}`);
+      }
+    }
+    
     // If we have identified an instance name, process the webhook
     if (instanceName) {
       await logDebug('WEBHOOK_INSTANCE', `Processing webhook for instance: ${instanceName}`);
-      
-      const data = await req.json();
       
       // Different webhook events have different structures
       // We need to normalize based on the structure
       let event = 'unknown';
       let normalizedData = data;
-      
-      // Log the raw webhook data
-      await logDebug('WEBHOOK_RAW_DATA', 'Raw webhook data received', { data });
       
       // Determine the event type based on data structure
       if (data.event) {
@@ -543,12 +566,14 @@ serve(async (req) => {
     }
     
     // If no valid instance name could be extracted, log this and return an error
-    await logDebug('WEBHOOK_PATH_ERROR', 'No valid instance name could be extracted from path', { 
+    await logDebug('WEBHOOK_PATH_ERROR', 'No valid instance name could be extracted from path or payload', { 
       fullPath: url.pathname,
-      pathParts 
+      pathParts,
+      hasPayload: !!data,
+      payloadKeys: data ? Object.keys(data) : []
     });
     
-    return new Response(JSON.stringify({ success: false, error: 'Invalid webhook path or missing instance name' }), {
+    return new Response(JSON.stringify({ success: false, error: 'Invalid webhook path or missing instance name in payload' }), {
       status: 400,
       headers: {
         ...corsHeaders,

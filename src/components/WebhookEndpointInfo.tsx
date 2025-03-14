@@ -15,6 +15,7 @@ const WebhookEndpointInfo = () => {
   const [copied, setCopied] = useState(false);
   const { user } = useAuth();
   
+  // Simplified webhook URL - no instance name in the path
   const baseUrl = 'https://okoaoguvtjauiecfajri.supabase.co/functions/v1/whatsapp-webhook';
   const webhookEndpoint = `${baseUrl}`;
 
@@ -84,17 +85,20 @@ const WebhookEndpointInfo = () => {
           </p>
         </div>
 
-        <Alert>
+        <Alert variant="default">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>EVOLUTION API Webhook Setup</AlertTitle>
           <AlertDescription>
             <p className="mb-2">The EVOLUTION API server uses a single webhook for all WhatsApp instances. All events (incoming and outgoing messages) from all connected WhatsApp numbers are sent to this endpoint.</p>
             <div className="mt-2 space-y-1 text-sm">
               <p>
+                <span className="font-medium">Important:</span> Your webhook URL should be set exactly as shown above. Do not add any extra path segments.
+              </p>
+              <p>
                 <span className="font-medium">Key points:</span>
               </p>
               <ul className="list-disc pl-5 space-y-1">
-                <li>Our system will automatically extract the instance name from each incoming webhook event</li>
+                <li>The system automatically extracts the instance name from the webhook payload</li>
                 <li>Messages from different WhatsApp numbers will be properly routed to the correct AI instance</li>
                 <li>Group messages (containing @g.us) and self-sent messages are automatically filtered</li>
                 <li>Only messages from individual users that aren't sent by the bot will receive AI responses</li>
@@ -138,6 +142,7 @@ const WebhookEndpointInfo = () => {
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               This is an example of a webhook payload sent by EVOLUTION API when a message is received.
+              Notice that the <code className="bg-muted px-1 rounded">instance</code> field identifies which WhatsApp number received the message.
             </p>
           </TabsContent>
           <TabsContent value="docs" className="mt-4">
