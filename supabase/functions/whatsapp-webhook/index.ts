@@ -11,6 +11,32 @@ const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY') || '';
 // Create a Supabase client with the service role key
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+// Enhanced logging function
+async function logDebug(category: string, message: string, data?: any): Promise<void> {
+  const logEntry = {
+    category,
+    message,
+    data: data ? (typeof data === 'object' ? JSON.stringify(data).substring(0, 1000) : data) : null,
+    timestamp: new Date().toISOString()
+  };
+  
+  console.log(`[DEBUG][${category}] ${message}`, data ? logEntry.data : '');
+  
+  try {
+    // Store detailed debug logs in a separate table for analysis
+    await supabaseAdmin
+      .from('webhook_debug_logs')
+      .insert({
+        category,
+        message,
+        data: data,
+        created_at: new Date().toISOString()
+      });
+  } catch (error) {
+    console.error('Failed to store debug log:', error);
+  }
+}
+
 // Simplified function to extract content from request
 async function extractRequestContent(req: Request): Promise<{ parsedData: any, contentType: string, rawContent: string }> {
   // Get the content type for logging
@@ -172,6 +198,7 @@ function normalizeEventData(data: any): {
 // Process WhatsApp message for AI response
 async function processMessageForAI(messageData: any, instanceName: string): Promise<boolean> {
   try {
+    await logDebug('AI_PROCESSING', 'Starting AI processing', { instanceName });
     console.log('🤖 Processing message for AI response...');
     
     // Check if this is a message we should process
@@ -181,11 +208,19 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
     const messageType = messageData?.message ? Object.keys(messageData.message)[0] : null;
     const isFromMe = messageData?.key?.fromMe || false;
     
+    await logDebug('AI_PROCESSING', 'Message details', { 
+      remoteJid, 
+      messageType, 
+      isFromMe,
+      hasGroupId: remoteJid.includes('@g.us')
+    });
+    
     // Skip processing if:
     // 1. Message is from a group chat (contains @g.us)
     // 2. Message is from the bot itself (fromMe is true)
     // 3. No text message content is available
     if (remoteJid.includes('@g.us') || isFromMe) {
+      await logDebug('AI_PROCESSING', 'Skipping - Group message or sent by bot', { remoteJid, isFromMe });
       console.log('⏭️ Skipping AI processing: Group message or sent by bot');
       return false;
     }
@@ -204,8 +239,15 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
       messageText = messageData.message.videoMessage.caption || '';
     }
     
+    await logDebug('AI_PROCESSING', 'Extracted message text', { 
+      messageType, 
+      messageText: messageText.substring(0, 100),
+      hasText: messageText.trim().length > 0
+    });
+    
     // If no usable text was found, skip processing
     if (!messageText.trim()) {
+      await logDebug('AI_PROCESSING', 'Skipping - No text content');
       console.log('⏭️ Skipping AI processing: No text content');
       return false;
     }
@@ -214,6 +256,7 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
     console.log(`📝 Processing message text: ${messageText.substring(0, 100)}${messageText.length > 100 ? '...' : ''}`);
     
     // Get the instance ID from the instance name
+    await logDebug('AI_PROCESSING', 'Looking up instance data', { instanceName });
     const { data: instanceData, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
       .select('id, instance_url, instance_name')
@@ -221,9 +264,15 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
       .single();
       
     if (instanceError || !instanceData) {
+      await logDebug('AI_PROCESSING', 'Instance not found', { 
+        instanceName, 
+        error: instanceError ? instanceError.message : 'No instance data returned'
+      });
       console.error('❌ Instance not found:', instanceName, instanceError);
       return false;
     }
+    
+    await logDebug('AI_PROCESSING', 'Found instance', instanceData);
     
     const instanceId = instanceData.id;
     const instanceName2 = instanceData.instance_name;
@@ -233,6 +282,7 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
     
     // Try to determine the base URL for this instance
     try {
+      await logDebug('AI_PROCESSING', 'Fetching webhook config');
       const { data: webhookConfig, error: webhookError } = await supabaseAdmin
         .from('whatsapp_webhook_config')
         .select('webhook_url')
@@ -245,20 +295,33 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
         // We want http://api.example.com
         const url = new URL(webhookConfig.webhook_url);
         instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+        await logDebug('AI_PROCESSING', 'Using instance base URL from webhook config', { 
+          webhookUrl: webhookConfig.webhook_url,
+          instanceBaseUrl
+        });
         console.log(`ℹ️ Using instance base URL from webhook config: ${instanceBaseUrl}`);
       } else {
+        await logDebug('AI_PROCESSING', 'No webhook URL found', { 
+          error: webhookError ? webhookError.message : 'No webhook config returned'
+        });
         console.warn('⚠️ No webhook URL found, using fallback method to determine instance URL');
         // If we couldn't get it from webhook URL, use a default pattern or environment variable
         // This needs to be configured based on your EVOLUTION API setup
         instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'http://localhost:8080';
+        await logDebug('AI_PROCESSING', 'Using fallback instance base URL', { instanceBaseUrl });
       }
     } catch (error) {
+      await logDebug('AI_PROCESSING', 'Error determining instance base URL', { 
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
       console.error('❌ Error determining instance base URL:', error);
       instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'http://localhost:8080';
+      await logDebug('AI_PROCESSING', 'Using fallback instance base URL after error', { instanceBaseUrl });
     }
     console.log(`🌐 Using EVOLUTION API base URL: ${instanceBaseUrl}`);
     
     // Check if AI is enabled for this instance
+    await logDebug('AI_PROCESSING', 'Checking AI configuration');
     const { data: aiConfigData, error: aiConfigError } = await supabaseAdmin
       .from('whatsapp_ai_config')
       .select('*')
@@ -267,9 +330,19 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
       .single();
       
     if (aiConfigError || !aiConfigData) {
+      await logDebug('AI_PROCESSING', 'AI is not enabled or config not found', { 
+        error: aiConfigError ? aiConfigError.message : 'No AI config returned',
+        instanceId
+      });
       console.log('⏭️ AI is not enabled for this instance or config not found');
       return false;
     }
+    
+    await logDebug('AI_PROCESSING', 'AI is enabled for this instance', {
+      systemPrompt: aiConfigData.system_prompt?.substring(0, 50) + '...',
+      temperature: aiConfigData.temperature,
+      instanceId
+    });
     
     console.log('✅ AI is enabled for this instance', {
       systemPrompt: aiConfigData.system_prompt?.substring(0, 50) + '...',
@@ -277,24 +350,40 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
     });
     
     // Get file mappings for this instance
+    await logDebug('AI_PROCESSING', 'Fetching file mappings');
     const { data: fileMappings, error: fileMappingsError } = await supabaseAdmin
       .from('whatsapp_file_mappings')
       .select('file_id')
       .eq('whatsapp_instance_id', instanceId);
       
     if (fileMappingsError) {
+      await logDebug('AI_PROCESSING', 'Error fetching file mappings', { 
+        error: fileMappingsError.message
+      });
       console.error('❌ Error fetching file mappings:', fileMappingsError);
       return false;
     }
     
     const fileIds = fileMappings?.map(mapping => mapping.file_id) || [];
+    await logDebug('AI_PROCESSING', 'Found file mappings', { 
+      fileCount: fileIds.length,
+      fileIds
+    });
     console.log(`✅ Found ${fileIds.length} file mappings for this instance`);
 
     // PHASE 2: Call semantic-search to find relevant content
+    await logDebug('AI_PROCESSING', 'Calling semantic-search', {
+      query: messageText.substring(0, 50) + '...'
+    });
     console.log('🔍 Phase 2.1: Calling semantic-search with query:', messageText.substring(0, 50) + '...');
     
     try {
       // Step 1: Call semantic-search edge function
+      await logDebug('AI_PROCESSING', 'Sending semantic search request', {
+        query: messageText,
+        fileIds: fileIds.length > 0 ? 'Using specific files' : 'No file filters'
+      });
+      
       const { data: searchData, error: searchError } = await supabaseAdmin.functions.invoke('semantic-search', {
         body: {
           query: messageText,
@@ -305,23 +394,38 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
       });
       
       if (searchError) {
+        await logDebug('AI_PROCESSING', 'Error calling semantic-search', { 
+          error: searchError
+        });
         console.error('❌ Error calling semantic-search:', searchError);
         return false;
       }
       
       if (!searchData.success) {
+        await logDebug('AI_PROCESSING', 'Semantic search failed', { 
+          error: searchData.error
+        });
         console.error('❌ Semantic search failed:', searchData.error);
         return false;
       }
       
       const searchResults = searchData.results;
+      await logDebug('AI_PROCESSING', 'Semantic search results', { 
+        resultCount: searchResults.length,
+        firstResult: searchResults.length > 0 ? {
+          score: searchResults[0].score,
+          content: searchResults[0].content.substring(0, 100) + '...'
+        } : null
+      });
       console.log(`✅ Semantic search returned ${searchResults.length} results`);
       
       if (searchResults.length === 0) {
+        await logDebug('AI_PROCESSING', 'No relevant content found');
         console.log('⚠️ No relevant content found. Will try generating response with empty context.');
       }
       
       // Step 2: Call assemble-context edge function
+      await logDebug('AI_PROCESSING', 'Calling assemble-context');
       console.log('📝 Phase 2.2: Calling assemble-context to compile knowledge base information');
       
       const { data: assembleData, error: assembleError } = await supabaseAdmin.functions.invoke('assemble-context', {
@@ -332,20 +436,31 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
       });
       
       if (assembleError) {
+        await logDebug('AI_PROCESSING', 'Error calling assemble-context', { 
+          error: assembleError
+        });
         console.error('❌ Error calling assemble-context:', assembleError);
         return false;
       }
       
       if (!assembleData.success) {
+        await logDebug('AI_PROCESSING', 'Context assembly failed', { 
+          error: assembleData.error
+        });
         console.error('❌ Context assembly failed:', assembleData.error);
         return false;
       }
       
       const assembledContext = assembleData.assembled.context || '';
+      await logDebug('AI_PROCESSING', 'Context assembled', { 
+        contextLength: assembledContext.length,
+        stats: assembleData.assembled.stats
+      });
       console.log(`✅ Context assembled: ${assembledContext.length} characters`);
       console.log(`📊 Context stats:`, assembleData.assembled.stats);
       
       // Step 3: Call generate-response edge function
+      await logDebug('AI_PROCESSING', 'Calling generate-response');
       console.log('🧠 Phase 2.3: Calling generate-response to create AI response');
       
       const { data: responseData, error: responseError } = await supabaseAdmin.functions.invoke('generate-response', {
@@ -359,19 +474,31 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
       });
       
       if (responseError) {
+        await logDebug('AI_PROCESSING', 'Error calling generate-response', { 
+          error: responseError
+        });
         console.error('❌ Error calling generate-response:', responseError);
         return false;
       }
       
       if (!responseData.success) {
+        await logDebug('AI_PROCESSING', 'Response generation failed', { 
+          error: responseData.error
+        });
         console.error('❌ Response generation failed:', responseData.error);
         return false;
       }
       
       const aiAnswer = responseData.answer;
+      await logDebug('AI_PROCESSING', 'Generated AI response', { 
+        response: aiAnswer.substring(0, 100) + '...',
+        model: responseData.model,
+        usage: responseData.usage
+      });
       console.log(`✅ Generated AI response: ${aiAnswer.substring(0, 100)}${aiAnswer.length > 100 ? '...' : ''}`);
       
       // Store the AI interaction in the database for history/analytics
+      await logDebug('AI_PROCESSING', 'Storing AI interaction');
       const { data: interactionData, error: interactionError } = await supabaseAdmin
         .from('whatsapp_ai_interactions')
         .insert({
@@ -390,18 +517,29 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
         .single();
         
       if (interactionError) {
+        await logDebug('AI_PROCESSING', 'Failed to store AI interaction', { 
+          error: interactionError.message
+        });
         console.warn('⚠️ Failed to store AI interaction:', interactionError);
         // Continue despite error - this is non-critical
       } else {
+        await logDebug('AI_PROCESSING', 'Stored AI interaction', { 
+          interactionId: interactionData?.id
+        });
         console.log(`✅ Stored AI interaction with ID: ${interactionData?.id}`);
       }
       
       // PHASE 3: Send the AI response back via EVOLUTION API
+      await logDebug('AI_PROCESSING', 'Sending AI response via EVOLUTION API');
       console.log('📤 Phase 3: Sending AI response back to user via EVOLUTION API');
       
       try {
         // Build the URL for the message sending endpoint
         const sendMessageUrl = `${instanceBaseUrl}/api/v1/message/sendText/${instanceName2}`;
+        await logDebug('AI_PROCESSING', 'Sending message to URL', { 
+          url: sendMessageUrl,
+          instance: instanceName2
+        });
         console.log(`🔗 Sending message to URL: ${sendMessageUrl}`);
         
         // Format the number correctly - remove any non-digit characters
@@ -419,6 +557,10 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
           }
         };
         
+        await logDebug('AI_PROCESSING', 'Sending message with body', { 
+          number: phoneNumber,
+          messageLength: aiAnswer.length
+        });
         console.log('📨 Request body:', JSON.stringify(sendMessageBody));
         
         // Send the message using fetch
@@ -433,22 +575,37 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
         
         if (!response.ok) {
           const errorText = await response.text();
+          await logDebug('AI_PROCESSING', 'Failed to send message', { 
+            status: response.status,
+            statusText: response.statusText,
+            errorText
+          });
           throw new Error(`Failed to send message: ${response.status} ${response.statusText} - ${errorText}`);
         }
         
         const responseData = await response.json();
+        await logDebug('AI_PROCESSING', 'Message sent successfully', responseData);
         console.log('✅ Message sent successfully:', JSON.stringify(responseData));
         
         return true;
       } catch (error) {
+        await logDebug('AI_PROCESSING', 'Error sending message via EVOLUTION API', { 
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
         console.error('❌ Error sending message via EVOLUTION API:', error);
         return false;
       }
     } catch (error) {
+      await logDebug('AI_PROCESSING', 'Error during AI response processing', { 
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
       console.error('❌ Error during AI response processing:', error);
       return false;
     }
   } catch (error) {
+    await logDebug('AI_PROCESSING', 'Error processing message for AI', { 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
     console.error('❌ Error processing message for AI:', error);
     return false;
   }
@@ -458,29 +615,38 @@ async function processMessageForAI(messageData: any, instanceName: string): Prom
 async function handleWebhook(req: Request): Promise<Response> {
   try {
     console.log('⭐ WEBHOOK REQUEST RECEIVED ⭐');
+    await logDebug('WEBHOOK', 'Webhook request received');
     
     // Extract content from the request using our robust extraction function
     const { parsedData, contentType, rawContent } = await extractRequestContent(req);
     
+    await logDebug('WEBHOOK', 'Extracted content', { 
+      contentType,
+      dataPreview: JSON.stringify(parsedData).substring(0, 500) 
+    });
     console.log(`Processing webhook with content-type: ${contentType}`);
     console.log('📨 Incoming webhook data:', JSON.stringify(parsedData).substring(0, 500));
     
     // For test requests, handle differently
     if (req.method === 'POST' && parsedData.action === 'test') {
+      await logDebug('WEBHOOK', 'Test request detected');
       return handleTestRequest(parsedData);
     }
     
     // For status check requests
     if (req.method === 'POST' && parsedData.action === 'status') {
+      await logDebug('WEBHOOK', 'Status check request detected');
       return handleStatusRequest();
     }
     
     // Normalize the event data to a consistent format
     const normalizedEvent = normalizeEventData(parsedData);
+    await logDebug('WEBHOOK', 'Normalized event', normalizedEvent);
     console.log('✅ Normalized event:', JSON.stringify(normalizedEvent).substring(0, 500));
     
     // Additional validation before insert
     if (!normalizedEvent.event || !normalizedEvent.instance) {
+      await logDebug('WEBHOOK', 'Invalid normalized event - missing required fields', normalizedEvent);
       console.error('❌ Invalid normalized event - missing required fields:', JSON.stringify(normalizedEvent));
       await logWebhookError('Invalid normalized event - missing required fields', rawContent, contentType, normalizedEvent);
       
@@ -496,17 +662,29 @@ async function handleWebhook(req: Request): Promise<Response> {
     // Check if this is a messages.upsert event and attempt to process for AI
     let aiProcessed = false;
     if (normalizedEvent.event === 'messages.upsert' && normalizedEvent.data) {
+      await logDebug('WEBHOOK', 'Messages.upsert event detected, checking for AI processing');
       const messageData = normalizedEvent.data.messages ? normalizedEvent.data.messages[0] : normalizedEvent.data;
       
       if (messageData) {
+        await logDebug('WEBHOOK', 'Processing message for AI', { 
+          instance: normalizedEvent.instance 
+        });
         aiProcessed = await processMessageForAI(messageData, normalizedEvent.instance);
+        
         if (aiProcessed) {
+          await logDebug('WEBHOOK', 'Message successfully processed for AI');
           console.log('✅ Message successfully processed for AI');
+        } else {
+          await logDebug('WEBHOOK', 'Message was not processed for AI');
+          console.log('⚠️ Message was not processed for AI');
         }
+      } else {
+        await logDebug('WEBHOOK', 'No message data found for AI processing');
       }
     }
     
     // Store in database
+    await logDebug('WEBHOOK', 'Storing webhook message in database');
     console.log('💾 Attempting to insert webhook message into database...');
     
     try {
@@ -519,6 +697,9 @@ async function handleWebhook(req: Request): Promise<Response> {
         });
       
       if (insertError) {
+        await logDebug('WEBHOOK', 'Database insertion error', { 
+          error: insertError.message 
+        });
         console.error('❌ Database insertion error:', insertError);
         await logWebhookError(insertError.message, rawContent, contentType, normalizedEvent);
         
@@ -532,6 +713,7 @@ async function handleWebhook(req: Request): Promise<Response> {
         );
       }
       
+      await logDebug('WEBHOOK', 'Successfully processed and stored webhook message');
       console.log('✅ Successfully processed and stored webhook message');
       
       // Return success response - ALWAYS return 200 to prevent retries
@@ -544,6 +726,9 @@ async function handleWebhook(req: Request): Promise<Response> {
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } catch (dbError) {
+      await logDebug('WEBHOOK', 'Unexpected database error', { 
+        error: dbError instanceof Error ? dbError.message : 'Unknown database error'
+      });
       console.error('❌ Unexpected database error:', dbError);
       await logWebhookError(dbError instanceof Error ? dbError.message : 'Unknown database error', 
                            rawContent, contentType, normalizedEvent);
@@ -557,6 +742,9 @@ async function handleWebhook(req: Request): Promise<Response> {
       );
     }
   } catch (error) {
+    await logDebug('WEBHOOK', 'Unexpected error in webhook handler', { 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
     console.error('❌ Unexpected error in webhook handler:', error);
     
     try {
