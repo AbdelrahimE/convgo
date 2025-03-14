@@ -124,8 +124,11 @@ function normalizeEventData(data: any): {
   data: any;
 } {
   try {
+    console.log('Normalizing data:', JSON.stringify(data).substring(0, 500));
+    
     // Check if this is already in our expected format
     if (data.event && data.instance && data.data) {
+      console.log('Data already in expected format');
       return data;
     }
     
@@ -134,7 +137,9 @@ function normalizeEventData(data: any): {
     if (data.body?.key?.remoteJid || data.key?.remoteJid) {
       // This appears to be EVOLUTION's direct format
       const messageObj = data.body || data;
-      const instanceName = data.instance || 'unknown-instance';
+      const instanceName = data.instance || data.instance_name || 'unknown-instance';
+      
+      console.log('Detected EVOLUTION API format, instance:', instanceName);
       
       // Construct normalized event data
       return {
@@ -145,11 +150,14 @@ function normalizeEventData(data: any): {
     }
     
     // Handle other potential formats or return something reasonable
-    return {
+    const result = {
       event: data.type || data.event || 'unknown',
       instance: data.instance || data.instanceName || 'unknown-instance',
       data: data
     };
+    
+    console.log('Using fallback format:', JSON.stringify(result).substring(0, 200));
+    return result;
   } catch (error) {
     console.error('Error normalizing event data:', error);
     return {
@@ -163,13 +171,13 @@ function normalizeEventData(data: any): {
 // Main webhook handler
 async function handleWebhook(req: Request): Promise<Response> {
   try {
+    console.log('⭐ WEBHOOK REQUEST RECEIVED ⭐');
+    
     // Extract content from the request using our robust extraction function
     const { parsedData, contentType, rawContent } = await extractRequestContent(req);
     
     console.log(`Processing webhook with content-type: ${contentType}`);
-    
-    // Log request data for debugging
-    console.log('Extracted data:', JSON.stringify(parsedData).substring(0, 500));
+    console.log('📨 Incoming webhook data:', JSON.stringify(parsedData).substring(0, 500));
     
     // For test requests, handle differently
     if (req.method === 'POST' && parsedData.action === 'test') {
@@ -183,56 +191,80 @@ async function handleWebhook(req: Request): Promise<Response> {
     
     // Normalize the event data to a consistent format
     const normalizedEvent = normalizeEventData(parsedData);
-    console.log('Normalized event:', JSON.stringify(normalizedEvent).substring(0, 500));
+    console.log('✅ Normalized event:', JSON.stringify(normalizedEvent).substring(0, 500));
     
-    // Store in database
-    const { data: insertData, error: insertError } = await supabaseAdmin
-      .from('webhook_messages')
-      .insert({
-        event: normalizedEvent.event,
-        instance: normalizedEvent.instance,
-        data: normalizedEvent.data
-      });
-    
-    if (insertError) {
-      console.error('Error inserting webhook message:', insertError);
+    // Additional validation before insert
+    if (!normalizedEvent.event || !normalizedEvent.instance) {
+      console.error('❌ Invalid normalized event - missing required fields:', JSON.stringify(normalizedEvent));
+      await logWebhookError('Invalid normalized event - missing required fields', rawContent, contentType, normalizedEvent);
       
-      // Also try to log the failed request for debugging
-      try {
-        await supabaseAdmin
-          .from('webhook_errors')
-          .insert({
-            error_message: insertError.message,
-            raw_content: rawContent,
-            content_type: contentType,
-            normalized_data: normalizedEvent
-          });
-      } catch (logError) {
-        console.error('Failed to log webhook error:', logError);
-      }
-      
-      // Even if we failed to store it, return 200 to avoid EVOLUTION API retries
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: 'Failed to process webhook, but received' 
+          message: 'Invalid webhook data' 
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    console.log('Successfully processed and stored webhook message');
+    // Store in database
+    console.log('💾 Attempting to insert webhook message into database...');
     
-    // Return success response - ALWAYS return 200 to prevent retries
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Webhook received and processed successfully' 
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    try {
+      const { data: insertData, error: insertError } = await supabaseAdmin
+        .from('webhook_messages')
+        .insert({
+          event: normalizedEvent.event,
+          instance: normalizedEvent.instance,
+          data: normalizedEvent.data
+        });
+      
+      if (insertError) {
+        console.error('❌ Database insertion error:', insertError);
+        await logWebhookError(insertError.message, rawContent, contentType, normalizedEvent);
+        
+        // Even if we failed to store it, return 200 to avoid EVOLUTION API retries
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            message: 'Failed to process webhook, but received' 
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.log('✅ Successfully processed and stored webhook message');
+      
+      // Return success response - ALWAYS return 200 to prevent retries
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Webhook received and processed successfully' 
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } catch (dbError) {
+      console.error('❌ Unexpected database error:', dbError);
+      await logWebhookError(dbError instanceof Error ? dbError.message : 'Unknown database error', 
+                           rawContent, contentType, normalizedEvent);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'Database error, but request received' 
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
   } catch (error) {
-    console.error('Unexpected error in webhook handler:', error);
+    console.error('❌ Unexpected error in webhook handler:', error);
+    
+    try {
+      await logWebhookError(error instanceof Error ? error.message : 'Unknown error', 
+                           'Failed to extract content', 'unknown', null);
+    } catch (logError) {
+      console.error('❌ Failed to log webhook error:', logError);
+    }
     
     // Return 200 even for errors to prevent retries
     return new Response(
@@ -242,6 +274,25 @@ async function handleWebhook(req: Request): Promise<Response> {
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+  }
+}
+
+// Helper function to log errors for debugging
+async function logWebhookError(errorMessage: string, rawContent: string, contentType: string, normalizedData: any): Promise<void> {
+  try {
+    await supabaseAdmin
+      .from('webhook_errors')
+      .insert({
+        error_message: errorMessage,
+        raw_content: rawContent,
+        content_type: contentType,
+        normalized_data: normalizedData,
+        created_at: new Date().toISOString()
+      });
+    
+    console.log('✅ Webhook error logged to database');
+  } catch (error) {
+    console.error('❌ Failed to log webhook error to database:', error);
   }
 }
 
@@ -353,7 +404,7 @@ async function handleStatusRequest(): Promise<Response> {
 
 // Main handler function
 serve(async (req) => {
-  console.log(`Webhook request received: ${req.method} ${new URL(req.url).pathname}`);
+  console.log(`🔔 Webhook request received: ${req.method} ${new URL(req.url).pathname}`);
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
