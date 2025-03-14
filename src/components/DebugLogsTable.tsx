@@ -62,15 +62,19 @@ export function DebugLogsTable() {
       const { data, error } = await supabase
         .from('webhook_debug_logs')
         .select('category')
-        .order('category')
-        .distinctOn('category');
+        .order('category');
       
       if (error) {
         console.error('Error fetching categories:', error);
         return [];
       }
       
-      return data as {category: string}[];
+      // Process the data to get unique categories
+      const uniqueCategories = Array.from(
+        new Set(data.map(item => item.category))
+      ).map(category => ({ category }));
+      
+      return uniqueCategories;
     },
     placeholderData: []
   });
