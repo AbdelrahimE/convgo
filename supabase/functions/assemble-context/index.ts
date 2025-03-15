@@ -15,6 +15,7 @@ interface SearchResult {
 interface AssemblyRequest {
   results: SearchResult[];
   maxContextLength?: number;
+  query?: string; // Added to support filtering by relevance to query
 }
 
 interface AssembledContext {
@@ -37,17 +38,50 @@ serve(async (req) => {
   }
 
   try {
-    const { results, maxContextLength = 8000 } = await req.json() as AssemblyRequest;
+    const { results, maxContextLength = 8000, query } = await req.json() as AssemblyRequest;
 
-    if (!results || !Array.isArray(results) || results.length === 0) {
+    // MODIFIED: More lenient validation - if no results, return empty context instead of error
+    if (!results || !Array.isArray(results)) {
+      console.log('No valid search results provided, returning empty context');
+      
       return new Response(
         JSON.stringify({ 
-          success: false, 
-          error: 'Valid search results are required' 
+          success: true, 
+          assembled: {
+            context: '',
+            sources: [],
+            stats: {
+              originalChunks: 0,
+              assembledChunks: 0,
+              totalTokenEstimate: 0
+            }
+          }
         }),
         { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 400
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // If results array is empty, return empty context instead of error
+    if (results.length === 0) {
+      console.log('Empty results array provided, returning empty context');
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          assembled: {
+            context: '',
+            sources: [],
+            stats: {
+              originalChunks: 0,
+              assembledChunks: 0,
+              totalTokenEstimate: 0
+            }
+          }
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
@@ -101,8 +135,8 @@ serve(async (req) => {
         // MODIFIED: First pass - Add all chunks with similarity above threshold
         // This ensures we include important chunks regardless of contiguity
         chunksWithPosition.forEach(chunk => {
-          // Include chunks with sufficient similarity
-          if (!usedChunkIds.has(chunk.chunk_id) && chunk.similarity > 0.4) { // Lowered threshold to 0.4
+          // Include chunks with sufficient similarity - LOWERED threshold further to ensure inclusion
+          if (!usedChunkIds.has(chunk.chunk_id) && chunk.similarity > 0.2) { // Lowered threshold even more
             assembledChunks.push(chunk);
             usedChunkIds.add(chunk.chunk_id);
             fileSource.chunk_ids.push(chunk.chunk_id);
@@ -130,7 +164,7 @@ serve(async (req) => {
       
       // Add remaining high similarity chunks that weren't processed above
       chunks.forEach(chunk => {
-        if (!usedChunkIds.has(chunk.chunk_id) && chunk.similarity > 0.4) { // Lowered threshold to 0.4
+        if (!usedChunkIds.has(chunk.chunk_id) && chunk.similarity > 0.2) { // Lowered threshold even more
           assembledChunks.push(chunk);
           usedChunkIds.add(chunk.chunk_id);
           fileSource.chunk_ids.push(chunk.chunk_id);
@@ -138,12 +172,12 @@ serve(async (req) => {
         }
       });
       
-      // ADDED: Always include at least the top 3 chunks from each file if no chunks were selected
+      // MODIFIED: Be even more lenient - always include at least the top 5 chunks from each file
       if (fileSource.chunk_ids.length === 0 && chunks.length > 0) {
-        // Sort by similarity and take up to 3 top chunks
+        // Sort by similarity and take up to 5 top chunks (increased from 3)
         const topChunks = [...chunks]
           .sort((a, b) => b.similarity - a.similarity)
-          .slice(0, Math.min(3, chunks.length));
+          .slice(0, Math.min(5, chunks.length));
         
         topChunks.forEach(chunk => {
           assembledChunks.push(chunk);
@@ -158,15 +192,11 @@ serve(async (req) => {
       }
     });
     
-    // ADDED: If still no chunks were assembled, include at least some of the original results
+    // MODIFIED: More lenient logic - always include at least something
     if (assembledChunks.length === 0 && results.length > 0) {
-      console.log(`No chunks passed the filtering criteria. Including top results by default.`);
-      // Sort by similarity and take up to 5 top results (increased from 3)
-      const topResults = [...results]
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, Math.min(5, results.length));
-      
-      for (const result of topResults) {
+      console.log(`No chunks passed the filtering criteria. Including all results by default.`);
+      // Just include all results if nothing else was selected
+      results.forEach(result => {
         assembledChunks.push(result);
         usedChunkIds.add(result.chunk_id);
         
@@ -180,7 +210,7 @@ serve(async (req) => {
             chunk_ids: [result.chunk_id]
           });
         }
-      }
+      });
     }
     
     // Now let's sort the assembled chunks to maintain the original document order

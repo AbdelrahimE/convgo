@@ -221,7 +221,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         query: messageText,
         fileIds: fileIds.length > 0 ? fileIds : undefined,
         limit: 5,
-        threshold: 0.7
+        threshold: 0.3  // Lowered threshold to ensure we get results
       })
     });
 
@@ -232,7 +232,10 @@ async function processMessageForAI(instance: string, messageData: any) {
         error: errorText
       });
       console.error('Semantic search failed:', errorText);
-      return false;
+      
+      // Continue with empty context instead of failing
+      await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
+      return await generateAndSendAIResponse(messageText, '', instanceName, fromNumber, instanceBaseUrl, aiConfig, messageData);
     }
 
     const searchResults = await searchResponse.json();
@@ -241,68 +244,42 @@ async function processMessageForAI(instance: string, messageData: any) {
       similarity: searchResults.results?.[0]?.similarity || 0
     });
 
-    // Assemble context from search results
-    await logDebug('AI_CONTEXT_ASSEMBLY', 'Assembling context from search results');
-    const contextResponse = await fetch(`${supabaseUrl}/functions/v1/assemble-context`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify({
-        searchResults: searchResults.results || [],
-        query: messageText,
-        maxTokens: 1500
-      })
-    });
-
-    if (!contextResponse.ok) {
-      const errorText = await contextResponse.text();
-      await logDebug('AI_CONTEXT_ERROR', 'Context assembly failed', { 
-        status: contextResponse.status,
-        error: errorText
+    // MODIFIED: Use a simpler context assembly approach matching WhatsAppAIConfig.tsx
+    // Instead of using the assemble-context function, directly create context from search results
+    let context = '';
+    
+    if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
+      // Similar to WhatsAppAIConfig's approach, join content with separators
+      context = searchResults.results.map(result => result.content).join('\n\n');
+      await logDebug('AI_CONTEXT_ASSEMBLED', 'Context assembled using direct method', { 
+        resultCount: searchResults.results.length,
+        contextSize: context.length,
+        contextPreview: context.substring(0, 100) + '...'
       });
-      console.error('Context assembly failed:', errorText);
-      return false;
+    } else {
+      await logDebug('AI_EMPTY_CONTEXT', 'No search results found, using empty context');
     }
 
-    const contextData = await contextResponse.json();
-    await logDebug('AI_CONTEXT_ASSEMBLED', 'Context assembled successfully', { 
-      contextTokens: contextData.tokenCount || 0,
-      contextPreview: contextData.assembledContext?.substring(0, 100) + '...'
-    });
+    // Generate and send the response
+    return await generateAndSendAIResponse(messageText, context, instanceName, fromNumber, instanceBaseUrl, aiConfig, messageData);
+    
+  } catch (error) {
+    await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
+    console.error('Error in processMessageForAI:', error);
+    return false;
+  }
+}
 
+// Helper function to generate and send AI response
+async function generateAndSendAIResponse(query: string, context: string, instanceName: string, fromNumber: string, 
+                                        instanceBaseUrl: string, aiConfig: any, messageData: any) {
+  try {
     // Generate system prompt
-    await logDebug('AI_SYSTEM_PROMPT', 'Generating system prompt', { 
+    await logDebug('AI_SYSTEM_PROMPT', 'Using system prompt from configuration', { 
       userSystemPrompt: aiConfig.system_prompt
     });
     
-    const systemPromptResponse = await fetch(`${supabaseUrl}/functions/v1/generate-system-prompt`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify({
-        customSystemPrompt: aiConfig.system_prompt,
-        query: messageText
-      })
-    });
-
-    if (!systemPromptResponse.ok) {
-      const errorText = await systemPromptResponse.text();
-      await logDebug('AI_SYSTEM_PROMPT_ERROR', 'System prompt generation failed', {
-        status: systemPromptResponse.status,
-        error: errorText
-      });
-      console.error('System prompt generation failed:', errorText);
-      return false;
-    }
-
-    const systemPromptData = await systemPromptResponse.json();
-    await logDebug('AI_SYSTEM_PROMPT_GENERATED', 'System prompt generated', {
-      systemPromptPreview: systemPromptData.systemPrompt?.substring(0, 100) + '...'
-    });
+    const systemPrompt = aiConfig.system_prompt;
 
     // Generate AI response
     await logDebug('AI_RESPONSE_GENERATION', 'Generating AI response');
@@ -313,9 +290,9 @@ async function processMessageForAI(instance: string, messageData: any) {
         'Authorization': `Bearer ${supabaseServiceKey}`
       },
       body: JSON.stringify({
-        query: messageText,
-        systemPrompt: systemPromptData.systemPrompt || aiConfig.system_prompt,
-        context: contextData.assembledContext || '',
+        query: query,
+        context: context,
+        systemPrompt: systemPrompt,
         temperature: aiConfig.temperature || 0.7,
         model: 'gpt-4o-mini' // Using a smaller model for cost efficiency
       })
@@ -333,7 +310,7 @@ async function processMessageForAI(instance: string, messageData: any) {
 
     const responseData = await responseGenResponse.json();
     await logDebug('AI_RESPONSE_GENERATED', 'AI response generated successfully', {
-      responsePreview: responseData.content?.substring(0, 100) + '...',
+      responsePreview: responseData.answer?.substring(0, 100) + '...',
       tokens: responseData.usage
     });
 
@@ -344,15 +321,15 @@ async function processMessageForAI(instance: string, messageData: any) {
       const { error: interactionError } = await supabaseAdmin
         .from('whatsapp_ai_interactions')
         .insert({
-          whatsapp_instance_id: instanceId,
+          whatsapp_instance_id: aiConfig.whatsapp_instance_id,
           user_phone: fromNumber,
-          user_message: messageText,
-          ai_response: responseData.content,
+          user_message: query,
+          ai_response: responseData.answer,
           prompt_tokens: responseData.usage?.prompt_tokens || 0,
           completion_tokens: responseData.usage?.completion_tokens || 0,
           total_tokens: responseData.usage?.total_tokens || 0,
-          context_token_count: contextData.tokenCount || 0,
-          search_result_count: searchResults.results?.length || 0,
+          context_token_count: Math.ceil((context?.length || 0) / 4), // Simple estimation
+          search_result_count: context ? 1 : 0, // Simplified
           response_model: responseData.model || 'gpt-4o-mini'
         });
 
@@ -372,7 +349,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     }
 
     // Send response back through WhatsApp
-    if (instanceBaseUrl && fromNumber && responseData.content) {
+    if (instanceBaseUrl && fromNumber && responseData.answer) {
       await logDebug('AI_SENDING_RESPONSE', 'Sending AI response to WhatsApp', {
         instanceName,
         toNumber: fromNumber,
@@ -401,7 +378,7 @@ async function processMessageForAI(instance: string, messageData: any) {
           },
           body: JSON.stringify({
             number: fromNumber,
-            message: responseData.content
+            message: responseData.answer
           })
         });
 
@@ -417,7 +394,7 @@ async function processMessageForAI(instance: string, messageData: any) {
             },
             body: {
               number: fromNumber,
-              message: responseData.content.substring(0, 50) + '...'
+              message: responseData.answer.substring(0, 50) + '...'
             }
           });
           console.error('Error sending WhatsApp message:', errorText);
@@ -441,13 +418,12 @@ async function processMessageForAI(instance: string, messageData: any) {
       await logDebug('AI_SEND_MISSING_DATA', 'Missing data for sending WhatsApp message', {
         hasInstanceBaseUrl: !!instanceBaseUrl,
         hasFromNumber: !!fromNumber,
-        hasResponse: !!responseData.content
+        hasResponse: !!responseData.answer
       });
       return false;
     }
   } catch (error) {
-    await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
-    console.error('Error in processMessageForAI:', error);
+    await logDebug('AI_GENERATE_SEND_EXCEPTION', 'Exception in generate and send function', { error });
     return false;
   }
 }
