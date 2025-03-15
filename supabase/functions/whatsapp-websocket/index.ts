@@ -434,21 +434,21 @@ async function sendWhatsAppResponse(originalMessage: EvolutionMessage, responseT
     const recipientJid = originalMessage.data.key.remoteJid;
     const instanceName = originalMessage.instance;
     
+    // Extract clean phone number from the JID (remove any @s.whatsapp.net suffix)
+    const recipientNumber = recipientJid.includes('@') ? recipientJid.split('@')[0] : recipientJid;
+    
+    console.log(`Sending response to ${recipientNumber} on instance ${instanceName}`);
+    
     // Prepare the request to the EVOLUTION API
-    const response = await fetch(`https://api.convgo.com/v1/message/sendText/${instanceName}`, {
+    const response = await fetch(`https://api.convgo.com/message/sendText/${instanceName}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': EVOLUTION_API_KEY
       },
       body: JSON.stringify({
-        number: recipientJid,
-        options: {
-          delay: 1000
-        },
-        textMessage: {
-          text: responseText
-        }
+        number: recipientNumber,
+        text: responseText
       })
     });
     
@@ -457,7 +457,7 @@ async function sendWhatsAppResponse(originalMessage: EvolutionMessage, responseT
       throw new Error(`EVOLUTION API error: ${errorData}`);
     }
     
-    console.log(`Response sent to ${recipientJid} on instance ${instanceName}`);
+    console.log(`Response sent to ${recipientNumber} on instance ${instanceName}`);
   } catch (error) {
     console.error('Error sending WhatsApp response:', error);
   }

@@ -366,7 +366,7 @@ async function generateAndSendAIResponse(query: string, context: string, instanc
       }
 
       // Construct the send message URL according to EVOLUTION API format
-      const sendUrl = `${instanceBaseUrl}/api/${instanceName}/send-message`;
+      const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
       await logDebug('AI_RESPONSE_URL', 'Constructed send message URL', { sendUrl });
       
       try {
@@ -378,7 +378,7 @@ async function generateAndSendAIResponse(query: string, context: string, instanc
           },
           body: JSON.stringify({
             number: fromNumber,
-            message: responseData.answer
+            text: responseData.answer
           })
         });
 
@@ -394,7 +394,7 @@ async function generateAndSendAIResponse(query: string, context: string, instanc
             },
             body: {
               number: fromNumber,
-              message: responseData.answer.substring(0, 50) + '...'
+              text: responseData.answer.substring(0, 50) + '...'
             }
           });
           console.error('Error sending WhatsApp message:', errorText);
