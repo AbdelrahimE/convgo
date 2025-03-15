@@ -12,6 +12,9 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+// Default API URL - Set to the correct Evolution API URL
+const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
+
 // Debug logging function that logs to both console and database
 async function logDebug(category: string, message: string, data?: any) {
   console.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
@@ -168,29 +171,31 @@ async function processMessageForAI(instance: string, messageData: any) {
     try {
       await logDebug('AI_EVOLUTION_URL_CHECK', 'Attempting to determine EVOLUTION API URL', { instanceId });
       
-      const { data: webhookConfig, error: webhookError } = await supabaseAdmin
-        .from('whatsapp_webhook_config')
-        .select('webhook_url')
-        .eq('whatsapp_instance_id', instanceId)
-        .single();
-        
-      if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
-        // Extract base URL from webhook URL
-        const url = new URL(webhookConfig.webhook_url);
-        instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-        await logDebug('AI_EVOLUTION_URL_FOUND', 'Extracted base URL from webhook config', { 
-          instanceBaseUrl,
-          webhookUrl: webhookConfig.webhook_url
+      // IMPORTANT: First check if the server_url is available in the current message payload
+      if (messageData.server_url) {
+        instanceBaseUrl = messageData.server_url;
+        await logDebug('AI_EVOLUTION_URL_FROM_PAYLOAD', 'Using server_url from payload', { 
+          instanceBaseUrl
         });
       } else {
-        // If webhook URL doesn't exist, try to get it from the payload's server_url if available
-        if (messageData.server_url) {
-          instanceBaseUrl = messageData.server_url;
-          await logDebug('AI_EVOLUTION_URL_FROM_PAYLOAD', 'Using server_url from payload', { 
-            instanceBaseUrl
+        // If not available in the payload, try to get it from webhook config
+        const { data: webhookConfig, error: webhookError } = await supabaseAdmin
+          .from('whatsapp_webhook_config')
+          .select('webhook_url')
+          .eq('whatsapp_instance_id', instanceId)
+          .single();
+          
+        if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
+          // Extract base URL from webhook URL
+          const url = new URL(webhookConfig.webhook_url);
+          instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+          await logDebug('AI_EVOLUTION_URL_FOUND', 'Extracted base URL from webhook config', { 
+            instanceBaseUrl,
+            webhookUrl: webhookConfig.webhook_url
           });
         } else {
-          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'http://localhost:8080';
+          // If webhook URL doesn't exist, use the default Evolution API URL
+          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
           await logDebug('AI_EVOLUTION_URL_DEFAULT', 'Using default EVOLUTION API URL', { 
             instanceBaseUrl,
             webhookError
@@ -198,7 +203,8 @@ async function processMessageForAI(instance: string, messageData: any) {
         }
       }
     } catch (error) {
-      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'http://localhost:8080';
+      // In case of any error, use the default Evolution API URL
+      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
       await logDebug('AI_EVOLUTION_URL_ERROR', 'Error determining EVOLUTION API URL, using default', { 
         instanceBaseUrl,
         error

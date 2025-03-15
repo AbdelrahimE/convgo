@@ -57,6 +57,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Get API key for EVOLUTION API
 const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY') || '';
 
+// Default API URL - Set to the correct Evolution API URL
+const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
+
 // Track active WebSocket connections
 const activeConnections = new Map<string, WebSocket>();
 
@@ -439,8 +442,11 @@ async function sendWhatsAppResponse(originalMessage: EvolutionMessage, responseT
     
     console.log(`Sending response to ${recipientNumber} on instance ${instanceName}`);
     
+    // Use the default or environment-specified Evolution API URL
+    const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+    
     // Prepare the request to the EVOLUTION API
-    const response = await fetch(`https://api.convgo.com/message/sendText/${instanceName}`, {
+    const response = await fetch(`${evolutionApiUrl}/message/sendText/${instanceName}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
