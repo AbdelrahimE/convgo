@@ -38,14 +38,6 @@ export function useAIResponse() {
     setError(null);
     
     try {
-      console.log('Generating AI response with:', { 
-        queryLength: query.length,
-        contextLength: context?.length || 0,
-        model: options?.model || 'gpt-4o-mini',
-        temperature: options?.temperature || 0.3,
-        hasSystemPrompt: !!options?.systemPrompt
-      });
-      
       // Call the generate-response edge function
       const { data, error } = await supabase.functions.invoke('generate-response', {
         body: {
@@ -76,11 +68,6 @@ export function useAIResponse() {
         return null;
       }
 
-      console.log('AI response generated successfully', {
-        answerLength: data.answer?.length || 0,
-        tokens: data.usage?.total_tokens || 0
-      });
-      
       setResponseResult(data);
       return data;
     } catch (err) {
