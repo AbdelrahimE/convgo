@@ -204,10 +204,7 @@ const WebhookMonitor = () => {
       <WebhookEndpointInfo />
       
       <Tabs defaultValue="messages" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="messages">Webhook Messages</TabsTrigger>
-          <TabsTrigger value="debug">Debug Logs</TabsTrigger>
-        </TabsList>
+        
         
         <TabsContent value="messages">
           <Card>
