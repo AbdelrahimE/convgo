@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -184,11 +183,19 @@ async function processMessageForAI(instance: string, messageData: any) {
           webhookUrl: webhookConfig.webhook_url
         });
       } else {
-        instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'http://localhost:8080';
-        await logDebug('AI_EVOLUTION_URL_DEFAULT', 'Using default EVOLUTION API URL', { 
-          instanceBaseUrl,
-          webhookError
-        });
+        // If webhook URL doesn't exist, try to get it from the payload's server_url if available
+        if (messageData.server_url) {
+          instanceBaseUrl = messageData.server_url;
+          await logDebug('AI_EVOLUTION_URL_FROM_PAYLOAD', 'Using server_url from payload', { 
+            instanceBaseUrl
+          });
+        } else {
+          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'http://localhost:8080';
+          await logDebug('AI_EVOLUTION_URL_DEFAULT', 'Using default EVOLUTION API URL', { 
+            instanceBaseUrl,
+            webhookError
+          });
+        }
       }
     } catch (error) {
       instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'http://localhost:8080';
@@ -368,18 +375,20 @@ async function processMessageForAI(instance: string, messageData: any) {
     if (instanceBaseUrl && fromNumber && responseData.content) {
       await logDebug('AI_SENDING_RESPONSE', 'Sending AI response to WhatsApp', {
         instanceName,
-        toNumber: fromNumber
+        toNumber: fromNumber,
+        baseUrl: instanceBaseUrl
       });
       
       // Determine Evolution API key
-      const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
+      const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey;
       
       if (!evolutionApiKey) {
-        await logDebug('AI_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable not set');
-        console.error('EVOLUTION_API_KEY environment variable not set');
+        await logDebug('AI_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable not set and no apikey in payload');
+        console.error('EVOLUTION_API_KEY environment variable not set and no apikey in payload');
         return false;
       }
 
+      // Construct the send message URL according to EVOLUTION API format
       const sendUrl = `${instanceBaseUrl}/api/${instanceName}/send-message`;
       await logDebug('AI_RESPONSE_URL', 'Constructed send message URL', { sendUrl });
       
@@ -400,7 +409,16 @@ async function processMessageForAI(instance: string, messageData: any) {
           const errorText = await sendResponse.text();
           await logDebug('AI_SEND_RESPONSE_ERROR', 'Error sending WhatsApp message', {
             status: sendResponse.status,
-            error: errorText
+            error: errorText,
+            sendUrl,
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': '[REDACTED]'
+            },
+            body: {
+              number: fromNumber,
+              message: responseData.content.substring(0, 50) + '...'
+            }
           });
           console.error('Error sending WhatsApp message:', errorText);
           return false;
@@ -410,7 +428,12 @@ async function processMessageForAI(instance: string, messageData: any) {
         await logDebug('AI_RESPONSE_SENT', 'WhatsApp message sent successfully', { sendResult });
         return true;
       } catch (error) {
-        await logDebug('AI_SEND_EXCEPTION', 'Exception sending WhatsApp message', { error });
+        await logDebug('AI_SEND_EXCEPTION', 'Exception sending WhatsApp message', { 
+          error,
+          sendUrl, 
+          instanceBaseUrl,
+          fromNumber
+        });
         console.error('Exception sending WhatsApp message:', error);
         return false;
       }
@@ -454,6 +477,25 @@ serve(async (req) => {
       pathParts 
     });
     
+    // Get the request body for further processing
+    let data;
+    try {
+      data = await req.json();
+      await logDebug('WEBHOOK_PAYLOAD', 'Webhook payload received', { data });
+    } catch (error) {
+      await logDebug('WEBHOOK_PAYLOAD_ERROR', 'Failed to parse webhook payload', { error });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid JSON payload' }),
+        { 
+          status: 400, 
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+    
     // Try to extract the instance name from the path first (for backward compatibility)
     let instanceName = null;
     
@@ -479,25 +521,6 @@ serve(async (req) => {
       // Try to extract instance from the next path part
       instanceName = pathParts[3];
       await logDebug('WEBHOOK_PATH_ALTERNATIVE', `Alternative webhook path detected, using: ${instanceName}`);
-    }
-    
-    // Get the request body for further processing
-    let data;
-    try {
-      data = await req.json();
-      await logDebug('WEBHOOK_PAYLOAD', 'Webhook payload received', { data });
-    } catch (error) {
-      await logDebug('WEBHOOK_PAYLOAD_ERROR', 'Failed to parse webhook payload', { error });
-      return new Response(
-        JSON.stringify({ success: false, error: 'Invalid JSON payload' }),
-        { 
-          status: 400, 
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
     }
     
     // If instance name is not found in the path, try to extract it from the payload
