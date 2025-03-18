@@ -7,6 +7,8 @@ interface GenerateResponseOptions {
   model?: string;
   temperature?: number;
   systemPrompt?: string;
+  includeConversationHistory?: boolean;
+  conversationId?: string;
 }
 
 interface ResponseResult {
@@ -17,6 +19,7 @@ interface ResponseResult {
     completion_tokens: number;
     total_tokens: number;
   };
+  conversationId?: string;
 }
 
 export function useAIResponse() {
@@ -45,7 +48,9 @@ export function useAIResponse() {
           context,
           model: options?.model || 'gpt-4o-mini',
           temperature: options?.temperature || 0.3,
-          systemPrompt: options?.systemPrompt
+          systemPrompt: options?.systemPrompt,
+          includeConversationHistory: options?.includeConversationHistory || false,
+          conversationId: options?.conversationId
         }
       });
       
@@ -68,8 +73,14 @@ export function useAIResponse() {
         return null;
       }
 
-      setResponseResult(data);
-      return data;
+      // Include conversation ID in response if available
+      const result = {
+        ...data,
+        conversationId: data.conversationId || options?.conversationId
+      };
+
+      setResponseResult(result);
+      return result;
     } catch (err) {
       console.error('Exception during response generation:', err);
       setError(err instanceof Error ? err : new Error('An unknown error occurred'));

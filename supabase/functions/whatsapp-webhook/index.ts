@@ -18,28 +18,58 @@ async function findOrCreateConversation(instanceId: string, userPhone: string) {
     // First try to find existing conversation
     const { data: existingConversation, error: findError } = await supabaseAdmin
       .from('whatsapp_conversations')
-      .select('id')
+      .select('id, status, last_activity')
       .eq('instance_id', instanceId)
       .eq('user_phone', userPhone)
       .eq('status', 'active')
       .single();
 
+    // If found an active conversation that's not expired
     if (!findError && existingConversation) {
-      return existingConversation.id;
+      // Check if the conversation has been inactive for more than 6 hours (considered expired)
+      const lastActivity = new Date(existingConversation.last_activity);
+      const currentTime = new Date();
+      const hoursDifference = (currentTime.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
+      
+      if (hoursDifference > 6) {
+        // Mark the old conversation as expired and create a new one
+        await supabaseAdmin
+          .from('whatsapp_conversations')
+          .update({ status: 'expired' })
+          .eq('id', existingConversation.id);
+          
+        // Log the expiration
+        await logDebug('CONVERSATION_EXPIRED', `Conversation ${existingConversation.id} expired after ${hoursDifference.toFixed(2)} hours of inactivity`);
+        
+        // Create new conversation below (fall through to creation)
+      } else {
+        // Existing active conversation that hasn't expired
+        return existingConversation.id;
+      }
     }
 
-    // If no active conversation exists, create a new one
+    // If no active conversation exists or it expired, create a new one
     const { data: newConversation, error: createError } = await supabaseAdmin
       .from('whatsapp_conversations')
       .insert({
         instance_id: instanceId,
         user_phone: userPhone,
-        status: 'active'
+        status: 'active',
+        conversation_data: { 
+          context: {
+            last_update: new Date().toISOString(),
+            message_count: 0
+          }
+        }
       })
       .select('id')
       .single();
 
     if (createError) throw createError;
+    
+    // Log the creation of a new conversation
+    await logDebug('CONVERSATION_CREATED', `New conversation created for instance ${instanceId} and phone ${userPhone}`);
+    
     return newConversation.id;
   } catch (error) {
     console.error('Error in findOrCreateConversation:', error);
@@ -60,23 +90,66 @@ async function storeMessageInConversation(conversationId: string, role: 'user' |
       });
 
     if (error) throw error;
+    
+    // Update conversation data with message count
+    const { data: messageCount } = await supabaseAdmin
+      .from('whatsapp_conversation_messages')
+      .select('id', { count: 'exact' })
+      .eq('conversation_id', conversationId);
+      
+    // Update the conversation metadata
+    await supabaseAdmin
+      .from('whatsapp_conversations')
+      .update({ 
+        conversation_data: {
+          context: {
+            last_update: new Date().toISOString(),
+            message_count: messageCount || 0
+          }
+        }
+      })
+      .eq('id', conversationId);
   } catch (error) {
     console.error('Error in storeMessageInConversation:', error);
     throw error;
   }
 }
 
-// Helper function to get recent conversation history
-async function getRecentConversationHistory(conversationId: string, limit = 5) {
+// Helper function to get recent conversation history with token consideration
+async function getRecentConversationHistory(conversationId: string, maxTokens = 1000) {
   try {
+    // Get message count first to determine how many to fetch
+    const { data: countData, error: countError } = await supabaseAdmin
+      .from('whatsapp_conversation_messages')
+      .select('id', { count: 'exact' })
+      .eq('conversation_id', conversationId);
+    
+    if (countError) throw countError;
+    
+    // Calculate how many messages to fetch (estimate 50 tokens per message on average)
+    // This is a simple heuristic - adjust based on your actual message sizes
+    const messageCount = countData || 0;
+    const estimatedMessagesToFetch = Math.min(Math.floor(maxTokens / 50), messageCount, 10);
+    
+    // Always include at least 3 messages if available
+    const messagesToFetch = Math.max(estimatedMessagesToFetch, Math.min(3, messageCount));
+    
+    // Fetch the messages
     const { data, error } = await supabaseAdmin
       .from('whatsapp_conversation_messages')
-      .select('role, content')
+      .select('role, content, timestamp')
       .eq('conversation_id', conversationId)
       .order('timestamp', { ascending: false })
-      .limit(limit);
+      .limit(messagesToFetch);
 
     if (error) throw error;
+    
+    // Log the conversation history retrieval
+    await logDebug('CONVERSATION_HISTORY', `Retrieved ${data.length} messages from conversation ${conversationId}`, {
+      messageCount: data.length,
+      maxTokensAllowed: maxTokens
+    });
+    
     return data.reverse();
   } catch (error) {
     console.error('Error in getRecentConversationHistory:', error);
@@ -102,6 +175,7 @@ async function logDebug(category: string, message: string, data?: any) {
   }
 }
 
+// Helper function to save webhook message
 async function saveWebhookMessage(instance: string, event: string, data: any) {
   try {
     await logDebug('WEBHOOK_SAVE', `Saving webhook message for instance ${instance}, event ${event}`);
@@ -126,6 +200,7 @@ async function saveWebhookMessage(instance: string, event: string, data: any) {
   }
 }
 
+// Helper function to process message for AI
 async function processMessageForAI(instance: string, messageData: any) {
   try {
     await logDebug('AI_PROCESS_START', 'Starting AI message processing', { instance });
@@ -187,8 +262,8 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Store user message in conversation
     await storeMessageInConversation(conversationId, 'user', messageText, messageData.key?.id);
     
-    // Get recent conversation history
-    const conversationHistory = await getRecentConversationHistory(conversationId);
+    // Get recent conversation history - improved to consider tokens
+    const conversationHistory = await getRecentConversationHistory(conversationId, 800);
     await logDebug('CONVERSATION_HISTORY', 'Retrieved conversation history', { 
       messageCount: conversationHistory.length 
     });
@@ -196,7 +271,6 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Check if this instance has AI enabled
     await logDebug('AI_CONFIG_CHECK', 'Checking if AI is enabled for instance', { instanceName });
     
-
     const instanceId = instanceData.id;
     await logDebug('AI_INSTANCE_FOUND', 'Found instance in database', { instanceId, status: instanceData.status });
 
@@ -313,7 +387,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         query: messageText,
         fileIds: fileIds.length > 0 ? fileIds : undefined,
         limit: 5,
-        threshold: 0.3  // Lowered threshold to ensure we get results
+        threshold: 0.3
       })
     });
 
@@ -336,37 +410,40 @@ async function processMessageForAI(instance: string, messageData: any) {
       similarity: searchResults.results?.[0]?.similarity || 0
     });
 
-    // MODIFIED: Use a simpler context assembly approach matching WhatsAppAIConfig.tsx
-    // Instead of using the assemble-context function, directly create context from search results
+    // IMPROVED CONTEXT ASSEMBLY: Balance between conversation history and RAG content
     let context = '';
+    let ragContext = '';
     
+    // 1. Format conversation history in a clean format
+    const conversationContext = conversationHistory
+      .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+      .join('\n\n');
+    
+    // 2. Format RAG results if available
     if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
-      // Similar to WhatsAppAIConfig's approach, join content with separators
-      context = searchResults.results.map(result => result.content).join('\n\n');
-      await logDebug('AI_CONTEXT_ASSEMBLED', 'Context assembled using direct method', { 
-        resultCount: searchResults.results.length,
-        contextSize: context.length,
-        contextPreview: context.substring(0, 100) + '...'
+      // Join RAG content with separators and add source information
+      ragContext = searchResults.results
+        .map((result, index) => `DOCUMENT ${index + 1}:\n${result.content.trim()}`)
+        .join('\n\n---\n\n');
+      
+      // 3. Combine both contexts with clear separation
+      context = `CONVERSATION HISTORY:\n${conversationContext}\n\n` + 
+                `RELEVANT INFORMATION:\n${ragContext}`;
+      
+      await logDebug('AI_CONTEXT_ASSEMBLED', 'Enhanced context assembled with both conversation history and RAG', { 
+        conversationTokens: Math.ceil(conversationContext.length / 4),
+        ragTokens: Math.ceil(ragContext.length / 4),
+        totalTokens: Math.ceil(context.length / 4)
       });
     } else {
-      await logDebug('AI_EMPTY_CONTEXT', 'No search results found, using empty context');
+      // Only conversation history is available
+      context = `CONVERSATION HISTORY:\n${conversationContext}`;
+      await logDebug('AI_CONTEXT_ASSEMBLED', 'Context assembled with only conversation history', { 
+        conversationTokens: Math.ceil(conversationContext.length / 4)
+      });
     }
 
-    // Format conversation history for context
-    const conversationContext = conversationHistory
-      .map(msg => `${msg.role}: ${msg.content}`)
-      .join('\n');
-
-    // Combine conversation history with file context
-    
-    if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
-      const fileContext = searchResults.results.map(result => result.content).join('\n\n');
-      context = `${conversationContext}\n\nRelevant information:\n${fileContext}`;
-    } else {
-      context = conversationContext;
-    }
-
-    // Generate and send the response with conversation context
+    // Generate and send the response with improved context
     return await generateAndSendAIResponse(
       messageText,
       context,
@@ -384,6 +461,7 @@ async function processMessageForAI(instance: string, messageData: any) {
   }
 }
 
+// Helper function to generate and send AI response
 async function generateAndSendAIResponse(
   query: string,
   context: string,
@@ -415,7 +493,7 @@ async function generateAndSendAIResponse(
         context: context,
         systemPrompt: systemPrompt,
         temperature: aiConfig.temperature || 0.7,
-        model: 'gpt-4o-mini' // Using a smaller model for cost efficiency
+        model: 'gpt-4o-mini'
       })
     });
 
@@ -454,8 +532,8 @@ async function generateAndSendAIResponse(
           prompt_tokens: responseData.usage?.prompt_tokens || 0,
           completion_tokens: responseData.usage?.completion_tokens || 0,
           total_tokens: responseData.usage?.total_tokens || 0,
-          context_token_count: Math.ceil((context?.length || 0) / 4), // Simple estimation
-          search_result_count: context ? 1 : 0, // Simplified
+          context_token_count: Math.ceil((context?.length || 0) / 4),
+          search_result_count: context ? 1 : 0,
           response_model: responseData.model || 'gpt-4o-mini'
         });
 

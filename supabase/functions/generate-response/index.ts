@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 interface GenerateResponseRequest {
   query: string;
@@ -8,6 +9,8 @@ interface GenerateResponseRequest {
   model?: string;
   temperature?: number;
   systemPrompt?: string;
+  includeConversationHistory?: boolean;
+  conversationId?: string;
 }
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
@@ -25,6 +28,30 @@ If this is a greeting or general question, please respond appropriately.
 For greetings, acknowledge the greeting and ask how you can help.
 For general questions, provide a helpful response if you can, or politely explain that you need more specific information.`;
 
+// Initialize Supabase client (only when conversation features are used)
+const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+// Helper function to store AI response in conversation if conversation ID is provided
+async function storeResponseInConversation(conversationId: string, responseText: string) {
+  if (!conversationId) return;
+  
+  try {
+    await supabaseAdmin
+      .from('whatsapp_conversation_messages')
+      .insert({
+        conversation_id: conversationId,
+        role: 'assistant',
+        content: responseText
+      });
+    
+    console.log(`Stored AI response in conversation ${conversationId}`);
+  } catch (error) {
+    console.error('Error storing response in conversation:', error);
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -37,7 +64,9 @@ serve(async (req) => {
       context, 
       model = 'gpt-4o-mini', 
       temperature = 0.3,
-      systemPrompt 
+      systemPrompt,
+      includeConversationHistory = false,
+      conversationId
     } = await req.json() as GenerateResponseRequest;
 
     if (!query) {
@@ -55,6 +84,9 @@ serve(async (req) => {
 
     console.log(`Generating response for query: "${query}" with model: ${model}, temperature: ${temperature}`);
     console.log(`Context available: ${context ? 'Yes' : 'No'}`);
+    if (conversationId) {
+      console.log(`Using conversation ID: ${conversationId}`);
+    }
 
     // Use the provided system prompt or fall back to the default
     let finalSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
@@ -94,12 +126,18 @@ serve(async (req) => {
     const responseData = await openaiResponse.json();
     const generatedAnswer = responseData.choices[0].message.content;
 
+    // If conversationId is provided, store the response in the conversation
+    if (conversationId) {
+      await storeResponseInConversation(conversationId, generatedAnswer);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         answer: generatedAnswer,
         model,
-        usage: responseData.usage
+        usage: responseData.usage,
+        conversationId: conversationId // Return the conversation ID if it was provided
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
