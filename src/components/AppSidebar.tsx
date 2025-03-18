@@ -35,11 +35,6 @@ const navigation = [
     name: 'WhatsApp AI',
     href: '/whatsapp-ai-config',
     icon: Settings
-  },
-  {
-    name: 'Webhook Monitor',
-    href: '/webhook-monitor',
-    icon: Radio
   }
 ];
 
