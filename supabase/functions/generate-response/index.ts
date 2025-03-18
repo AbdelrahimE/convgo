@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -11,6 +10,7 @@ interface GenerateResponseRequest {
   systemPrompt?: string;
   includeConversationHistory?: boolean;
   conversationId?: string;
+  maxContextTokens?: number;
 }
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
@@ -32,6 +32,135 @@ For general questions, provide a helpful response if you can, or politely explai
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+// Token estimation constants
+const TOKENS_PER_CHAR = 0.25; // Approximate ratio of tokens to characters
+const MAX_CONTEXT_TOKENS = 3000; // Default maximum context tokens
+const MAX_CONVERSATION_TOKENS = 1000; // Default maximum for conversation history
+const MAX_RAG_TOKENS = 2000; // Default maximum for RAG content
+
+// Helper function to estimate token count from text
+function estimateTokens(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length * TOKENS_PER_CHAR);
+}
+
+// Advanced function to balance conversation history and RAG content
+function balanceContextTokens(
+  conversationHistory: string, 
+  ragContent: string, 
+  maxContextTokens: number = MAX_CONTEXT_TOKENS
+): { finalContext: string, tokenCounts: { conversation: number, rag: number, total: number } } {
+  // Get token estimates
+  const conversationTokens = estimateTokens(conversationHistory);
+  const ragTokens = estimateTokens(ragContent);
+  const totalTokens = conversationTokens + ragTokens;
+  
+  // If everything fits, return the full context
+  if (totalTokens <= maxContextTokens) {
+    const finalContext = conversationHistory ? 
+      `CONVERSATION HISTORY:\n${conversationHistory}\n\n${ragContent ? `RELEVANT INFORMATION:\n${ragContent}` : ''}` : 
+      (ragContent ? `RELEVANT INFORMATION:\n${ragContent}` : '');
+    
+    return {
+      finalContext,
+      tokenCounts: { conversation: conversationTokens, rag: ragTokens, total: totalTokens }
+    };
+  }
+  
+  // If we need to trim, allocate tokens proportionally but with minimums
+  let trimmedConversation = conversationHistory;
+  let trimmedRag = ragContent;
+  
+  // Calculate target token counts
+  const MIN_CONVERSATION_TOKENS = 300; // Preserve at least this much conversation
+  const MIN_RAG_TOKENS = 500; // Preserve at least this much RAG content
+  
+  // If conversation is too large, trim it (preserve most recent messages)
+  if (conversationTokens > MIN_CONVERSATION_TOKENS && totalTokens > maxContextTokens) {
+    // Calculate how much conversation history we can keep
+    let targetConvTokens = Math.min(
+      conversationTokens,
+      Math.max(
+        MIN_CONVERSATION_TOKENS,
+        Math.floor(maxContextTokens * 0.3) // Allocate 30% to conversation by default
+      )
+    );
+    
+    // If RAG content is small, we can allocate more to conversation
+    if (ragTokens < MIN_RAG_TOKENS) {
+      targetConvTokens = Math.min(
+        conversationTokens,
+        maxContextTokens - ragTokens
+      );
+    }
+    
+    // Trim conversation to target token count (from the end to keep most recent)
+    const lines = conversationHistory.split('\n\n');
+    let currentTokens = 0;
+    let includedLines = [];
+    
+    // Start from the end (most recent) and work backwards
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const lineTokens = estimateTokens(lines[i]);
+      if (currentTokens + lineTokens <= targetConvTokens) {
+        includedLines.unshift(lines[i]); // Add to beginning
+        currentTokens += lineTokens;
+      } else {
+        break;
+      }
+    }
+    
+    trimmedConversation = includedLines.join('\n\n');
+  }
+  
+  // If RAG is too large, trim it (preserve highest similarity matches)
+  if (ragTokens > MIN_RAG_TOKENS && totalTokens > maxContextTokens) {
+    // Calculate how much RAG content we can keep
+    const targetRagTokens = Math.min(
+      ragTokens,
+      Math.max(
+        MIN_RAG_TOKENS,
+        maxContextTokens - estimateTokens(trimmedConversation)
+      )
+    );
+    
+    // Trim RAG to target token count
+    const sections = ragContent.split('\n\n---\n\n');
+    let currentTokens = 0;
+    let includedSections = [];
+    
+    // Preserve sections until we hit the limit
+    for (let i = 0; i < sections.length; i++) {
+      const sectionTokens = estimateTokens(sections[i]);
+      if (currentTokens + sectionTokens <= targetRagTokens) {
+        includedSections.push(sections[i]);
+        currentTokens += sectionTokens;
+      } else {
+        break;
+      }
+    }
+    
+    trimmedRag = includedSections.join('\n\n---\n\n');
+  }
+  
+  // Assemble the balanced context
+  const finalTokens = {
+    conversation: estimateTokens(trimmedConversation),
+    rag: estimateTokens(trimmedRag),
+    total: estimateTokens(trimmedConversation) + estimateTokens(trimmedRag)
+  };
+  
+  let finalContext = '';
+  if (trimmedConversation) {
+    finalContext += `CONVERSATION HISTORY:\n${trimmedConversation}\n\n`;
+  }
+  if (trimmedRag) {
+    finalContext += `RELEVANT INFORMATION:\n${trimmedRag}`;
+  }
+  
+  return { finalContext, tokenCounts: finalTokens };
+}
 
 // Helper function to store AI response in conversation if conversation ID is provided
 async function storeResponseInConversation(conversationId: string, responseText: string) {
@@ -66,7 +195,8 @@ serve(async (req) => {
       temperature = 0.3,
       systemPrompt,
       includeConversationHistory = false,
-      conversationId
+      conversationId,
+      maxContextTokens = MAX_CONTEXT_TOKENS
     } = await req.json() as GenerateResponseRequest;
 
     if (!query) {
@@ -96,10 +226,19 @@ serve(async (req) => {
       finalSystemPrompt += EMPTY_CONTEXT_ADDITION;
     }
 
-    // Prepare the user message - include context only if it exists
-    const userMessage = context && context.trim() !== '' 
-      ? `Context:\n${context}\n\nQuestion: ${query}`
-      : `Question: ${query}`;
+    // Apply advanced token management to balance conversation history and RAG content
+    const { finalContext, tokenCounts } = balanceContextTokens(
+      context,
+      '',
+      maxContextTokens
+    );
+    
+    console.log(`Token allocation - Conversation: ${tokenCounts.conversation}, RAG: ${tokenCounts.rag}, Total: ${tokenCounts.total}`);
+
+    // Prepare the user message with the balanced context
+    const userMessage = finalContext ? 
+      `Context:\n${finalContext}\n\nQuestion: ${query}` : 
+      `Question: ${query}`;
 
     // Call OpenAI API to generate response
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -137,6 +276,11 @@ serve(async (req) => {
         answer: generatedAnswer,
         model,
         usage: responseData.usage,
+        tokenUsage: {
+          context: tokenCounts,
+          completion: responseData.usage.completion_tokens,
+          total: responseData.usage.total_tokens
+        },
         conversationId: conversationId // Return the conversation ID if it was provided
       }),
       { 

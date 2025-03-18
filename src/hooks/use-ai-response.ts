@@ -9,6 +9,17 @@ interface GenerateResponseOptions {
   systemPrompt?: string;
   includeConversationHistory?: boolean;
   conversationId?: string;
+  maxContextTokens?: number;
+}
+
+interface TokenUsage {
+  context: {
+    conversation: number;
+    rag: number;
+    total: number;
+  };
+  completion: number;
+  total: number;
 }
 
 interface ResponseResult {
@@ -19,6 +30,7 @@ interface ResponseResult {
     completion_tokens: number;
     total_tokens: number;
   };
+  tokenUsage?: TokenUsage;
   conversationId?: string;
 }
 
@@ -50,7 +62,8 @@ export function useAIResponse() {
           temperature: options?.temperature || 0.3,
           systemPrompt: options?.systemPrompt,
           includeConversationHistory: options?.includeConversationHistory || false,
-          conversationId: options?.conversationId
+          conversationId: options?.conversationId,
+          maxContextTokens: options?.maxContextTokens || 3000 // Pass the token limit
         }
       });
       
