@@ -477,6 +477,82 @@ export type Database = {
           },
         ]
       }
+      whatsapp_conversation_messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          id: string
+          message_id: string | null
+          metadata: Json | null
+          role: string
+          timestamp: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          role: string
+          timestamp?: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          role?: string
+          timestamp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_conversation_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_conversations: {
+        Row: {
+          conversation_data: Json | null
+          id: string
+          instance_id: string
+          last_activity: string
+          started_at: string
+          status: string
+          user_phone: string
+        }
+        Insert: {
+          conversation_data?: Json | null
+          id?: string
+          instance_id: string
+          last_activity?: string
+          started_at?: string
+          status?: string
+          user_phone: string
+        }
+        Update: {
+          conversation_data?: Json | null
+          id?: string
+          instance_id?: string
+          last_activity?: string
+          started_at?: string
+          status?: string
+          user_phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_conversations_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_file_mappings: {
         Row: {
           created_at: string

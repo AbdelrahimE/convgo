@@ -12,6 +12,78 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+// Helper function to find or create a conversation
+async function findOrCreateConversation(instanceId: string, userPhone: string) {
+  try {
+    // First try to find existing conversation
+    const { data: existingConversation, error: findError } = await supabaseAdmin
+      .from('whatsapp_conversations')
+      .select('id')
+      .eq('instance_id', instanceId)
+      .eq('user_phone', userPhone)
+      .eq('status', 'active')
+      .single();
+
+    if (!findError && existingConversation) {
+      return existingConversation.id;
+    }
+
+    // If no active conversation exists, create a new one
+    const { data: newConversation, error: createError } = await supabaseAdmin
+      .from('whatsapp_conversations')
+      .insert({
+        instance_id: instanceId,
+        user_phone: userPhone,
+        status: 'active'
+      })
+      .select('id')
+      .single();
+
+    if (createError) throw createError;
+    return newConversation.id;
+  } catch (error) {
+    console.error('Error in findOrCreateConversation:', error);
+    throw error;
+  }
+}
+
+// Helper function to store message in conversation
+async function storeMessageInConversation(conversationId: string, role: 'user' | 'assistant', content: string, messageId?: string) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('whatsapp_conversation_messages')
+      .insert({
+        conversation_id: conversationId,
+        role,
+        content,
+        message_id: messageId
+      });
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error in storeMessageInConversation:', error);
+    throw error;
+  }
+}
+
+// Helper function to get recent conversation history
+async function getRecentConversationHistory(conversationId: string, limit = 5) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('whatsapp_conversation_messages')
+      .select('role, content')
+      .eq('conversation_id', conversationId)
+      .order('timestamp', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data.reverse();
+  } catch (error) {
+    console.error('Error in getRecentConversationHistory:', error);
+    return [];
+  }
+}
+
 // Default API URL - Set to the correct Evolution API URL
 const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
 
@@ -92,10 +164,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       return false;
     }
 
-    // Check if this instance has AI enabled
-    await logDebug('AI_CONFIG_CHECK', 'Checking if AI is enabled for instance', { instanceName });
-    
-    // First, get the instance ID from the instance name
+    // Get instance ID from instance name
     const { data: instanceData, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
       .select('id, status')
@@ -110,6 +179,23 @@ async function processMessageForAI(instance: string, messageData: any) {
       console.error('Error getting instance data:', instanceError);
       return false;
     }
+
+    // Find or create conversation
+    const conversationId = await findOrCreateConversation(instanceData.id, fromNumber);
+    await logDebug('CONVERSATION_MANAGED', 'Conversation found or created', { conversationId });
+
+    // Store user message in conversation
+    await storeMessageInConversation(conversationId, 'user', messageText, messageData.key?.id);
+    
+    // Get recent conversation history
+    const conversationHistory = await getRecentConversationHistory(conversationId);
+    await logDebug('CONVERSATION_HISTORY', 'Retrieved conversation history', { 
+      messageCount: conversationHistory.length 
+    });
+
+    // Check if this instance has AI enabled
+    await logDebug('AI_CONFIG_CHECK', 'Checking if AI is enabled for instance', { instanceName });
+    
 
     const instanceId = instanceData.id;
     await logDebug('AI_INSTANCE_FOUND', 'Found instance in database', { instanceId, status: instanceData.status });
@@ -241,7 +327,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       
       // Continue with empty context instead of failing
       await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
-      return await generateAndSendAIResponse(messageText, '', instanceName, fromNumber, instanceBaseUrl, aiConfig, messageData);
+      return await generateAndSendAIResponse(messageText, '', instanceName, fromNumber, instanceBaseUrl, aiConfig, messageData, conversationId);
     }
 
     const searchResults = await searchResponse.json();
@@ -266,9 +352,31 @@ async function processMessageForAI(instance: string, messageData: any) {
       await logDebug('AI_EMPTY_CONTEXT', 'No search results found, using empty context');
     }
 
-    // Generate and send the response
-    return await generateAndSendAIResponse(messageText, context, instanceName, fromNumber, instanceBaseUrl, aiConfig, messageData);
+    // Format conversation history for context
+    const conversationContext = conversationHistory
+      .map(msg => `${msg.role}: ${msg.content}`)
+      .join('\n');
+
+    // Combine conversation history with file context
     
+    if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
+      const fileContext = searchResults.results.map(result => result.content).join('\n\n');
+      context = `${conversationContext}\n\nRelevant information:\n${fileContext}`;
+    } else {
+      context = conversationContext;
+    }
+
+    // Generate and send the response with conversation context
+    return await generateAndSendAIResponse(
+      messageText,
+      context,
+      instanceName,
+      fromNumber,
+      instanceBaseUrl,
+      aiConfig,
+      messageData,
+      conversationId
+    );
   } catch (error) {
     await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
     console.error('Error in processMessageForAI:', error);
@@ -276,9 +384,16 @@ async function processMessageForAI(instance: string, messageData: any) {
   }
 }
 
-// Helper function to generate and send AI response
-async function generateAndSendAIResponse(query: string, context: string, instanceName: string, fromNumber: string, 
-                                        instanceBaseUrl: string, aiConfig: any, messageData: any) {
+async function generateAndSendAIResponse(
+  query: string,
+  context: string,
+  instanceName: string,
+  fromNumber: string,
+  instanceBaseUrl: string,
+  aiConfig: any,
+  messageData: any,
+  conversationId: string
+) {
   try {
     // Generate system prompt
     await logDebug('AI_SYSTEM_PROMPT', 'Using system prompt from configuration', { 
@@ -319,6 +434,11 @@ async function generateAndSendAIResponse(query: string, context: string, instanc
       responsePreview: responseData.answer?.substring(0, 100) + '...',
       tokens: responseData.usage
     });
+
+    // Store AI response in conversation history
+    if (responseData.answer) {
+      await storeMessageInConversation(conversationId, 'assistant', responseData.answer);
+    }
 
     // Save interaction to database
     try {
