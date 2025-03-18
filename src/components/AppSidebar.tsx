@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "react-router-dom";
-import { FileText, Home, LogOut, MessageCircle, Link2, Settings, Radio } from "lucide-react";
+import { Folder, Home, LogOut, Phone, Link2, Radio } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,24 +17,24 @@ const navigation = [
     icon: Home
   }, 
   {
-    name: 'Files',
+    name: 'My Files',
     href: '/files',
-    icon: FileText
+    icon: Folder
   }, 
   {
-    name: 'WhatsApp',
+    name: 'WhatsApp Numbers',
     href: '/whatsapp',
-    icon: MessageCircle
+    icon: Phone
   },
   {
-    name: 'WhatsApp Files',
+    name: 'Linked Files',
     href: '/whatsapp-file-config',
     icon: Link2
   },
   {
-    name: 'WhatsApp AI',
+    name: 'AI Settings',
     href: '/whatsapp-ai-config',
-    icon: Settings
+    icon: Radio
   }
 ];
 
