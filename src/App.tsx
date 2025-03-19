@@ -1,4 +1,3 @@
-
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -10,7 +9,6 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
 import OpenAITest from '@/pages/OpenAITest';
-import TextProcessingDemo from '@/pages/TextProcessingDemo';
 import WhatsAppFileConfig from '@/pages/WhatsAppFileConfig';
 import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
@@ -87,15 +85,6 @@ function AppContent() {
                     </ProtectedRoute>
                   }
                 />
-                <Route
-                  path="/text-processing"
-                  element={
-                    <ProtectedRoute>
-                      <TextProcessingDemo />
-                    </ProtectedRoute>
-                  }
-                />
-                {/* Removed the semantic-search route */}
               </Routes>
             </NetworkErrorBoundary>
           </ErrorBoundary>
