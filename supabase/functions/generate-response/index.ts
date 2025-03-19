@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -162,6 +163,14 @@ function balanceContextTokens(
   return { finalContext, tokenCounts: finalTokens };
 }
 
+// Post-processing function to convert double asterisks to single asterisks for WhatsApp
+function formatTextForWhatsApp(text: string): string {
+  if (!text) return text;
+  
+  // Replace double asterisks with single asterisks for bold formatting
+  return text.replace(/\*\*(.*?)\*\*/g, '*$1*');
+}
+
 // Helper function to store AI response in conversation if conversation ID is provided
 async function storeResponseInConversation(conversationId: string, responseText: string) {
   if (!conversationId) return;
@@ -263,7 +272,10 @@ serve(async (req) => {
     }
 
     const responseData = await openaiResponse.json();
-    const generatedAnswer = responseData.choices[0].message.content;
+    let generatedAnswer = responseData.choices[0].message.content;
+    
+    // Apply WhatsApp formatting post-processing
+    generatedAnswer = formatTextForWhatsApp(generatedAnswer);
 
     // If conversationId is provided, store the response in the conversation
     if (conversationId) {
