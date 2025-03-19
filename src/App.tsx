@@ -11,7 +11,6 @@ import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
 import OpenAITest from '@/pages/OpenAITest';
 import TextProcessingDemo from '@/pages/TextProcessingDemo';
-import SemanticSearchTest from '@/pages/SemanticSearchTest';
 import WhatsAppFileConfig from '@/pages/WhatsAppFileConfig';
 import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
@@ -96,14 +95,7 @@ function AppContent() {
                     </ProtectedRoute>
                   }
                 />
-                <Route
-                  path="/semantic-search"
-                  element={
-                    <ProtectedRoute>
-                      <SemanticSearchTest />
-                    </ProtectedRoute>
-                  }
-                />
+                {/* Removed the semantic-search route */}
               </Routes>
             </NetworkErrorBoundary>
           </ErrorBoundary>
