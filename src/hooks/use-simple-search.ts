@@ -28,8 +28,8 @@ export function useSimpleSearch() {
     setError(null);
     
     try {
-      // First, get embedding for the query using the generate-embeddings function
-      const { data: embeddingData, error: embeddingError } = await supabase.functions.invoke('generate-embeddings', {
+      // Use our new generate-query-embedding function specifically for search queries
+      const { data: embeddingData, error: embeddingError } = await supabase.functions.invoke('generate-query-embedding', {
         body: { text: options.query }
       });
       
