@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface GenerateResponseOptions {
   model?: string;
@@ -30,10 +31,17 @@ interface AIResponseResult {
   conversationId?: string;
 }
 
+interface SendWhatsAppMessageOptions {
+  instanceName: string;
+  recipientPhone: string;
+  message: string;
+}
+
 export function useAIResponse() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [responseResult, setResponseResult] = useState<AIResponseResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
 
   const generateResponse = async (
     query: string,
@@ -84,9 +92,46 @@ export function useAIResponse() {
     }
   };
 
+  const sendWhatsAppMessage = async (options: SendWhatsAppMessageOptions): Promise<boolean> => {
+    try {
+      setIsSendingWhatsApp(true);
+      
+      const { instanceName, recipientPhone, message } = options;
+      
+      // Call the Edge Function to send a WhatsApp message
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-message', {
+        body: {
+          instanceName,
+          phone: recipientPhone,
+          message
+        }
+      });
+      
+      if (error) {
+        throw new Error(`Error sending WhatsApp message: ${error.message}`);
+      }
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to send WhatsApp message');
+      }
+      
+      toast.success('WhatsApp message sent successfully');
+      return true;
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('Error sending WhatsApp message:', errMessage);
+      toast.error(`Failed to send WhatsApp message: ${errMessage}`);
+      return false;
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
+
   return {
     generateResponse,
+    sendWhatsAppMessage,
     isGenerating,
+    isSendingWhatsApp,
     responseResult,
     error,
   };
