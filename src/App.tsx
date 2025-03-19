@@ -1,3 +1,4 @@
+
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -8,7 +9,6 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
-import OpenAITest from '@/pages/OpenAITest';
 import WhatsAppFileConfig from '@/pages/WhatsAppFileConfig';
 import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
@@ -74,14 +74,6 @@ function AppContent() {
                   element={
                     <ProtectedRoute>
                       <WebhookMonitor />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/openai-test"
-                  element={
-                    <ProtectedRoute>
-                      <OpenAITest />
                     </ProtectedRoute>
                   }
                 />
