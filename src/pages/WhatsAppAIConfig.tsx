@@ -348,7 +348,7 @@ const WhatsAppAIConfig = () => {
                 </option>)}
           </select>
           
-          <div className="mt-6">
+          <div className="mt-6 my-[8px]">
             {selectedInstance && instances.length > 0 && <WhatsAppAIToggle instanceId={selectedInstance} instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} />}
           </div>
         </div>
