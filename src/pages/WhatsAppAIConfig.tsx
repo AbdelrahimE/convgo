@@ -9,35 +9,31 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { useSemanticSearch } from '@/hooks/use-semantic-search';
+import { useSimpleSearch } from '@/hooks/use-simple-search';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Loader2, Lightbulb } from 'lucide-react';
 import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
+
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
+
 interface AIConfig {
   id: string;
   system_prompt: string;
   temperature: number;
   is_active: boolean;
 }
+
 const WhatsAppAIConfig = () => {
-  const {
-    user
-  } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const {
-    search
-  } = useSemanticSearch();
-  const {
-    generateResponse,
-    isGenerating,
-    responseResult
-  } = useAIResponse();
+  const { search } = useSimpleSearch();
+  const { generateResponse, isGenerating, responseResult } = useAIResponse();
+
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [systemPrompt, setSystemPrompt] = useState<string>('');
@@ -52,11 +48,13 @@ const WhatsAppAIConfig = () => {
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const [userDescription, setUserDescription] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
+
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
+
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -64,6 +62,7 @@ const WhatsAppAIConfig = () => {
       setSystemPrompt('');
     }
   }, [selectedInstance]);
+
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -83,6 +82,7 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
+
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
@@ -105,6 +105,7 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
+
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
@@ -148,9 +149,11 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
+
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
+
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
@@ -182,6 +185,7 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
+
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -191,62 +195,86 @@ const WhatsAppAIConfig = () => {
       toast.error('Please select a WhatsApp instance');
       return;
     }
+
     try {
       const userMessage = {
         role: 'user',
         content: testQuery
       };
       setConversation(prev => [...prev, userMessage]);
-      const {
-        data: fileMappings,
-        error: mappingError
-      } = await supabase.from('whatsapp_file_mappings').select('file_id').eq('whatsapp_instance_id', selectedInstance).eq('user_id', user?.id);
+
+      const { data: fileMappings, error: mappingError } = await supabase
+        .from('whatsapp_file_mappings')
+        .select('file_id')
+        .eq('whatsapp_instance_id', selectedInstance)
+        .eq('user_id', user?.id);
+
       if (mappingError) throw mappingError;
+
       if (!fileMappings || fileMappings.length === 0) {
         toast.error('No files associated with this WhatsApp instance');
-        setConversation(prev => [...prev, {
-          role: 'assistant',
-          content: 'Error: No files are configured for this WhatsApp number. Please associate files with this number in the WhatsApp File Configuration page.'
-        }]);
+        setConversation(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: 'Error: No files are configured for this WhatsApp number. Please associate files with this number in the WhatsApp File Configuration page.'
+          }
+        ]);
         return;
       }
+
       const fileIds = fileMappings.map(mapping => mapping.file_id);
+      
       const results = await search({
         query: testQuery,
         fileIds: fileIds,
         limit: 5
       });
+
       let context = '';
       if (results.length > 0) {
         context = results.map(result => result.content).join('\n\n');
       } else {
         console.log('No relevant content found, proceeding with empty context');
       }
+
       const response = await generateResponse(testQuery, context, {
         systemPrompt,
         temperature: 1.0
       });
+
       if (response) {
-        setConversation(prev => [...prev, {
-          role: 'assistant',
-          content: response.answer
-        }]);
+        setConversation(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: response.answer
+          }
+        ]);
       } else {
-        setConversation(prev => [...prev, {
-          role: 'assistant',
-          content: 'Sorry, I was unable to generate a response at this time.'
-        }]);
+        setConversation(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: 'Sorry, I was unable to generate a response at this time.'
+          }
+        ]);
       }
+
       setTestQuery('');
     } catch (error) {
       console.error('Error sending test message:', error);
       toast.error('Failed to send test message');
-      setConversation(prev => [...prev, {
-        role: 'assistant',
-        content: 'Error: Failed to process your message.'
-      }]);
+      setConversation(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'Error: Failed to process your message.'
+        }
+      ]);
     }
   };
+
   return <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-3xl font-bold">WhatsApp AI Configuration</h1>
       
@@ -380,4 +408,5 @@ const WhatsAppAIConfig = () => {
       </Dialog>
     </div>;
 };
+
 export default WhatsAppAIConfig;
