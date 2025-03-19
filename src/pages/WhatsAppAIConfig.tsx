@@ -17,26 +17,31 @@ import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
-
 interface AIConfig {
   id: string;
   system_prompt: string;
   temperature: number;
   is_active: boolean;
 }
-
 const WhatsAppAIConfig = () => {
-  const { user } = useAuth();
+  const {
+    user
+  } = useAuth();
   const navigate = useNavigate();
-  const { search } = useSimpleSearch();
-  const { generateResponse, cleanupTestConversations, isGenerating, responseResult } = useAIResponse();
-
+  const {
+    search
+  } = useSimpleSearch();
+  const {
+    generateResponse,
+    cleanupTestConversations,
+    isGenerating,
+    responseResult
+  } = useAIResponse();
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [systemPrompt, setSystemPrompt] = useState<string>('');
@@ -54,13 +59,11 @@ const WhatsAppAIConfig = () => {
   const [testConversationId, setTestConversationId] = useState<string | null>(null);
   const [useRealConversation, setUseRealConversation] = useState(true);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
-
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
-
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -68,7 +71,6 @@ const WhatsAppAIConfig = () => {
       setSystemPrompt('');
     }
   }, [selectedInstance]);
-
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
@@ -76,13 +78,11 @@ const WhatsAppAIConfig = () => {
       }
     };
   }, [testConversationId]);
-
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
     }
   }, [activeTab, selectedInstance, useRealConversation]);
-
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -102,7 +102,6 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
@@ -125,7 +124,6 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
@@ -169,11 +167,9 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
-
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
-
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
@@ -205,65 +201,50 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
-
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
-    
     try {
       const cleanupResult = await cleanupTestConversations(selectedInstance);
-      
       if (!cleanupResult.success) {
         console.warn('Warning: Could not clean up stale test conversations:', cleanupResult.error);
       } else if (cleanupResult.count > 0) {
         console.log(`Cleaned up ${cleanupResult.count} stale test conversations`);
       }
-      
       const uniqueId = new Date().getTime().toString();
-      const { data, error } = await supabase.from('whatsapp_conversations').insert({
+      const {
+        data,
+        error
+      } = await supabase.from('whatsapp_conversations').insert({
         instance_id: selectedInstance,
         user_phone: `test-user-${uniqueId}`,
         status: 'active',
-        conversation_data: { is_test: true, created_at: new Date().toISOString() }
+        conversation_data: {
+          is_test: true,
+          created_at: new Date().toISOString()
+        }
       }).select().single();
-      
       if (error) throw error;
-      
       setTestConversationId(data.id);
       console.log('Created test conversation:', data.id);
-      
       setConversation([]);
-      
     } catch (error) {
       console.error('Error creating test conversation:', error);
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
-
   const cleanupTestConversation = async (conversationId: string) => {
     if (!conversationId) return;
-    
     try {
       setIsCleaningUp(true);
-      
-      await supabase
-        .from('whatsapp_conversation_messages')
-        .delete()
-        .eq('conversation_id', conversationId);
-      
-      await supabase
-        .from('whatsapp_conversations')
-        .delete()
-        .eq('id', conversationId);
-      
+      await supabase.from('whatsapp_conversation_messages').delete().eq('conversation_id', conversationId);
+      await supabase.from('whatsapp_conversations').delete().eq('id', conversationId);
       console.log('Cleaned up test conversation:', conversationId);
-      
     } catch (error) {
       console.error('Error cleaning up test conversation:', error);
     } finally {
       setIsCleaningUp(false);
     }
   };
-
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       await cleanupTestConversation(testConversationId);
@@ -274,7 +255,6 @@ const WhatsAppAIConfig = () => {
       setConversation([]);
     }
   };
-
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -284,102 +264,78 @@ const WhatsAppAIConfig = () => {
       toast.error('Please select a WhatsApp instance');
       return;
     }
-
     try {
       const userMessage = {
         role: 'user',
         content: testQuery
       };
       setConversation(prev => [...prev, userMessage]);
-
       if (useRealConversation && testConversationId) {
         await supabase.from('whatsapp_conversation_messages').insert({
           conversation_id: testConversationId,
           role: 'user',
           content: testQuery,
-          metadata: { is_test: true }
+          metadata: {
+            is_test: true
+          }
         });
       }
-
-      const { data: fileMappings, error: mappingError } = await supabase
-        .from('whatsapp_file_mappings')
-        .select('file_id')
-        .eq('whatsapp_instance_id', selectedInstance)
-        .eq('user_id', user?.id);
-
+      const {
+        data: fileMappings,
+        error: mappingError
+      } = await supabase.from('whatsapp_file_mappings').select('file_id').eq('whatsapp_instance_id', selectedInstance).eq('user_id', user?.id);
       if (mappingError) throw mappingError;
-
       if (!fileMappings || fileMappings.length === 0) {
         toast.error('No files associated with this WhatsApp instance');
-        setConversation(prev => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: 'Error: No files are configured for this WhatsApp number. Please associate files with this number in the WhatsApp File Configuration page.'
-          }
-        ]);
+        setConversation(prev => [...prev, {
+          role: 'assistant',
+          content: 'Error: No files are configured for this WhatsApp number. Please associate files with this number in the WhatsApp File Configuration page.'
+        }]);
         return;
       }
-
       const fileIds = fileMappings.map(mapping => mapping.file_id);
-      
       const results = await search({
         query: testQuery,
         fileIds: fileIds,
         limit: 5
       });
-
       let context = '';
       if (results.length > 0) {
         context = results.map(result => result.content).join('\n\n');
       } else {
         console.log('No relevant content found, proceeding with empty context');
       }
-
       const response = await generateResponse(testQuery, context, {
         systemPrompt,
         temperature: 1.0,
         includeConversationHistory: useRealConversation,
         conversationId: useRealConversation ? testConversationId : undefined
       });
-
       if (response) {
-        setConversation(prev => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: response.answer
-          }
-        ]);
-
+        setConversation(prev => [...prev, {
+          role: 'assistant',
+          content: response.answer
+        }]);
         if (!useRealConversation) {
           setTestQuery('');
           return;
         }
       } else {
-        setConversation(prev => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: 'Sorry, I was unable to generate a response at this time.'
-          }
-        ]);
+        setConversation(prev => [...prev, {
+          role: 'assistant',
+          content: 'Sorry, I was unable to generate a response at this time.'
+        }]);
       }
-
       setTestQuery('');
     } catch (error) {
       console.error('Error sending test message:', error);
       toast.error('Failed to send test message');
-      setConversation(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'Error: Failed to process your message.'
-        }
-      ]);
+      setConversation(prev => [...prev, {
+        role: 'assistant',
+        content: 'Error: Failed to process your message.'
+      }]);
     }
   };
-
   return <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-3xl font-bold">WhatsApp AI Configuration</h1>
       
@@ -452,11 +408,7 @@ const WhatsAppAIConfig = () => {
                         </CardDescription>
                       </div>
                       
-                      {testConversationId && useRealConversation && (
-                        <Badge variant="outline" className="ml-2">
-                          Test ID: {testConversationId.substring(0, 8)}...
-                        </Badge>
-                      )}
+                      {testConversationId && useRealConversation}
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -466,16 +418,12 @@ const WhatsAppAIConfig = () => {
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div className="flex items-center space-x-2">
-                                <Switch
-                                  id="conversation-mode"
-                                  checked={useRealConversation}
-                                  onCheckedChange={value => {
-                                    setUseRealConversation(value);
-                                    if (value && !testConversationId) {
-                                      createTestConversation();
-                                    }
-                                  }}
-                                />
+                                <Switch id="conversation-mode" checked={useRealConversation} onCheckedChange={value => {
+                              setUseRealConversation(value);
+                              if (value && !testConversationId) {
+                                createTestConversation();
+                              }
+                            }} />
                                 <Label htmlFor="conversation-mode">Conversation Memory</Label>
                               </div>
                             </TooltipTrigger>
@@ -486,25 +434,18 @@ const WhatsAppAIConfig = () => {
                         </TooltipProvider>
                       </div>
                       
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={resetTestConversation}
-                        disabled={conversation.length === 0 || isCleaningUp}
-                      >
+                      <Button variant="outline" size="sm" onClick={resetTestConversation} disabled={conversation.length === 0 || isCleaningUp}>
                         <RotateCcw className="mr-2 h-4 w-4" />
                         Reset Conversation
                       </Button>
                     </div>
                     
-                    {useRealConversation && (
-                      <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800 flex items-start">
+                    {useRealConversation && <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800 flex items-start">
                         <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 mt-0.5 flex-shrink-0" />
                         <p className="text-sm text-amber-700 dark:text-amber-300">
                           Test conversations are stored temporarily in the database and will be automatically cleaned up when you leave this page or reset the conversation.
                         </p>
-                      </div>
-                    )}
+                      </div>}
                     
                     <div className="bg-secondary/50 rounded-lg p-4 h-80 overflow-y-auto mb-4 flex flex-col gap-2">
                       {conversation.length === 0 ? <p className="text-center text-muted-foreground p-4">
@@ -569,5 +510,4 @@ const WhatsAppAIConfig = () => {
       </Dialog>
     </div>;
 };
-
 export default WhatsAppAIConfig;
