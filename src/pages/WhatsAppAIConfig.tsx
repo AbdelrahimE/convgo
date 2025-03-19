@@ -360,7 +360,7 @@ const WhatsAppAIConfig = () => {
                   Please select a WhatsApp instance to configure AI settings
                 </p>
               </CardContent>
-            </Card> : <Tabs value={activeTab} onValueChange={setActiveTab}>
+            </Card> : <Tabs value={activeTab} onValueChange={setActiveTab} className="px-0 py-0 my-[25px]">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="config">Configuration</TabsTrigger>
                 <TabsTrigger value="test">Test ChatBot</TabsTrigger>
