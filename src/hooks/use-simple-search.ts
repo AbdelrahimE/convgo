@@ -28,23 +28,43 @@ export function useSimpleSearch() {
     setError(null);
     
     try {
-      const { data, error } = await supabase.functions.invoke('match-document-chunks', {
-        body: {
-          query: options.query,
-          file_ids: options.fileIds,
-          limit: options.limit || 5
-        }
+      // First, get embedding for the query using the generate-embeddings function
+      const { data: embeddingData, error: embeddingError } = await supabase.functions.invoke('generate-embeddings', {
+        body: { text: options.query }
       });
       
-      if (error) {
-        throw error;
+      if (embeddingError) {
+        throw embeddingError;
       }
       
-      if (!data.success) {
-        throw new Error(data.error || 'Search failed');
+      if (!embeddingData.success || !embeddingData.embedding) {
+        console.log('No embedding generated, returning empty results');
+        return [];
       }
       
-      const searchResults = data.matches || [];
+      // Now use the embedding to search for similar content using the match_document_chunks_by_files database function
+      const { data: matchesData, error: matchesError } = await supabase.rpc(
+        'match_document_chunks_by_files',
+        {
+          query_embedding: embeddingData.embedding,
+          match_threshold: 0.5,
+          match_count: options.limit || 5,
+          min_content_length: 20,
+          file_ids: options.fileIds
+        }
+      );
+      
+      if (matchesError) {
+        throw matchesError;
+      }
+      
+      // Transform results to match the expected SearchResult format
+      const searchResults = (matchesData || []).map(item => ({
+        file_id: item.file_id,
+        content: item.content,
+        similarity: item.similarity
+      }));
+      
       setResults(searchResults);
       return searchResults;
     } catch (err) {
