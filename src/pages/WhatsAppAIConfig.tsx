@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,8 +13,11 @@ import { Input } from '@/components/ui/input';
 import { useSimpleSearch } from '@/hooks/use-simple-search';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Loader2, Lightbulb } from 'lucide-react';
+import { Loader2, Lightbulb, RotateCcw, AlertTriangle } from 'lucide-react';
 import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface WhatsAppInstance {
   id: string;
@@ -48,6 +52,9 @@ const WhatsAppAIConfig = () => {
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const [userDescription, setUserDescription] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
+  const [testConversationId, setTestConversationId] = useState<string | null>(null);
+  const [useRealConversation, setUseRealConversation] = useState(true);
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -62,6 +69,22 @@ const WhatsAppAIConfig = () => {
       setSystemPrompt('');
     }
   }, [selectedInstance]);
+
+  // Cleanup test conversations when component unmounts or user changes tab
+  useEffect(() => {
+    return () => {
+      if (testConversationId && useRealConversation) {
+        cleanupTestConversation(testConversationId);
+      }
+    };
+  }, [testConversationId]);
+
+  // Create a new test conversation when the user switches to the test tab
+  useEffect(() => {
+    if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
+      createTestConversation();
+    }
+  }, [activeTab, selectedInstance, useRealConversation]);
 
   const loadWhatsAppInstances = async () => {
     try {
@@ -186,6 +209,73 @@ const WhatsAppAIConfig = () => {
     }
   };
 
+  // Create a new test conversation
+  const createTestConversation = async () => {
+    if (!selectedInstance || !useRealConversation) return;
+    
+    try {
+      // Create a test conversation in the database
+      const { data, error } = await supabase.from('whatsapp_conversations').insert({
+        instance_id: selectedInstance,
+        user_phone: 'test-user',
+        status: 'active',
+        conversation_data: { is_test: true }
+      }).select().single();
+      
+      if (error) throw error;
+      
+      setTestConversationId(data.id);
+      console.log('Created test conversation:', data.id);
+      
+      // Reset the conversation display
+      setConversation([]);
+      
+    } catch (error) {
+      console.error('Error creating test conversation:', error);
+      toast.error('Failed to create test conversation');
+    }
+  };
+
+  // Cleanup a test conversation
+  const cleanupTestConversation = async (conversationId: string) => {
+    if (!conversationId) return;
+    
+    try {
+      setIsCleaningUp(true);
+      
+      // Delete messages from the test conversation
+      await supabase
+        .from('whatsapp_conversation_messages')
+        .delete()
+        .eq('conversation_id', conversationId);
+      
+      // Delete the test conversation
+      await supabase
+        .from('whatsapp_conversations')
+        .delete()
+        .eq('id', conversationId);
+      
+      console.log('Cleaned up test conversation:', conversationId);
+      
+    } catch (error) {
+      console.error('Error cleaning up test conversation:', error);
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
+  // Reset the test conversation
+  const resetTestConversation = async () => {
+    if (testConversationId && useRealConversation) {
+      await cleanupTestConversation(testConversationId);
+      setTestConversationId(null);
+      setConversation([]);
+      await createTestConversation();
+    } else {
+      setConversation([]);
+    }
+  };
+
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -202,6 +292,16 @@ const WhatsAppAIConfig = () => {
         content: testQuery
       };
       setConversation(prev => [...prev, userMessage]);
+
+      // If using real conversation storage, store the message in the database
+      if (useRealConversation && testConversationId) {
+        await supabase.from('whatsapp_conversation_messages').insert({
+          conversation_id: testConversationId,
+          role: 'user',
+          content: testQuery,
+          metadata: { is_test: true }
+        });
+      }
 
       const { data: fileMappings, error: mappingError } = await supabase
         .from('whatsapp_file_mappings')
@@ -238,9 +338,12 @@ const WhatsAppAIConfig = () => {
         console.log('No relevant content found, proceeding with empty context');
       }
 
+      // Generate response with conversation history if using real conversations
       const response = await generateResponse(testQuery, context, {
         systemPrompt,
-        temperature: 1.0
+        temperature: 1.0,
+        includeConversationHistory: useRealConversation,
+        conversationId: useRealConversation ? testConversationId : undefined
       });
 
       if (response) {
@@ -251,6 +354,12 @@ const WhatsAppAIConfig = () => {
             content: response.answer
           }
         ]);
+
+        // If not using the database storage for conversation, manually store the response
+        if (!useRealConversation) {
+          setTestQuery('');
+          return;
+        }
       } else {
         setConversation(prev => [
           ...prev,
@@ -339,12 +448,68 @@ const WhatsAppAIConfig = () => {
               <TabsContent value="test">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Test Your ChatBot</CardTitle>
-                    <CardDescription>
-                      Send test messages to see how your AI will respond using the configured files
-                    </CardDescription>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <CardTitle>Test Your ChatBot</CardTitle>
+                        <CardDescription>
+                          Send test messages to see how your AI will respond using the configured files
+                        </CardDescription>
+                      </div>
+                      
+                      {testConversationId && useRealConversation && (
+                        <Badge variant="outline" className="ml-2">
+                          Test ID: {testConversationId.substring(0, 8)}...
+                        </Badge>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center space-x-2">
+                                <Switch
+                                  id="conversation-mode"
+                                  checked={useRealConversation}
+                                  onCheckedChange={value => {
+                                    setUseRealConversation(value);
+                                    if (value && !testConversationId) {
+                                      createTestConversation();
+                                    }
+                                  }}
+                                />
+                                <Label htmlFor="conversation-mode">Conversation Memory</Label>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>When enabled, the AI will remember previous messages in this conversation</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={resetTestConversation}
+                        disabled={conversation.length === 0 || isCleaningUp}
+                      >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Reset Conversation
+                      </Button>
+                    </div>
+                    
+                    {useRealConversation && (
+                      <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800 flex items-start">
+                        <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm text-amber-700 dark:text-amber-300">
+                          Test conversations are stored temporarily in the database and will be automatically cleaned up when you leave this page or reset the conversation.
+                        </p>
+                      </div>
+                    )}
+                    
                     <div className="bg-secondary/50 rounded-lg p-4 h-80 overflow-y-auto mb-4 flex flex-col gap-2">
                       {conversation.length === 0 ? <p className="text-center text-muted-foreground p-4">
                           Send a message to start the conversation

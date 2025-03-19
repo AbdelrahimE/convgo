@@ -46,6 +46,51 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length * TOKENS_PER_CHAR);
 }
 
+// Function to retrieve conversation history
+async function getConversationHistory(conversationId: string, maxTokens: number = MAX_CONVERSATION_TOKENS): Promise<string> {
+  try {
+    // Get the last few messages from the conversation, ordered by timestamp
+    const { data: messages, error } = await supabaseAdmin
+      .from('whatsapp_conversation_messages')
+      .select('role, content, timestamp')
+      .eq('conversation_id', conversationId)
+      .order('timestamp', { ascending: false })
+      .limit(10);  // Limit to last 10 messages
+    
+    if (error) {
+      console.error('Error fetching conversation history:', error);
+      return '';
+    }
+    
+    if (!messages || messages.length === 0) {
+      return '';
+    }
+    
+    // Format messages into a conversation history string, latest messages first
+    let historyText = '';
+    let currentTokens = 0;
+    
+    // Process messages in reverse (oldest first)
+    for (const message of messages.reverse()) {
+      const formattedMsg = `${message.role.toUpperCase()}: ${message.content}\n\n`;
+      const msgTokens = estimateTokens(formattedMsg);
+      
+      // Check if adding this message would exceed the token limit
+      if (currentTokens + msgTokens > maxTokens) {
+        break;
+      }
+      
+      historyText += formattedMsg;
+      currentTokens += msgTokens;
+    }
+    
+    return historyText.trim();
+  } catch (error) {
+    console.error('Failed to get conversation history:', error);
+    return '';
+  }
+}
+
 // Advanced function to balance conversation history and RAG content
 function balanceContextTokens(
   conversationHistory: string, 
@@ -235,10 +280,17 @@ serve(async (req) => {
       finalSystemPrompt += EMPTY_CONTEXT_ADDITION;
     }
 
+    // Get conversation history if requested and conversation ID is provided
+    let conversationHistory = '';
+    if (includeConversationHistory && conversationId) {
+      conversationHistory = await getConversationHistory(conversationId, MAX_CONVERSATION_TOKENS);
+      console.log(`Retrieved conversation history: ${conversationHistory ? 'Yes' : 'No'}`);
+    }
+
     // Apply advanced token management to balance conversation history and RAG content
     const { finalContext, tokenCounts } = balanceContextTokens(
+      conversationHistory,
       context,
-      '',
       maxContextTokens
     );
     

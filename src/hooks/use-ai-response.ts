@@ -1,7 +1,6 @@
 
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 
 interface GenerateResponseOptions {
   model?: string;
@@ -9,20 +8,9 @@ interface GenerateResponseOptions {
   systemPrompt?: string;
   includeConversationHistory?: boolean;
   conversationId?: string;
-  maxContextTokens?: number;
 }
 
-interface TokenUsage {
-  context: {
-    conversation: number;
-    rag: number;
-    total: number;
-  };
-  completion: number;
-  total: number;
-}
-
-interface ResponseResult {
+interface AIResponseResult {
   answer: string;
   model: string;
   usage: {
@@ -30,94 +18,76 @@ interface ResponseResult {
     completion_tokens: number;
     total_tokens: number;
   };
-  tokenUsage?: TokenUsage;
+  tokenUsage: {
+    context: {
+      conversation: number;
+      rag: number;
+      total: number;
+    };
+    completion: number;
+    total: number;
+  };
   conversationId?: string;
 }
 
 export function useAIResponse() {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [responseResult, setResponseResult] = useState<ResponseResult | null>(null);
-  const [error, setError] = useState<Error | null>(null);
+  const [responseResult, setResponseResult] = useState<AIResponseResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const generateResponse = async (
     query: string,
     context: string,
     options?: GenerateResponseOptions
-  ) => {
-    if (!query) {
-      setError(new Error('Query is required'));
-      return null;
-    }
-
-    setIsGenerating(true);
-    setError(null);
-    
+  ): Promise<AIResponseResult | null> => {
     try {
-      // Call the generate-response edge function
+      setIsGenerating(true);
+      setError(null);
+
       const { data, error } = await supabase.functions.invoke('generate-response', {
         body: {
           query,
           context,
           model: options?.model || 'gpt-4o-mini',
-          temperature: options?.temperature || 0.3,
+          temperature: options?.temperature || 0.7,
           systemPrompt: options?.systemPrompt,
           includeConversationHistory: options?.includeConversationHistory || false,
-          conversationId: options?.conversationId,
-          maxContextTokens: options?.maxContextTokens || 3000 // Pass the token limit
-        }
+          conversationId: options?.conversationId
+        },
       });
-      
+
       if (error) {
-        console.error('Error generating AI response:', error);
-        setError(error instanceof Error ? error : new Error('Failed to generate response'));
-        toast.error('Response generation failed', {
-          description: error.message || 'An unknown error occurred'
-        });
-        setResponseResult(null);
-        return null;
+        throw new Error(`Error generating response: ${error.message}`);
       }
 
       if (!data.success) {
-        setError(new Error(data.error || 'Response generation failed'));
-        toast.error('Response generation failed', {
-          description: data.error || 'An unknown error occurred'
-        });
-        setResponseResult(null);
-        return null;
+        throw new Error(data.error || 'Failed to generate response');
       }
 
-      // Include conversation ID in response if available
-      const result = {
-        ...data,
-        conversationId: data.conversationId || options?.conversationId
+      const result: AIResponseResult = {
+        answer: data.answer,
+        model: data.model,
+        usage: data.usage,
+        tokenUsage: data.tokenUsage,
+        conversationId: data.conversationId
       };
 
       setResponseResult(result);
       return result;
     } catch (err) {
-      console.error('Exception during response generation:', err);
-      setError(err instanceof Error ? err : new Error('An unknown error occurred'));
-      toast.error('Response generation error', {
-        description: err instanceof Error ? err.message : 'An unknown error occurred'
-      });
-      setResponseResult(null);
+      const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('Error generating AI response:', errMessage);
+      setError(errMessage);
       return null;
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const reset = () => {
-    setResponseResult(null);
-    setError(null);
-  };
-
   return {
     generateResponse,
-    reset,
     isGenerating,
     responseResult,
     error,
-    hasResponse: !!responseResult
   };
 }
