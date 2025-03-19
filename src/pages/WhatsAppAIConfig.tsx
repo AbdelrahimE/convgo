@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,7 +35,7 @@ const WhatsAppAIConfig = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { search } = useSimpleSearch();
-  const { generateResponse, isGenerating, responseResult } = useAIResponse();
+  const { generateResponse, cleanupTestConversations, isGenerating, responseResult } = useAIResponse();
 
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<string>('');
@@ -70,7 +69,6 @@ const WhatsAppAIConfig = () => {
     }
   }, [selectedInstance]);
 
-  // Cleanup test conversations when component unmounts or user changes tab
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
@@ -79,7 +77,6 @@ const WhatsAppAIConfig = () => {
     };
   }, [testConversationId]);
 
-  // Create a new test conversation when the user switches to the test tab
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
@@ -209,17 +206,24 @@ const WhatsAppAIConfig = () => {
     }
   };
 
-  // Create a new test conversation
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
     
     try {
-      // Create a test conversation in the database
+      const cleanupResult = await cleanupTestConversations(selectedInstance);
+      
+      if (!cleanupResult.success) {
+        console.warn('Warning: Could not clean up stale test conversations:', cleanupResult.error);
+      } else if (cleanupResult.count > 0) {
+        console.log(`Cleaned up ${cleanupResult.count} stale test conversations`);
+      }
+      
+      const uniqueId = new Date().getTime().toString();
       const { data, error } = await supabase.from('whatsapp_conversations').insert({
         instance_id: selectedInstance,
-        user_phone: 'test-user',
+        user_phone: `test-user-${uniqueId}`,
         status: 'active',
-        conversation_data: { is_test: true }
+        conversation_data: { is_test: true, created_at: new Date().toISOString() }
       }).select().single();
       
       if (error) throw error;
@@ -227,29 +231,25 @@ const WhatsAppAIConfig = () => {
       setTestConversationId(data.id);
       console.log('Created test conversation:', data.id);
       
-      // Reset the conversation display
       setConversation([]);
       
     } catch (error) {
       console.error('Error creating test conversation:', error);
-      toast.error('Failed to create test conversation');
+      toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
 
-  // Cleanup a test conversation
   const cleanupTestConversation = async (conversationId: string) => {
     if (!conversationId) return;
     
     try {
       setIsCleaningUp(true);
       
-      // Delete messages from the test conversation
       await supabase
         .from('whatsapp_conversation_messages')
         .delete()
         .eq('conversation_id', conversationId);
       
-      // Delete the test conversation
       await supabase
         .from('whatsapp_conversations')
         .delete()
@@ -264,7 +264,6 @@ const WhatsAppAIConfig = () => {
     }
   };
 
-  // Reset the test conversation
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       await cleanupTestConversation(testConversationId);
@@ -293,7 +292,6 @@ const WhatsAppAIConfig = () => {
       };
       setConversation(prev => [...prev, userMessage]);
 
-      // If using real conversation storage, store the message in the database
       if (useRealConversation && testConversationId) {
         await supabase.from('whatsapp_conversation_messages').insert({
           conversation_id: testConversationId,
@@ -338,7 +336,6 @@ const WhatsAppAIConfig = () => {
         console.log('No relevant content found, proceeding with empty context');
       }
 
-      // Generate response with conversation history if using real conversations
       const response = await generateResponse(testQuery, context, {
         systemPrompt,
         temperature: 1.0,
@@ -355,7 +352,6 @@ const WhatsAppAIConfig = () => {
           }
         ]);
 
-        // If not using the database storage for conversation, manually store the response
         if (!useRealConversation) {
           setTestQuery('');
           return;

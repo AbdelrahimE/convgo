@@ -37,11 +37,18 @@ interface SendWhatsAppMessageOptions {
   message: string;
 }
 
+interface CleanupTestConversationsResult {
+  success: boolean;
+  count: number;
+  error?: string;
+}
+
 export function useAIResponse() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [responseResult, setResponseResult] = useState<AIResponseResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isCleaningConversations, setIsCleaningConversations] = useState(false);
 
   const generateResponse = async (
     query: string,
@@ -127,11 +134,74 @@ export function useAIResponse() {
     }
   };
 
+  const cleanupTestConversations = async (instanceId: string): Promise<CleanupTestConversationsResult> => {
+    try {
+      setIsCleaningConversations(true);
+      
+      // First, identify test conversations by the test-user phone and is_test flag in conversation_data
+      const { data: testConversations, error: fetchError } = await supabase
+        .from('whatsapp_conversations')
+        .select('id')
+        .eq('instance_id', instanceId)
+        .eq('user_phone', 'test-user')
+        .contains('conversation_data', { is_test: true });
+      
+      if (fetchError) {
+        throw new Error(`Error finding test conversations: ${fetchError.message}`);
+      }
+      
+      if (!testConversations || testConversations.length === 0) {
+        return { success: true, count: 0 };
+      }
+      
+      const conversationIds = testConversations.map(conv => conv.id);
+      console.log(`Found ${conversationIds.length} stale test conversations to clean up`);
+      
+      // Delete all messages from these conversations
+      const { error: messagesDeleteError } = await supabase
+        .from('whatsapp_conversation_messages')
+        .delete()
+        .in('conversation_id', conversationIds);
+      
+      if (messagesDeleteError) {
+        throw new Error(`Error deleting test conversation messages: ${messagesDeleteError.message}`);
+      }
+      
+      // Now delete the conversations themselves
+      const { error: convsDeleteError } = await supabase
+        .from('whatsapp_conversations')
+        .delete()
+        .in('id', conversationIds);
+      
+      if (convsDeleteError) {
+        throw new Error(`Error deleting test conversations: ${convsDeleteError.message}`);
+      }
+      
+      console.log(`Successfully cleaned up ${conversationIds.length} test conversations`);
+      return { 
+        success: true, 
+        count: conversationIds.length 
+      };
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('Error cleaning up test conversations:', errMessage);
+      return { 
+        success: false, 
+        count: 0,
+        error: errMessage
+      };
+    } finally {
+      setIsCleaningConversations(false);
+    }
+  };
+
   return {
     generateResponse,
     sendWhatsAppMessage,
+    cleanupTestConversations,
     isGenerating,
     isSendingWhatsApp,
+    isCleaningConversations,
     responseResult,
     error,
   };
