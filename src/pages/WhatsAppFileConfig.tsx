@@ -194,7 +194,7 @@ const WhatsAppFileConfig = () => {
     }
   };
   return <div className="container mx-auto py-8 px-[16px]">
-      <h1 className="font-bold mb-6 text-4xl">WhatsApp File Configuration</h1>
+      <h1 className="font-bold mb-6 text-4xl">File Configuration</h1>
       
       <Card className="mb-8">
         <CardHeader>
