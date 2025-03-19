@@ -337,7 +337,7 @@ const WhatsAppAIConfig = () => {
     }
   };
   return <div className="container mx-auto space-y-6 px-[16px] py-[32px]">
-      <h1 className="text-3xl font-bold">WhatsApp AI Configuration</h1>
+      <h1 className="font-bold text-4xl">WhatsApp AI Configuration</h1>
       
       <div className="flex flex-col md:flex-row gap-4 mb-6">
         <div className="w-full md:w-1/3">
