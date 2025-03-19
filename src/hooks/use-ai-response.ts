@@ -138,12 +138,13 @@ export function useAIResponse() {
     try {
       setIsCleaningConversations(true);
       
-      // First, identify test conversations by the test-user phone and is_test flag in conversation_data
+      // First, identify test conversations by looking for user_phone starting with 'test-user-' 
+      // and having is_test:true in conversation_data
       const { data: testConversations, error: fetchError } = await supabase
         .from('whatsapp_conversations')
         .select('id')
         .eq('instance_id', instanceId)
-        .eq('user_phone', 'test-user')
+        .like('user_phone', 'test-user-%')  // Changed from eq to like with wildcard
         .contains('conversation_data', { is_test: true });
       
       if (fetchError) {
