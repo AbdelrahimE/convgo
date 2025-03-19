@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -63,6 +64,42 @@ const WhatsAppAIConfig = () => {
   const [testConversationId, setTestConversationId] = useState<string | null>(null);
   const [useRealConversation, setUseRealConversation] = useState(true);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
+
+  // Define cleanupTestConversation before it's used in the useEffect
+  const cleanupTestConversation = useCallback(async (conversationId: string) => {
+    if (!conversationId) return false;
+    try {
+      setIsCleaningUp(true);
+      
+      const { error: messagesError } = await supabase
+        .from('whatsapp_conversation_messages')
+        .delete()
+        .eq('conversation_id', conversationId);
+      
+      if (messagesError) {
+        console.error('Error deleting test conversation messages:', messagesError);
+        return false;
+      }
+      
+      const { error: conversationError } = await supabase
+        .from('whatsapp_conversations')
+        .delete()
+        .eq('id', conversationId);
+      
+      if (conversationError) {
+        console.error('Error deleting test conversation:', conversationError);
+        return false;
+      }
+      
+      console.log('Successfully cleaned up test conversation:', conversationId);
+      return true;
+    } catch (error) {
+      console.error('Error cleaning up test conversation:', error);
+      return false;
+    } finally {
+      setIsCleaningUp(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -252,41 +289,6 @@ const WhatsAppAIConfig = () => {
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
-
-  const cleanupTestConversation = useCallback(async (conversationId: string) => {
-    if (!conversationId) return false;
-    try {
-      setIsCleaningUp(true);
-      
-      const { error: messagesError } = await supabase
-        .from('whatsapp_conversation_messages')
-        .delete()
-        .eq('conversation_id', conversationId);
-      
-      if (messagesError) {
-        console.error('Error deleting test conversation messages:', messagesError);
-        return false;
-      }
-      
-      const { error: conversationError } = await supabase
-        .from('whatsapp_conversations')
-        .delete()
-        .eq('id', conversationId);
-      
-      if (conversationError) {
-        console.error('Error deleting test conversation:', conversationError);
-        return false;
-      }
-      
-      console.log('Successfully cleaned up test conversation:', conversationId);
-      return true;
-    } catch (error) {
-      console.error('Error cleaning up test conversation:', error);
-      return false;
-    } finally {
-      setIsCleaningUp(false);
-    }
-  }, []);
 
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
