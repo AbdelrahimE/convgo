@@ -10,21 +10,25 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Save, RefreshCw, CheckCircle2, Wifi, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
+
 interface File {
   id: string;
   filename: string;
   original_name: string;
 }
+
 interface FileMapping {
   id: string;
   file_id: string;
   whatsapp_instance_id: string;
 }
+
 const WhatsAppFileConfig = () => {
   const {
     user
@@ -41,6 +45,7 @@ const WhatsAppFileConfig = () => {
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
   const [existingMappings, setExistingMappings] = useState<FileMapping[]>([]);
   const [hoveredFileId, setHoveredFileId] = useState<string | null>(null);
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -79,6 +84,7 @@ const WhatsAppFileConfig = () => {
     };
     fetchData();
   }, [toast]);
+
   useEffect(() => {
     const fetchMappings = async () => {
       if (!selectedInstanceId) return;
@@ -104,9 +110,11 @@ const WhatsAppFileConfig = () => {
     };
     fetchMappings();
   }, [selectedInstanceId, toast]);
+
   const handleInstanceChange = (instanceId: string) => {
     setSelectedInstanceId(instanceId);
   };
+
   const handleFileToggle = (fileId: string) => {
     const newSelectedFileIds = new Set(selectedFileIds);
     if (newSelectedFileIds.has(fileId)) {
@@ -116,6 +124,7 @@ const WhatsAppFileConfig = () => {
     }
     setSelectedFileIds(newSelectedFileIds);
   };
+
   const handleSave = async () => {
     if (!selectedInstanceId || !user) return;
     setIsSaving(true);
@@ -158,6 +167,7 @@ const WhatsAppFileConfig = () => {
       setIsSaving(false);
     }
   };
+
   const refreshData = async () => {
     if (!selectedInstanceId) return;
     try {
@@ -184,12 +194,15 @@ const WhatsAppFileConfig = () => {
       });
     }
   };
+
   const getInstanceStatus = (instance?: WhatsAppInstance) => {
     if (!instance) return 'disconnected';
     return instance.status.toLowerCase() === 'connected' ? 'connected' : 'disconnected';
   };
+
   const selectedInstance = whatsappInstances.find(instance => instance.id === selectedInstanceId);
   const connectionStatus = getInstanceStatus(selectedInstance);
+
   return <motion.div initial={{
     opacity: 0,
     y: 20
@@ -198,7 +211,7 @@ const WhatsAppFileConfig = () => {
     y: 0
   }} transition={{
     duration: 0.3
-  }} className="container mx-auto px-4 py-8">
+  }} className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="space-y-8">
         <motion.h1 initial={{
         opacity: 0,
@@ -229,8 +242,8 @@ const WhatsAppFileConfig = () => {
                   <CardDescription className="my-[6px] text-left">Choose which WhatsApp number you want to configure</CardDescription>
                 </div>
                 
-                {selectedInstanceId && <div className="flex flex-row items-center justify-start gap-2 mt-2 sm:mt-0 min-w-max">
-                    <div className={cn("relative flex items-center justify-center rounded-full h-8 w-8", connectionStatus === 'connected' ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30")}>
+                {selectedInstanceId && <div className="flex flex-col items-center w-full sm:items-start md:flex-row md:items-center justify-end gap-2 mt-2 sm:mt-0 min-w-max">
+                    <div className={cn("relative flex items-center justify-center rounded-full h-8 w-8 shrink-0", connectionStatus === 'connected' ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30")}>
                       {connectionStatus === 'connected' ? <>
                           <Wifi className="h-4 w-4 text-green-600 dark:text-green-500" />
                           <span className="absolute inset-0 rounded-full bg-green-400/40 dark:bg-green-600/40 animate-pulse"></span>
@@ -339,4 +352,5 @@ const WhatsAppFileConfig = () => {
       </div>
     </motion.div>;
 };
+
 export default WhatsAppFileConfig;
