@@ -292,6 +292,85 @@ async function saveWebhookMessage(instance: string, event: string, data: any) {
   }
 }
 
+// Helper function to download audio file from WhatsApp
+async function downloadAudioFile(url: string, mediaKey: string, filetype: string): Promise<{ success: boolean; data?: ArrayBuffer; error?: string }> {
+  try {
+    await logDebug('AUDIO_DOWNLOAD_START', `Starting audio download from ${url}`);
+    
+    // Currently, we cannot directly download the encrypted WhatsApp audio file
+    // We need to use the EVOLUTION API to get the decrypted media
+    // This is a placeholder for the actual implementation
+    
+    // Return unsuccessful response for now
+    return { 
+      success: false, 
+      error: 'Direct audio download not supported. The EVOLUTION API must be used to download media.' 
+    };
+  } catch (error) {
+    await logDebug('AUDIO_DOWNLOAD_ERROR', 'Error downloading audio file', { error });
+    return { success: false, error: error.message };
+  }
+}
+
+// Helper function to determine if a message contains audio
+function hasAudioContent(messageData: any): boolean {
+  return (
+    messageData?.message?.audioMessage || 
+    (messageData?.messageType === 'audioMessage') ||
+    (messageData?.message?.pttMessage)
+  );
+}
+
+// Helper function to extract audio details from the message
+function extractAudioDetails(messageData: any): { 
+  url: string | null; 
+  mediaKey: string | null;
+  duration: number | null;
+  mimeType: string | null;
+  ptt: boolean;
+} {
+  const audioMessage = messageData?.message?.audioMessage;
+  if (!audioMessage) {
+    return {
+      url: null,
+      mediaKey: null,
+      duration: null,
+      mimeType: null,
+      ptt: false
+    };
+  }
+
+  return {
+    url: audioMessage.url || null,
+    mediaKey: audioMessage.mediaKey || null,
+    duration: audioMessage.seconds || null,
+    mimeType: audioMessage.mimetype || 'audio/ogg; codecs=opus',
+    ptt: audioMessage.ptt || false
+  };
+}
+
+// Helper function to handle audio transcription
+async function processAudioMessage(audioDetails: any, instanceName: string, fromNumber: string): Promise<{ success: boolean; transcription?: string; error?: string }> {
+  try {
+    await logDebug('AUDIO_PROCESSING_START', 'Starting audio processing', { instanceName, fromNumber });
+    
+    // This will be implemented in Phase 2
+    // For now, we'll log that we detected an audio message but cannot process it yet
+    await logDebug('AUDIO_PROCESSING_PENDING', 'Audio processing capability not yet implemented', { 
+      audioDetails 
+    });
+    
+    return { 
+      success: false, 
+      error: 'Audio transcription not yet implemented - Phase 2 pending',
+      transcription: 'This is a voice message that will be processed in Phase 2 of the implementation.'
+    };
+  } catch (error) {
+    await logDebug('AUDIO_PROCESSING_ERROR', 'Error processing audio', { error });
+    return { success: false, error: error.message };
+  }
+}
+
 // Helper function to process message for AI
 async function processMessageForAI(instance: string, messageData: any) {
   try {
@@ -300,9 +379,9 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Extract key information from the message
     const instanceName = instance;
     const fromNumber = messageData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
-    const messageText = messageData.message?.conversation || 
-                      messageData.message?.extendedTextMessage?.text ||
-                      null;
+    let messageText = messageData.message?.conversation || 
+                    messageData.message?.extendedTextMessage?.text ||
+                    null;
     const remoteJid = messageData.key?.remoteJid || '';
     const isFromMe = messageData.key?.fromMe || false;
     
@@ -317,7 +396,6 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Skip processing if:
     // 1. Message is from a group chat (contains @g.us)
     // 2. Message is from the bot itself (fromMe is true)
-    // 3. No text message content is available
     if (remoteJid.includes('@g.us') || isFromMe) {
       await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: Group message or sent by bot', {
         isGroup: remoteJid.includes('@g.us'),
@@ -326,6 +404,41 @@ async function processMessageForAI(instance: string, messageData: any) {
       return false;
     }
 
+    // Check if this is an audio message
+    const isAudioMessage = hasAudioContent(messageData);
+    
+    if (isAudioMessage) {
+      await logDebug('AUDIO_MESSAGE_DETECTED', 'Audio message detected', { 
+        messageType: messageData.messageType,
+        hasAudioMessage: !!messageData.message?.audioMessage
+      });
+      
+      // Extract audio details
+      const audioDetails = extractAudioDetails(messageData);
+      await logDebug('AUDIO_DETAILS', 'Extracted audio details', { audioDetails });
+      
+      // In Phase 1, we'll acknowledge the audio but not process it yet
+      // This will be expanded in Phase 2 to actually transcribe the audio
+      const transcriptionResult = await processAudioMessage(audioDetails, instanceName, fromNumber);
+      
+      if (!transcriptionResult.success) {
+        // For now, we'll set a placeholder message
+        messageText = "This is a voice message. Voice message processing will be available soon.";
+        
+        // Log that we're using a placeholder for now
+        await logDebug('AUDIO_PLACEHOLDER', 'Using placeholder text for audio message until Phase 2 implementation', {
+          originalMessage: 'Voice message',
+          placeholderText: messageText
+        });
+      } else {
+        // If transcription is successful (will be in Phase 2), use it as message text
+        messageText = transcriptionResult.transcription || messageText;
+      }
+      
+      // Continue with regular text processing using the placeholder or transcription
+    }
+
+    // If no message content (text or processed audio), skip
     if (!messageText) {
       await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text content', { messageData });
       return false;
@@ -765,6 +878,14 @@ serve(async (req) => {
     try {
       data = await req.json();
       await logDebug('WEBHOOK_PAYLOAD', 'Webhook payload received', { data });
+      
+      // Check if message contains audio
+      if (data && hasAudioContent(data)) {
+        await logDebug('AUDIO_CONTENT_DETECTED', 'Audio content detected in webhook payload', {
+          messageType: data.messageType,
+          hasAudioMessage: !!data.message?.audioMessage
+        });
+      }
     } catch (error) {
       await logDebug('WEBHOOK_PAYLOAD_ERROR', 'Failed to parse webhook payload', { error });
       return new Response(
