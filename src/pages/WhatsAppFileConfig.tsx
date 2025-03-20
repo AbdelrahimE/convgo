@@ -231,7 +231,7 @@ const WhatsAppFileConfig = () => {
   const getInstanceStatus = (instance?: WhatsAppInstance) => {
     if (!instance) return 'disconnected';
     // Convert UPPERCASE status values from the database to lowercase for display
-    return instance.status === 'CONNECTED' ? 'connected' : 'disconnected';
+    return instance.status.toLowerCase() === 'connected' ? 'connected' : 'disconnected';
   };
 
   const selectedInstance = whatsappInstances.find(instance => instance.id === selectedInstanceId);
@@ -242,7 +242,7 @@ const WhatsAppFileConfig = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="container mx-auto px-4 py-8 max-w-7xl"
+      className="container mx-auto px-4 py-8"
     >
       <div className="space-y-8">
         <motion.h1 
@@ -268,7 +268,7 @@ const WhatsAppFileConfig = () => {
                 </div>
                 
                 {selectedInstanceId && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-row items-center gap-2 shrink-0">
                     <div className={cn(
                       "relative flex items-center justify-center rounded-full h-8 w-8", 
                       connectionStatus === 'connected' 
