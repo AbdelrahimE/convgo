@@ -233,7 +233,8 @@ const WhatsAppFileConfig = () => {
 
   const getInstanceStatus = (instance?: WhatsAppInstance) => {
     if (!instance) return 'disconnected';
-    return instance.status === 'connected' ? 'connected' : 'disconnected';
+    // Convert UPPERCASE status values from the database to lowercase for display
+    return instance.status === 'CONNECTED' ? 'connected' : 'disconnected';
   };
 
   const selectedInstance = whatsappInstances.find(instance => instance.id === selectedInstanceId);
@@ -245,9 +246,37 @@ const WhatsAppFileConfig = () => {
       
       <div className="flex flex-col space-y-6 max-w-3xl">
         <Card>
-          <CardHeader>
-            <CardTitle>Select WhatsApp Instance</CardTitle>
-            <CardDescription>Choose which WhatsApp number you want to configure</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle>Select WhatsApp Instance</CardTitle>
+              <CardDescription>Choose which WhatsApp number you want to configure</CardDescription>
+            </div>
+            
+            {selectedInstanceId && (
+              <div className="flex items-center gap-2">
+                <div 
+                  className={cn(
+                    "relative flex items-center justify-center rounded-full h-8 w-8",
+                    connectionStatus === 'connected' ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30"
+                  )}
+                >
+                  {connectionStatus === 'connected' ? (
+                    <>
+                      <Wifi className="h-4 w-4 text-green-600 dark:text-green-500" />
+                      <span className="absolute inset-0 rounded-full bg-green-400/40 dark:bg-green-600/40 animate-pulse"></span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="h-4 w-4 text-red-600 dark:text-red-500" />
+                      <span className="absolute inset-0 rounded-full bg-red-400/40 dark:bg-red-600/40 animate-pulse"></span>
+                    </>
+                  )}
+                </div>
+                <span className="text-sm font-medium">
+                  {connectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -261,48 +290,18 @@ const WhatsAppFileConfig = () => {
               <div className="space-y-4">
                 <div className="flex flex-col space-y-1.5">
                   <Label htmlFor="instance-select">WhatsApp Instance</Label>
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1">
-                      <Select value={selectedInstanceId || ''} onValueChange={handleInstanceChange}>
-                        <SelectTrigger id="instance-select">
-                          <SelectValue placeholder="Select an instance" />
-                        </SelectTrigger>
-                        <SelectContent position="popper">
-                          {whatsappInstances.map(instance => (
-                            <SelectItem key={instance.id} value={instance.id}>
-                              {instance.instance_name} ({instance.status})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    {selectedInstanceId && (
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className={cn(
-                            "relative flex items-center justify-center rounded-full h-8 w-8",
-                            connectionStatus === 'connected' ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30"
-                          )}
-                        >
-                          {connectionStatus === 'connected' ? (
-                            <>
-                              <Wifi className="h-4 w-4 text-green-600 dark:text-green-500" />
-                              <span className="absolute inset-0 rounded-full bg-green-400/40 dark:bg-green-600/40 animate-pulse"></span>
-                            </>
-                          ) : (
-                            <>
-                              <WifiOff className="h-4 w-4 text-red-600 dark:text-red-500" />
-                              <span className="absolute inset-0 rounded-full bg-red-400/40 dark:bg-red-600/40 animate-pulse"></span>
-                            </>
-                          )}
-                        </div>
-                        <span className="text-sm font-medium">
-                          {connectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                  <Select value={selectedInstanceId || ''} onValueChange={handleInstanceChange}>
+                    <SelectTrigger id="instance-select">
+                      <SelectValue placeholder="Select an instance" />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      {whatsappInstances.map(instance => (
+                        <SelectItem key={instance.id} value={instance.id}>
+                          {instance.instance_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             )}
