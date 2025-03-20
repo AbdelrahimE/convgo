@@ -242,7 +242,7 @@ const WhatsAppFileConfig = () => {
                   <CardDescription className="my-[6px] text-left">Choose which WhatsApp number you want to configure</CardDescription>
                 </div>
                 
-                {selectedInstanceId && <div className="flex flex-col items-center w-full sm:items-start md:flex-row md:items-center justify-end gap-2 mt-2 sm:mt-0 min-w-max">
+                {selectedInstanceId && <div className="flex flex-row items-center justify-start sm:justify-start md:justify-end gap-2 mt-2 sm:mt-0 min-w-max w-full">
                     <div className={cn("relative flex items-center justify-center rounded-full h-8 w-8 shrink-0", connectionStatus === 'connected' ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30")}>
                       {connectionStatus === 'connected' ? <>
                           <Wifi className="h-4 w-4 text-green-600 dark:text-green-500" />
