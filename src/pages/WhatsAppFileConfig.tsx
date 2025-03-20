@@ -256,7 +256,7 @@ const WhatsAppFileConfig = () => {
                 </div>
                 
                 {selectedInstanceId && (
-                  <div className="flex flex-row items-center justify-end gap-2 mt-2 sm:mt-0 min-w-max">
+                  <div className="flex flex-row items-center justify-start gap-2 mt-2 sm:mt-0 min-w-max">
                     <div className={cn(
                       "relative flex items-center justify-center rounded-full h-8 w-8", 
                       connectionStatus === 'connected' 
