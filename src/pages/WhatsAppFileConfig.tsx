@@ -251,7 +251,7 @@ const WhatsAppFileConfig = () => {
             <Card>
               <CardHeader className="flex flex-col space-y-2 pb-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
                 <div>
-                  <CardTitle>Select WhatsApp Instance</CardTitle>
+                  <CardTitle>WhatsApp Instance</CardTitle>
                   <CardDescription className="my-[6px] text-left">Choose which WhatsApp number you want to configure</CardDescription>
                 </div>
                 
