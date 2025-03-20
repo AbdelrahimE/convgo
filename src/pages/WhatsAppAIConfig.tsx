@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,20 +17,17 @@ import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
-
 interface AIConfig {
   id: string;
   system_prompt: string;
   temperature: number;
   is_active: boolean;
 }
-
 const WhatsAppAIConfig = () => {
   const {
     user
@@ -46,7 +42,6 @@ const WhatsAppAIConfig = () => {
     isGenerating,
     responseResult
   } = useAIResponse();
-
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [systemPrompt, setSystemPrompt] = useState<string>('');
@@ -70,27 +65,20 @@ const WhatsAppAIConfig = () => {
     if (!conversationId) return false;
     try {
       setIsCleaningUp(true);
-      
-      const { error: messagesError } = await supabase
-        .from('whatsapp_conversation_messages')
-        .delete()
-        .eq('conversation_id', conversationId);
-      
+      const {
+        error: messagesError
+      } = await supabase.from('whatsapp_conversation_messages').delete().eq('conversation_id', conversationId);
       if (messagesError) {
         console.error('Error deleting test conversation messages:', messagesError);
         return false;
       }
-      
-      const { error: conversationError } = await supabase
-        .from('whatsapp_conversations')
-        .delete()
-        .eq('id', conversationId);
-      
+      const {
+        error: conversationError
+      } = await supabase.from('whatsapp_conversations').delete().eq('id', conversationId);
       if (conversationError) {
         console.error('Error deleting test conversation:', conversationError);
         return false;
       }
-      
       console.log('Successfully cleaned up test conversation:', conversationId);
       return true;
     } catch (error) {
@@ -100,13 +88,11 @@ const WhatsAppAIConfig = () => {
       setIsCleaningUp(false);
     }
   }, []);
-
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
-
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -114,29 +100,24 @@ const WhatsAppAIConfig = () => {
       setSystemPrompt('');
     }
   }, [selectedInstance]);
-
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
-        cleanupTestConversation(testConversationId)
-          .then(success => {
-            if (success) {
-              console.log('Successfully cleaned up test conversation on unmount:', testConversationId);
-            }
-          })
-          .catch(err => {
-            console.error('Failed to clean up test conversation on unmount:', err);
-          });
+        cleanupTestConversation(testConversationId).then(success => {
+          if (success) {
+            console.log('Successfully cleaned up test conversation on unmount:', testConversationId);
+          }
+        }).catch(err => {
+          console.error('Failed to clean up test conversation on unmount:', err);
+        });
       }
     };
   }, [testConversationId, useRealConversation, cleanupTestConversation]);
-
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
     }
   }, [activeTab, selectedInstance, useRealConversation]);
-
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -156,7 +137,6 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
@@ -179,7 +159,6 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
@@ -223,11 +202,9 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
-
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
-
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
@@ -259,7 +236,6 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
-
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
     try {
@@ -269,9 +245,11 @@ const WhatsAppAIConfig = () => {
       } else if (cleanupResult.count > 0) {
         console.log(`Cleaned up ${cleanupResult.count} stale test conversations`);
       }
-
       const uniqueId = new Date().getTime().toString();
-      const { data, error } = await supabase.from('whatsapp_conversations').insert({
+      const {
+        data,
+        error
+      } = await supabase.from('whatsapp_conversations').insert({
         instance_id: selectedInstance,
         user_phone: `test-user-${uniqueId}`,
         status: 'active',
@@ -289,24 +267,20 @@ const WhatsAppAIConfig = () => {
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
-
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       const idToDelete = testConversationId;
       setTestConversationId(null);
       setConversation([]);
-      
       const success = await cleanupTestConversation(idToDelete);
       if (!success) {
         toast.error('Failed to clean up test conversation. A new one will be created anyway.');
       }
-      
       await createTestConversation();
     } else {
       setConversation([]);
     }
   };
-
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -388,7 +362,6 @@ const WhatsAppAIConfig = () => {
       }]);
     }
   };
-
   return <div className="container mx-auto space-y-6 px-[16px] py-[32px]">
       <h1 className="font-bold text-4xl">AI Configuration</h1>
       
@@ -563,5 +536,4 @@ const WhatsAppAIConfig = () => {
       </Dialog>
     </div>;
 };
-
 export default WhatsAppAIConfig;
