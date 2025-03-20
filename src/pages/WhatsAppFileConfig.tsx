@@ -226,7 +226,7 @@ const WhatsAppFileConfig = () => {
       {selectedInstanceId && <Card>
           <CardHeader>
             <CardTitle>Select Files</CardTitle>
-            <CardDescription>Choose which files should be used for this WhatsApp instance</CardDescription>
+            <CardDescription className="text-left">Select the files that the AI will use to respond to inquiries received on the specified WhatsApp number. Any files not selected here will be ignored.</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? <div className="flex items-center justify-center p-4">
