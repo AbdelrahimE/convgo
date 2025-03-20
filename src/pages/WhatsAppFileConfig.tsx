@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,28 +11,28 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Save, RefreshCw, CheckCircle2, Wifi, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
+
 interface File {
   id: string;
   filename: string;
   original_name: string;
 }
+
 interface FileMapping {
   id: string;
   file_id: string;
   whatsapp_instance_id: string;
 }
+
 const WhatsAppFileConfig = () => {
-  const {
-    user
-  } = useAuth();
-  const {
-    toast
-  } = useToast();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -48,13 +49,15 @@ const WhatsAppFileConfig = () => {
       setIsLoading(true);
       try {
         // Fetch WhatsApp instances
-        const {
-          data: instancesData,
-          error: instancesError
-        } = await supabase.from('whatsapp_instances').select('*').order('instance_name');
+        const { data: instancesData, error: instancesError } = await supabase
+          .from('whatsapp_instances')
+          .select('*')
+          .order('instance_name');
+
         if (instancesError) {
           throw new Error(instancesError.message);
         }
+
         setWhatsappInstances(instancesData || []);
 
         // Set default selected instance if any exist
@@ -63,15 +66,15 @@ const WhatsAppFileConfig = () => {
         }
 
         // Fetch files
-        const {
-          data: filesData,
-          error: filesError
-        } = await supabase.from('files').select('id, filename, original_name').order('created_at', {
-          ascending: false
-        });
+        const { data: filesData, error: filesError } = await supabase
+          .from('files')
+          .select('id, filename, original_name')
+          .order('created_at', { ascending: false });
+
         if (filesError) {
           throw new Error(filesError.message);
         }
+
         setFiles(filesData || []);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -84,6 +87,7 @@ const WhatsAppFileConfig = () => {
         setIsLoading(false);
       }
     };
+
     fetchData();
   }, [toast]);
 
@@ -91,14 +95,17 @@ const WhatsAppFileConfig = () => {
   useEffect(() => {
     const fetchMappings = async () => {
       if (!selectedInstanceId) return;
+
       try {
-        const {
-          data,
-          error
-        } = await supabase.from('whatsapp_file_mappings').select('*').eq('whatsapp_instance_id', selectedInstanceId);
+        const { data, error } = await supabase
+          .from('whatsapp_file_mappings')
+          .select('*')
+          .eq('whatsapp_instance_id', selectedInstanceId);
+
         if (error) {
           throw new Error(error.message);
         }
+
         setExistingMappings(data || []);
 
         // Update selected file IDs based on mappings
@@ -113,28 +120,37 @@ const WhatsAppFileConfig = () => {
         });
       }
     };
+
     fetchMappings();
   }, [selectedInstanceId, toast]);
+
   const handleInstanceChange = (instanceId: string) => {
     setSelectedInstanceId(instanceId);
   };
+
   const handleFileToggle = (fileId: string) => {
     const newSelectedFileIds = new Set(selectedFileIds);
+
     if (newSelectedFileIds.has(fileId)) {
       newSelectedFileIds.delete(fileId);
     } else {
       newSelectedFileIds.add(fileId);
     }
+
     setSelectedFileIds(newSelectedFileIds);
   };
+
   const handleSave = async () => {
     if (!selectedInstanceId || !user) return;
+
     setIsSaving(true);
     try {
       // Delete existing mappings for this instance
-      const {
-        error: deleteError
-      } = await supabase.from('whatsapp_file_mappings').delete().eq('whatsapp_instance_id', selectedInstanceId);
+      const { error: deleteError } = await supabase
+        .from('whatsapp_file_mappings')
+        .delete()
+        .eq('whatsapp_instance_id', selectedInstanceId);
+
       if (deleteError) {
         throw new Error(deleteError.message);
       }
@@ -147,13 +163,16 @@ const WhatsAppFileConfig = () => {
           file_id: fileId,
           user_id: user.id
         }));
-        const {
-          error: insertError
-        } = await supabase.from('whatsapp_file_mappings').insert(mappingsToInsert);
+
+        const { error: insertError } = await supabase
+          .from('whatsapp_file_mappings')
+          .insert(mappingsToInsert);
+
         if (insertError) {
           throw new Error(insertError.message);
         }
       }
+
       setSaveSuccess(true);
       toast({
         title: 'Success',
@@ -175,21 +194,26 @@ const WhatsAppFileConfig = () => {
       setIsSaving(false);
     }
   };
+
   const refreshData = async () => {
     if (!selectedInstanceId) return;
+
     try {
-      const {
-        data,
-        error
-      } = await supabase.from('whatsapp_file_mappings').select('*').eq('whatsapp_instance_id', selectedInstanceId);
+      const { data, error } = await supabase
+        .from('whatsapp_file_mappings')
+        .select('*')
+        .eq('whatsapp_instance_id', selectedInstanceId);
+
       if (error) {
         throw new Error(error.message);
       }
+
       setExistingMappings(data || []);
 
       // Update selected file IDs based on mappings
       const mappedFileIds = new Set((data || []).map(mapping => mapping.file_id));
       setSelectedFileIds(mappedFileIds);
+
       toast({
         title: 'Refreshed',
         description: 'File mappings refreshed successfully'
@@ -203,120 +227,208 @@ const WhatsAppFileConfig = () => {
       });
     }
   };
+
   const getInstanceStatus = (instance?: WhatsAppInstance) => {
     if (!instance) return 'disconnected';
     // Convert UPPERCASE status values from the database to lowercase for display
     return instance.status === 'CONNECTED' ? 'connected' : 'disconnected';
   };
+
   const selectedInstance = whatsappInstances.find(instance => instance.id === selectedInstanceId);
   const connectionStatus = getInstanceStatus(selectedInstance);
-  return <div className="container mx-auto py-8 px-4 md:px-6 lg:px-[16px]">
-      <h1 className="font-bold mb-6 text-3xl md:text-4xl">File Configuration</h1>
-      
-      <div className="flex flex-col space-y-6 max-w-3xl">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <div>
-              <CardTitle>Select WhatsApp Instance</CardTitle>
-              <CardDescription className="my-[6px] text-left">Choose which WhatsApp number you want to configure</CardDescription>
-            </div>
-            
-            {selectedInstanceId && <div className="flex items-center gap-2">
-                <div className={cn("relative flex items-center justify-center rounded-full h-8 w-8", connectionStatus === 'connected' ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30")}>
-                  {connectionStatus === 'connected' ? <>
-                      <Wifi className="h-4 w-4 text-green-600 dark:text-green-500" />
-                      <span className="absolute inset-0 rounded-full bg-green-400/40 dark:bg-green-600/40 animate-pulse"></span>
-                    </> : <>
-                      <WifiOff className="h-4 w-4 text-red-600 dark:text-red-500" />
-                      <span className="absolute inset-0 rounded-full bg-red-400/40 dark:bg-red-600/40 animate-pulse"></span>
-                    </>}
-                </div>
-                <span className="text-sm font-medium">
-                  {connectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
-                </span>
-              </div>}
-          </CardHeader>
-          <CardContent>
-            {isLoading ? <div className="flex items-center justify-center p-4">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                <span className="ml-2">Loading instances...</span>
-              </div> : whatsappInstances.length === 0 ? <p className="text-muted-foreground">No WhatsApp instances found. Please create a WhatsApp connection first.</p> : <div className="space-y-4">
-                <div className="flex flex-col space-y-1.5">
-                  <Label htmlFor="instance-select">WhatsApp Instance</Label>
-                  <Select value={selectedInstanceId || ''} onValueChange={handleInstanceChange}>
-                    <SelectTrigger id="instance-select">
-                      <SelectValue placeholder="Select an instance" />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      {whatsappInstances.map(instance => <SelectItem key={instance.id} value={instance.id}>
-                          {instance.instance_name}
-                        </SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>}
-          </CardContent>
-        </Card>
 
-        {selectedInstanceId && <Card>
-            <CardHeader>
-              <CardTitle>Select Files</CardTitle>
-              <CardDescription>
-                Select the files that the AI will use to respond to inquiries received on the specified WhatsApp number. 
-                Any files not selected here will be ignored.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? <div className="flex items-center justify-center p-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <span className="ml-2">Loading files...</span>
-                </div> : files.length === 0 ? <p className="text-muted-foreground">No files found. Please upload files first.</p> : <div className="space-y-4">
-                  <div className="border rounded-md p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-medium">Available Files</h3>
-                      <Button variant="outline" size="sm" onClick={refreshData} className="flex items-center gap-1 transition hover:scale-105 active:scale-95">
-                        <RefreshCw className="h-4 w-4" />
-                        <span>Refresh</span>
-                      </Button>
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="container mx-auto px-4 py-8 max-w-7xl"
+    >
+      <div className="space-y-8">
+        <motion.h1 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
+          className="text-2xl font-bold text-left md:text-3xl lg:text-4xl"
+        >
+          File Configuration
+        </motion.h1>
+        
+        <div className="space-y-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div>
+                  <CardTitle>Select WhatsApp Instance</CardTitle>
+                  <CardDescription className="my-[6px] text-left">Choose which WhatsApp number you want to configure</CardDescription>
+                </div>
+                
+                {selectedInstanceId && (
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      "relative flex items-center justify-center rounded-full h-8 w-8", 
+                      connectionStatus === 'connected' 
+                        ? "bg-green-100 dark:bg-green-900/30" 
+                        : "bg-red-100 dark:bg-red-900/30"
+                    )}>
+                      {connectionStatus === 'connected' ? (
+                        <>
+                          <Wifi className="h-4 w-4 text-green-600 dark:text-green-500" />
+                          <span className="absolute inset-0 rounded-full bg-green-400/40 dark:bg-green-600/40 animate-pulse"></span>
+                        </>
+                      ) : (
+                        <>
+                          <WifiOff className="h-4 w-4 text-red-600 dark:text-red-500" />
+                          <span className="absolute inset-0 rounded-full bg-red-400/40 dark:bg-red-600/40 animate-pulse"></span>
+                        </>
+                      )}
                     </div>
-                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                      {files.map(file => <motion.div key={file.id} whileHover={{
-                  scale: 1.01
-                }} onMouseEnter={() => setHoveredFileId(file.id)} onMouseLeave={() => setHoveredFileId(null)} className={cn("flex items-start space-x-2 p-2 rounded-md border border-transparent transition-all duration-200", hoveredFileId === file.id && "border-border bg-accent/30 shadow-sm")}>
-                          <Checkbox id={`file-${file.id}`} checked={selectedFileIds.has(file.id)} onCheckedChange={() => handleFileToggle(file.id)} />
-                          <Label htmlFor={`file-${file.id}`} className="text-sm font-normal cursor-pointer flex-1">
-                            {file.original_name || file.filename}
-                          </Label>
-                        </motion.div>)}
+                    <span className="text-sm font-medium">
+                      {connectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
+                    </span>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="flex items-center justify-center p-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <span className="ml-2">Loading instances...</span>
+                  </div>
+                ) : whatsappInstances.length === 0 ? (
+                  <p className="text-muted-foreground">No WhatsApp instances found. Please create a WhatsApp connection first.</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex flex-col space-y-1.5">
+                      <Label htmlFor="instance-select">WhatsApp Instance</Label>
+                      <Select value={selectedInstanceId || ''} onValueChange={handleInstanceChange}>
+                        <SelectTrigger id="instance-select">
+                          <SelectValue placeholder="Select an instance" />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {whatsappInstances.map(instance => (
+                            <SelectItem key={instance.id} value={instance.id}>
+                              {instance.instance_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                </div>}
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <div>
-                <span className="text-sm text-muted-foreground">
-                  {selectedFileIds.size} file(s) selected
-                </span>
-              </div>
-              <motion.div whileTap={{
-            scale: 0.95
-          }}>
-                <Button onClick={handleSave} disabled={isLoading || isSaving || !selectedInstanceId} className="flex items-center gap-1">
-                  {isSaving ? <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Saving...</span>
-                    </> : saveSuccess ? <>
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      <span>Saved!</span>
-                    </> : <>
-                      <Save className="h-4 w-4" />
-                      <span>Save Configuration</span>
-                    </>}
-                </Button>
-              </motion.div>
-            </CardFooter>
-          </Card>}
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {selectedInstanceId && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle>Select Files</CardTitle>
+                  <CardDescription>
+                    Select the files that the AI will use to respond to inquiries received on the specified WhatsApp number. 
+                    Any files not selected here will be ignored.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <div className="flex items-center justify-center p-4">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <span className="ml-2">Loading files...</span>
+                    </div>
+                  ) : files.length === 0 ? (
+                    <p className="text-muted-foreground">No files found. Please upload files first.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="border rounded-md p-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-medium">Available Files</h3>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={refreshData}
+                            className="flex items-center gap-1 transition hover:scale-105 active:scale-95"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            <span>Refresh</span>
+                          </Button>
+                        </div>
+                        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                          {files.map(file => (
+                            <motion.div
+                              key={file.id}
+                              whileHover={{ scale: 1.01 }}
+                              onMouseEnter={() => setHoveredFileId(file.id)}
+                              onMouseLeave={() => setHoveredFileId(null)}
+                              className={cn(
+                                "flex items-start space-x-2 p-2 rounded-md border border-transparent transition-all duration-200",
+                                hoveredFileId === file.id && "border-border bg-accent/30 shadow-sm"
+                              )}
+                            >
+                              <Checkbox
+                                id={`file-${file.id}`}
+                                checked={selectedFileIds.has(file.id)}
+                                onCheckedChange={() => handleFileToggle(file.id)}
+                              />
+                              <Label
+                                htmlFor={`file-${file.id}`}
+                                className="text-sm font-normal cursor-pointer flex-1"
+                              >
+                                {file.original_name || file.filename}
+                              </Label>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+                <CardFooter className="flex justify-between">
+                  <div>
+                    <span className="text-sm text-muted-foreground">
+                      {selectedFileIds.size} file(s) selected
+                    </span>
+                  </div>
+                  <motion.div whileTap={{ scale: 0.95 }}>
+                    <Button
+                      onClick={handleSave}
+                      disabled={isLoading || isSaving || !selectedInstanceId}
+                      className="flex items-center gap-1"
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : saveSuccess ? (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          <span>Saved!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4" />
+                          <span>Save Configuration</span>
+                        </>
+                      )}
+                    </Button>
+                  </motion.div>
+                </CardFooter>
+              </Card>
+            </motion.div>
+          )}
+        </div>
       </div>
-    </div>;
+    </motion.div>
+  );
 };
+
 export default WhatsAppFileConfig;
