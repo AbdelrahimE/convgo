@@ -489,7 +489,7 @@ const WhatsAppLink = () => {
         </Card>
       </div>;
   }
-  return <div className="container mx-auto md:px-6 max-w-7xl min-h-[calc(100vh-4rem)] py-[32px] px-[16px]">
+  return <div className="container md:px-6 max-w-7xl min-h-[calc(100vh-4rem)] mx-0 my-0 py-[32px] px-[16px]">
       <div className="mb-6 md:mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
