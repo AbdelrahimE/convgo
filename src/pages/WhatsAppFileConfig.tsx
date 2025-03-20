@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -248,14 +249,14 @@ const WhatsAppFileConfig = () => {
             transition={{ delay: 0.3 }}
           >
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-col space-y-2 pb-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
                 <div>
                   <CardTitle>Select WhatsApp Instance</CardTitle>
                   <CardDescription className="my-[6px] text-left">Choose which WhatsApp number you want to configure</CardDescription>
                 </div>
                 
                 {selectedInstanceId && (
-                  <div className="flex flex-row items-center gap-2 shrink-0 min-w-max">
+                  <div className="flex flex-row items-center justify-center gap-2 mt-2 sm:mt-0 sm:justify-end min-w-max">
                     <div className={cn(
                       "relative flex items-center justify-center rounded-full h-8 w-8", 
                       connectionStatus === 'connected' 
