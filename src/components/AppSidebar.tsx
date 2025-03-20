@@ -8,6 +8,7 @@ import { Folder, Home, LogOut, Phone, Link2, Radio } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 const FULL_NAME_MAX_LENGTH = 25;
 const navigation = [
@@ -77,23 +78,42 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navigation.map(item => {
-              const isActive = location.pathname === item.href;
-              return <SidebarMenuItem key={item.name}>
-                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.name}>
-                      <Link to={item.href}>
-                        <item.icon />
-                        <span>{item.name}</span>
+                const isActive = location.pathname === item.href;
+                return (
+                  <SidebarMenuItem key={item.name}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.name}
+                      className="group"
+                    >
+                      <Link to={item.href} className={cn(
+                        "relative",
+                        isActive && "after:content-[''] after:absolute after:bottom-0 after:left-4 after:right-4 after:h-0.5 after:bg-primary after:animate-in after:fade-in-0 after:zoom-in-95"
+                      )}>
+                        <item.icon className={cn(
+                          "transition-transform duration-200 group-hover:scale-110",
+                          isActive ? "text-primary group-hover:text-primary" : "group-hover:text-primary/80"
+                        )} />
+                        <span className={cn(
+                          "transition-colors duration-200",
+                          isActive ? "text-primary group-hover:text-primary" : "group-hover:text-primary/80" 
+                        )}>
+                          {item.name}
+                        </span>
                       </Link>
                     </SidebarMenuButton>
-                  </SidebarMenuItem>;
-            })}
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter>
-        {profile && <>
+        {profile && (
+          <>
             <div className="flex items-center gap-3 px-4 pb-4">
               <Avatar>
                 <AvatarImage src={profile.avatarUrl || undefined} />
@@ -106,12 +126,17 @@ export function AppSidebar() {
               </div>
             </div>
             <div className="p-4 pt-0">
-              <Button variant="outline" className="w-full justify-start gap-2" onClick={handleLogout}>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start gap-2 transition hover:scale-105 active:scale-95" 
+                onClick={handleLogout}
+              >
                 <LogOut className="h-4 w-4" />
                 Logout
               </Button>
             </div>
-          </>}
+          </>
+        )}
       </SidebarFooter>
     </Sidebar>
   );
