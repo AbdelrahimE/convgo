@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -43,12 +42,10 @@ const WhatsAppFileConfig = () => {
   const [existingMappings, setExistingMappings] = useState<FileMapping[]>([]);
   const [hoveredFileId, setHoveredFileId] = useState<string | null>(null);
 
-  // Fetch WhatsApp instances and files when component mounts
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Fetch WhatsApp instances
         const { data: instancesData, error: instancesError } = await supabase
           .from('whatsapp_instances')
           .select('*')
@@ -60,12 +57,10 @@ const WhatsAppFileConfig = () => {
 
         setWhatsappInstances(instancesData || []);
 
-        // Set default selected instance if any exist
         if (instancesData && instancesData.length > 0) {
           setSelectedInstanceId(instancesData[0].id);
         }
 
-        // Fetch files
         const { data: filesData, error: filesError } = await supabase
           .from('files')
           .select('id, filename, original_name')
@@ -91,7 +86,6 @@ const WhatsAppFileConfig = () => {
     fetchData();
   }, [toast]);
 
-  // Fetch existing mappings when selected instance changes
   useEffect(() => {
     const fetchMappings = async () => {
       if (!selectedInstanceId) return;
@@ -108,7 +102,6 @@ const WhatsAppFileConfig = () => {
 
         setExistingMappings(data || []);
 
-        // Update selected file IDs based on mappings
         const mappedFileIds = new Set((data || []).map(mapping => mapping.file_id));
         setSelectedFileIds(mappedFileIds);
       } catch (error) {
@@ -145,7 +138,6 @@ const WhatsAppFileConfig = () => {
 
     setIsSaving(true);
     try {
-      // Delete existing mappings for this instance
       const { error: deleteError } = await supabase
         .from('whatsapp_file_mappings')
         .delete()
@@ -155,9 +147,7 @@ const WhatsAppFileConfig = () => {
         throw new Error(deleteError.message);
       }
 
-      // Only proceed with insertions if there are files selected
       if (selectedFileIds.size > 0) {
-        // Create new mappings
         const mappingsToInsert = Array.from(selectedFileIds).map(fileId => ({
           whatsapp_instance_id: selectedInstanceId,
           file_id: fileId,
@@ -179,7 +169,6 @@ const WhatsAppFileConfig = () => {
         description: 'File mappings saved successfully'
       });
 
-      // Reset success state after 2 seconds
       setTimeout(() => {
         setSaveSuccess(false);
       }, 2000);
@@ -210,7 +199,6 @@ const WhatsAppFileConfig = () => {
 
       setExistingMappings(data || []);
 
-      // Update selected file IDs based on mappings
       const mappedFileIds = new Set((data || []).map(mapping => mapping.file_id));
       setSelectedFileIds(mappedFileIds);
 
@@ -230,7 +218,6 @@ const WhatsAppFileConfig = () => {
 
   const getInstanceStatus = (instance?: WhatsAppInstance) => {
     if (!instance) return 'disconnected';
-    // Convert UPPERCASE status values from the database to lowercase for display
     return instance.status.toLowerCase() === 'connected' ? 'connected' : 'disconnected';
   };
 
@@ -268,7 +255,7 @@ const WhatsAppFileConfig = () => {
                 </div>
                 
                 {selectedInstanceId && (
-                  <div className="flex flex-row items-center gap-2 shrink-0">
+                  <div className="flex flex-row items-center gap-2 shrink-0 min-w-max">
                     <div className={cn(
                       "relative flex items-center justify-center rounded-full h-8 w-8", 
                       connectionStatus === 'connected' 
@@ -287,7 +274,7 @@ const WhatsAppFileConfig = () => {
                         </>
                       )}
                     </div>
-                    <span className="text-sm font-medium">
+                    <span className="text-sm font-medium whitespace-nowrap">
                       {connectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
                     </span>
                   </div>
