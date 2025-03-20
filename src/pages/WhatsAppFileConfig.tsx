@@ -282,7 +282,7 @@ const WhatsAppFileConfig = () => {
                     <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                       {files.map(file => <motion.div key={file.id} whileHover={{
                   scale: 1.01
-                }} onMouseEnter={() => setHoveredFileId(file.id)} onMouseLeave={() => setHoveredFileId(null)} className={cn("flex items-start space-x-2 p-2 rounded-md border border-transparent transition-all duration-200", hoveredFileId === file.id && "border-border bg-accent/30 shadow-sm")}>
+                }} onMouseEnter={() => setHoveredFileId(file.id)} onMouseLeave={() => setHoveredFileId(null)} className="mx-[4px]">
                           <Checkbox id={`file-${file.id}`} checked={selectedFileIds.has(file.id)} onCheckedChange={() => handleFileToggle(file.id)} />
                           <Label htmlFor={`file-${file.id}`} className="text-sm font-normal cursor-pointer flex-1">
                             {file.original_name || file.filename}
