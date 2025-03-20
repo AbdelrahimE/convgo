@@ -7,9 +7,12 @@ import {
   CardContent, 
   CardDescription, 
   CardHeader, 
-  CardTitle 
+  CardTitle,
+  CardFooter
 } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Mic } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useAIResponse } from '@/hooks/use-ai-response';
 
 const WhatsAppWebhookManager: React.FC<{ instanceName: string }> = ({ instanceName }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -21,6 +24,8 @@ const WhatsAppWebhookManager: React.FC<{ instanceName: string }> = ({ instanceNa
     last_status?: string;
     last_checked_at?: string;
   } | null>(null);
+  const [showVoiceCapabilities, setShowVoiceCapabilities] = useState(false);
+  const { transcribeAudio, isTranscribing } = useAIResponse();
 
   // Check webhook status on load
   useEffect(() => {
@@ -74,6 +79,28 @@ const WhatsAppWebhookManager: React.FC<{ instanceName: string }> = ({ instanceNa
       // Don't show error toast on routine checks
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const testAudioTranscription = async () => {
+    try {
+      // This is just a test audio URL - in production this would come from the webhook
+      const testAudioUrl = "https://audio-samples.github.io/samples/mp3/blizzard_biased/sample-1.mp3";
+      
+      const result = await transcribeAudio({
+        audioUrl: testAudioUrl,
+        mimeType: "audio/mp3",
+        instanceName
+      });
+      
+      if (result.success) {
+        toast.success(`Transcription test successful: "${result.transcription}"`);
+      } else {
+        toast.error(`Transcription test failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error testing transcription:", error);
+      toast.error("Transcription test failed");
     }
   };
 
@@ -132,6 +159,44 @@ const WhatsAppWebhookManager: React.FC<{ instanceName: string }> = ({ instanceNa
                 using the configured system prompts and knowledge base files.
               </p>
             </div>
+
+            {showVoiceCapabilities ? (
+              <div className="mt-4 border border-blue-200 rounded-md p-4 bg-blue-50">
+                <h3 className="text-sm font-medium text-blue-800 mb-2">Voice Message Support</h3>
+                <p className="text-xs text-blue-700 mb-3">
+                  Voice messages sent to your WhatsApp number will be automatically transcribed and processed.
+                </p>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={testAudioTranscription}
+                  disabled={isTranscribing}
+                  className="w-full flex items-center justify-center gap-2"
+                >
+                  {isTranscribing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Testing Transcription...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="h-4 w-4" />
+                      <span>Test Voice Transcription</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => setShowVoiceCapabilities(true)}
+                >
+                  Show Voice Capabilities
+                </Button>
+              </div>
+            )}
           </>
         )}
       </CardContent>

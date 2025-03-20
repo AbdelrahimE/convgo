@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -43,12 +42,26 @@ interface CleanupTestConversationsResult {
   error?: string;
 }
 
+interface TranscribeAudioOptions {
+  audioUrl: string;
+  mimeType?: string;
+  instanceName?: string;
+}
+
+interface TranscriptionResult {
+  success: boolean;
+  transcription?: string;
+  language?: string;
+  error?: string;
+}
+
 export function useAIResponse() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [responseResult, setResponseResult] = useState<AIResponseResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [isCleaningConversations, setIsCleaningConversations] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const generateResponse = async (
     query: string,
@@ -105,7 +118,6 @@ export function useAIResponse() {
       
       const { instanceName, recipientPhone, message } = options;
       
-      // Call the Edge Function to send a WhatsApp message
       const { data, error } = await supabase.functions.invoke('whatsapp-send-message', {
         body: {
           instanceName,
@@ -138,13 +150,11 @@ export function useAIResponse() {
     try {
       setIsCleaningConversations(true);
       
-      // Identify test conversations by looking for user_phone starting with 'test-user-' 
-      // and having is_test:true in conversation_data
       const { data: testConversations, error: fetchError } = await supabase
         .from('whatsapp_conversations')
         .select('id')
         .eq('instance_id', instanceId)
-        .like('user_phone', 'test-user-%')  // Use like with wildcard to match all test users
+        .like('user_phone', 'test-user-%')
         .contains('conversation_data', { is_test: true });
       
       if (fetchError) {
@@ -158,7 +168,6 @@ export function useAIResponse() {
       const conversationIds = testConversations.map(conv => conv.id);
       console.log(`Found ${conversationIds.length} stale test conversations to clean up`);
       
-      // Delete all messages from these conversations
       const { error: messagesDeleteError } = await supabase
         .from('whatsapp_conversation_messages')
         .delete()
@@ -168,7 +177,6 @@ export function useAIResponse() {
         throw new Error(`Error deleting test conversation messages: ${messagesDeleteError.message}`);
       }
       
-      // Now delete the conversations themselves
       const { error: convsDeleteError } = await supabase
         .from('whatsapp_conversations')
         .delete()
@@ -196,13 +204,67 @@ export function useAIResponse() {
     }
   };
 
+  const transcribeAudio = async (options: TranscribeAudioOptions): Promise<TranscriptionResult> => {
+    try {
+      setIsTranscribing(true);
+      setError(null);
+      
+      const { audioUrl, mimeType, instanceName } = options;
+      
+      if (!audioUrl) {
+        throw new Error('Audio URL is required for transcription');
+      }
+      
+      console.log(`Requesting transcription for audio URL: ${audioUrl.substring(0, 30)}...`);
+      
+      const { data, error } = await supabase.functions.invoke('whatsapp-voice-transcribe', {
+        body: {
+          audioUrl,
+          mimeType: mimeType || 'audio/ogg; codecs=opus',
+          instanceName: instanceName || 'unknown'
+        },
+      });
+      
+      if (error) {
+        throw new Error(`Error transcribing audio: ${error.message}`);
+      }
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to transcribe audio');
+      }
+      
+      toast.success('Audio transcription successful');
+      console.log('Transcription result:', data);
+      
+      return {
+        success: true,
+        transcription: data.transcription,
+        language: data.language
+      };
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('Error transcribing audio:', errMessage);
+      setError(errMessage);
+      toast.error(`Audio transcription failed: ${errMessage}`);
+      
+      return {
+        success: false,
+        error: errMessage
+      };
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   return {
     generateResponse,
     sendWhatsAppMessage,
     cleanupTestConversations,
+    transcribeAudio,
     isGenerating,
     isSendingWhatsApp,
     isCleaningConversations,
+    isTranscribing,
     responseResult,
     error,
   };
