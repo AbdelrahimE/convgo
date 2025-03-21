@@ -293,21 +293,40 @@ async function saveWebhookMessage(instance: string, event: string, data: any) {
 }
 
 // Helper function to download audio file from WhatsApp
-async function downloadAudioFile(url: string, mediaKey: string, filetype: string): Promise<{ success: boolean; data?: ArrayBuffer; error?: string }> {
+async function downloadAudioFile(url: string, instance: string, evolutionApiKey: string): Promise<{ success: boolean; audioUrl?: string; error?: string }> {
   try {
-    await logDebug('AUDIO_DOWNLOAD_START', `Starting audio download from ${url}`);
+    await logDebug('AUDIO_DOWNLOAD_START', `Starting audio download request for URL: ${url}`);
     
-    // Currently, we cannot directly download the encrypted WhatsApp audio file
-    // We need to use the EVOLUTION API to get the decrypted media
-    // This is a placeholder for the actual implementation
+    // We cannot directly download the encrypted WhatsApp audio file
+    // Instead, we need to retrieve the decrypted media file through the EVOLUTION API
     
-    // Return unsuccessful response for now
-    return { 
-      success: false, 
-      error: 'Direct audio download not supported. The EVOLUTION API must be used to download media.' 
+    if (!evolutionApiKey) {
+      await logDebug('AUDIO_DOWNLOAD_ERROR', 'EVOLUTION_API_KEY not available');
+      return { 
+        success: false, 
+        error: 'EVOLUTION API key not available for media download' 
+      };
+    }
+    
+    // Prepare Evolution API URL to download media
+    // Using the format explained in the Evolution API docs
+    const mediaUrl = url.split('?')[0]; // Remove query parameters
+    const mediaId = mediaUrl.split('/').pop(); // Extract media ID
+    
+    if (!mediaId) {
+      return { success: false, error: 'Could not extract media ID from URL' };
+    }
+    
+    await logDebug('AUDIO_DOWNLOAD_MEDIA_ID', `Extracted media ID: ${mediaId}`);
+    
+    // We're returning the URL that will be used with the proper headers in the transcription function
+    // This is more reliable than downloading here and passing the bytes
+    return {
+      success: true,
+      audioUrl: url
     };
   } catch (error) {
-    await logDebug('AUDIO_DOWNLOAD_ERROR', 'Error downloading audio file', { error });
+    await logDebug('AUDIO_DOWNLOAD_ERROR', 'Error processing audio file URL', { error });
     return { success: false, error: error.message };
   }
 }
@@ -329,45 +348,121 @@ function extractAudioDetails(messageData: any): {
   mimeType: string | null;
   ptt: boolean;
 } {
+  // Check for audioMessage object
   const audioMessage = messageData?.message?.audioMessage;
-  if (!audioMessage) {
+  if (audioMessage) {
     return {
-      url: null,
-      mediaKey: null,
-      duration: null,
-      mimeType: null,
-      ptt: false
+      url: audioMessage.url || null,
+      mediaKey: audioMessage.mediaKey || null,
+      duration: audioMessage.seconds || null,
+      mimeType: audioMessage.mimetype || 'audio/ogg; codecs=opus',
+      ptt: audioMessage.ptt || false
     };
   }
-
+  
+  // Check for pttMessage object (Push To Talk - voice messages)
+  const pttMessage = messageData?.message?.pttMessage;
+  if (pttMessage) {
+    return {
+      url: pttMessage.url || null,
+      mediaKey: pttMessage.mediaKey || null,
+      duration: pttMessage.seconds || null,
+      mimeType: pttMessage.mimetype || 'audio/ogg; codecs=opus',
+      ptt: true
+    };
+  }
+  
+  // No audio content found
   return {
-    url: audioMessage.url || null,
-    mediaKey: audioMessage.mediaKey || null,
-    duration: audioMessage.seconds || null,
-    mimeType: audioMessage.mimetype || 'audio/ogg; codecs=opus',
-    ptt: audioMessage.ptt || false
+    url: null,
+    mediaKey: null,
+    duration: null,
+    mimeType: null,
+    ptt: false
   };
 }
 
 // Helper function to handle audio transcription
-async function processAudioMessage(audioDetails: any, instanceName: string, fromNumber: string): Promise<{ success: boolean; transcription?: string; error?: string }> {
+async function processAudioMessage(audioDetails: any, instanceName: string, fromNumber: string, evolutionApiKey: string): Promise<{ success: boolean; transcription?: string; error?: string }> {
   try {
     await logDebug('AUDIO_PROCESSING_START', 'Starting audio processing', { instanceName, fromNumber });
     
-    // This will be implemented in Phase 2
-    // For now, we'll log that we detected an audio message but cannot process it yet
-    await logDebug('AUDIO_PROCESSING_PENDING', 'Audio processing capability not yet implemented', { 
-      audioDetails 
+    if (!audioDetails.url) {
+      return { 
+        success: false, 
+        error: 'No audio URL available in message',
+        transcription: "This is a voice message that could not be processed because no audio URL was found."
+      };
+    }
+    
+    // Get the audio URL that we can access with the Evolution API key
+    const downloadResult = await downloadAudioFile(audioDetails.url, instanceName, evolutionApiKey);
+    
+    if (!downloadResult.success || !downloadResult.audioUrl) {
+      await logDebug('AUDIO_DOWNLOAD_FAILED', 'Failed to get audio URL', { error: downloadResult.error });
+      return {
+        success: false,
+        error: downloadResult.error,
+        transcription: "This is a voice message that could not be processed. Voice transcription error: " + downloadResult.error
+      };
+    }
+    
+    await logDebug('AUDIO_URL_RETRIEVED', 'Successfully retrieved audio URL for transcription');
+    
+    // Call the transcription function
+    const transcriptionResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-voice-transcribe`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify({
+        audioUrl: downloadResult.audioUrl,
+        mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus',
+        instanceName: instanceName,
+        evolutionApiKey: evolutionApiKey
+      })
     });
     
-    return { 
-      success: false, 
-      error: 'Audio transcription not yet implemented - Phase 2 pending',
-      transcription: 'This is a voice message that will be processed in Phase 2 of the implementation.'
+    if (!transcriptionResponse.ok) {
+      const errorText = await transcriptionResponse.text();
+      await logDebug('AUDIO_TRANSCRIPTION_API_ERROR', 'Error from transcription API', { status: transcriptionResponse.status, error: errorText });
+      
+      return {
+        success: false,
+        error: `Transcription API error: ${transcriptionResponse.status}`,
+        transcription: "This is a voice message that could not be transcribed due to a service error."
+      };
+    }
+    
+    const transcriptionResult = await transcriptionResponse.json();
+    
+    if (!transcriptionResult.success) {
+      await logDebug('AUDIO_TRANSCRIPTION_FAILED', 'Transcription process failed', { error: transcriptionResult.error });
+      
+      return {
+        success: false,
+        error: transcriptionResult.error,
+        transcription: "This is a voice message that could not be transcribed."
+      };
+    }
+    
+    await logDebug('AUDIO_TRANSCRIPTION_SUCCESS', 'Successfully transcribed audio', { 
+      language: transcriptionResult.language,
+      transcription: transcriptionResult.transcription?.substring(0, 100) + '...'
+    });
+    
+    return {
+      success: true,
+      transcription: transcriptionResult.transcription
     };
   } catch (error) {
     await logDebug('AUDIO_PROCESSING_ERROR', 'Error processing audio', { error });
-    return { success: false, error: error.message };
+    return { 
+      success: false, 
+      error: error.message,
+      transcription: "This is a voice message that could not be processed due to a technical error."
+    };
   }
 }
 
@@ -404,38 +499,54 @@ async function processMessageForAI(instance: string, messageData: any) {
       return false;
     }
 
+    // Determine Evolution API key
+    const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey;
+    
+    if (!evolutionApiKey) {
+      await logDebug('AI_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable not set and no apikey in payload');
+    }
+
     // Check if this is an audio message
     const isAudioMessage = hasAudioContent(messageData);
     
     if (isAudioMessage) {
       await logDebug('AUDIO_MESSAGE_DETECTED', 'Audio message detected', { 
         messageType: messageData.messageType,
-        hasAudioMessage: !!messageData.message?.audioMessage
+        hasAudioMessage: !!messageData.message?.audioMessage,
+        hasPttMessage: !!messageData.message?.pttMessage
       });
       
       // Extract audio details
       const audioDetails = extractAudioDetails(messageData);
       await logDebug('AUDIO_DETAILS', 'Extracted audio details', { audioDetails });
       
-      // In Phase 1, we'll acknowledge the audio but not process it yet
-      // This will be expanded in Phase 2 to actually transcribe the audio
-      const transcriptionResult = await processAudioMessage(audioDetails, instanceName, fromNumber);
+      // Process the audio for transcription
+      const transcriptionResult = await processAudioMessage(audioDetails, instanceName, fromNumber, evolutionApiKey);
       
       if (!transcriptionResult.success) {
-        // For now, we'll set a placeholder message
-        messageText = "This is a voice message. Voice message processing will be available soon.";
-        
-        // Log that we're using a placeholder for now
-        await logDebug('AUDIO_PLACEHOLDER', 'Using placeholder text for audio message until Phase 2 implementation', {
-          originalMessage: 'Voice message',
-          placeholderText: messageText
-        });
+        // If transcription failed but we have a fallback transcription, use it
+        if (transcriptionResult.transcription) {
+          messageText = transcriptionResult.transcription;
+          
+          await logDebug('AUDIO_FALLBACK_TRANSCRIPTION', 'Using fallback transcription for failed audio processing', {
+            transcription: messageText
+          });
+        } else {
+          // Complete failure - set generic placeholder
+          messageText = "This is a voice message that could not be processed.";
+          
+          await logDebug('AUDIO_PROCESSING_FAILED', 'Failed to process audio with no fallback', {
+            error: transcriptionResult.error
+          });
+        }
       } else {
-        // If transcription is successful (will be in Phase 2), use it as message text
-        messageText = transcriptionResult.transcription || messageText;
+        // Successful transcription
+        messageText = transcriptionResult.transcription;
+        
+        await logDebug('AUDIO_TRANSCRIPTION_USED', 'Successfully transcribed audio message', {
+          transcription: messageText?.substring(0, 100) + '...'
+        });
       }
-      
-      // Continue with regular text processing using the placeholder or transcription
     }
 
     // If no message content (text or processed audio), skip

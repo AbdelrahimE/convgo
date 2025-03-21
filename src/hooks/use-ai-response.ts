@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -46,12 +47,14 @@ interface TranscribeAudioOptions {
   audioUrl: string;
   mimeType?: string;
   instanceName?: string;
+  evolutionApiKey?: string;
 }
 
 interface TranscriptionResult {
   success: boolean;
   transcription?: string;
   language?: string;
+  duration?: number;
   error?: string;
 }
 
@@ -209,7 +212,7 @@ export function useAIResponse() {
       setIsTranscribing(true);
       setError(null);
       
-      const { audioUrl, mimeType, instanceName } = options;
+      const { audioUrl, mimeType, instanceName, evolutionApiKey } = options;
       
       if (!audioUrl) {
         throw new Error('Audio URL is required for transcription');
@@ -221,7 +224,8 @@ export function useAIResponse() {
         body: {
           audioUrl,
           mimeType: mimeType || 'audio/ogg; codecs=opus',
-          instanceName: instanceName || 'unknown'
+          instanceName: instanceName || 'unknown',
+          evolutionApiKey
         },
       });
       
@@ -239,7 +243,8 @@ export function useAIResponse() {
       return {
         success: true,
         transcription: data.transcription,
-        language: data.language
+        language: data.language,
+        duration: data.duration
       };
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';

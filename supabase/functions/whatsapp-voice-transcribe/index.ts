@@ -22,7 +22,7 @@ serve(async (req) => {
     }
 
     // Parse the request body
-    const { audioUrl, mimeType, instanceName } = await req.json();
+    const { audioUrl, mimeType, instanceName, evolutionApiKey } = await req.json();
     
     if (!audioUrl) {
       throw new Error('Missing audio URL');
@@ -32,9 +32,32 @@ serve(async (req) => {
     console.log(`Audio URL: ${audioUrl.substring(0, 50)}... (truncated)`);
     console.log(`MIME type: ${mimeType || 'Not provided'}`);
 
+    // Set up headers for EVOLUTION API calls if we need to download audio
+    let headers = {};
+    if (evolutionApiKey) {
+      headers = {
+        'apikey': evolutionApiKey,
+        'Content-Type': 'application/json'
+      };
+      console.log('Using provided EVOLUTION API key for audio retrieval');
+    }
+
     // Step 1: Download the audio file from the provided URL
     console.log('Downloading audio file...');
-    const audioResponse = await fetch(audioUrl);
+    
+    let audioResponse;
+    try {
+      // URLs from EVOLUTION API require the apikey header
+      if (audioUrl.includes('api.convgo.com') || evolutionApiKey) {
+        audioResponse = await fetch(audioUrl, { headers });
+      } else {
+        // Standard download for other URLs
+        audioResponse = await fetch(audioUrl);
+      }
+    } catch (error) {
+      console.error('Error fetching audio:', error);
+      throw new Error(`Failed to download audio: ${error.message}`);
+    }
     
     if (!audioResponse.ok) {
       throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
@@ -54,8 +77,8 @@ serve(async (req) => {
     // Optional: Set language detection to auto (or specify a language if known)
     formData.append('language', 'auto');
     
-    // Optional: Enable text translation to English (if needed)
-    // formData.append('response_format', 'text');
+    // Optional: Set response format to verbose JSON to get more info including language
+    formData.append('response_format', 'verbose_json');
     
     console.log('Sending audio to OpenAI Whisper API...');
     
@@ -85,6 +108,8 @@ serve(async (req) => {
         success: true,
         transcription: transcriptionResult.text,
         language: transcriptionResult.language || 'unknown',
+        duration: transcriptionResult.duration || null,
+        segments: transcriptionResult.segments || null,
       }),
       { 
         headers: { 
