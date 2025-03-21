@@ -161,10 +161,10 @@ const WhatsAppWebhookManager: React.FC<{ instanceName: string }> = ({ instanceNa
             </div>
 
             {showVoiceCapabilities ? (
-              <div className="mt-4 border border-blue-200 rounded-md p-4 bg-blue-50">
-                <h3 className="text-sm font-medium text-blue-800 mb-2">Voice Message Support</h3>
-                <p className="text-xs text-blue-700 mb-3">
-                  Voice messages sent to your WhatsApp number will be automatically transcribed and processed.
+              <div className="mt-4 border border-blue-200 rounded-md p-4 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
+                <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">Voice Message Support</h3>
+                <p className="text-xs text-blue-700 dark:text-blue-400 mb-3">
+                  Voice messages sent to your WhatsApp number will be automatically transcribed and processed by your AI assistant.
                 </p>
                 <Button 
                   size="sm" 
