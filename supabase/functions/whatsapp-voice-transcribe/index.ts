@@ -45,7 +45,7 @@ serve(async (req) => {
     console.log(`Audio URL: ${audioUrl.substring(0, 100)}... (truncated)`);
     console.log(`MIME type: ${mimeType || 'Not provided'}`);
 
-    // Set up headers for EVOLUTION API calls if we need to download audio
+    // Set up headers for EVOLUTION API calls
     let headers = {};
     if (evolutionApiKey) {
       headers = {
@@ -59,10 +59,12 @@ serve(async (req) => {
     console.log('Attempting to download audio file...');
     
     let audioResponse;
+    let audioBlob;
+    
     try {
       // Different fetch approaches based on URL type
       if (audioUrl.includes('mmg.whatsapp.net')) {
-        // WhatsApp URLs require special handling
+        // WhatsApp URLs require special handling through EVOLUTION API
         if (!evolutionApiKey) {
           console.error("ERROR: Evolution API key required for WhatsApp media but not provided");
           throw new Error('Evolution API key required for WhatsApp media');
@@ -70,7 +72,7 @@ serve(async (req) => {
         
         console.log('Detected WhatsApp media URL, using Evolution API for download');
         
-        // Extract media ID from the URL
+        // Extract media ID and other necessary info from the URL
         const mediaIdMatch = audioUrl.match(/\/([^\/]+\.enc)/);
         const mediaId = mediaIdMatch ? mediaIdMatch[1] : null;
         
@@ -80,42 +82,103 @@ serve(async (req) => {
         }
         
         console.log(`Extracted media ID: ${mediaId}`);
-        audioResponse = await fetch(audioUrl, { headers });
+        
+        // Get base URL from the audio URL
+        const baseUrlMatch = audioUrl.match(/https:\/\/[^/]+/);
+        const baseUrl = baseUrlMatch ? baseUrlMatch[0] : 'https://api.convgo.com';
+        console.log(`Base URL for Evolution API: ${baseUrl}`);
+        
+        // Extract the instance ID from the URL or use the provided instanceName
+        let whatsappInstance = instanceName || 'test';
+        console.log(`Using WhatsApp instance: ${whatsappInstance}`);
+        
+        // Construct the proper download URL for the Evolution API
+        // Instead of directly fetching the WhatsApp URL, we'll use the Evolution API's download endpoint
+        const downloadUrl = `${baseUrl}/instance/downloadMediaMessage/${whatsappInstance}`;
+        console.log(`Evolution API media download URL: ${downloadUrl}`);
+        
+        // We need to extract information from the audio URL to create the proper request
+        const downloadRequestBody = {
+          url: audioUrl,
+        };
+        
+        console.log('Sending download request to Evolution API:', JSON.stringify(downloadRequestBody));
+        
+        // Make the request to download the media through Evolution API
+        const downloadResponse = await fetch(downloadUrl, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(downloadRequestBody)
+        });
+        
+        console.log(`Evolution API download response status: ${downloadResponse.status} ${downloadResponse.statusText}`);
+        
+        if (!downloadResponse.ok) {
+          const responseText = await downloadResponse.text();
+          console.error(`ERROR: Failed to download audio via Evolution API: ${downloadResponse.status} ${downloadResponse.statusText}`);
+          console.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
+          throw new Error(`Failed to download audio via Evolution API: ${downloadResponse.status} ${downloadResponse.statusText}`);
+        }
+        
+        // The response should be the binary audio data
+        audioBlob = await downloadResponse.blob();
+        console.log(`Successfully downloaded audio via Evolution API: ${audioBlob.size} bytes`);
       } 
       else if (audioUrl.includes('api.convgo.com')) {
         // Evolution API URLs require the apikey header
         console.log('Detected Evolution API URL, using provided API key');
         audioResponse = await fetch(audioUrl, { headers });
+        
+        console.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
+        
+        if (!audioResponse.ok) {
+          const responseText = await audioResponse.text();
+          console.error(`ERROR: Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
+          console.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
+          throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
+        }
+        
+        audioBlob = await audioResponse.blob();
       } 
       else if (audioUrl.includes('audio-samples.github.io')) {
         // Test URL - make a simple fetch without any special headers
         console.log('Detected test audio URL, making standard fetch request');
         audioResponse = await fetch(audioUrl);
+        
+        console.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
+        
+        if (!audioResponse.ok) {
+          const responseText = await audioResponse.text();
+          console.error(`ERROR: Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
+          console.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
+          throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
+        }
+        
+        audioBlob = await audioResponse.blob();
       }
       else {
         // Standard download for other URLs
         console.log('Using standard fetch for audio URL');
         audioResponse = await fetch(audioUrl);
+        
+        console.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
+        
+        if (!audioResponse.ok) {
+          const responseText = await audioResponse.text();
+          console.error(`ERROR: Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
+          console.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
+          throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
+        }
+        
+        audioBlob = await audioResponse.blob();
       }
       
-      console.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
-      
-      if (!audioResponse.ok) {
-        console.error(`ERROR: Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
-        const responseText = await audioResponse.text();
-        console.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
-        throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
-      }
+      console.log(`Successfully downloaded audio: ${audioBlob.size} bytes`);
     } catch (error) {
       console.error('ERROR during audio fetch:', error);
       throw new Error(`Failed to download audio: ${error.message}`);
     }
     
-    // Get the audio file as a blob
-    console.log('Converting audio response to blob...');
-    const audioBlob = await audioResponse.blob();
-    console.log(`Successfully downloaded audio: ${audioBlob.size} bytes`);
-
     // Get the correct mime type - use the one from the response if available,
     // otherwise use the one provided in the request
     let actualMimeType = audioBlob.type || mimeType || 'audio/ogg; codecs=opus';
@@ -135,8 +198,8 @@ serve(async (req) => {
     formData.append('file', audioBlob, 'audio.mp3');
     formData.append('model', 'whisper-1');
     
-    // For the Whisper API, we should specify a legitimate ISO language code instead of 'auto'
-    formData.append('language', 'en'); // Default to English instead of 'auto'
+    // For the Whisper API, we should specify a legitimate ISO language code
+    formData.append('language', 'en'); // Default to English
     
     // Set response format to verbose JSON to get more info including language
     formData.append('response_format', 'verbose_json');
