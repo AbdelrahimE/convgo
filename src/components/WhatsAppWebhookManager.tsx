@@ -85,7 +85,10 @@ const WhatsAppWebhookManager: React.FC<{ instanceName: string }> = ({ instanceNa
   const testAudioTranscription = async () => {
     try {
       // This is just a test audio URL - in production this would come from the webhook
+      // Using a reliable, small public audio file for testing
       const testAudioUrl = "https://audio-samples.github.io/samples/mp3/blizzard_biased/sample-1.mp3";
+      
+      console.log("Starting test audio transcription");
       
       const result = await transcribeAudio({
         audioUrl: testAudioUrl,
@@ -95,12 +98,14 @@ const WhatsAppWebhookManager: React.FC<{ instanceName: string }> = ({ instanceNa
       
       if (result.success) {
         toast.success(`Transcription test successful: "${result.transcription}"`);
+        console.log("Transcription details:", result);
       } else {
+        console.error("Transcription test failed:", result.error);
         toast.error(`Transcription test failed: ${result.error}`);
       }
     } catch (error) {
       console.error("Error testing transcription:", error);
-      toast.error("Transcription test failed");
+      toast.error(`Transcription test failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 

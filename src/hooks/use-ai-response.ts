@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -230,11 +229,14 @@ export function useAIResponse() {
       });
       
       if (error) {
+        console.error('Edge function error:', error);
         throw new Error(`Error transcribing audio: ${error.message}`);
       }
       
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to transcribe audio');
+      if (!data || !data.success) {
+        const errorMessage = data?.error || 'Failed to transcribe audio';
+        console.error('Transcription failed:', errorMessage);
+        throw new Error(errorMessage);
       }
       
       toast.success('Audio transcription successful');
@@ -250,7 +252,6 @@ export function useAIResponse() {
       const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Error transcribing audio:', errMessage);
       setError(errMessage);
-      toast.error(`Audio transcription failed: ${errMessage}`);
       
       return {
         success: false,
