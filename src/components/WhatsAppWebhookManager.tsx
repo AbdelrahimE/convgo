@@ -10,9 +10,10 @@ import {
   CardTitle,
   CardFooter
 } from '@/components/ui/card';
-import { Loader2, Mic } from 'lucide-react';
+import { Loader2, Mic, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAIResponse } from '@/hooks/use-ai-response';
+import { Badge } from '@/components/ui/badge';
 
 const WhatsAppWebhookManager: React.FC<{ instanceName: string }> = ({ instanceName }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -107,7 +108,17 @@ const WhatsAppWebhookManager: React.FC<{ instanceName: string }> = ({ instanceNa
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>WhatsApp Webhook Status</CardTitle>
+        <CardTitle className="flex items-center justify-between">
+          <span>WhatsApp Webhook Status</span>
+          {status === 'connected' && (
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                Active
+              </div>
+            </Badge>
+          )}
+        </CardTitle>
         <CardDescription>
           The webhook for receiving WhatsApp messages is configured at the server level
         </CardDescription>
@@ -162,9 +173,16 @@ const WhatsAppWebhookManager: React.FC<{ instanceName: string }> = ({ instanceNa
 
             {showVoiceCapabilities ? (
               <div className="mt-4 border border-blue-200 rounded-md p-4 bg-blue-50">
-                <h3 className="text-sm font-medium text-blue-800 mb-2">Voice Message Support</h3>
+                <h3 className="text-sm font-medium text-blue-800 mb-2 flex items-center">
+                  <Volume2 className="h-4 w-4 mr-1.5" />
+                  Voice Message Support
+                </h3>
+                <p className="text-xs text-blue-700 mb-2">
+                  Voice messages sent to your WhatsApp number will be automatically transcribed, 
+                  processed through the same RAG pipeline as text messages, and receive AI responses.
+                </p>
                 <p className="text-xs text-blue-700 mb-3">
-                  Voice messages sent to your WhatsApp number will be automatically transcribed and processed.
+                  Supported languages include English, Spanish, Portuguese, French, and many others.
                 </p>
                 <Button 
                   size="sm" 
@@ -192,8 +210,10 @@ const WhatsAppWebhookManager: React.FC<{ instanceName: string }> = ({ instanceNa
                   size="sm" 
                   variant="outline" 
                   onClick={() => setShowVoiceCapabilities(true)}
+                  className="flex items-center gap-1.5"
                 >
-                  Show Voice Capabilities
+                  <Volume2 className="h-4 w-4" />
+                  <span>Show Voice Message Capabilities</span>
                 </Button>
               </div>
             )}
