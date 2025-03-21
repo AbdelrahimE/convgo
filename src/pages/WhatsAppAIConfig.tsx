@@ -17,20 +17,17 @@ import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
-
 interface AIConfig {
   id: string;
   system_prompt: string;
   temperature: number;
   is_active: boolean;
 }
-
 const WhatsAppAIConfig = () => {
   const {
     user
@@ -63,6 +60,7 @@ const WhatsAppAIConfig = () => {
   const [useRealConversation, setUseRealConversation] = useState(true);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
 
+  // Define cleanupTestConversation before it's used in the useEffect
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
     try {
@@ -90,13 +88,11 @@ const WhatsAppAIConfig = () => {
       setIsCleaningUp(false);
     }
   }, []);
-
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
-
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -104,7 +100,6 @@ const WhatsAppAIConfig = () => {
       setSystemPrompt('');
     }
   }, [selectedInstance]);
-
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
@@ -118,13 +113,11 @@ const WhatsAppAIConfig = () => {
       }
     };
   }, [testConversationId, useRealConversation, cleanupTestConversation]);
-
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
     }
   }, [activeTab, selectedInstance, useRealConversation]);
-
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -144,7 +137,6 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
@@ -167,7 +159,6 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
@@ -211,11 +202,9 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
-
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
-
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
@@ -247,7 +236,6 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
-
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
     try {
@@ -279,7 +267,6 @@ const WhatsAppAIConfig = () => {
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
-
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       const idToDelete = testConversationId;
@@ -294,7 +281,6 @@ const WhatsAppAIConfig = () => {
       setConversation([]);
     }
   };
-
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -376,7 +362,6 @@ const WhatsAppAIConfig = () => {
       }]);
     }
   };
-
   return <div className="container mx-auto space-y-6 px-[16px] py-[32px]">
       <h1 className="font-bold text-4xl">AI Configuration</h1>
       
@@ -391,13 +376,6 @@ const WhatsAppAIConfig = () => {
           
           <div className="mt-6 my-[8px]">
             {selectedInstance && instances.length > 0 && <WhatsAppAIToggle instanceId={selectedInstance} instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} />}
-          </div>
-
-          <div className="mt-4 bg-green-50 border border-green-200 rounded-md p-3">
-            <h3 className="text-sm font-medium text-green-800 mb-1">Voice Message Support</h3>
-            <p className="text-xs text-green-700">
-              Your AI assistant can now process voice messages from users. Messages are automatically transcribed and processed through the same pipeline as text messages.
-            </p>
           </div>
         </div>
         
@@ -558,5 +536,4 @@ const WhatsAppAIConfig = () => {
       </Dialog>
     </div>;
 };
-
 export default WhatsAppAIConfig;
