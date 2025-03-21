@@ -12,6 +12,7 @@ import WhatsAppLink from '@/pages/WhatsAppLink';
 import WhatsAppFileConfig from '@/pages/WhatsAppFileConfig';
 import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
+import WhatsAppMediaTest from '@/pages/WhatsAppMediaTest';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import './App.css';
@@ -74,6 +75,14 @@ function AppContent() {
                   element={
                     <ProtectedRoute>
                       <WebhookMonitor />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/whatsapp-media-test"
+                  element={
+                    <ProtectedRoute>
+                      <WhatsAppMediaTest />
                     </ProtectedRoute>
                   }
                 />
