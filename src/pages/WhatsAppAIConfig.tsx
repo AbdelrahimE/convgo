@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,6 +14,7 @@ import { useAIResponse } from '@/hooks/use-ai-response';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Loader2, Lightbulb, RotateCcw, AlertTriangle, Headphones } from 'lucide-react';
 import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
+import WhisperAPITester from '@/components/WhisperAPITester';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -66,7 +66,6 @@ const WhatsAppAIConfig = () => {
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [showVoiceFeature, setShowVoiceFeature] = useState(false);
 
-  // Define cleanupTestConversation before it's used in the useEffect
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
     try {
@@ -393,15 +392,19 @@ const WhatsAppAIConfig = () => {
                 </option>)}
           </select>
           
-          <div className="mt-6 my-[8px]">
+          <div className="mt-6 mb-6">
             {selectedInstance && instances.length > 0 && <WhatsAppAIToggle instanceId={selectedInstance} instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} />}
           </div>
 
           {selectedInstance && instances.length > 0 && (
-            <div className="mt-6">
+            <div className="mt-6 mb-6">
               <WhatsAppWebhookManager instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} />
             </div>
           )}
+
+          <div className="mt-6">
+            <WhisperAPITester />
+          </div>
 
           {showVoiceFeature && (
             <Card className="mt-6">
@@ -590,3 +593,4 @@ const WhatsAppAIConfig = () => {
 };
 
 export default WhatsAppAIConfig;
+

@@ -27,8 +27,8 @@ serve(async (req) => {
       throw new Error('Missing audio URL');
     }
 
-    console.log(`Received transcription request for audio from instance: ${instanceName}`);
-    console.log(`Audio URL: ${audioUrl.substring(0, 50)}... (truncated)`);
+    console.log(`Received transcription request for audio from instance: ${instanceName || 'test'}`);
+    console.log(`Audio URL: ${audioUrl.substring(0, 100)}... (truncated)`);
     console.log(`MIME type: ${mimeType || 'Not provided'}`);
 
     // Set up headers for EVOLUTION API calls if we need to download audio
@@ -46,10 +46,9 @@ serve(async (req) => {
     
     let audioResponse;
     try {
-      // Use different fetch approaches based on URL
+      // Different fetch approaches based on URL type
       if (audioUrl.includes('mmg.whatsapp.net')) {
-        // WhatsApp URLs require special handling - we'll need to use the Evolution API
-        // to download the media, as direct access might be restricted
+        // WhatsApp URLs require special handling
         if (!evolutionApiKey) {
           throw new Error('Evolution API key required for WhatsApp media');
         }
@@ -65,15 +64,19 @@ serve(async (req) => {
         }
         
         console.log(`Extracted media ID: ${mediaId}`);
-        
-        // For testing, if we can't access WhatsApp media directly, we'll just continue
-        // and let the next fetch handle it
         audioResponse = await fetch(audioUrl, { headers });
-      } else if (audioUrl.includes('api.convgo.com')) {
+      } 
+      else if (audioUrl.includes('api.convgo.com')) {
         // Evolution API URLs require the apikey header
         audioResponse = await fetch(audioUrl, { headers });
-      } else {
-        // Standard download for other URLs (like test URLs)
+      } 
+      else if (audioUrl.includes('audio-samples.github.io')) {
+        // Test URL - make a simple fetch without any special headers
+        console.log('Detected test audio URL');
+        audioResponse = await fetch(audioUrl);
+      }
+      else {
+        // Standard download for other URLs
         audioResponse = await fetch(audioUrl);
       }
     } catch (error) {
@@ -81,8 +84,8 @@ serve(async (req) => {
       throw new Error(`Failed to download audio: ${error.message}`);
     }
     
-    if (!audioResponse.ok) {
-      throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
+    if (!audioResponse || !audioResponse.ok) {
+      throw new Error(`Failed to download audio: ${audioResponse?.status} ${audioResponse?.statusText}`);
     }
     
     // Get the audio file as a blob
@@ -91,7 +94,13 @@ serve(async (req) => {
 
     // Get the correct mime type - use the one from the response if available,
     // otherwise use the one provided in the request
-    const actualMimeType = audioBlob.type || mimeType || 'audio/ogg; codecs=opus';
+    let actualMimeType = audioBlob.type || mimeType || 'audio/ogg; codecs=opus';
+    
+    // For test URLs, ensure we're using the correct MIME type
+    if (audioUrl.includes('audio-samples.github.io') && audioUrl.includes('.mp3')) {
+      actualMimeType = 'audio/mpeg';
+    }
+    
     console.log(`Audio MIME type: ${actualMimeType}`);
 
     // Step 2: Prepare form data for OpenAI Whisper API
@@ -124,7 +133,7 @@ serve(async (req) => {
     if (!whisperResponse.ok) {
       const errorText = await whisperResponse.text();
       console.error('OpenAI API error:', errorText);
-      throw new Error(`OpenAI API error: ${whisperResponse.status} ${whisperResponse.statusText}`);
+      throw new Error(`OpenAI API error: ${whisperResponse.status} ${whisperResponse.statusText} - ${errorText}`);
     }
 
     const transcriptionResult = await whisperResponse.json();
