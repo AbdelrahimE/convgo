@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -30,11 +29,12 @@ serve(async (req) => {
     const requestData = await req.json();
     console.log("Request data received:", JSON.stringify({
       hasAudioUrl: !!requestData.audioUrl,
-      mimeType: requestData.mimeType || 'Not provided',
+      hasMimeType: !!requestData.mimeType,
+      hasMediaKey: !!requestData.mediaKey,
       instanceName: requestData.instanceName || 'test'
     }));
     
-    const { audioUrl, mimeType, instanceName, evolutionApiKey } = requestData;
+    const { audioUrl, mimeType, instanceName, evolutionApiKey, mediaKey } = requestData;
     
     if (!audioUrl) {
       console.error("ERROR: Missing audio URL in request");
@@ -44,6 +44,7 @@ serve(async (req) => {
     console.log(`Processing transcription request for audio from instance: ${instanceName || 'test'}`);
     console.log(`Audio URL: ${audioUrl.substring(0, 100)}... (truncated)`);
     console.log(`MIME type: ${mimeType || 'Not provided'}`);
+    console.log(`Media Key provided: ${!!mediaKey}`);
 
     // Set up headers for EVOLUTION API calls
     let headers = {};
@@ -55,15 +56,69 @@ serve(async (req) => {
       console.log('Using provided EVOLUTION API key for audio retrieval');
     }
 
-    // Step 1: Download the audio file from the provided URL
-    console.log('Attempting to download audio file...');
+    // Step 1: Get the audio file - different handling based on URL type and if it's encrypted
+    console.log('Attempting to retrieve audio file...');
     
-    let audioResponse;
     let audioBlob;
+    let actualMimeType = mimeType || 'audio/ogg; codecs=opus';
     
     try {
-      // Different fetch approaches based on URL type
-      if (audioUrl.includes('mmg.whatsapp.net')) {
+      // Check if this is a WhatsApp encrypted media that needs decryption
+      if (audioUrl.includes('mmg.whatsapp.net') && mediaKey) {
+        console.log('Detected WhatsApp encrypted media with mediaKey, using external decryption service');
+        
+        // Use the external decryption service
+        const decryptionUrl = 'https://voice.convgo.com/decrypt-audio';
+        console.log(`Calling external decryption service at: ${decryptionUrl}`);
+        
+        const decryptionResponse = await fetch(decryptionUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            url: audioUrl,
+            mediaKey: mediaKey
+          })
+        });
+        
+        console.log(`Decryption service response status: ${decryptionResponse.status} ${decryptionResponse.statusText}`);
+        
+        if (!decryptionResponse.ok) {
+          const errorText = await decryptionResponse.text();
+          console.error(`ERROR: External decryption service failed: ${decryptionResponse.status} ${decryptionResponse.statusText}`);
+          console.error(`Response body: ${errorText.substring(0, 200)}... (truncated)`);
+          throw new Error(`External decryption service failed: ${decryptionResponse.status} ${decryptionResponse.statusText}`);
+        }
+        
+        // Get the decrypted audio URL
+        const decryptionResult = await decryptionResponse.json();
+        
+        if (!decryptionResult.success || !decryptionResult.audioUrl) {
+          console.error(`ERROR: Invalid response from decryption service:`, decryptionResult);
+          throw new Error('Invalid response from decryption service');
+        }
+        
+        console.log(`Successfully decrypted audio, got URL: ${decryptionResult.audioUrl}`);
+        
+        // Now fetch the decrypted audio
+        const audioResponse = await fetch(decryptionResult.audioUrl);
+        
+        console.log(`Decrypted audio fetch status: ${audioResponse.status} ${audioResponse.statusText}`);
+        
+        if (!audioResponse.ok) {
+          const responseText = await audioResponse.text();
+          console.error(`ERROR: Failed to download decrypted audio: ${audioResponse.status} ${audioResponse.statusText}`);
+          console.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
+          throw new Error(`Failed to download decrypted audio: ${audioResponse.status} ${audioResponse.statusText}`);
+        }
+        
+        audioBlob = await audioResponse.blob();
+        // Typically WhatsApp voice messages are OGG format
+        actualMimeType = 'audio/ogg; codecs=opus';
+      }
+      // Handle the existing cases for other audio types
+      else if (audioUrl.includes('mmg.whatsapp.net')) {
         // WhatsApp URLs require special handling through EVOLUTION API
         if (!evolutionApiKey) {
           console.error("ERROR: Evolution API key required for WhatsApp media but not provided");
@@ -127,7 +182,7 @@ serve(async (req) => {
       else if (audioUrl.includes('api.convgo.com')) {
         // Evolution API URLs require the apikey header
         console.log('Detected Evolution API URL, using provided API key');
-        audioResponse = await fetch(audioUrl, { headers });
+        const audioResponse = await fetch(audioUrl, { headers });
         
         console.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
         
@@ -143,7 +198,7 @@ serve(async (req) => {
       else if (audioUrl.includes('audio-samples.github.io')) {
         // Test URL - make a simple fetch without any special headers
         console.log('Detected test audio URL, making standard fetch request');
-        audioResponse = await fetch(audioUrl);
+        const audioResponse = await fetch(audioUrl);
         
         console.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
         
@@ -159,7 +214,7 @@ serve(async (req) => {
       else {
         // Standard download for other URLs
         console.log('Using standard fetch for audio URL');
-        audioResponse = await fetch(audioUrl);
+        const audioResponse = await fetch(audioUrl);
         
         console.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
         
@@ -181,7 +236,9 @@ serve(async (req) => {
     
     // Get the correct mime type - use the one from the response if available,
     // otherwise use the one provided in the request
-    let actualMimeType = audioBlob.type || mimeType || 'audio/ogg; codecs=opus';
+    if (audioBlob.type) {
+      actualMimeType = audioBlob.type;
+    }
     
     // For test URLs, ensure we're using the correct MIME type
     if (audioUrl.includes('audio-samples.github.io') && audioUrl.includes('.mp3')) {
