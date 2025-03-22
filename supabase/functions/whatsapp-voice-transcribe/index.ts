@@ -202,8 +202,8 @@ serve(async (req) => {
     formData.append('file', audioBlob, 'audio.mp3');
     formData.append('model', 'whisper-1');
     
-    // For the Whisper API, we should specify a legitimate ISO language code
-    formData.append('language', 'en'); // Default to English
+    // Removing the default language parameter to allow Whisper to auto-detect language
+    // This will improve detection for both English and Arabic without bias
     
     // Set response format to verbose JSON to get more info including language
     formData.append('response_format', 'verbose_json');
