@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -5,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Loader2, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAIResponse } from '@/hooks/use-ai-response';
+
 const WhatsAppWebhookManager: React.FC<{
   instanceName: string;
 }> = ({
@@ -31,6 +33,7 @@ const WhatsAppWebhookManager: React.FC<{
       checkWebhookStatus();
     }
   }, [instanceName]);
+
   const checkWebhookStatus = async () => {
     try {
       if (!instanceName) return;
@@ -76,6 +79,7 @@ const WhatsAppWebhookManager: React.FC<{
       setIsLoading(false);
     }
   };
+
   const testAudioTranscription = async () => {
     try {
       // This is just a test audio URL - in production this would come from the webhook
@@ -99,6 +103,55 @@ const WhatsAppWebhookManager: React.FC<{
       toast.error(`Transcription test failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
-  return;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-medium flex items-center">
+          <Mic className="h-4 w-4 mr-2" />
+          Webhook Status
+        </CardTitle>
+        <CardDescription>
+          Connection status for voice message processing
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center">
+            {isLoading ? (
+              <Loader2 className="h-5 w-5 mr-2 animate-spin text-muted-foreground" />
+            ) : status === 'connected' ? (
+              <div className="h-3 w-3 rounded-full bg-green-500 mr-2" />
+            ) : (
+              <div className="h-3 w-3 rounded-full bg-red-500 mr-2" />
+            )}
+            <span className="text-sm">
+              {isLoading 
+                ? 'Checking connection...' 
+                : status === 'connected' 
+                  ? 'Webhook connected' 
+                  : 'Connection error'}
+            </span>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={testAudioTranscription}
+            disabled={isLoading || status !== 'connected' || isTranscribing}
+          >
+            {isTranscribing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Testing...
+              </>
+            ) : (
+              'Test Voice Processing'
+            )}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 };
+
 export default WhatsAppWebhookManager;
