@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("$$$$$ DEPLOYMENT VERIFICATION: Starting voice transcription process - UPDATED VERSION $$$$$");
+    console.log("$$$$$ DEPLOYMENT VERIFICATION: Starting voice transcription process - NEW VERIFICATION $$$$$");
     
     // Check for API key
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
