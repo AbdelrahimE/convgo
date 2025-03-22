@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -63,13 +64,15 @@ serve(async (req) => {
     let actualMimeType = mimeType || 'audio/ogg; codecs=opus';
     
     try {
-      // Check if this is a WhatsApp encrypted media that needs decryption
+      // IMPORTANT: FIRST check for WhatsApp encrypted audio with mediaKey
+      // This needs to be the FIRST condition to ensure it takes priority
       if (audioUrl.includes('mmg.whatsapp.net') && mediaKey) {
         console.log('Detected WhatsApp encrypted media with mediaKey, using external decryption service');
         
         // Use the external decryption service
         const decryptionUrl = 'https://voice.convgo.com/decrypt-audio';
         console.log(`Calling external decryption service at: ${decryptionUrl}`);
+        console.log(`Sending URL: ${audioUrl.substring(0, 50)}... and mediaKey to decryption service`);
         
         const decryptionResponse = await fetch(decryptionUrl, {
           method: 'POST',
@@ -117,7 +120,7 @@ serve(async (req) => {
         // Typically WhatsApp voice messages are OGG format
         actualMimeType = 'audio/ogg; codecs=opus';
       }
-      // Handle the existing cases for other audio types
+      // Handle legacy WhatsApp URLs without mediaKey (this should rarely happen now)
       else if (audioUrl.includes('mmg.whatsapp.net')) {
         // WhatsApp URLs require special handling through EVOLUTION API
         if (!evolutionApiKey) {
@@ -125,7 +128,7 @@ serve(async (req) => {
           throw new Error('Evolution API key required for WhatsApp media');
         }
         
-        console.log('Detected WhatsApp media URL, using Evolution API for download');
+        console.log('Detected WhatsApp media URL without mediaKey, using Evolution API for download (legacy path)');
         
         // Extract media ID and other necessary info from the URL
         const mediaIdMatch = audioUrl.match(/\/([^\/]+\.enc)/);
