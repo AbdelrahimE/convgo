@@ -385,30 +385,36 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          process_voice_messages: boolean
           system_prompt: string
           temperature: number
           updated_at: string
           user_id: string
+          voice_message_default_response: string | null
           whatsapp_instance_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           is_active?: boolean
+          process_voice_messages?: boolean
           system_prompt: string
           temperature?: number
           updated_at?: string
           user_id: string
+          voice_message_default_response?: string | null
           whatsapp_instance_id: string
         }
         Update: {
           created_at?: string
           id?: string
           is_active?: boolean
+          process_voice_messages?: boolean
           system_prompt?: string
           temperature?: number
           updated_at?: string
           user_id?: string
+          voice_message_default_response?: string | null
           whatsapp_instance_id?: string
         }
         Relationships: [

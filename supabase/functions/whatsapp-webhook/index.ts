@@ -387,6 +387,42 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
   try {
     await logDebug('AUDIO_PROCESSING_START', 'Starting audio processing', { instanceName, fromNumber });
     
+    // Check if this instance has disabled voice message processing
+    const { data: instanceData, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('id')
+      .eq('instance_name', instanceName)
+      .single();
+
+    if (instanceError) {
+      await logDebug('AUDIO_PROCESSING_INSTANCE_ERROR', 'Failed to get instance data', { error: instanceError });
+      return { 
+        success: false, 
+        error: 'Instance not found',
+        transcription: "This is a voice message that could not be processed because the instance was not found."
+      };
+    }
+
+    // Check if voice processing is disabled for this instance
+    const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
+      .from('whatsapp_ai_config')
+      .select('process_voice_messages, voice_message_default_response')
+      .eq('whatsapp_instance_id', instanceData.id)
+      .single();
+
+    if (!aiConfigError && aiConfig && aiConfig.process_voice_messages === false) {
+      await logDebug('AUDIO_PROCESSING_DISABLED', 'Voice message processing is disabled for this instance', { 
+        instanceId: instanceData.id,
+        instanceName 
+      });
+      
+      return {
+        success: false,
+        error: 'Voice message processing is disabled',
+        transcription: aiConfig.voice_message_default_response || "Voice message processing is disabled."
+      };
+    }
+    
     if (!audioDetails.url) {
       return { 
         success: false, 
@@ -1143,4 +1179,3 @@ serve(async (req) => {
     );
   }
 });
-
