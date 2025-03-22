@@ -20,7 +20,11 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const DEFAULT_SYSTEM_PROMPT = `You are a helpful WhatsApp AI assistant that answers questions based on the provided context. 
 If the information to answer the question is not in the context, say "I don't have enough information to answer that question."
 If the question is not related to the context, still try to be helpful but make it clear that you're providing general knowledge.
-Always be concise, professional, and accurate. Don't make things up.`;
+Always be concise, professional, and accurate. Don't make things up.
+IMPORTANT: Don't use markdown formatting in your responses. Format your text as plain text for WhatsApp.
+- Don't use headings with # symbols
+- Don't format links as [text](url) - instead write the text followed by the URL on a new line if needed
+- Use *text* for emphasis instead of **text**`;
 
 // System prompt addition for empty context
 const EMPTY_CONTEXT_ADDITION = `
@@ -208,12 +212,31 @@ function balanceContextTokens(
   return { finalContext, tokenCounts: finalTokens };
 }
 
-// Post-processing function to convert double asterisks to single asterisks for WhatsApp
+// Enhanced post-processing function to format text for WhatsApp
 function formatTextForWhatsApp(text: string): string {
   if (!text) return text;
   
-  // Replace double asterisks with single asterisks for bold formatting
-  return text.replace(/\*\*(.*?)\*\*/g, '*$1*');
+  // Process the text in multiple stages
+  let formattedText = text;
+  
+  // 1. Replace markdown headings (# Heading) with plain text emphasis
+  formattedText = formattedText.replace(/^#{1,6}\s+(.+)$/gm, '*$1*');
+  
+  // 2. Replace markdown links [text](url) with "text: url"
+  formattedText = formattedText.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
+    return `${text}: ${url}`;
+  });
+  
+  // 3. Replace double asterisks with single asterisks for bold formatting
+  formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '*$1*');
+  
+  // 4. Replace any remaining markdown formatting that isn't WhatsApp compatible
+  formattedText = formattedText.replace(/`([^`]+)`/g, '"$1"'); // Replace code blocks with quotes
+  
+  // 5. Fix bullet points if needed (optional)
+  // If using - for bullets, can leave as is since WhatsApp supports these
+  
+  return formattedText;
 }
 
 // Helper function to store AI response in conversation if conversation ID is provided
@@ -274,6 +297,14 @@ serve(async (req) => {
 
     // Use the provided system prompt or fall back to the default
     let finalSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
+    
+    // If system prompt doesn't already have formatting instructions, add them
+    if (!finalSystemPrompt.includes("Don't use markdown")) {
+      finalSystemPrompt += `\n\nIMPORTANT: Don't use markdown formatting in your responses. Format your text as plain text for WhatsApp.
+- Don't use headings with # symbols
+- Don't format links as [text](url) - instead write the text followed by the URL on a new line if needed
+- Use *text* for emphasis instead of **text**`;
+    }
     
     // If context is empty, add special instructions to handle greetings and general questions
     if (!context || context.trim() === '') {
