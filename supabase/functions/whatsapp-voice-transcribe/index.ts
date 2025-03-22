@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("Starting voice transcription process");
+    console.log("$$$$$ DEPLOYMENT VERIFICATION: Starting voice transcription process - UPDATED VERSION $$$$$");
     
     // Check for API key
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -28,7 +28,7 @@ serve(async (req) => {
 
     // Parse the request body
     const requestData = await req.json();
-    console.log("Request data received:", JSON.stringify({
+    console.log("$$$$$ DEPLOYMENT VERIFICATION: Request data received $$$$$", JSON.stringify({
       hasAudioUrl: !!requestData.audioUrl,
       hasMimeType: !!requestData.mimeType,
       hasMediaKey: !!requestData.mediaKey,
@@ -46,6 +46,7 @@ serve(async (req) => {
     console.log(`Audio URL: ${audioUrl.substring(0, 100)}... (truncated)`);
     console.log(`MIME type: ${mimeType || 'Not provided'}`);
     console.log(`Media Key provided: ${!!mediaKey}`);
+    console.log(`$$$$$ DEPLOYMENT VERIFICATION: Media Key value: ${mediaKey ? mediaKey.substring(0, 10) + '...' : 'None'} $$$$$`);
 
     // Set up headers for EVOLUTION API calls
     let headers = {};
@@ -58,7 +59,7 @@ serve(async (req) => {
     }
 
     // Step 1: Get the audio file - different handling based on URL type and if it's encrypted
-    console.log('Attempting to retrieve audio file...');
+    console.log('$$$$$ DEPLOYMENT VERIFICATION: Attempting to retrieve audio file... $$$$$');
     
     let audioBlob;
     let actualMimeType = mimeType || 'audio/ogg; codecs=opus';
@@ -67,6 +68,7 @@ serve(async (req) => {
       // IMPORTANT: FIRST check for WhatsApp encrypted audio with mediaKey
       // This needs to be the FIRST condition to ensure it takes priority
       if (audioUrl.includes('mmg.whatsapp.net') && mediaKey) {
+        console.log('$$$$$ DEPLOYMENT VERIFICATION: ENTERING DECRYPTION SERVICE PATH - This should be used for WhatsApp voice messages $$$$$');
         console.log('Detected WhatsApp encrypted media with mediaKey, using external decryption service');
         
         // Use the external decryption service
@@ -85,7 +87,7 @@ serve(async (req) => {
           })
         });
         
-        console.log(`Decryption service response status: ${decryptionResponse.status} ${decryptionResponse.statusText}`);
+        console.log(`$$$$$ DEPLOYMENT VERIFICATION: Decryption service response status: ${decryptionResponse.status} ${decryptionResponse.statusText} $$$$$`);
         
         if (!decryptionResponse.ok) {
           const errorText = await decryptionResponse.text();
@@ -102,7 +104,7 @@ serve(async (req) => {
           throw new Error('Invalid response from decryption service');
         }
         
-        console.log(`Successfully decrypted audio, got URL: ${decryptionResult.audioUrl}`);
+        console.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully decrypted audio, got URL: ${decryptionResult.audioUrl} $$$$$`);
         
         // Now fetch the decrypted audio
         const audioResponse = await fetch(decryptionResult.audioUrl);
@@ -122,6 +124,8 @@ serve(async (req) => {
       }
       // Handle legacy WhatsApp URLs without mediaKey (this should rarely happen now)
       else if (audioUrl.includes('mmg.whatsapp.net')) {
+        console.log('$$$$$ DEPLOYMENT VERIFICATION: ENTERING LEGACY PATH - This should NOT be used for WhatsApp voice messages with mediaKey $$$$$');
+        
         // WhatsApp URLs require special handling through EVOLUTION API
         if (!evolutionApiKey) {
           console.error("ERROR: Evolution API key required for WhatsApp media but not provided");
@@ -231,9 +235,9 @@ serve(async (req) => {
         audioBlob = await audioResponse.blob();
       }
       
-      console.log(`Successfully downloaded audio: ${audioBlob.size} bytes`);
+      console.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully downloaded audio: ${audioBlob.size} bytes $$$$$`);
     } catch (error) {
-      console.error('ERROR during audio fetch:', error);
+      console.error('$$$$$ DEPLOYMENT VERIFICATION: ERROR during audio fetch $$$$$:', error);
       throw new Error(`Failed to download audio: ${error.message}`);
     }
     
@@ -251,7 +255,7 @@ serve(async (req) => {
     console.log(`Audio MIME type determined as: ${actualMimeType}`);
 
     // Step 2: Prepare form data for OpenAI Whisper API
-    console.log('Preparing FormData for OpenAI Whisper API...');
+    console.log('$$$$$ DEPLOYMENT VERIFICATION: Preparing FormData for OpenAI Whisper API... $$$$$');
     const formData = new FormData();
     
     // Add the audio file to the form data with the appropriate name and type
@@ -264,7 +268,7 @@ serve(async (req) => {
     // Set response format to verbose JSON to get more info including language
     formData.append('response_format', 'verbose_json');
     
-    console.log('Sending request to OpenAI Whisper API...');
+    console.log('$$$$$ DEPLOYMENT VERIFICATION: Sending request to OpenAI Whisper API... $$$$$');
     
     // Step 3: Call the OpenAI Whisper API
     let whisperResponse;
@@ -294,7 +298,7 @@ serve(async (req) => {
     let transcriptionResult;
     try {
       transcriptionResult = await whisperResponse.json();
-      console.log('Successfully received transcription from OpenAI');
+      console.log('$$$$$ DEPLOYMENT VERIFICATION: Successfully received transcription from OpenAI $$$$$');
       console.log('Transcription result:', JSON.stringify(transcriptionResult).substring(0, 200) + '... (truncated)');
     } catch (error) {
       console.error('ERROR parsing OpenAI response:', error);
@@ -319,7 +323,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('CRITICAL ERROR in whatsapp-voice-transcribe:', error);
+    console.error('$$$$$ DEPLOYMENT VERIFICATION: CRITICAL ERROR in whatsapp-voice-transcribe $$$$$:', error);
     
     return new Response(
       JSON.stringify({
