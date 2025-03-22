@@ -19,20 +19,17 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import WhatsAppWebhookManager from '@/components/WhatsAppWebhookManager';
-
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
-
 interface AIConfig {
   id: string;
   system_prompt: string;
   temperature: number;
   is_active: boolean;
 }
-
 const WhatsAppAIConfig = () => {
   const {
     user
@@ -65,7 +62,6 @@ const WhatsAppAIConfig = () => {
   const [useRealConversation, setUseRealConversation] = useState(true);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [showVoiceFeature, setShowVoiceFeature] = useState(false);
-
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
     try {
@@ -93,13 +89,11 @@ const WhatsAppAIConfig = () => {
       setIsCleaningUp(false);
     }
   }, []);
-  
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
-  
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -107,7 +101,6 @@ const WhatsAppAIConfig = () => {
       setSystemPrompt('');
     }
   }, [selectedInstance]);
-  
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
@@ -121,13 +114,11 @@ const WhatsAppAIConfig = () => {
       }
     };
   }, [testConversationId, useRealConversation, cleanupTestConversation]);
-  
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
     }
   }, [activeTab, selectedInstance, useRealConversation]);
-  
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -147,7 +138,6 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-  
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
@@ -170,7 +160,6 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-  
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
@@ -214,11 +203,9 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
-  
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
-  
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
@@ -250,7 +237,6 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
-  
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
     try {
@@ -282,7 +268,6 @@ const WhatsAppAIConfig = () => {
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
-  
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       const idToDelete = testConversationId;
@@ -297,7 +282,6 @@ const WhatsAppAIConfig = () => {
       setConversation([]);
     }
   };
-  
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -379,7 +363,6 @@ const WhatsAppAIConfig = () => {
       }]);
     }
   };
-
   return <div className="container mx-auto space-y-6 px-[16px] py-[32px]">
       <h1 className="font-bold text-4xl">AI Configuration</h1>
       
@@ -396,18 +379,15 @@ const WhatsAppAIConfig = () => {
             {selectedInstance && instances.length > 0 && <WhatsAppAIToggle instanceId={selectedInstance} instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} />}
           </div>
 
-          {selectedInstance && instances.length > 0 && (
-            <div className="mt-6 mb-6">
+          {selectedInstance && instances.length > 0 && <div className="mt-6 mb-6">
               <WhatsAppWebhookManager instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} />
-            </div>
-          )}
+            </div>}
 
           <div className="mt-6">
             <WhisperAPITester />
           </div>
 
-          {showVoiceFeature && (
-            <Card className="mt-6">
+          {showVoiceFeature && <Card className="mt-6">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center">
                   <Headphones className="h-4 w-4 mr-2" />
@@ -419,8 +399,7 @@ const WhatsAppAIConfig = () => {
                   Your WhatsApp AI can now understand voice messages! Users can send voice recordings, and the system will transcribe and respond to them automatically.
                 </p>
               </CardContent>
-            </Card>
-          )}
+            </Card>}
         </div>
         
         <div className="flex-1">
@@ -460,9 +439,7 @@ const WhatsAppAIConfig = () => {
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="outline" size="sm" onClick={() => setShowVoiceFeature(!showVoiceFeature)} className="ml-auto">
-                              {showVoiceFeature ? "Hide" : "Show"} Voice Message Info
-                            </Button>
+                            
                           </TooltipTrigger>
                           <TooltipContent>
                             <p>Your AI can now understand voice messages!</p>
@@ -591,6 +568,4 @@ const WhatsAppAIConfig = () => {
       </Dialog>
     </div>;
 };
-
 export default WhatsAppAIConfig;
-
