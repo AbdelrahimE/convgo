@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -65,8 +64,7 @@ serve(async (req) => {
     let actualMimeType = mimeType || 'audio/ogg; codecs=opus';
     
     try {
-      // IMPORTANT: FIRST check for WhatsApp encrypted audio with mediaKey
-      // This needs to be the FIRST condition to ensure it takes priority
+      // IMPORTANT: Check for WhatsApp encrypted audio with mediaKey
       if (audioUrl.includes('mmg.whatsapp.net') && mediaKey) {
         console.log('$$$$$ DEPLOYMENT VERIFICATION: ENTERING DECRYPTION SERVICE PATH - This should be used for WhatsApp voice messages $$$$$');
         console.log('Detected WhatsApp encrypted media with mediaKey, using external decryption service');
@@ -122,69 +120,10 @@ serve(async (req) => {
         // Typically WhatsApp voice messages are OGG format
         actualMimeType = 'audio/ogg; codecs=opus';
       }
-      // Handle legacy WhatsApp URLs without mediaKey (this should rarely happen now)
+      // Handle any WhatsApp URLs without mediaKey as an error case
       else if (audioUrl.includes('mmg.whatsapp.net')) {
-        console.log('$$$$$ DEPLOYMENT VERIFICATION: ENTERING LEGACY PATH - This should NOT be used for WhatsApp voice messages with mediaKey $$$$$');
-        
-        // WhatsApp URLs require special handling through EVOLUTION API
-        if (!evolutionApiKey) {
-          console.error("ERROR: Evolution API key required for WhatsApp media but not provided");
-          throw new Error('Evolution API key required for WhatsApp media');
-        }
-        
-        console.log('Detected WhatsApp media URL without mediaKey, using Evolution API for download (legacy path)');
-        
-        // Extract media ID and other necessary info from the URL
-        const mediaIdMatch = audioUrl.match(/\/([^\/]+\.enc)/);
-        const mediaId = mediaIdMatch ? mediaIdMatch[1] : null;
-        
-        if (!mediaId) {
-          console.error("ERROR: Could not extract media ID from WhatsApp URL");
-          throw new Error('Could not extract media ID from WhatsApp URL');
-        }
-        
-        console.log(`Extracted media ID: ${mediaId}`);
-        
-        // Get base URL from the audio URL
-        const baseUrlMatch = audioUrl.match(/https:\/\/[^/]+/);
-        const baseUrl = baseUrlMatch ? baseUrlMatch[0] : 'https://api.convgo.com';
-        console.log(`Base URL for Evolution API: ${baseUrl}`);
-        
-        // Extract the instance ID from the URL or use the provided instanceName
-        let whatsappInstance = instanceName || 'test';
-        console.log(`Using WhatsApp instance: ${whatsappInstance}`);
-        
-        // Construct the proper download URL for the Evolution API
-        // Instead of directly fetching the WhatsApp URL, we'll use the Evolution API's download endpoint
-        const downloadUrl = `${baseUrl}/instance/downloadMediaMessage/${whatsappInstance}`;
-        console.log(`Evolution API media download URL: ${downloadUrl}`);
-        
-        // We need to extract information from the audio URL to create the proper request
-        const downloadRequestBody = {
-          url: audioUrl,
-        };
-        
-        console.log('Sending download request to Evolution API:', JSON.stringify(downloadRequestBody));
-        
-        // Make the request to download the media through Evolution API
-        const downloadResponse = await fetch(downloadUrl, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(downloadRequestBody)
-        });
-        
-        console.log(`Evolution API download response status: ${downloadResponse.status} ${downloadResponse.statusText}`);
-        
-        if (!downloadResponse.ok) {
-          const responseText = await downloadResponse.text();
-          console.error(`ERROR: Failed to download audio via Evolution API: ${downloadResponse.status} ${downloadResponse.statusText}`);
-          console.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
-          throw new Error(`Failed to download audio via Evolution API: ${downloadResponse.status} ${downloadResponse.statusText}`);
-        }
-        
-        // The response should be the binary audio data
-        audioBlob = await downloadResponse.blob();
-        console.log(`Successfully downloaded audio via Evolution API: ${audioBlob.size} bytes`);
+        console.log('$$$$$ DEPLOYMENT VERIFICATION: ERROR - WhatsApp audio URL without mediaKey $$$$$');
+        throw new Error('WhatsApp voice messages require a mediaKey for processing. Please update your client to include the mediaKey parameter.');
       } 
       else if (audioUrl.includes('api.convgo.com')) {
         // Evolution API URLs require the apikey header
