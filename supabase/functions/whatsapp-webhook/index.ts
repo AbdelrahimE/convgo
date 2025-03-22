@@ -420,7 +420,8 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
         audioUrl: downloadResult.audioUrl,
         mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus',
         instanceName: instanceName,
-        evolutionApiKey: evolutionApiKey
+        evolutionApiKey: evolutionApiKey,
+        mediaKey: audioDetails.mediaKey
       })
     });
     
@@ -1142,3 +1143,4 @@ serve(async (req) => {
     );
   }
 });
+
