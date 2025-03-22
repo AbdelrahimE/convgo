@@ -383,7 +383,7 @@ function extractAudioDetails(messageData: any): {
 }
 
 // Helper function to handle audio transcription
-async function processAudioMessage(audioDetails: any, instanceName: string, fromNumber: string, evolutionApiKey: string): Promise<{ success: boolean; transcription?: string; error?: string }> {
+async function processAudioMessage(audioDetails: any, instanceName: string, fromNumber: string, evolutionApiKey: string): Promise<{ success: boolean; transcription?: string; error?: string; bypassAiProcessing?: boolean; directResponse?: string }> {
   try {
     await logDebug('AUDIO_PROCESSING_START', 'Starting audio processing', { instanceName, fromNumber });
     
@@ -413,13 +413,17 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
     if (!aiConfigError && aiConfig && aiConfig.process_voice_messages === false) {
       await logDebug('AUDIO_PROCESSING_DISABLED', 'Voice message processing is disabled for this instance', { 
         instanceId: instanceData.id,
-        instanceName 
+        instanceName,
+        customResponseExists: !!aiConfig.voice_message_default_response 
       });
       
+      // If voice processing is disabled, return the custom message and flag to bypass AI processing
       return {
         success: false,
         error: 'Voice message processing is disabled',
-        transcription: aiConfig.voice_message_default_response || "Voice message processing is disabled."
+        transcription: aiConfig.voice_message_default_response || "Voice message processing is disabled.",
+        bypassAiProcessing: true, // Flag to indicate we should bypass AI processing
+        directResponse: aiConfig.voice_message_default_response || "Voice message processing is disabled."
       };
     }
     
@@ -546,6 +550,10 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Check if this is an audio message
     const isAudioMessage = hasAudioContent(messageData);
     
+    // Variable to track if we should bypass AI and send direct response
+    let bypassAiProcessing = false;
+    let directResponse = null;
+    
     if (isAudioMessage) {
       await logDebug('AUDIO_MESSAGE_DETECTED', 'Audio message detected', { 
         messageType: messageData.messageType,
@@ -559,6 +567,97 @@ async function processMessageForAI(instance: string, messageData: any) {
       
       // Process the audio for transcription
       const transcriptionResult = await processAudioMessage(audioDetails, instanceName, fromNumber, evolutionApiKey);
+      
+      // Check if we should bypass AI and send direct response
+      if (transcriptionResult.bypassAiProcessing && transcriptionResult.directResponse) {
+        await logDebug('AUDIO_DIRECT_RESPONSE', 'Using direct response for disabled voice processing', {
+          directResponse: transcriptionResult.directResponse
+        });
+        
+        // Initialize instance base URL for sending responses
+        let instanceBaseUrl = '';
+
+        // Try to determine the base URL for this instance (reusing existing code logic)
+        try {
+          await logDebug('AI_EVOLUTION_URL_CHECK', 'Determining EVOLUTION API URL for direct response', { instanceName });
+          
+          // IMPORTANT: First check if the server_url is available in the current message payload
+          if (messageData.server_url) {
+            instanceBaseUrl = messageData.server_url;
+          } else {
+            // Get instance ID to look up webhook config
+            const { data: instanceData, error: instanceError } = await supabaseAdmin
+              .from('whatsapp_instances')
+              .select('id')
+              .eq('instance_name', instanceName)
+              .single();
+
+            if (instanceError) {
+              await logDebug('DIRECT_RESPONSE_ERROR', 'Failed to get instance data', { error: instanceError });
+              return false;
+            }
+
+            // If not available in the payload, try to get it from webhook config
+            const { data: webhookConfig, error: webhookError } = await supabaseAdmin
+              .from('whatsapp_webhook_config')
+              .select('webhook_url')
+              .eq('whatsapp_instance_id', instanceData.id)
+              .single();
+              
+            if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
+              // Extract base URL from webhook URL
+              const url = new URL(webhookConfig.webhook_url);
+              instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+            } else {
+              // If webhook URL doesn't exist, use the default Evolution API URL
+              instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+            }
+          }
+        
+          // Send direct response through WhatsApp without AI processing
+          if (instanceBaseUrl && fromNumber) {
+            await logDebug('DIRECT_RESPONSE_SENDING', 'Sending direct response to WhatsApp', {
+              instanceName,
+              toNumber: fromNumber,
+              baseUrl: instanceBaseUrl,
+              response: transcriptionResult.directResponse
+            });
+            
+            // Construct the send message URL according to EVOLUTION API format
+            const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+            
+            const sendResponse = await fetch(sendUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': evolutionApiKey
+              },
+              body: JSON.stringify({
+                number: fromNumber,
+                text: transcriptionResult.directResponse
+              })
+            });
+
+            if (!sendResponse.ok) {
+              const errorText = await sendResponse.text();
+              await logDebug('DIRECT_RESPONSE_ERROR', 'Error sending direct response', {
+                status: sendResponse.status,
+                error: errorText
+              });
+              return false;
+            }
+
+            const sendResult = await sendResponse.json();
+            await logDebug('DIRECT_RESPONSE_SENT', 'Direct response sent successfully', { sendResult });
+            return true;
+          }
+        } catch (error) {
+          await logDebug('DIRECT_RESPONSE_EXCEPTION', 'Exception sending direct response', { error });
+          return false;
+        }
+        
+        // If we couldn't send the direct response, continue with normal processing as fallback
+      }
       
       if (!transcriptionResult.success) {
         // If transcription failed but we have a fallback transcription, use it
@@ -1179,3 +1278,4 @@ serve(async (req) => {
     );
   }
 });
+
