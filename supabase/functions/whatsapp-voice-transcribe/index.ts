@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -64,7 +65,7 @@ serve(async (req) => {
     let actualMimeType = mimeType || 'audio/ogg; codecs=opus';
     
     try {
-      // IMPORTANT: Check for WhatsApp encrypted audio with mediaKey
+      // Handle WhatsApp encrypted audio with mediaKey
       if (audioUrl.includes('mmg.whatsapp.net') && mediaKey) {
         console.log('$$$$$ DEPLOYMENT VERIFICATION: ENTERING DECRYPTION SERVICE PATH - This should be used for WhatsApp voice messages $$$$$');
         console.log('Detected WhatsApp encrypted media with mediaKey, using external decryption service');
