@@ -384,8 +384,8 @@ const WhatsAppAIConfig = () => {
       
       <div className="flex flex-col md:flex-row gap-4 mb-6">
         <div className="w-full md:w-1/3">
-          <Label htmlFor="whatsapp-instance">WhatsApp Number</Label>
-          <select id="whatsapp-instance" className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" value={selectedInstance} onChange={e => setSelectedInstance(e.target.value)} disabled={isLoading || instances.length === 0}>
+          <Label htmlFor="whatsapp-instance">Choose WhatsApp Number</Label>
+          <select id="whatsapp-instance" value={selectedInstance} onChange={e => setSelectedInstance(e.target.value)} disabled={isLoading || instances.length === 0} className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 my-[8px]">
             {instances.length === 0 ? <option value="">No WhatsApp numbers available</option> : instances.map(instance => <option key={instance.id} value={instance.id}>
                   {instance.instance_name} ({instance.status})
                 </option>)}
