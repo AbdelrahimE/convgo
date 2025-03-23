@@ -17,13 +17,11 @@ import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
-
 interface AIConfig {
   id: string;
   system_prompt: string;
@@ -32,7 +30,6 @@ interface AIConfig {
   process_voice_messages: boolean;
   voice_message_default_response: string;
 }
-
 const WhatsAppAIConfig = () => {
   const {
     user
@@ -47,14 +44,11 @@ const WhatsAppAIConfig = () => {
     isGenerating,
     responseResult
   } = useAIResponse();
-
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [systemPrompt, setSystemPrompt] = useState<string>('');
   const [processVoiceMessages, setProcessVoiceMessages] = useState(true);
-  const [voiceMessageDefaultResponse, setVoiceMessageDefaultResponse] = useState(
-    "I'm sorry, but I cannot process voice messages at the moment. Please send your question as text, and I'll be happy to assist you."
-  );
+  const [voiceMessageDefaultResponse, setVoiceMessageDefaultResponse] = useState("I'm sorry, but I cannot process voice messages at the moment. Please send your question as text, and I'll be happy to assist you.");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('config');
@@ -70,7 +64,6 @@ const WhatsAppAIConfig = () => {
   const [useRealConversation, setUseRealConversation] = useState(true);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [showVoiceFeature, setShowVoiceFeature] = useState(true);
-
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
     try {
@@ -98,13 +91,11 @@ const WhatsAppAIConfig = () => {
       setIsCleaningUp(false);
     }
   }, []);
-
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
-
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -114,7 +105,6 @@ const WhatsAppAIConfig = () => {
       setVoiceMessageDefaultResponse("I'm sorry, but I cannot process voice messages at the moment. Please send your question as text, and I'll be happy to assist you.");
     }
   }, [selectedInstance]);
-
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
@@ -128,13 +118,11 @@ const WhatsAppAIConfig = () => {
       }
     };
   }, [testConversationId, useRealConversation, cleanupTestConversation]);
-
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
     }
   }, [activeTab, selectedInstance, useRealConversation]);
-
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -154,7 +142,6 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
@@ -181,18 +168,15 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
       return;
     }
-
     if (!processVoiceMessages && !voiceMessageDefaultResponse.trim()) {
       toast.error('Please provide a default response for voice messages');
       return;
     }
-
     try {
       setIsSaving(true);
       const {
@@ -235,11 +219,9 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
-
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
-
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
@@ -271,7 +253,6 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
-
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
     try {
@@ -303,7 +284,6 @@ const WhatsAppAIConfig = () => {
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
-
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       const idToDelete = testConversationId;
@@ -318,7 +298,6 @@ const WhatsAppAIConfig = () => {
       setConversation([]);
     }
   };
-
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -400,7 +379,6 @@ const WhatsAppAIConfig = () => {
       }]);
     }
   };
-
   return <div className="container mx-auto space-y-6 px-[16px] py-[32px]">
       <h1 className="font-bold text-4xl">AI Configuration</h1>
       
@@ -466,7 +444,7 @@ const WhatsAppAIConfig = () => {
                     </div>
                     
                     <div className="space-y-4 pt-4 border-t">
-                      <h3 className="text-lg font-medium">Voice Message Settings</h3>
+                      <h3 className="text-lg font-semibold text-left">Voice Message Settings</h3>
                       
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
@@ -475,33 +453,21 @@ const WhatsAppAIConfig = () => {
                             When enabled, your AI will transcribe and respond to voice messages
                           </p>
                         </div>
-                        <Switch 
-                          id="process-voice"
-                          checked={processVoiceMessages}
-                          onCheckedChange={setProcessVoiceMessages}
-                        />
+                        <Switch id="process-voice" checked={processVoiceMessages} onCheckedChange={setProcessVoiceMessages} />
                       </div>
                       
-                      {!processVoiceMessages && (
-                        <div className="space-y-2 mt-4">
+                      {!processVoiceMessages && <div className="space-y-2 mt-4">
                           <Label htmlFor="voice-default-response">
                             Default Response for Voice Messages
                           </Label>
-                          <Textarea 
-                            id="voice-default-response"
-                            value={voiceMessageDefaultResponse}
-                            onChange={(e) => setVoiceMessageDefaultResponse(e.target.value)}
-                            placeholder="Message to send when a voice message is received"
-                            rows={3}
-                          />
+                          <Textarea id="voice-default-response" value={voiceMessageDefaultResponse} onChange={e => setVoiceMessageDefaultResponse(e.target.value)} placeholder="Message to send when a voice message is received" rows={3} />
                           <p className="text-xs text-muted-foreground">
                             This message will be sent automatically when a voice message is received
                           </p>
-                        </div>
-                      )}
+                        </div>}
                     </div>
                     
-                    <Button onClick={saveAIConfig} disabled={isSaving || !systemPrompt.trim() || !selectedInstance || (!processVoiceMessages && !voiceMessageDefaultResponse.trim())} className="w-full">
+                    <Button onClick={saveAIConfig} disabled={isSaving || !systemPrompt.trim() || !selectedInstance || !processVoiceMessages && !voiceMessageDefaultResponse.trim()} className="w-full">
                       {isSaving ? 'Saving...' : 'Save Configuration'}
                     </Button>
                   </CardContent>
@@ -621,5 +587,4 @@ const WhatsAppAIConfig = () => {
       </Dialog>
     </div>;
 };
-
 export default WhatsAppAIConfig;
