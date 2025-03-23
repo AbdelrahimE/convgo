@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -847,4 +848,482 @@ async function processMessageForAI(instance: string, messageData: any) {
         if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
           // Extract base URL from webhook URL
           const url = new URL(webhookConfig.webhook_url);
-          instanceBaseUrl = `${url
+          instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+          
+          await logDebug('AI_EVOLUTION_URL_FROM_WEBHOOK', 'Using base URL extracted from webhook URL', { 
+            instanceBaseUrl, 
+            webhookUrl: webhookConfig.webhook_url 
+          });
+        } else {
+          // If webhook URL doesn't exist, use the default Evolution API URL
+          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+          
+          await logDebug('AI_EVOLUTION_URL_DEFAULT', 'Using default API URL', { 
+            instanceBaseUrl,
+            fromEnv: !!Deno.env.get('EVOLUTION_API_URL')
+          });
+        }
+      }
+    } catch (error) {
+      await logDebug('AI_EVOLUTION_URL_ERROR', 'Error determining API URL, using default', { 
+        error,
+        defaultUrl: DEFAULT_EVOLUTION_API_URL
+      });
+      
+      // Fallback to default URL if extraction failed
+      instanceBaseUrl = DEFAULT_EVOLUTION_API_URL;
+    }
+
+    // Get context for this query based on fileIds if available
+    const contextResponse = await fetch(`${supabaseUrl}/functions/v1/assemble-context`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify({
+        query: messageText,
+        fileIds,
+        maxTokens: 2000, // Allocate enough tokens for the context
+        conversationHistory
+      })
+    });
+
+    let context = '';
+    if (contextResponse.ok) {
+      const contextResult = await contextResponse.json();
+      if (contextResult.success && contextResult.context) {
+        context = contextResult.context;
+        await logDebug('AI_CONTEXT_RETRIEVED', 'Successfully retrieved context', {
+          contextLength: context.length,
+          estimatedTokens: Math.ceil(context.length * 0.25)
+        });
+      } else {
+        await logDebug('AI_CONTEXT_EMPTY', 'No context found or error retrieving context', {
+          success: contextResult.success,
+          error: contextResult.error
+        });
+      }
+    } else {
+      await logDebug('AI_CONTEXT_ERROR', 'Error calling context assembly endpoint', {
+        status: contextResponse.status
+      });
+    }
+
+    // Get system prompt based on aiConfig and add context
+    const systemPromptResponse = await fetch(`${supabaseUrl}/functions/v1/generate-system-prompt`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify({
+        baseSystemPrompt: aiConfig.system_prompt,
+        context,
+        maxTokens: 4000, // Allow plenty of tokens for system prompt
+        languagePreference: aiConfig.language_preference || 'auto'
+      })
+    });
+
+    let systemPrompt = aiConfig.system_prompt;
+    if (systemPromptResponse.ok) {
+      const systemPromptResult = await systemPromptResponse.json();
+      if (systemPromptResult.success && systemPromptResult.systemPrompt) {
+        systemPrompt = systemPromptResult.systemPrompt;
+        await logDebug('AI_SYSTEM_PROMPT_GENERATED', 'Generated system prompt with context', {
+          promptLength: systemPrompt.length,
+          estimatedTokens: Math.ceil(systemPrompt.length * 0.25)
+        });
+      } else {
+        await logDebug('AI_SYSTEM_PROMPT_ERROR', 'Error generating system prompt, using base prompt', {
+          error: systemPromptResult.error
+        });
+      }
+    } else {
+      await logDebug('AI_SYSTEM_PROMPT_API_ERROR', 'API error generating system prompt', {
+        status: systemPromptResponse.status
+      });
+    }
+
+    // Generate AI response
+    const aiResponse = await fetch(`${supabaseUrl}/functions/v1/generate-response`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify({
+        model: aiConfig.model || 'gpt-4o-mini',
+        systemPrompt,
+        conversationHistory,
+        userMessage: messageText,
+        temperature: aiConfig.temperature || 0.7,
+        maxTokens: aiConfig.max_tokens || 1024,
+        fileIds
+      })
+    });
+
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      await logDebug('AI_GENERATION_API_ERROR', 'Error from AI generation API', {
+        status: aiResponse.status,
+        error: errorText
+      });
+      
+      // If AI response generation failed, we can't send a response
+      console.error('Error generating AI response:', aiResponse.status, errorText);
+      return false;
+    }
+
+    const aiResult = await aiResponse.json();
+
+    if (!aiResult.success) {
+      await logDebug('AI_GENERATION_FAILED', 'AI generation process failed', {
+        error: aiResult.error
+      });
+      
+      // If AI response generation failed, we can't send a response
+      console.error('Error in AI response generation:', aiResult.error);
+      return false;
+    }
+
+    const assistantResponse = aiResult.response;
+    await logDebug('AI_RESPONSE_GENERATED', 'Successfully generated AI response', {
+      responseLength: assistantResponse.length,
+      estimatedTokens: Math.ceil(assistantResponse.length * 0.25),
+      preview: assistantResponse.substring(0, 100) + '...'
+    });
+
+    // Store assistant response in conversation
+    await storeMessageInConversation(conversationId, 'assistant', assistantResponse);
+
+    // Send the response back to the user via WhatsApp
+    if (instanceBaseUrl && fromNumber) {
+      await logDebug('AI_SENDING_RESPONSE', 'Sending AI response to WhatsApp', {
+        instanceName,
+        toNumber: fromNumber,
+        baseUrl: instanceBaseUrl,
+        responsePreview: assistantResponse.substring(0, 100) + '...'
+      });
+      
+      // Construct the send message URL according to EVOLUTION API format
+      const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+      
+      // Check if we should chunk the response (if it's too long)
+      const maxMessageLength = 4000; // WhatsApp has limitations on message length
+      let responseToSend = assistantResponse;
+      
+      if (assistantResponse.length > maxMessageLength) {
+        await logDebug('AI_RESPONSE_CHUNKING', 'Response exceeds maximum length, splitting into chunks', {
+          responseLength: assistantResponse.length,
+          maxLength: maxMessageLength,
+          estimatedChunks: Math.ceil(assistantResponse.length / maxMessageLength)
+        });
+        
+        // Split response into chunks at sensible points (e.g., paragraph breaks, sentences)
+        const chunks = [];
+        let remainingText = assistantResponse;
+        
+        while (remainingText.length > 0) {
+          let chunkSize = Math.min(remainingText.length, maxMessageLength);
+          
+          // Try to find a good breaking point (paragraph, sentence)
+          if (chunkSize < remainingText.length) {
+            // Try to break at paragraph
+            let breakPoint = remainingText.lastIndexOf('\n\n', maxMessageLength);
+            
+            if (breakPoint === -1 || breakPoint < maxMessageLength * 0.5) {
+              // If no paragraph break found, or it's too early, try sentence
+              breakPoint = remainingText.lastIndexOf('. ', maxMessageLength);
+              
+              if (breakPoint === -1 || breakPoint < maxMessageLength * 0.5) {
+                // If no sentence break, try any break
+                breakPoint = remainingText.lastIndexOf(' ', maxMessageLength);
+                
+                if (breakPoint === -1 || breakPoint < maxMessageLength * 0.8) {
+                  // Last resort: just break at max length
+                  breakPoint = maxMessageLength;
+                }
+              } else {
+                // Move past the period and space
+                breakPoint += 2;
+              }
+            } else {
+              // Move past the paragraph breaks
+              breakPoint += 2;
+            }
+            
+            chunkSize = breakPoint;
+          }
+          
+          chunks.push(remainingText.substring(0, chunkSize));
+          remainingText = remainingText.substring(chunkSize);
+        }
+        
+        await logDebug('AI_RESPONSE_CHUNKS', 'Split response into chunks', {
+          chunkCount: chunks.length,
+          chunkSizes: chunks.map(chunk => chunk.length)
+        });
+        
+        // Send each chunk sequentially
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          await logDebug('AI_SENDING_CHUNK', `Sending chunk ${i+1} of ${chunks.length}`, {
+            chunkLength: chunk.length
+          });
+          
+          const chunkResponse = await fetch(sendUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': evolutionApiKey
+            },
+            body: JSON.stringify({
+              number: fromNumber,
+              text: chunk
+            })
+          });
+
+          if (!chunkResponse.ok) {
+            const errorText = await chunkResponse.text();
+            await logDebug('AI_SEND_CHUNK_ERROR', `Error sending chunk ${i+1}`, {
+              status: chunkResponse.status,
+              error: errorText
+            });
+            
+            // Continue trying to send other chunks
+            continue;
+          }
+
+          const chunkResult = await chunkResponse.json();
+          await logDebug('AI_CHUNK_SENT', `Chunk ${i+1} sent successfully`, { 
+            messageId: chunkResult.key?.id 
+          });
+          
+          // Add a small delay between chunks to ensure proper ordering
+          if (i < chunks.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      } else {
+        // Send the response as a single message
+        const sendResponse = await fetch(sendUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': evolutionApiKey
+          },
+          body: JSON.stringify({
+            number: fromNumber,
+            text: responseToSend
+          })
+        });
+
+        if (!sendResponse.ok) {
+          const errorText = await sendResponse.text();
+          await logDebug('AI_SEND_ERROR', 'Error sending AI response', {
+            status: sendResponse.status,
+            error: errorText
+          });
+          return false;
+        }
+
+        const sendResult = await sendResponse.json();
+        await logDebug('AI_RESPONSE_SENT', 'AI response sent successfully', { sendResult });
+      }
+      
+      return true;
+    } else {
+      await logDebug('AI_SEND_MISSING_INFO', 'Cannot send response, missing instance URL or number', {
+        hasInstanceBaseUrl: !!instanceBaseUrl,
+        hasFromNumber: !!fromNumber
+      });
+      return false;
+    }
+  } catch (error) {
+    await logDebug('AI_PROCESSING_ERROR', 'Error in AI message processing', { error });
+    console.error('Error processing message for AI:', error);
+    return false;
+  }
+}
+
+serve(async (req) => {
+  // CORS check for preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders
+    });
+  }
+
+  try {
+    // Log the request URL and method for debugging
+    const url = new URL(req.url);
+    const path = url.pathname;
+    const pathParts = path.split('/').filter(Boolean);
+
+    await logDebug('PATH_ANALYSIS', 'Full request path analysis', {
+      fullPath: path,
+      pathParts
+    });
+
+    // Log the full request details
+    await logDebug('WEBHOOK_REQUEST', 'WEBHOOK REQUEST RECEIVED', {
+      url: req.url,
+      method: req.method,
+      headers: Object.fromEntries(req.headers.entries())
+    });
+
+    // Handle status check from the frontend
+    if (req.method === 'POST') {
+      const requestData = await req.json();
+      
+      if (requestData.action === 'status') {
+        // Check webhook status for all instances
+        const { data: webhookConfigs, error: webhookError } = await supabaseAdmin
+          .from('whatsapp_webhook_config')
+          .select('id, whatsapp_instance_id, webhook_url, is_active, last_status, last_checked_at');
+          
+        if (webhookError) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'Error fetching webhook configurations: ' + webhookError.message
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500
+          });
+        }
+        
+        // Fetch instance information to match with webhooks
+        const { data: instances, error: instancesError } = await supabaseAdmin
+          .from('whatsapp_instances')
+          .select('id, instance_name');
+          
+        if (instancesError) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'Error fetching instance data: ' + instancesError.message
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500
+          });
+        }
+        
+        // Map instance IDs to names
+        const instanceMap = instances?.reduce((map, instance) => {
+          map[instance.id] = instance.instance_name;
+          return map;
+        }, {}) || {};
+        
+        // Format webhook configs with instance names
+        const activeWebhooks = webhookConfigs?.map(webhook => ({
+          id: webhook.id,
+          whatsapp_instance_id: webhook.whatsapp_instance_id,
+          instance_name: instanceMap[webhook.whatsapp_instance_id] || 'Unknown',
+          webhook_url: webhook.webhook_url,
+          is_active: webhook.is_active,
+          last_status: webhook.last_status,
+          last_checked_at: webhook.last_checked_at
+        })) || [];
+        
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Webhook status retrieved successfully',
+          activeWebhooks
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // Regular webhook processing for messages from WhatsApp
+    if (req.method === 'POST') {
+      const payload = await req.json();
+      
+      // Log the full payload for debugging
+      await logDebug('WEBHOOK_PAYLOAD', 'Webhook payload received', { data: payload });
+      
+      // Detect different webhook formats
+      const isStandardFormat = payload?.event === 'messages.upsert';
+      
+      // For standard format (messages.upsert)
+      if (isStandardFormat) {
+        await logDebug('WEBHOOK_EVENT_STANDARD', 'Standard event format detected: messages.upsert');
+        
+        // Try to extract instance from payload
+        let instance = payload?.instance || null;
+        // Also check sender field as a backup
+        if (!instance && payload?.sender) {
+          instance = payload.sender.replace('@s.whatsapp.net', '');
+          await logDebug('WEBHOOK_INSTANCE_FROM_PAYLOAD', `Extracted instance from payload: ${instance}`);
+        }
+        
+        if (instance) {
+          // Save the message for logging/debugging purposes
+          await saveWebhookMessage(instance, 'messages.upsert', payload);
+          
+          // Process this specific webhook (for AI processing)
+          await logDebug('WEBHOOK_INSTANCE', `Processing webhook for instance: ${instance}`);
+          
+          // Attempt to process the message for AI response
+          await logDebug('AI_PROCESS_ATTEMPT', 'Attempting to process message for AI response');
+          await processMessageForAI(instance, payload.data);
+          
+          // Return success response
+          return new Response(JSON.stringify({
+            success: true,
+            message: 'Webhook received and processed'
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        } else {
+          // No instance identified
+          await logDebug('WEBHOOK_NO_INSTANCE', 'No instance found in payload');
+          
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'No instance identified in webhook'
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400
+          });
+        }
+      } else {
+        // Unknown format
+        await logDebug('WEBHOOK_UNKNOWN_FORMAT', 'Unknown webhook format', { payload });
+        
+        // Still save the message for logging
+        await saveWebhookMessage('unknown', 'unknown', payload);
+        
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Webhook received but format not recognized'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // Default response for unsupported methods
+    return new Response(JSON.stringify({
+      error: 'Method not allowed'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 405
+    });
+  } catch (error) {
+    // Log the error
+    await logDebug('WEBHOOK_ERROR', 'Error processing webhook', { error: error.message, stack: error.stack });
+    
+    console.error('Error processing request:', error);
+    
+    // Return error response
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Internal server error: ' + error.message
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500
+    });
+  }
+});
