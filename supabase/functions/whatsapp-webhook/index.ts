@@ -507,6 +507,42 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
   }
 }
 
+// Helper function to check if a message appears to be an auto-response from our bot
+// This helps prevent processing our own responses, which saves tokens and prevents
+// incorrect conversation flow
+async function isAutoResponseMessage(messageText: string, instanceId: string): Promise<boolean> {
+  try {
+    if (!messageText) return false;
+    
+    // Check if this instance has any custom auto-responses defined
+    const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
+      .from('whatsapp_ai_config')
+      .select('voice_message_default_response')
+      .eq('whatsapp_instance_id', instanceId)
+      .single();
+      
+    if (aiConfigError) {
+      await logDebug('AUTO_RESPONSE_CHECK_ERROR', 'Error checking for auto-response', { error: aiConfigError });
+      return false;
+    }
+    
+    // If we have a voice message default response and it matches the incoming message exactly
+    // This is likely our bot's own message being echoed back
+    if (aiConfig?.voice_message_default_response && 
+        messageText.trim() === aiConfig.voice_message_default_response.trim()) {
+      await logDebug('AUTO_RESPONSE_DETECTED', 'Detected message matching voice response template', {
+        messagePreview: messageText.substring(0, 50) + '...',
+      });
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    await logDebug('AUTO_RESPONSE_CHECK_EXCEPTION', 'Exception when checking auto-response', { error });
+    return false; // On error, default to processing the message
+  }
+}
+
 // Helper function to process message for AI
 async function processMessageForAI(instance: string, messageData: any) {
   try {
@@ -707,6 +743,16 @@ async function processMessageForAI(instance: string, messageData: any) {
       return false;
     }
 
+    // NEW: Check if this message appears to be an auto-response from our system
+    // This helps prevent processing our own messages that get echoed back via webhook
+    const isAutoResponse = await isAutoResponseMessage(messageText, instanceData.id);
+    if (isAutoResponse) {
+      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: Message appears to be our own auto-response', {
+        messageTextPreview: messageText.substring(0, 50) + '...'
+      });
+      return false;
+    }
+
     // Find or create conversation
     const conversationId = await findOrCreateConversation(instanceData.id, fromNumber);
     await logDebug('CONVERSATION_MANAGED', 'Conversation found or created', { conversationId });
@@ -801,481 +847,4 @@ async function processMessageForAI(instance: string, messageData: any) {
         if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
           // Extract base URL from webhook URL
           const url = new URL(webhookConfig.webhook_url);
-          instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-          await logDebug('AI_EVOLUTION_URL_FOUND', 'Extracted base URL from webhook config', { 
-            instanceBaseUrl,
-            webhookUrl: webhookConfig.webhook_url
-          });
-        } else {
-          // If webhook URL doesn't exist, use the default Evolution API URL
-          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-          await logDebug('AI_EVOLUTION_URL_DEFAULT', 'Using default EVOLUTION API URL', { 
-            instanceBaseUrl,
-            webhookError
-          });
-        }
-      }
-    } catch (error) {
-      // In case of any error, use the default Evolution API URL
-      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-      await logDebug('AI_EVOLUTION_URL_ERROR', 'Error determining EVOLUTION API URL, using default', { 
-        instanceBaseUrl,
-        error
-      });
-    }
-
-    await logDebug('AI_CONTEXT_SEARCH', 'Starting semantic search for context', { 
-      userQuery: messageText,
-      fileIds 
-    });
-
-    // Perform semantic search to find relevant contexts
-    const searchResponse = await fetch(`${supabaseUrl}/functions/v1/semantic-search`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify({
-        query: messageText,
-        fileIds: fileIds.length > 0 ? fileIds : undefined,
-        limit: 5,
-        threshold: 0.3
-      })
-    });
-
-    if (!searchResponse.ok) {
-      const errorText = await searchResponse.text();
-      await logDebug('AI_SEARCH_ERROR', 'Semantic search failed', { 
-        status: searchResponse.status,
-        error: errorText
-      });
-      console.error('Semantic search failed:', errorText);
-      
-      // Continue with empty context instead of failing
-      await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
-      return await generateAndSendAIResponse(messageText, '', instanceName, fromNumber, instanceBaseUrl, aiConfig, messageData, conversationId);
-    }
-
-    const searchResults = await searchResponse.json();
-    await logDebug('AI_SEARCH_RESULTS', 'Semantic search completed', { 
-      resultCount: searchResults.results?.length || 0,
-      similarity: searchResults.results?.[0]?.similarity || 0
-    });
-
-    // IMPROVED CONTEXT ASSEMBLY: Balance between conversation history and RAG content
-    let context = '';
-    let ragContext = '';
-    
-    // 1. Format conversation history in a clean, token-efficient format
-    const conversationContext = conversationHistory
-      .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
-      .join('\n\n');
-    
-    // 2. Format RAG results if available - more token-efficient formatting
-    if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
-      // Only include the most relevant sections to save tokens
-      const topResults = searchResults.results.slice(0, 3);
-      
-      // Join RAG content with separators and add source information
-      ragContext = topResults
-        .map((result, index) => `DOCUMENT ${index + 1} (similarity: ${result.similarity.toFixed(2)}):\n${result.content.trim()}`)
-        .join('\n\n---\n\n');
-      
-      // 3. The context assembly is now handled by the balanceContextTokens function in generate-response
-      context = `${conversationContext}\n\n${ragContext}`;
-      
-      await logDebug('AI_CONTEXT_ASSEMBLED', 'Enhanced context assembled for token balancing', { 
-        conversationChars: conversationContext.length,
-        ragChars: ragContext.length,
-        totalChars: context.length,
-        estimatedTokens: Math.ceil(context.length * 0.25)
-      });
-    } else {
-      // Only conversation history is available
-      context = conversationContext;
-      await logDebug('AI_CONTEXT_ASSEMBLED', 'Context assembled with only conversation history', { 
-        conversationChars: conversationContext.length,
-        estimatedTokens: Math.ceil(conversationContext.length * 0.25)
-      });
-    }
-
-    // Generate and send the response with improved context and token management
-    return await generateAndSendAIResponse(
-      messageText,
-      context,
-      instanceName,
-      fromNumber,
-      instanceBaseUrl,
-      aiConfig,
-      messageData,
-      conversationId
-    );
-  } catch (error) {
-    await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
-    console.error('Error in processMessageForAI:', error);
-    return false;
-  }
-}
-
-// Helper function to generate and send AI response
-async function generateAndSendAIResponse(
-  query: string,
-  context: string,
-  instanceName: string,
-  fromNumber: string,
-  instanceBaseUrl: string,
-  aiConfig: any,
-  messageData: any,
-  conversationId: string
-) {
-  try {
-    // Generate system prompt
-    await logDebug('AI_SYSTEM_PROMPT', 'Using system prompt from configuration', { 
-      userSystemPrompt: aiConfig.system_prompt
-    });
-    
-    const systemPrompt = aiConfig.system_prompt;
-
-    // Generate AI response with improved token management
-    await logDebug('AI_RESPONSE_GENERATION', 'Generating AI response with token management');
-    const responseGenResponse = await fetch(`${supabaseUrl}/functions/v1/generate-response`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify({
-        query: query,
-        context: context,
-        systemPrompt: systemPrompt,
-        temperature: aiConfig.temperature || 0.7,
-        model: 'gpt-4o-mini',
-        maxContextTokens: 3000 // Explicit token limit
-      })
-    });
-
-    if (!responseGenResponse.ok) {
-      const errorText = await responseGenResponse.text();
-      await logDebug('AI_RESPONSE_ERROR', 'AI response generation failed', {
-        status: responseGenResponse.status,
-        error: errorText
-      });
-      console.error('AI response generation failed:', errorText);
-      return false;
-    }
-
-    const responseData = await responseGenResponse.json();
-    await logDebug('AI_RESPONSE_GENERATED', 'AI response generated successfully', {
-      responsePreview: responseData.answer?.substring(0, 100) + '...',
-      tokens: responseData.usage
-    });
-
-    // Log token usage if available
-    if (responseData.tokenUsage) {
-      await logDebug('AI_TOKEN_USAGE', 'Token usage details', responseData.tokenUsage);
-    }
-
-    // Store AI response in conversation history
-    if (responseData.answer) {
-      await storeMessageInConversation(conversationId, 'assistant', responseData.answer);
-    }
-
-    // Save interaction to database
-    try {
-      await logDebug('AI_SAVING_INTERACTION', 'Saving AI interaction to database');
-      
-      const { error: interactionError } = await supabaseAdmin
-        .from('whatsapp_ai_interactions')
-        .insert({
-          whatsapp_instance_id: aiConfig.whatsapp_instance_id,
-          user_phone: fromNumber,
-          user_message: query,
-          ai_response: responseData.answer,
-          prompt_tokens: responseData.usage?.prompt_tokens || 0,
-          completion_tokens: responseData.usage?.completion_tokens || 0,
-          total_tokens: responseData.usage?.total_tokens || 0,
-          context_token_count: Math.ceil((context?.length || 0) / 4),
-          search_result_count: context ? 1 : 0,
-          response_model: responseData.model || 'gpt-4o-mini'
-        });
-
-      if (interactionError) {
-        await logDebug('AI_INTERACTION_SAVE_ERROR', 'Error saving AI interaction', {
-          error: interactionError
-        });
-        console.error('Error saving AI interaction:', interactionError);
-      } else {
-        await logDebug('AI_INTERACTION_SAVED', 'AI interaction saved successfully');
-      }
-    } catch (error) {
-      await logDebug('AI_INTERACTION_SAVE_EXCEPTION', 'Exception saving AI interaction', {
-        error
-      });
-      console.error('Exception saving AI interaction:', error);
-    }
-
-    // Send response back through WhatsApp
-    if (instanceBaseUrl && fromNumber && responseData.answer) {
-      await logDebug('AI_SENDING_RESPONSE', 'Sending AI response to WhatsApp', {
-        instanceName,
-        toNumber: fromNumber,
-        baseUrl: instanceBaseUrl
-      });
-      
-      // Determine Evolution API key
-      const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey;
-      
-      if (!evolutionApiKey) {
-        await logDebug('AI_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable not set and no apikey in payload');
-        console.error('EVOLUTION_API_KEY environment variable not set and no apikey in payload');
-        return false;
-      }
-
-      // Construct the send message URL according to EVOLUTION API format
-      const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
-      await logDebug('AI_RESPONSE_URL', 'Constructed send message URL', { sendUrl });
-      
-      try {
-        const sendResponse = await fetch(sendUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': evolutionApiKey
-          },
-          body: JSON.stringify({
-            number: fromNumber,
-            text: responseData.answer
-          })
-        });
-
-        if (!sendResponse.ok) {
-          const errorText = await sendResponse.text();
-          await logDebug('AI_SEND_RESPONSE_ERROR', 'Error sending WhatsApp message', {
-            status: sendResponse.status,
-            error: errorText,
-            sendUrl,
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': '[REDACTED]'
-            },
-            body: {
-              number: fromNumber,
-              text: responseData.answer.substring(0, 50) + '...'
-            }
-          });
-          console.error('Error sending WhatsApp message:', errorText);
-          return false;
-        }
-
-        const sendResult = await sendResponse.json();
-        await logDebug('AI_RESPONSE_SENT', 'WhatsApp message sent successfully', { sendResult });
-        return true;
-      } catch (error) {
-        await logDebug('AI_SEND_EXCEPTION', 'Exception sending WhatsApp message', { 
-          error,
-          sendUrl, 
-          instanceBaseUrl,
-          fromNumber
-        });
-        console.error('Exception sending WhatsApp message:', error);
-        return false;
-      }
-    } else {
-      await logDebug('AI_SEND_MISSING_DATA', 'Missing data for sending WhatsApp message', {
-        hasInstanceBaseUrl: !!instanceBaseUrl,
-        hasFromNumber: !!fromNumber,
-        hasResponse: !!responseData.answer
-      });
-      return false;
-    }
-  } catch (error) {
-    await logDebug('AI_GENERATE_SEND_EXCEPTION', 'Exception in generate and send function', { error });
-    return false;
-  }
-}
-
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: corsHeaders
-    });
-  }
-
-  // Log the incoming request
-  await logDebug('WEBHOOK_REQUEST', 'WEBHOOK REQUEST RECEIVED', {
-    method: req.method,
-    url: req.url,
-    headers: Object.fromEntries(req.headers.entries())
-  });
-  
-  try {
-    const url = new URL(req.url);
-    const pathParts = url.pathname.split('/').filter(Boolean);
-    
-    // Log full path analysis for debugging
-    await logDebug('PATH_ANALYSIS', 'Full request path analysis', { 
-      fullPath: url.pathname,
-      pathParts 
-    });
-    
-    // Get the request body for further processing
-    let data;
-    try {
-      data = await req.json();
-      await logDebug('WEBHOOK_PAYLOAD', 'Webhook payload received', { data });
-      
-      // Check if message contains audio
-      if (data && hasAudioContent(data)) {
-        await logDebug('AUDIO_CONTENT_DETECTED', 'Audio content detected in webhook payload', {
-          messageType: data.messageType,
-          hasAudioMessage: !!data.message?.audioMessage
-        });
-      }
-    } catch (error) {
-      await logDebug('WEBHOOK_PAYLOAD_ERROR', 'Failed to parse webhook payload', { error });
-      return new Response(
-        JSON.stringify({ success: false, error: 'Invalid JSON payload' }),
-        { 
-          status: 400, 
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    }
-    
-    // Try to extract the instance name from the path first (for backward compatibility)
-    let instanceName = null;
-    
-    // Pattern 1: Direct path format
-    if (pathParts.length >= 3 && pathParts[0] === 'api') {
-      instanceName = pathParts[1];
-      await logDebug('WEBHOOK_PATH_DIRECT', `Direct webhook path detected for instance: ${instanceName}`);
-    }
-    // Pattern 2: Supabase prefixed path format
-    else if (pathParts.length >= 6 && 
-             pathParts[0] === 'functions' && 
-             pathParts[1] === 'v1' && 
-             pathParts[2] === 'whatsapp-webhook' && 
-             pathParts[3] === 'api') {
-      instanceName = pathParts[4];
-      await logDebug('WEBHOOK_PATH_SUPABASE', `Supabase prefixed webhook path detected for instance: ${instanceName}`);
-    }
-    // Pattern 3: Another possible edge function URL format with just the instance in the path
-    else if (pathParts.length >= 4 && 
-             pathParts[0] === 'functions' && 
-             pathParts[1] === 'v1' && 
-             pathParts[2] === 'whatsapp-webhook') {
-      // Try to extract instance from the next path part
-      instanceName = pathParts[3];
-      await logDebug('WEBHOOK_PATH_ALTERNATIVE', `Alternative webhook path detected, using: ${instanceName}`);
-    }
-    
-    // If instance name is not found in the path, try to extract it from the payload
-    // This handles the simple path format that EVOLUTION API is using
-    if (!instanceName && data) {
-      if (data.instance) {
-        instanceName = data.instance;
-        await logDebug('WEBHOOK_INSTANCE_FROM_PAYLOAD', `Extracted instance from payload: ${instanceName}`);
-      } else if (data.instanceId) {
-        instanceName = data.instanceId;
-        await logDebug('WEBHOOK_INSTANCE_FROM_PAYLOAD', `Extracted instanceId from payload: ${instanceName}`);
-      }
-    }
-    
-    // If we have identified an instance name, process the webhook
-    if (instanceName) {
-      await logDebug('WEBHOOK_INSTANCE', `Processing webhook for instance: ${instanceName}`);
-      
-      // Different webhook events have different structures
-      // We need to normalize based on the structure
-      let event = 'unknown';
-      let normalizedData = data;
-      
-      // Determine the event type based on data structure
-      if (data.event) {
-        // This is the standard format
-        event = data.event;
-        normalizedData = data.data || data;
-        await logDebug('WEBHOOK_EVENT_STANDARD', `Standard event format detected: ${event}`);
-      } else if (data.key && data.key.remoteJid) {
-        // This is a message format
-        event = 'messages.upsert';
-        normalizedData = data;
-        await logDebug('WEBHOOK_EVENT_MESSAGE', 'Message event detected');
-      } else if (data.status) {
-        // This is a connection status event
-        event = 'connection.update';
-        normalizedData = data;
-        await logDebug('WEBHOOK_EVENT_CONNECTION', `Connection event detected: ${data.status}`);
-      } else if (data.qrcode) {
-        // This is a QR code event
-        event = 'qrcode.updated';
-        normalizedData = data;
-        await logDebug('WEBHOOK_EVENT_QRCODE', 'QR code event detected');
-      }
-      
-      // Save the webhook message to the database
-      const saved = await saveWebhookMessage(instanceName, event, normalizedData);
-      
-      if (saved) {
-        await logDebug('WEBHOOK_SAVED', 'Webhook message saved successfully');
-      }
-      
-      // Process for AI if this is a message event
-      if (event === 'messages.upsert') {
-        await logDebug('AI_PROCESS_ATTEMPT', 'Attempting to process message for AI response');
-        await processMessageForAI(instanceName, normalizedData);
-      }
-      
-      return new Response(JSON.stringify({ success: true }), {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      });
-    }
-    
-    // If no valid instance name could be extracted, log this and return an error
-    await logDebug('WEBHOOK_PATH_ERROR', 'No valid instance name could be extracted from path or payload', { 
-      fullPath: url.pathname,
-      pathParts,
-      hasPayload: !!data,
-      payloadKeys: data ? Object.keys(data) : []
-    });
-    
-    return new Response(JSON.stringify({ success: false, error: 'Invalid webhook path or missing instance name in payload' }), {
-      status: 400,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
-    });
-  } catch (error) {
-    await logDebug('WEBHOOK_ERROR', 'Error processing webhook', { 
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    
-    console.error('Error processing webhook:', error);
-    
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-  }
-});
-
+          instanceBaseUrl = `${url
