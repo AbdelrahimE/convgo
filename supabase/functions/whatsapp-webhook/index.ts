@@ -1095,6 +1095,105 @@ async function generateAndSendAIResponse(
   }
 }
 
+// NEW FUNCTION: Process connection status updates from webhook
+async function processConnectionStatus(instanceName: string, statusData: any) {
+  try {
+    await logDebug('CONNECTION_STATUS_UPDATE', `Processing connection status update for instance ${instanceName}`, { 
+      state: statusData.state, 
+      statusReason: statusData.statusReason 
+    });
+    
+    // Map the webhook status to database status values
+    let dbStatus: string;
+    switch (statusData.state) {
+      case 'open':
+        dbStatus = 'CONNECTED';
+        break;
+      case 'connecting':
+        dbStatus = 'CONNECTING';
+        break;
+      case 'close':
+        dbStatus = 'DISCONNECTED';
+        break;
+      default:
+        dbStatus = 'UNKNOWN';
+        break;
+    }
+    
+    // Find the instance in the database
+    const { data: instanceData, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('id, status')
+      .eq('instance_name', instanceName)
+      .single();
+      
+    if (instanceError) {
+      await logDebug('CONNECTION_STATUS_ERROR', `Instance not found: ${instanceName}`, { error: instanceError });
+      return false;
+    }
+    
+    // Prepare the update data
+    const updateData: any = {
+      status: dbStatus,
+      updated_at: new Date().toISOString()
+    };
+    
+    // If connecting to CONNECTED state, update the last_connected timestamp
+    if (dbStatus === 'CONNECTED') {
+      updateData.last_connected = new Date().toISOString();
+      
+      // If profile data is available, store it in the instance record
+      if (statusData.profileName || statusData.profilePictureUrl) {
+        // Create or update metadata object
+        const metadata = instanceData.metadata || {};
+        metadata.profile = {
+          name: statusData.profileName || metadata.profile?.name,
+          pictureUrl: statusData.profilePictureUrl || metadata.profile?.pictureUrl,
+          lastUpdated: new Date().toISOString()
+        };
+        updateData.metadata = metadata;
+      }
+    }
+    
+    // Log the status transition
+    await logDebug('CONNECTION_STATUS_TRANSITION', `Instance ${instanceName} status changing from ${instanceData.status} to ${dbStatus}`, {
+      previousStatus: instanceData.status,
+      newStatus: dbStatus,
+      statusReason: statusData.statusReason,
+      instanceId: instanceData.id
+    });
+    
+    // Update the instance record
+    const { error: updateError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .update(updateData)
+      .eq('id', instanceData.id);
+      
+    if (updateError) {
+      await logDebug('CONNECTION_STATUS_UPDATE_ERROR', `Failed to update instance status`, { error: updateError });
+      return false;
+    }
+    
+    await logDebug('CONNECTION_STATUS_UPDATED', `Successfully updated status for instance ${instanceName} to ${dbStatus}`);
+    return true;
+    
+  } catch (error) {
+    await logDebug('CONNECTION_STATUS_EXCEPTION', `Exception processing connection status`, { error, instanceName });
+    console.error('Error in processConnectionStatus:', error);
+    return false;
+  }
+}
+
+// Helper function to detect if a webhook payload is a connection status event
+function isConnectionStatusEvent(data: any): boolean {
+  return (
+    data &&
+    typeof data.state === 'string' &&
+    typeof data.instance === 'string' &&
+    ['open', 'connecting', 'close'].includes(data.state)
+  );
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -1195,8 +1294,34 @@ serve(async (req) => {
       let event = 'unknown';
       let normalizedData = data;
       
-      // Determine the event type based on data structure
-      if (data.event) {
+      // NEW: First check if this is a connection status event
+      if (isConnectionStatusEvent(data)) {
+        event = 'connection.state';
+        normalizedData = data;
+        await logDebug('WEBHOOK_EVENT_CONNECTION_STATE', `Connection state event detected: ${data.state}`);
+        
+        // Save the webhook message to the database first
+        const saved = await saveWebhookMessage(instanceName, event, normalizedData);
+        if (saved) {
+          await logDebug('WEBHOOK_CONNECTION_SAVED', 'Connection state event saved successfully');
+        }
+        
+        // Process the connection status update
+        await processConnectionStatus(instanceName, normalizedData);
+        
+        // Return success response for connection events
+        return new Response(JSON.stringify({ 
+          success: true,
+          message: `Connection state "${data.state}" processed for instance ${instanceName}`
+        }), {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+      // Continuing with existing event detection logic
+      else if (data.event) {
         // This is the standard format
         event = data.event;
         normalizedData = data.data || data;
@@ -1278,4 +1403,3 @@ serve(async (req) => {
     );
   }
 });
-
