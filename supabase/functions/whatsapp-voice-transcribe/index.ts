@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -70,8 +69,8 @@ serve(async (req) => {
         console.log('$$$$$ DEPLOYMENT VERIFICATION: ENTERING DECRYPTION SERVICE PATH - This should be used for WhatsApp voice messages $$$$$');
         console.log('Detected WhatsApp encrypted media with mediaKey, using external decryption service');
         
-        // Use the external decryption service
-        const decryptionUrl = 'https://voice.convgo.com/decrypt-audio';
+        // UPDATED: Use the updated external decryption service endpoint
+        const decryptionUrl = 'https://voice.convgo.com/decrypt-media';
         console.log(`Calling external decryption service at: ${decryptionUrl}`);
         console.log(`Sending URL: ${audioUrl.substring(0, 50)}... and mediaKey to decryption service`);
         
@@ -82,7 +81,8 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             url: audioUrl,
-            mediaKey: mediaKey
+            mediaKey: mediaKey,
+            mimetype: actualMimeType // UPDATED: Added mimetype parameter
           })
         });
         
@@ -95,18 +95,18 @@ serve(async (req) => {
           throw new Error(`External decryption service failed: ${decryptionResponse.status} ${decryptionResponse.statusText}`);
         }
         
-        // Get the decrypted audio URL
+        // Get the decrypted audio URL - UPDATED to use new response format
         const decryptionResult = await decryptionResponse.json();
         
-        if (!decryptionResult.success || !decryptionResult.audioUrl) {
+        if (!decryptionResult.success || !decryptionResult.mediaUrl) {
           console.error(`ERROR: Invalid response from decryption service:`, decryptionResult);
           throw new Error('Invalid response from decryption service');
         }
         
-        console.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully decrypted audio, got URL: ${decryptionResult.audioUrl} $$$$$`);
+        console.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully decrypted audio, got URL: ${decryptionResult.mediaUrl} $$$$$`);
         
         // Now fetch the decrypted audio
-        const audioResponse = await fetch(decryptionResult.audioUrl);
+        const audioResponse = await fetch(decryptionResult.mediaUrl);
         
         console.log(`Decrypted audio fetch status: ${audioResponse.status} ${audioResponse.statusText}`);
         
