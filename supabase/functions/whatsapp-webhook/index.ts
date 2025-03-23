@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -1098,14 +1099,18 @@ async function generateAndSendAIResponse(
 // NEW FUNCTION: Process connection status updates from webhook
 async function processConnectionStatus(instanceName: string, statusData: any) {
   try {
+    // Extract the actual status data from the nested structure if needed
+    // The statusData could either be directly the state object or nested in a data property
+    const stateData = statusData.data || statusData;
+    
     await logDebug('CONNECTION_STATUS_UPDATE', `Processing connection status update for instance ${instanceName}`, { 
-      state: statusData.state, 
-      statusReason: statusData.statusReason 
+      state: stateData.state, 
+      statusReason: stateData.statusReason 
     });
     
     // Map the webhook status to database status values
     let dbStatus: string;
-    switch (statusData.state) {
+    switch (stateData.state) {
       case 'open':
         dbStatus = 'CONNECTED';
         break;
@@ -1143,12 +1148,12 @@ async function processConnectionStatus(instanceName: string, statusData: any) {
       updateData.last_connected = new Date().toISOString();
       
       // If profile data is available, store it in the instance record
-      if (statusData.profileName || statusData.profilePictureUrl) {
+      if (stateData.profileName || stateData.profilePictureUrl) {
         // Create or update metadata object
         const metadata = instanceData.metadata || {};
         metadata.profile = {
-          name: statusData.profileName || metadata.profile?.name,
-          pictureUrl: statusData.profilePictureUrl || metadata.profile?.pictureUrl,
+          name: stateData.profileName || metadata.profile?.name,
+          pictureUrl: stateData.profilePictureUrl || metadata.profile?.pictureUrl,
           lastUpdated: new Date().toISOString()
         };
         updateData.metadata = metadata;
@@ -1159,7 +1164,7 @@ async function processConnectionStatus(instanceName: string, statusData: any) {
     await logDebug('CONNECTION_STATUS_TRANSITION', `Instance ${instanceName} status changing from ${instanceData.status} to ${dbStatus}`, {
       previousStatus: instanceData.status,
       newStatus: dbStatus,
-      statusReason: statusData.statusReason,
+      statusReason: stateData.statusReason,
       instanceId: instanceData.id
     });
     
@@ -1186,11 +1191,18 @@ async function processConnectionStatus(instanceName: string, statusData: any) {
 
 // Helper function to detect if a webhook payload is a connection status event
 function isConnectionStatusEvent(data: any): boolean {
+  // Check if this is a standard connection event
+  if (data && data.event === 'connection.update') {
+    return true;
+  }
+  
+  // Or directly check for state property in data or nested data
+  const stateData = data?.data || data;
   return (
     data &&
-    typeof data.state === 'string' &&
-    typeof data.instance === 'string' &&
-    ['open', 'connecting', 'close'].includes(data.state)
+    typeof stateData?.state === 'string' &&
+    typeof stateData?.instance === 'string' &&
+    ['open', 'connecting', 'close'].includes(stateData.state)
   );
 }
 
@@ -1282,6 +1294,10 @@ serve(async (req) => {
       } else if (data.instanceId) {
         instanceName = data.instanceId;
         await logDebug('WEBHOOK_INSTANCE_FROM_PAYLOAD', `Extracted instanceId from payload: ${instanceName}`);
+      } else if (data.data && data.data.instance) {
+        // Handle nested instance name in data object
+        instanceName = data.data.instance;
+        await logDebug('WEBHOOK_INSTANCE_FROM_PAYLOAD', `Extracted instance from nested data: ${instanceName}`);
       }
     }
     
@@ -1296,9 +1312,9 @@ serve(async (req) => {
       
       // NEW: First check if this is a connection status event
       if (isConnectionStatusEvent(data)) {
-        event = 'connection.state';
+        event = 'connection.update';
         normalizedData = data;
-        await logDebug('WEBHOOK_EVENT_CONNECTION_STATE', `Connection state event detected: ${data.state}`);
+        await logDebug('WEBHOOK_EVENT_CONNECTION_STATE', `Connection state event detected: ${data.data?.state || data.state}`);
         
         // Save the webhook message to the database first
         const saved = await saveWebhookMessage(instanceName, event, normalizedData);
@@ -1312,7 +1328,7 @@ serve(async (req) => {
         // Return success response for connection events
         return new Response(JSON.stringify({ 
           success: true,
-          message: `Connection state "${data.state}" processed for instance ${instanceName}`
+          message: `Connection state processed for instance ${instanceName}`
         }), {
           headers: {
             ...corsHeaders,
