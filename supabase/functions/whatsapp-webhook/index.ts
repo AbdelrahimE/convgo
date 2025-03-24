@@ -856,7 +856,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       
       // Continue with empty context instead of failing
       await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
-      return await generateAndSendAIResponse(messageText, '', instanceName, fromNumber, instanceBaseUrl, aiConfig, messageData, conversationId);
+      return await generateAndSendAIResponse(messageText, context, instanceName, fromNumber, instanceBaseUrl, aiConfig, messageData, conversationId, imageUrl);
     }
 
     const searchResults = await searchResponse.json();
@@ -953,7 +953,8 @@ async function generateAndSendAIResponse(
         systemPrompt: systemPrompt,
         temperature: aiConfig.temperature || 0.7,
         model: 'gpt-4o-mini',
-        maxContextTokens: 3000 // Explicit token limit
+        maxContextTokens: 3000, // Explicit token limit
+        imageUrl: imageUrl
       })
     });
 
