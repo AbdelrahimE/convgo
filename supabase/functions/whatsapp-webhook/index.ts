@@ -443,7 +443,7 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
       return {
         success: false,
         error: downloadResult.error,
-        transcription: "This is a voice message that could not be processed. Voice transcription error: " + downloadResult.error
+        transcription: "This is a voice message that could not be transcribed. Voice transcription error: " + downloadResult.error
       };
     }
     
@@ -574,6 +574,16 @@ async function processMessageForAI(instance: string, messageData: any) {
             const result = await imageProcessResponse.json();
             if (result.success && result.mediaUrl) {
               imageUrl = result.mediaUrl; // Set the processed URL
+              
+              // FIX: If this is an image-only message (no caption/text), set a default message text
+              // This ensures image-only messages will be processed
+              if (!messageText && imageUrl) {
+                messageText = "Please analyze this image.";
+                await logDebug('IMAGE_ONLY_MESSAGE', 'Added default text for image-only message', {
+                  defaultText: messageText
+                });
+              }
+              
               await logDebug('IMAGE_PROCESSED', 'Successfully processed image for AI analysis', {
                 originalUrlFragment: rawImageUrl.substring(0, 30) + '...',
                 processedUrlFragment: result.mediaUrl.substring(0, 30) + '...',
@@ -761,8 +771,8 @@ async function processMessageForAI(instance: string, messageData: any) {
     }
 
     // If no message content (text or processed audio), skip
-    if (!messageText) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text content', { messageData });
+    if (!messageText && !imageUrl) {
+      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text or image content', { messageData });
       return false;
     }
 
@@ -1498,3 +1508,4 @@ serve(async (req) => {
     );
   }
 });
+
