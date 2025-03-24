@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -12,7 +13,7 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// Helper function to find or create a conversation with improved timeout management and handling of unique constraint
+// Updated helper function to find or create a conversation with improved timeout management and handling of unique constraint
 async function findOrCreateConversation(instanceId: string, userPhone: string) {
   try {
     // First try to find existing conversation
@@ -249,60 +250,86 @@ async function storeMessageInConversation(conversationId: string, role: 'user' |
   }
 }
 
-// Helper function to extract text from different message types
-function extractMessageText(messageData: any): string | null {
-  if (!messageData || !messageData.message) return null;
+// Default API URL - Set to the correct Evolution API URL
+const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
+
+// Debug logging function that logs to both console and database
+async function logDebug(category: string, message: string, data?: any) {
+  console.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
   
-  const message = messageData.message;
-  
-  // Check for direct conversation text
-  if (message.conversation) {
-    return message.conversation;
+  try {
+    await supabaseAdmin.from('webhook_debug_logs').insert({
+      category,
+      message,
+      data: data || null
+    });
+  } catch (error) {
+    console.error('Failed to log debug info to database:', error);
   }
-  
-  // Check for extended text message
-  if (message.extendedTextMessage?.text) {
-    return message.extendedTextMessage.text;
-  }
-  
-  // Check for image message with caption
-  if (message.imageMessage?.caption) {
-    return message.imageMessage.caption;
-  }
-  
-  // Check for other message types with captions
-  if (message.videoMessage?.caption) {
-    return message.videoMessage.caption;
-  }
-  
-  return null;
 }
 
-// Helper function to check if message contains an image
-function hasImageContent(messageData: any): boolean {
-  return messageData?.message?.imageMessage !== undefined;
+// Helper function to save webhook message
+async function saveWebhookMessage(instance: string, event: string, data: any) {
+  try {
+    await logDebug('WEBHOOK_SAVE', `Saving webhook message for instance ${instance}, event ${event}`);
+    
+    const { error } = await supabaseAdmin.from('webhook_messages').insert({
+      instance,
+      event,
+      data
+    });
+    
+    if (error) {
+      await logDebug('WEBHOOK_SAVE_ERROR', 'Error saving webhook message', { error, instance, event });
+      console.error('Error saving webhook message:', error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    await logDebug('WEBHOOK_SAVE_EXCEPTION', 'Exception when saving webhook message', { error, instance, event });
+    console.error('Exception when saving webhook message:', error);
+    return false;
+  }
 }
 
-// Helper function to extract image details
-function extractImageDetails(messageData: any): { 
-  url: string | null; 
-  caption: string | null;
-  mimeType: string | null;
-} {
-  const imageMessage = messageData?.message?.imageMessage;
-  if (imageMessage) {
+// Helper function to download audio file from WhatsApp
+async function downloadAudioFile(url: string, instance: string, evolutionApiKey: string): Promise<{ success: boolean; audioUrl?: string; error?: string }> {
+  try {
+    await logDebug('AUDIO_DOWNLOAD_START', `Starting audio download request for URL: ${url}`);
+    
+    // We cannot directly download the encrypted WhatsApp audio file
+    // Instead, we need to retrieve the decrypted media file through the EVOLUTION API
+    
+    if (!evolutionApiKey) {
+      await logDebug('AUDIO_DOWNLOAD_ERROR', 'EVOLUTION_API_KEY not available');
+      return { 
+        success: false, 
+        error: 'EVOLUTION API key not available for media download' 
+      };
+    }
+    
+    // Prepare Evolution API URL to download media
+    // Using the format explained in the Evolution API docs
+    const mediaUrl = url.split('?')[0]; // Remove query parameters
+    const mediaId = mediaUrl.split('/').pop(); // Extract media ID
+    
+    if (!mediaId) {
+      return { success: false, error: 'Could not extract media ID from URL' };
+    }
+    
+    await logDebug('AUDIO_DOWNLOAD_MEDIA_ID', `Extracted media ID: ${mediaId}`);
+    
+    // We're returning the URL that will be used with the proper headers in the transcription function
+    // This is more reliable than downloading here and passing the bytes
     return {
-      url: imageMessage.url || null,
-      caption: imageMessage.caption || null,
-      mimeType: imageMessage.mimetype || 'image/jpeg'
+      success: true,
+      audioUrl: url
     };
+  } catch (error) {
+    await logDebug('AUDIO_DOWNLOAD_ERROR', 'Error processing audio file URL', { error });
+    return { success: false, error: error.message };
   }
-  
-  return {
-    url: null,
-    caption: null,
-    mimeType: null
-  };
 }
 
 // Helper function to determine if a message contains audio
@@ -489,23 +516,18 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Extract key information from the message
     const instanceName = instance;
     const fromNumber = messageData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
+    let messageText = messageData.message?.conversation || 
+                    messageData.message?.extendedTextMessage?.text ||
+                    null;
     const remoteJid = messageData.key?.remoteJid || '';
     const isFromMe = messageData.key?.fromMe || false;
-    
-    // Extract message text using the new helper function
-    let messageText = extractMessageText(messageData);
-    
-    // Track if this is an image message for later processing
-    const isImageMessage = hasImageContent(messageData);
-    let imageUrl = null;
     
     await logDebug('AI_MESSAGE_DETAILS', 'Extracted message details', { 
       instanceName, 
       fromNumber, 
       messageText, 
       remoteJid, 
-      isFromMe,
-      isImageMessage
+      isFromMe 
     });
 
     // Skip processing if:
@@ -526,27 +548,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       await logDebug('AI_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable not set and no apikey in payload');
     }
 
-    // Process image if present
-    if (isImageMessage) {
-      const imageDetails = extractImageDetails(messageData);
-      await logDebug('IMAGE_DETAILS', 'Extracted image details', { 
-        hasUrl: !!imageDetails.url,
-        hasCaption: !!imageDetails.caption,
-        mimeType: imageDetails.mimeType
-      });
-      
-      // If we extracted the image URL, save it for later use
-      if (imageDetails.url) {
-        imageUrl = imageDetails.url;
-        // If no caption text was extracted, set a default prompt for image analysis
-        if (!messageText) {
-          messageText = "Please analyze this image and tell me what you see.";
-          await logDebug('IMAGE_DEFAULT_PROMPT', 'Using default prompt for captionless image');
-        }
-      }
-    }
-
-    // Check if this is an audio message - keep existing audio processing logic
+    // Check if this is an audio message
     const isAudioMessage = hasAudioContent(messageData);
     
     // Variable to track if we should bypass AI and send direct response
@@ -684,9 +686,9 @@ async function processMessageForAI(instance: string, messageData: any) {
       }
     }
 
-    // If no message content (text, processed audio, or image), skip
-    if (!messageText && !imageUrl) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text content or image', { messageData });
+    // If no message content (text or processed audio), skip
+    if (!messageText) {
+      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text content', { messageData });
       return false;
     }
 
@@ -908,8 +910,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       instanceBaseUrl,
       aiConfig,
       messageData,
-      conversationId,
-      imageUrl
+      conversationId
     );
   } catch (error) {
     await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
@@ -927,8 +928,7 @@ async function generateAndSendAIResponse(
   instanceBaseUrl: string,
   aiConfig: any,
   messageData: any,
-  conversationId: string,
-  imageUrl?: string
+  conversationId: string
 ) {
   try {
     // Generate system prompt
@@ -940,14 +940,6 @@ async function generateAndSendAIResponse(
 
     // Generate AI response with improved token management
     await logDebug('AI_RESPONSE_GENERATION', 'Generating AI response with token management');
-    
-    // Log if we're sending an image for multimodal processing
-    if (imageUrl) {
-      await logDebug('AI_IMAGE_PROCESSING', 'Including image in AI request', {
-        hasImageUrl: !!imageUrl
-      });
-    }
-    
     const responseGenResponse = await fetch(`${supabaseUrl}/functions/v1/generate-response`, {
       method: 'POST',
       headers: {
@@ -960,8 +952,7 @@ async function generateAndSendAIResponse(
         systemPrompt: systemPrompt,
         temperature: aiConfig.temperature || 0.7,
         model: 'gpt-4o-mini',
-        maxContextTokens: 3000, // Explicit token limit
-        imageUrl: imageUrl
+        maxContextTokens: 3000 // Explicit token limit
       })
     });
 
