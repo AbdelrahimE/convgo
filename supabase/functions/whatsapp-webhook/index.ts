@@ -518,6 +518,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     const fromNumber = messageData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
     let messageText = messageData.message?.conversation || 
                     messageData.message?.extendedTextMessage?.text ||
+                    messageData.message?.imageMessage?.caption ||
                     null;
     const remoteJid = messageData.key?.remoteJid || '';
     const isFromMe = messageData.key?.fromMe || false;
