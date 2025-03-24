@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -382,137 +383,6 @@ function extractAudioDetails(messageData: any): {
   };
 }
 
-// NEW HELPER FUNCTION: Check if message contains an image
-function hasImageContent(messageData: any): boolean {
-  return (
-    messageData?.message?.imageMessage || 
-    (messageData?.messageType === 'imageMessage')
-  );
-}
-
-// NEW HELPER FUNCTION: Extract image details from the message
-function extractImageDetails(messageData: any): { 
-  url: string | null; 
-  mediaKey: string | null;
-  caption: string | null;
-  mimeType: string | null;
-} {
-  // Check for imageMessage object
-  const imageMessage = messageData?.message?.imageMessage;
-  if (imageMessage) {
-    return {
-      url: imageMessage.url || null,
-      mediaKey: imageMessage.mediaKey || null,
-      caption: imageMessage.caption || null,
-      mimeType: imageMessage.mimetype || 'image/jpeg'
-    };
-  }
-  
-  // No image content found
-  return {
-    url: null,
-    mediaKey: null,
-    caption: null,
-    mimeType: null
-  };
-}
-
-// NEW HELPER FUNCTION: Process image for AI
-async function processImageMessage(imageDetails: any, instanceName: string, evolutionApiKey: string): Promise<{ success: boolean; imageUrl?: string; error?: string; }> {
-  try {
-    await logDebug('IMAGE_PROCESSING_START', 'Starting image processing', { instanceName });
-    
-    if (!imageDetails.url) {
-      return { 
-        success: false, 
-        error: 'No image URL available in message'
-      };
-    }
-    
-    if (!imageDetails.mediaKey) {
-      await logDebug('IMAGE_PROCESSING_NO_MEDIA_KEY', 'No media key available for encrypted WhatsApp image', { 
-        imageUrl: imageDetails.url 
-      });
-      
-      // Some URLs may still work without decryption (e.g., from the Evolution API)
-      if (!imageDetails.url.includes('mmg.whatsapp.net')) {
-        return {
-          success: true,
-          imageUrl: imageDetails.url
-        };
-      }
-      
-      return {
-        success: false,
-        error: 'WhatsApp encrypted images require a mediaKey'
-      };
-    }
-    
-    // For WhatsApp encrypted images, we need to process them
-    await logDebug('IMAGE_PROCESSING_DECRYPTION', 'Processing encrypted WhatsApp image', { 
-      mediaKey: imageDetails.mediaKey ? imageDetails.mediaKey.substring(0, 10) + '...' : 'None',
-      mimeType: imageDetails.mimeType
-    });
-    
-    // Call the image processing function
-    const processingResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-image-process`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify({
-        imageUrl: imageDetails.url,
-        mimeType: imageDetails.mimeType,
-        instanceName: instanceName,
-        evolutionApiKey: evolutionApiKey,
-        mediaKey: imageDetails.mediaKey
-      })
-    });
-    
-    if (!processingResponse.ok) {
-      const errorText = await processingResponse.text();
-      await logDebug('IMAGE_PROCESSING_API_ERROR', 'Error from image processing API', { 
-        status: processingResponse.status, 
-        error: errorText.substring(0, 200) 
-      });
-      
-      return {
-        success: false,
-        error: `Image processing API error: ${processingResponse.status}`
-      };
-    }
-    
-    const processingResult = await processingResponse.json();
-    
-    if (!processingResult.success) {
-      await logDebug('IMAGE_PROCESSING_FAILED', 'Image processing failed', { 
-        error: processingResult.error 
-      });
-      
-      return {
-        success: false,
-        error: processingResult.error
-      };
-    }
-    
-    await logDebug('IMAGE_PROCESSING_SUCCESS', 'Successfully processed image', { 
-      mediaUrl: processingResult.mediaUrl?.substring(0, 50) + '...'
-    });
-    
-    return {
-      success: true,
-      imageUrl: processingResult.mediaUrl
-    };
-  } catch (error) {
-    await logDebug('IMAGE_PROCESSING_ERROR', 'Error processing image', { error });
-    return { 
-      success: false, 
-      error: error.message 
-    };
-  }
-}
-
 // Helper function to handle audio transcription
 async function processAudioMessage(audioDetails: any, instanceName: string, fromNumber: string, evolutionApiKey: string): Promise<{ success: boolean; transcription?: string; error?: string; bypassAiProcessing?: boolean; directResponse?: string }> {
   try {
@@ -652,16 +522,12 @@ async function processMessageForAI(instance: string, messageData: any) {
     const remoteJid = messageData.key?.remoteJid || '';
     const isFromMe = messageData.key?.fromMe || false;
     
-    // Variable to store image URL if this is an image message
-    let imageUrl = null;
-    
     await logDebug('AI_MESSAGE_DETAILS', 'Extracted message details', { 
       instanceName, 
       fromNumber, 
       messageText, 
       remoteJid, 
-      isFromMe,
-      hasImage: hasImageContent(messageData)
+      isFromMe 
     });
 
     // Skip processing if:
@@ -685,14 +551,10 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Check if this is an audio message
     const isAudioMessage = hasAudioContent(messageData);
     
-    // Check if this is an image message
-    const isImageMessage = hasImageContent(messageData);
-    
     // Variable to track if we should bypass AI and send direct response
     let bypassAiProcessing = false;
     let directResponse = null;
     
-    // Handle audio messages
     if (isAudioMessage) {
       await logDebug('AUDIO_MESSAGE_DETECTED', 'Audio message detected', { 
         messageType: messageData.messageType,
@@ -823,51 +685,10 @@ async function processMessageForAI(instance: string, messageData: any) {
         });
       }
     }
-    // Handle image messages with caption
-    else if (isImageMessage) {
-      // Extract image details
-      const imageDetails = extractImageDetails(messageData);
-      
-      await logDebug('IMAGE_MESSAGE_DETECTED', 'Image message detected', {
-        hasCaption: !!imageDetails.caption,
-        caption: imageDetails.caption,
-        hasMediaKey: !!imageDetails.mediaKey
-      });
-      
-      // Use the caption as the message text if available
-      if (imageDetails.caption) {
-        messageText = imageDetails.caption;
-        
-        await logDebug('IMAGE_CAPTION_USED', 'Using image caption as message text', {
-          caption: messageText
-        });
-        
-        // Process the image to get a URL that can be used with the OpenAI API
-        const imageProcessingResult = await processImageMessage(imageDetails, instanceName, evolutionApiKey);
-        
-        if (imageProcessingResult.success && imageProcessingResult.imageUrl) {
-          imageUrl = imageProcessingResult.imageUrl;
-          
-          await logDebug('IMAGE_URL_PROCESSED', 'Successfully processed image URL for AI', {
-            imageUrl: imageUrl?.substring(0, 50) + '...'
-          });
-        } else {
-          await logDebug('IMAGE_PROCESSING_FAILED', 'Failed to process image, continuing with text only', {
-            error: imageProcessingResult.error
-          });
-        }
-      } else {
-        await logDebug('IMAGE_NO_CAPTION', 'Image message without caption, treating as empty text');
-        messageText = "Please describe this image";
-      }
-    }
 
-    // If no message content (text or processed audio/image), skip
-    if (!messageText && !imageUrl) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text content or image', { 
-        hasText: !!messageText,
-        hasImage: !!imageUrl
-      });
+    // If no message content (text or processed audio), skip
+    if (!messageText) {
+      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text content', { messageData });
       return false;
     }
 
@@ -892,7 +713,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     await logDebug('CONVERSATION_MANAGED', 'Conversation found or created', { conversationId });
 
     // Store user message in conversation
-    await storeMessageInConversation(conversationId, 'user', messageText || "Image message without caption", messageData.key?.id);
+    await storeMessageInConversation(conversationId, 'user', messageText, messageData.key?.id);
     
     // Get recent conversation history with improved token management
     const conversationHistory = await getRecentConversationHistory(conversationId, 800);
@@ -1017,7 +838,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         'Authorization': `Bearer ${supabaseServiceKey}`
       },
       body: JSON.stringify({
-        query: messageText || "Image analysis query",
+        query: messageText,
         fileIds: fileIds.length > 0 ? fileIds : undefined,
         limit: 5,
         threshold: 0.3
@@ -1034,7 +855,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       
       // Continue with empty context instead of failing
       await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
-      return await generateAndSendAIResponse(messageText, '', instanceName, fromNumber, instanceBaseUrl, aiConfig, messageData, conversationId, imageUrl);
+      return await generateAndSendAIResponse(messageText, '', instanceName, fromNumber, instanceBaseUrl, aiConfig, messageData, conversationId);
     }
 
     const searchResults = await searchResponse.json();
@@ -1080,17 +901,16 @@ async function processMessageForAI(instance: string, messageData: any) {
       });
     }
 
-    // Generate and send the response with improved context and token management and image support
+    // Generate and send the response with improved context and token management
     return await generateAndSendAIResponse(
-      messageText || "Please describe this image",
+      messageText,
       context,
       instanceName,
       fromNumber,
       instanceBaseUrl,
       aiConfig,
       messageData,
-      conversationId,
-      imageUrl // Pass the image URL if we have one
+      conversationId
     );
   } catch (error) {
     await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
@@ -1099,7 +919,7 @@ async function processMessageForAI(instance: string, messageData: any) {
   }
 }
 
-// Updated helper function to generate and send AI response
+// Helper function to generate and send AI response
 async function generateAndSendAIResponse(
   query: string,
   context: string,
@@ -1108,8 +928,7 @@ async function generateAndSendAIResponse(
   instanceBaseUrl: string,
   aiConfig: any,
   messageData: any,
-  conversationId: string,
-  imageUrl?: string | null
+  conversationId: string
 ) {
   try {
     // Generate system prompt
@@ -1120,10 +939,7 @@ async function generateAndSendAIResponse(
     const systemPrompt = aiConfig.system_prompt;
 
     // Generate AI response with improved token management
-    await logDebug('AI_RESPONSE_GENERATION', 'Generating AI response with token management', {
-      hasImageUrl: !!imageUrl
-    });
-    
+    await logDebug('AI_RESPONSE_GENERATION', 'Generating AI response with token management');
     const responseGenResponse = await fetch(`${supabaseUrl}/functions/v1/generate-response`, {
       method: 'POST',
       headers: {
@@ -1136,8 +952,7 @@ async function generateAndSendAIResponse(
         systemPrompt: systemPrompt,
         temperature: aiConfig.temperature || 0.7,
         model: 'gpt-4o-mini',
-        maxContextTokens: 3000, // Explicit token limit
-        imageUrl: imageUrl // Include the image URL if available
+        maxContextTokens: 3000 // Explicit token limit
       })
     });
 
@@ -1154,8 +969,7 @@ async function generateAndSendAIResponse(
     const responseData = await responseGenResponse.json();
     await logDebug('AI_RESPONSE_GENERATED', 'AI response generated successfully', {
       responsePreview: responseData.answer?.substring(0, 100) + '...',
-      tokens: responseData.usage,
-      imageProcessed: !!imageUrl
+      tokens: responseData.usage
     });
 
     // Log token usage if available
@@ -1184,11 +998,7 @@ async function generateAndSendAIResponse(
           total_tokens: responseData.usage?.total_tokens || 0,
           context_token_count: Math.ceil((context?.length || 0) / 4),
           search_result_count: context ? 1 : 0,
-          response_model: responseData.model || 'gpt-4o-mini',
-          metadata: imageUrl ? { 
-            processed_with_image: true, 
-            image_url: imageUrl.substring(0, 100) + '...' 
-          } : null
+          response_model: responseData.model || 'gpt-4o-mini'
         });
 
       if (interactionError) {
