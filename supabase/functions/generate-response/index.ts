@@ -12,6 +12,7 @@ interface GenerateResponseRequest {
   includeConversationHistory?: boolean;
   conversationId?: string;
   maxContextTokens?: number;
+  imageUrl?: string; // New field for multimodal support
 }
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
@@ -32,6 +33,13 @@ The user's message doesn't appear to match any specific content in our knowledge
 If this is a greeting or general question, please respond appropriately.
 For greetings, acknowledge the greeting and ask how you can help.
 For general questions, provide a helpful response if you can, or politely explain that you need more specific information.`;
+
+// System prompt addition for image context
+const IMAGE_CONTEXT_ADDITION = `
+The user has sent an image. Please analyze the image and respond appropriately.
+If there is text in the image, please mention that you can see it.
+If there is a question about the image, respond based on what you can see in it.
+Be descriptive but concise in your analysis of the image content.`;
 
 // Initialize Supabase client (only when conversation features are used)
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -273,14 +281,15 @@ serve(async (req) => {
       systemPrompt,
       includeConversationHistory = false,
       conversationId,
-      maxContextTokens = MAX_CONTEXT_TOKENS
+      maxContextTokens = MAX_CONTEXT_TOKENS,
+      imageUrl  // New parameter for image URL
     } = await req.json() as GenerateResponseRequest;
 
-    if (!query) {
+    if (!query && !imageUrl) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Query is required' 
+          error: 'Either query or image is required' 
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -291,6 +300,7 @@ serve(async (req) => {
 
     console.log(`Generating response for query: "${query}" with model: ${model}, temperature: ${temperature}`);
     console.log(`Context available: ${context ? 'Yes' : 'No'}`);
+    console.log(`Image URL provided: ${imageUrl ? 'Yes' : 'No'}`);
     if (conversationId) {
       console.log(`Using conversation ID: ${conversationId}`);
     }
@@ -306,8 +316,12 @@ serve(async (req) => {
 - Use *text* for emphasis instead of **text**`;
     }
     
-    // If context is empty, add special instructions to handle greetings and general questions
-    if (!context || context.trim() === '') {
+    // Add image-specific instructions if an image is provided
+    if (imageUrl) {
+      finalSystemPrompt += IMAGE_CONTEXT_ADDITION;
+    }
+    // If context is empty and no image, add special instructions to handle greetings and general questions
+    else if (!context || context.trim() === '') {
       finalSystemPrompt += EMPTY_CONTEXT_ADDITION;
     }
 
@@ -329,10 +343,31 @@ serve(async (req) => {
 
     // Prepare the user message with the balanced context
     const userMessage = finalContext ? 
-      `Context:\n${finalContext}\n\nQuestion: ${query}` : 
-      `Question: ${query}`;
+      `Context:\n${finalContext}\n\nQuestion: ${query || "Please describe this image"}` : 
+      `Question: ${query || "Please describe this image"}`;
+
+    // Prepare the messages array for OpenAI API
+    const messages = [
+      { role: 'system', content: finalSystemPrompt },
+    ];
+
+    // Add image content if provided
+    if (imageUrl) {
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: userMessage },
+          { type: 'image_url', image_url: { url: imageUrl } }
+        ]
+      });
+      console.log(`Added image to message content: ${imageUrl.substring(0, 50)}...`);
+    } else {
+      // Regular text-only message
+      messages.push({ role: 'user', content: userMessage });
+    }
 
     // Call OpenAI API to generate response
+    console.log(`Calling OpenAI API with ${messages.length} messages, model: ${model}`);
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -341,16 +376,14 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: 'system', content: finalSystemPrompt },
-          { role: 'user', content: userMessage }
-        ],
+        messages,
         temperature,
       }),
     });
 
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.json();
+      console.error(`OpenAI API error (${openaiResponse.status}):`, errorData);
       throw new Error(`OpenAI API error: ${errorData.error?.message || JSON.stringify(errorData)}`);
     }
 
