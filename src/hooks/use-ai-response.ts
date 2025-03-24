@@ -8,6 +8,7 @@ interface GenerateResponseOptions {
   systemPrompt?: string;
   includeConversationHistory?: boolean;
   conversationId?: string;
+  imageUrl?: string;
 }
 
 interface AIResponseResult {
@@ -57,6 +58,21 @@ interface TranscriptionResult {
   error?: string;
 }
 
+interface ProcessImageOptions {
+  imageUrl: string;
+  mimeType?: string;
+  instanceName?: string;
+  evolutionApiKey?: string;
+  mediaKey?: string;
+}
+
+interface ProcessImageResult {
+  success: boolean;
+  mediaUrl?: string;
+  mediaType?: string;
+  error?: string;
+}
+
 export function useAIResponse() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [responseResult, setResponseResult] = useState<AIResponseResult | null>(null);
@@ -64,6 +80,7 @@ export function useAIResponse() {
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [isCleaningConversations, setIsCleaningConversations] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   const generateResponse = async (
     query: string,
@@ -262,15 +279,73 @@ export function useAIResponse() {
     }
   };
 
+  const processImage = async (options: ProcessImageOptions): Promise<ProcessImageResult> => {
+    try {
+      setIsProcessingImage(true);
+      setError(null);
+      
+      const { imageUrl, mimeType, instanceName, evolutionApiKey, mediaKey } = options;
+      
+      if (!imageUrl) {
+        throw new Error('Image URL is required for processing');
+      }
+      
+      console.log(`Requesting image processing for URL: ${imageUrl.substring(0, 30)}...`);
+      
+      const { data, error } = await supabase.functions.invoke('whatsapp-image-process', {
+        body: {
+          imageUrl,
+          mimeType: mimeType || 'image/jpeg',
+          instanceName: instanceName || 'unknown',
+          evolutionApiKey,
+          mediaKey
+        },
+      });
+      
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(`Error processing image: ${error.message}`);
+      }
+      
+      if (!data || !data.success) {
+        const errorMessage = data?.error || 'Failed to process image';
+        console.error('Image processing failed:', errorMessage);
+        throw new Error(errorMessage);
+      }
+      
+      toast.success('Image processed successfully');
+      console.log('Image processing result:', data);
+      
+      return {
+        success: true,
+        mediaUrl: data.mediaUrl,
+        mediaType: data.mediaType
+      };
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('Error processing image:', errMessage);
+      setError(errMessage);
+      
+      return {
+        success: false,
+        error: errMessage
+      };
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
   return {
     generateResponse,
     sendWhatsAppMessage,
     cleanupTestConversations,
     transcribeAudio,
+    processImage,
     isGenerating,
     isSendingWhatsApp,
     isCleaningConversations,
     isTranscribing,
+    isProcessingImage,
     responseResult,
     error,
   };
