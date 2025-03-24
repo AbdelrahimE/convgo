@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -250,49 +249,6 @@ async function storeMessageInConversation(conversationId: string, role: 'user' |
   }
 }
 
-// Default API URL - Set to the correct Evolution API URL
-const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
-
-// Debug logging function that logs to both console and database
-async function logDebug(category: string, message: string, data?: any) {
-  console.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
-  
-  try {
-    await supabaseAdmin.from('webhook_debug_logs').insert({
-      category,
-      message,
-      data: data || null
-    });
-  } catch (error) {
-    console.error('Failed to log debug info to database:', error);
-  }
-}
-
-// Helper function to save webhook message
-async function saveWebhookMessage(instance: string, event: string, data: any) {
-  try {
-    await logDebug('WEBHOOK_SAVE', `Saving webhook message for instance ${instance}, event ${event}`);
-    
-    const { error } = await supabaseAdmin.from('webhook_messages').insert({
-      instance,
-      event,
-      data
-    });
-    
-    if (error) {
-      await logDebug('WEBHOOK_SAVE_ERROR', 'Error saving webhook message', { error, instance, event });
-      console.error('Error saving webhook message:', error);
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    await logDebug('WEBHOOK_SAVE_EXCEPTION', 'Exception when saving webhook message', { error, instance, event });
-    console.error('Exception when saving webhook message:', error);
-    return false;
-  }
-}
-
 // Helper function to download audio file from WhatsApp
 async function downloadAudioFile(url: string, instance: string, evolutionApiKey: string): Promise<{ success: boolean; audioUrl?: string; error?: string }> {
   try {
@@ -518,6 +474,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     const fromNumber = messageData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
     let messageText = messageData.message?.conversation || 
                     messageData.message?.extendedTextMessage?.text ||
+                    messageData.message?.imageMessage?.caption || // Added support for image captions
                     null;
     const remoteJid = messageData.key?.remoteJid || '';
     const isFromMe = messageData.key?.fromMe || false;
@@ -527,7 +484,8 @@ async function processMessageForAI(instance: string, messageData: any) {
       fromNumber, 
       messageText, 
       remoteJid, 
-      isFromMe 
+      isFromMe,
+      hasImageCaption: !!messageData.message?.imageMessage?.caption // Log if we found an image caption
     });
 
     // Skip processing if:
