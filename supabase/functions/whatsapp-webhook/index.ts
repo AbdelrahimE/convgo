@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -13,7 +12,7 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// Updated helper function to find or create a conversation with improved timeout management and handling of unique constraint
+// Helper function to find or create a conversation with improved timeout management and handling of unique constraint
 async function findOrCreateConversation(instanceId: string, userPhone: string) {
   try {
     // First try to find existing conversation
@@ -341,49 +340,42 @@ function hasAudioContent(messageData: any): boolean {
   );
 }
 
-// Helper function to extract audio details from the message
-function extractAudioDetails(messageData: any): { 
+// NEW HELPER: Function to determine if a message contains an image
+function hasImageContent(messageData: any): boolean {
+  return (
+    messageData?.message?.imageMessage || 
+    (messageData?.messageType === 'imageMessage')
+  );
+}
+
+// NEW HELPER: Function to extract image details from the message
+function extractImageDetails(messageData: any): { 
   url: string | null; 
   mediaKey: string | null;
-  duration: number | null;
+  caption: string | null;
   mimeType: string | null;
-  ptt: boolean;
 } {
-  // Check for audioMessage object
-  const audioMessage = messageData?.message?.audioMessage;
-  if (audioMessage) {
+  // Check for imageMessage object
+  const imageMessage = messageData?.message?.imageMessage;
+  if (imageMessage) {
     return {
-      url: audioMessage.url || null,
-      mediaKey: audioMessage.mediaKey || null,
-      duration: audioMessage.seconds || null,
-      mimeType: audioMessage.mimetype || 'audio/ogg; codecs=opus',
-      ptt: audioMessage.ptt || false
+      url: imageMessage.url || null,
+      mediaKey: imageMessage.mediaKey || null,
+      caption: imageMessage.caption || null,
+      mimeType: imageMessage.mimetype || 'image/jpeg'
     };
   }
   
-  // Check for pttMessage object (Push To Talk - voice messages)
-  const pttMessage = messageData?.message?.pttMessage;
-  if (pttMessage) {
-    return {
-      url: pttMessage.url || null,
-      mediaKey: pttMessage.mediaKey || null,
-      duration: pttMessage.seconds || null,
-      mimeType: pttMessage.mimetype || 'audio/ogg; codecs=opus',
-      ptt: true
-    };
-  }
-  
-  // No audio content found
+  // No image content found
   return {
     url: null,
     mediaKey: null,
-    duration: null,
-    mimeType: null,
-    ptt: false
+    caption: null,
+    mimeType: null
   };
 }
 
-// Helper function to handle audio transcription
+// Helper function to process audio message
 async function processAudioMessage(audioDetails: any, instanceName: string, fromNumber: string, evolutionApiKey: string): Promise<{ success: boolean; transcription?: string; error?: string; bypassAiProcessing?: boolean; directResponse?: string }> {
   try {
     await logDebug('AUDIO_PROCESSING_START', 'Starting audio processing', { instanceName, fromNumber });
@@ -508,6 +500,80 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
   }
 }
 
+// NEW FUNCTION: Helper function to process image messages
+async function processImageMessage(imageDetails: any, instanceName: string, fromNumber: string, evolutionApiKey: string): Promise<{ success: boolean; imageUrl?: string; caption?: string; error?: string }> {
+  try {
+    await logDebug('IMAGE_PROCESSING_START', 'Starting image processing', { instanceName, fromNumber });
+    
+    if (!imageDetails.url) {
+      return { 
+        success: false, 
+        error: 'No image URL available in message'
+      };
+    }
+    
+    // Process the image using the whatsapp-image-process function
+    const imageProcessResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-image-process`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify({
+        imageUrl: imageDetails.url,
+        mimeType: imageDetails.mimeType || 'image/jpeg',
+        instanceName: instanceName,
+        evolutionApiKey: evolutionApiKey,
+        mediaKey: imageDetails.mediaKey
+      })
+    });
+    
+    if (!imageProcessResponse.ok) {
+      const errorText = await imageProcessResponse.text();
+      await logDebug('IMAGE_PROCESSING_API_ERROR', 'Error from image processing API', { 
+        status: imageProcessResponse.status, 
+        error: errorText 
+      });
+      
+      return {
+        success: false,
+        error: `Image processing API error: ${imageProcessResponse.status}`,
+        caption: imageDetails.caption
+      };
+    }
+    
+    const imageResult = await imageProcessResponse.json();
+    
+    if (!imageResult.success) {
+      await logDebug('IMAGE_PROCESSING_FAILED', 'Image processing failed', { error: imageResult.error });
+      
+      return {
+        success: false,
+        error: imageResult.error,
+        caption: imageDetails.caption
+      };
+    }
+    
+    await logDebug('IMAGE_PROCESSING_SUCCESS', 'Successfully processed image', { 
+      mediaUrl: imageResult.mediaUrl ? imageResult.mediaUrl.substring(0, 100) + '...' : 'No URL',
+      caption: imageDetails.caption
+    });
+    
+    return {
+      success: true,
+      imageUrl: imageResult.mediaUrl,
+      caption: imageDetails.caption
+    };
+  } catch (error) {
+    await logDebug('IMAGE_PROCESSING_ERROR', 'Error processing image', { error });
+    return { 
+      success: false, 
+      error: error.message,
+      caption: imageDetails.caption
+    };
+  }
+}
+
 // Helper function to process message for AI
 async function processMessageForAI(instance: string, messageData: any) {
   try {
@@ -527,7 +593,8 @@ async function processMessageForAI(instance: string, messageData: any) {
       fromNumber, 
       messageText, 
       remoteJid, 
-      isFromMe 
+      isFromMe,
+      hasImageAttachment: hasImageContent(messageData)
     });
 
     // Skip processing if:
@@ -550,6 +617,9 @@ async function processMessageForAI(instance: string, messageData: any) {
 
     // Check if this is an audio message
     const isAudioMessage = hasAudioContent(messageData);
+    
+    // NEW: Check if this is an image message
+    const isImageMessage = hasImageContent(messageData);
     
     // Variable to track if we should bypass AI and send direct response
     let bypassAiProcessing = false;
@@ -686,9 +756,49 @@ async function processMessageForAI(instance: string, messageData: any) {
       }
     }
 
-    // If no message content (text or processed audio), skip
-    if (!messageText) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text content', { messageData });
+    // NEW: Process image message if present
+    if (isImageMessage) {
+      await logDebug('IMAGE_MESSAGE_DETECTED', 'Image message detected', { 
+        messageType: messageData.messageType,
+        hasImageMessage: !!messageData.message?.imageMessage,
+        hasCaption: !!messageData.message?.imageMessage?.caption
+      });
+      
+      // Extract image details
+      const imageDetails = extractImageDetails(messageData);
+      await logDebug('IMAGE_DETAILS', 'Extracted image details', { 
+        url: imageDetails.url ? imageDetails.url.substring(0, 50) + '...' : null,
+        hasMediaKey: !!imageDetails.mediaKey,
+        hasCaption: !!imageDetails.caption,
+        caption: imageDetails.caption
+      });
+      
+      // Process the image
+      const imageResult = await processImageMessage(imageDetails, instanceName, fromNumber, evolutionApiKey);
+      
+      if (!imageResult.success) {
+        await logDebug('IMAGE_PROCESSING_ERROR_FALLBACK', 'Error processing image but continuing with caption', {
+          error: imageResult.error,
+          hasCaption: !!imageResult.caption
+        });
+      } else {
+        imageUrl = imageResult.imageUrl;
+        hasImage = true;
+        await logDebug('IMAGE_URL_READY', 'Image URL prepared for AI processing', { 
+          imageUrl: imageUrl ? imageUrl.substring(0, 50) + '...' : null
+        });
+      }
+      
+      // Use caption as message text if available
+      if (imageResult.caption) {
+        messageText = imageResult.caption;
+        await logDebug('USING_IMAGE_CAPTION', 'Using image caption as message text', { caption: messageText });
+      }
+    }
+
+    // If no message content (text/processed audio/image caption), skip
+    if (!messageText && !hasImage) {
+      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text content or processable image', { messageData });
       return false;
     }
 
@@ -910,7 +1020,8 @@ async function processMessageForAI(instance: string, messageData: any) {
       instanceBaseUrl,
       aiConfig,
       messageData,
-      conversationId
+      conversationId,
+      imageUrl
     );
   } catch (error) {
     await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
@@ -928,7 +1039,8 @@ async function generateAndSendAIResponse(
   instanceBaseUrl: string,
   aiConfig: any,
   messageData: any,
-  conversationId: string
+  conversationId: string,
+  imageUrl?: string
 ) {
   try {
     // Generate system prompt
@@ -940,20 +1052,32 @@ async function generateAndSendAIResponse(
 
     // Generate AI response with improved token management
     await logDebug('AI_RESPONSE_GENERATION', 'Generating AI response with token management');
+    
+    // Prepare request body with optional image URL
+    const requestBody: any = {
+      query: query,
+      context: context,
+      systemPrompt: systemPrompt,
+      temperature: aiConfig.temperature || 0.7,
+      model: 'gpt-4o-mini',
+      maxContextTokens: 3000 // Explicit token limit
+    };
+    
+    // Add image URL if available
+    if (imageUrl) {
+      requestBody.imageUrl = imageUrl;
+      await logDebug('AI_INCLUDE_IMAGE', 'Including image URL in AI request', { 
+        imageUrl: imageUrl.substring(0, 50) + '...' 
+      });
+    }
+    
     const responseGenResponse = await fetch(`${supabaseUrl}/functions/v1/generate-response`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${supabaseServiceKey}`
       },
-      body: JSON.stringify({
-        query: query,
-        context: context,
-        systemPrompt: systemPrompt,
-        temperature: aiConfig.temperature || 0.7,
-        model: 'gpt-4o-mini',
-        maxContextTokens: 3000 // Explicit token limit
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!responseGenResponse.ok) {
