@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -13,7 +12,7 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// Updated helper function to find or create a conversation with improved timeout management and handling of unique constraint
+// Helper function to find or create a conversation with improved timeout management and handling of unique constraint
 async function findOrCreateConversation(instanceId: string, userPhone: string) {
   try {
     // First try to find existing conversation
@@ -531,6 +530,80 @@ async function processMessageForAI(instance: string, messageData: any) {
       isFromMe 
     });
 
+    // NEW: Check for and process image content
+    let imageUrl = null;
+    if (messageData.message?.imageMessage) {
+      await logDebug('IMAGE_MESSAGE_DETECTED', 'Detected image message', {
+        hasCaption: !!messageData.message.imageMessage.caption,
+        mimeType: messageData.message.imageMessage.mimetype || 'Unknown'
+      });
+      
+      // Extract image details
+      const imageMessage = messageData.message.imageMessage;
+      const rawImageUrl = imageMessage.url;
+      const mediaKey = imageMessage.mediaKey;
+      const mimeType = imageMessage.mimetype || 'image/jpeg';
+      
+      // Determine Evolution API key for image processing
+      const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey;
+      
+      // Process the image to get a viewable URL
+      if (rawImageUrl && mediaKey) {
+        try {
+          await logDebug('IMAGE_PROCESSING', 'Processing image for AI analysis', {
+            urlFragment: rawImageUrl.substring(0, 30) + '...',
+            hasMediaKey: !!mediaKey
+          });
+          
+          const imageProcessResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-image-process`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`
+            },
+            body: JSON.stringify({
+              imageUrl: rawImageUrl,
+              mediaKey,
+              mimeType,
+              instanceName,
+              evolutionApiKey
+            })
+          });
+          
+          if (imageProcessResponse.ok) {
+            const result = await imageProcessResponse.json();
+            if (result.success && result.mediaUrl) {
+              imageUrl = result.mediaUrl; // Set the processed URL
+              await logDebug('IMAGE_PROCESSED', 'Successfully processed image for AI analysis', {
+                originalUrlFragment: rawImageUrl.substring(0, 30) + '...',
+                processedUrlFragment: result.mediaUrl.substring(0, 30) + '...',
+                mediaType: result.mediaType
+              });
+            } else {
+              await logDebug('IMAGE_PROCESS_FAILED', 'Image processing returned failure', result);
+            }
+          } else {
+            const errorText = await imageProcessResponse.text();
+            await logDebug('IMAGE_PROCESS_ERROR', 'Error response from image processing endpoint', {
+              status: imageProcessResponse.status,
+              error: errorText
+            });
+          }
+        } catch (error) {
+          await logDebug('IMAGE_PROCESS_EXCEPTION', 'Exception during image processing', {
+            error: error.message,
+            stack: error.stack
+          });
+          // Continue with just the text if image processing fails
+        }
+      } else {
+        await logDebug('IMAGE_MISSING_DATA', 'Image message missing required data', {
+          hasUrl: !!rawImageUrl,
+          hasMediaKey: !!mediaKey
+        });
+      }
+    }
+
     // Skip processing if:
     // 1. Message is from a group chat (contains @g.us)
     // 2. Message is from the bot itself (fromMe is true)
@@ -911,7 +984,8 @@ async function processMessageForAI(instance: string, messageData: any) {
       instanceBaseUrl,
       aiConfig,
       messageData,
-      conversationId
+      conversationId,
+      imageUrl
     );
   } catch (error) {
     await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
@@ -929,7 +1003,8 @@ async function generateAndSendAIResponse(
   instanceBaseUrl: string,
   aiConfig: any,
   messageData: any,
-  conversationId: string
+  conversationId: string,
+  imageUrl?: string | null
 ) {
   try {
     // Generate system prompt
@@ -939,8 +1014,10 @@ async function generateAndSendAIResponse(
     
     const systemPrompt = aiConfig.system_prompt;
 
-    // Generate AI response with improved token management
-    await logDebug('AI_RESPONSE_GENERATION', 'Generating AI response with token management');
+    // Generate AI response with improved token management and include imageUrl
+    await logDebug('AI_RESPONSE_GENERATION', 'Generating AI response with token management', {
+      hasImageUrl: !!imageUrl
+    });
     const responseGenResponse = await fetch(`${supabaseUrl}/functions/v1/generate-response`, {
       method: 'POST',
       headers: {
@@ -954,7 +1031,7 @@ async function generateAndSendAIResponse(
         temperature: aiConfig.temperature || 0.7,
         model: 'gpt-4o-mini',
         maxContextTokens: 3000, // Explicit token limit
-        imageUrl: imageUrl
+        imageUrl: imageUrl // Pass the image URL if available
       })
     });
 
