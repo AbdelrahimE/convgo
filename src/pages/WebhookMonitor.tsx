@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import WebhookEndpointInfo from '@/components/WebhookEndpointInfo';
 import { DebugLogsTable } from '@/components/DebugLogsTable';
+import { MessageBatchingInfo } from '@/components/MessageBatchingInfo';
 
 interface WebhookMessage {
   id: string;
@@ -212,19 +212,7 @@ const WebhookMonitor = () => {
         </div>
       </div>
       
-      {showIntroAlert && (
-        <Alert className="bg-blue-50">
-          <Info className="h-4 w-4" />
-          <AlertTitle>Message Batching Active</AlertTitle>
-          <AlertDescription>
-            Messages from the same user sent within a short time will be processed together to improve 
-            response quality and reduce token usage. This system automatically groups related questions.
-          </AlertDescription>
-          <Button variant="ghost" size="sm" className="mt-2" onClick={() => setShowIntroAlert(false)}>
-            Dismiss
-          </Button>
-        </Alert>
-      )}
+      <MessageBatchingInfo />
       
       <WebhookEndpointInfo />
       
