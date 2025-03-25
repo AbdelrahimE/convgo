@@ -20,11 +20,137 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
 
-    // Log function start
+    // Log function start with more detailed info
     await supabaseAdmin.from("webhook_debug_logs").insert({
       category: "MESSAGE_BATCH_PROCESSOR",
       message: "Message batch processor started",
+      data: { 
+        timestamp: new Date().toISOString(),
+        request_method: req.method,
+        trigger_source: req.headers.get('x-trigger-source') || 'direct' 
+      }
     });
+
+    // Check if we're processing a specific message (from trigger)
+    let requestData = {};
+    try {
+      if (req.method === 'POST' && req.headers.get('content-type')?.includes('application/json')) {
+        requestData = await req.json();
+        
+        // Log the request data
+        await supabaseAdmin.from("webhook_debug_logs").insert({
+          category: "MESSAGE_BATCH_PROCESSOR",
+          message: "Received message processing request",
+          data: { requestData }
+        });
+        
+        // Process single message if specified
+        if (requestData && requestData.message_id) {
+          const { data: messageData, error: messageError } = await supabaseAdmin
+            .from("whatsapp_message_buffer")
+            .select("*")
+            .eq("id", requestData.message_id)
+            .eq("status", "pending")
+            .single();
+            
+          if (messageError) {
+            throw new Error(`Error fetching specific message: ${messageError.message}`);
+          }
+          
+          if (messageData) {
+            // Process this single message
+            await supabaseAdmin.from("webhook_debug_logs").insert({
+              category: "MESSAGE_BATCH_PROCESSOR",
+              message: `Processing specific message from trigger: ${messageData.id}`,
+              data: { message: messageData }
+            });
+            
+            // Call the webhook handler directly for immediate processing
+            try {
+              const webhookResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-webhook`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  "X-Batch-Id": crypto.randomUUID(),
+                  "X-Single-Message": "true"
+                },
+                body: JSON.stringify({
+                  single_message: true,
+                  message_id: messageData.message_id,
+                  instance: messageData.instance_id,
+                  user_phone: messageData.user_phone,
+                  message_content: messageData.message_content,
+                  message_type: messageData.message_type,
+                  media_url: messageData.media_url
+                })
+              });
+              
+              const responseStatus = webhookResponse.status;
+              const responseOk = webhookResponse.ok;
+              
+              await supabaseAdmin.from("webhook_debug_logs").insert({
+                category: "MESSAGE_BATCH_PROCESSOR",
+                message: `Processed specific message ${messageData.id} with result: ${responseStatus}`,
+                data: { 
+                  status: responseStatus,
+                  ok: responseOk
+                }
+              });
+              
+              // Mark message as processed if the webhook call was successful
+              if (responseOk) {
+                await supabaseAdmin
+                  .from("whatsapp_message_buffer")
+                  .update({ 
+                    status: "processed", 
+                    processed_at: new Date().toISOString() 
+                  })
+                  .eq("id", messageData.id);
+              } else {
+                // Log the error response
+                let errorText = "";
+                try {
+                  errorText = await webhookResponse.text();
+                } catch (e) {
+                  errorText = "Failed to read error response";
+                }
+                
+                await supabaseAdmin.from("webhook_debug_logs").insert({
+                  category: "MESSAGE_BATCH_ERROR",
+                  message: `Error processing specific message ${messageData.id}`,
+                  data: { 
+                    status: responseStatus,
+                    errorText 
+                  }
+                });
+              }
+            } catch (singleMsgError) {
+              await supabaseAdmin.from("webhook_debug_logs").insert({
+                category: "MESSAGE_BATCH_ERROR",
+                message: `Exception processing specific message ${messageData.id}`,
+                data: { error: singleMsgError.message }
+              });
+            }
+            
+            return new Response(JSON.stringify({
+              status: "success",
+              message: `Processed specific message: ${messageData.id}`
+            }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 200,
+            });
+          }
+        }
+      }
+    } catch (jsonError) {
+      await supabaseAdmin.from("webhook_debug_logs").insert({
+        category: "MESSAGE_BATCH_ERROR",
+        message: "Error parsing request JSON",
+        data: { error: jsonError.message }
+      });
+      // Continue with normal batch processing
+    }
 
     // 1. Find conversations with pending messages
     const { data: conversationsWithPendingMessages, error: conversationsError } = await supabaseAdmin
@@ -128,77 +254,107 @@ serve(async (req: Request) => {
           // Prepare the webhook event to forward to the webhook handler
           const singleMessage = pendingMessages[0];
           
-          // Call the existing webhook handler to process the message
-          const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-webhook`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-              "X-Batch-Id": batchId,
-              "X-Single-Message": "true"
-            },
-            body: JSON.stringify({
-              single_message: true,
-              message_id: singleMessage.message_id,
-              instance: singleMessage.instance_id,
-              user_phone: singleMessage.user_phone,
-              message_content: singleMessage.message_content,
-              message_type: singleMessage.message_type,
-              media_url: singleMessage.media_url,
-              batch_id: batchId
-            })
-          });
+          try {
+            // Call the existing webhook handler to process the message
+            const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-webhook`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                "X-Batch-Id": batchId,
+                "X-Single-Message": "true"
+              },
+              body: JSON.stringify({
+                single_message: true,
+                message_id: singleMessage.message_id,
+                instance: singleMessage.instance_id,
+                user_phone: singleMessage.user_phone,
+                message_content: singleMessage.message_content,
+                message_type: singleMessage.message_type,
+                media_url: singleMessage.media_url,
+                batch_id: batchId
+              })
+            });
 
-          await supabaseAdmin.from("webhook_debug_logs").insert({
-            category: "MESSAGE_BATCH_PROCESSOR",
-            message: `Processed single message in batch ${batchId}`,
-            data: { 
-              status: response.status,
-              ok: response.ok
+            const responseText = await response.text();
+            
+            await supabaseAdmin.from("webhook_debug_logs").insert({
+              category: "MESSAGE_BATCH_PROCESSOR",
+              message: `Processed single message in batch ${batchId}`,
+              data: { 
+                status: response.status,
+                ok: response.ok,
+                response: responseText.substring(0, 500) // Limit response text size
+              }
+            });
+            
+            if (!response.ok) {
+              throw new Error(`Error processing single message: ${response.status} - ${responseText}`);
             }
-          });
+          } catch (singleError) {
+            await supabaseAdmin.from("webhook_debug_logs").insert({
+              category: "MESSAGE_BATCH_ERROR",
+              message: `Error processing single message in batch ${batchId}`,
+              data: { error: singleError.message }
+            });
+          }
         } else {
           // Combine multiple messages into a single batched message
           const combinedMessage = pendingMessages
             .map(msg => msg.message_content)
             .join("\n\n");
           
-          // Call the webhook handler with the batched message
-          const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-webhook`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-              "X-Batch-Id": batchId,
-              "X-Batch-Messages": pendingMessages.length.toString()
-            },
-            body: JSON.stringify({
-              batched_messages: true,
-              message_ids: pendingMessages.map(m => m.message_id),
-              instance: pendingMessages[0].instance_id,
-              user_phone: pendingMessages[0].user_phone,
-              message_content: combinedMessage,
-              message_type: "batched_text",
-              batch_id: batchId,
-              individual_messages: pendingMessages.map(m => ({
-                id: m.id,
-                content: m.message_content,
-                type: m.message_type,
-                media_url: m.media_url,
-                received_at: m.received_at
-              }))
-            })
-          });
+          try {
+            // Call the webhook handler with the batched message
+            const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-webhook`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                "X-Batch-Id": batchId,
+                "X-Batch-Messages": pendingMessages.length.toString()
+              },
+              body: JSON.stringify({
+                batched_messages: true,
+                message_ids: pendingMessages.map(m => m.message_id),
+                instance: pendingMessages[0].instance_id,
+                user_phone: pendingMessages[0].user_phone,
+                message_content: combinedMessage,
+                message_type: "batched_text",
+                batch_id: batchId,
+                individual_messages: pendingMessages.map(m => ({
+                  id: m.id,
+                  content: m.message_content,
+                  type: m.message_type,
+                  media_url: m.media_url,
+                  received_at: m.received_at
+                }))
+              })
+            });
 
-          await supabaseAdmin.from("webhook_debug_logs").insert({
-            category: "MESSAGE_BATCH_PROCESSOR",
-            message: `Processed batch ${batchId} with ${pendingMessages.length} messages`,
-            data: { 
-              status: response.status,
-              ok: response.ok,
-              message_count: pendingMessages.length
+            const responseText = await response.text();
+            
+            await supabaseAdmin.from("webhook_debug_logs").insert({
+              category: "MESSAGE_BATCH_PROCESSOR",
+              message: `Processed batch ${batchId} with ${pendingMessages.length} messages`,
+              data: { 
+                status: response.status,
+                ok: response.ok,
+                message_count: pendingMessages.length,
+                response: responseText.substring(0, 500) // Limit response text size
+              }
+            });
+            
+            if (!response.ok) {
+              throw new Error(`Error processing batch: ${response.status} - ${responseText}`);
             }
-          });
+          } catch (batchError) {
+            await supabaseAdmin.from("webhook_debug_logs").insert({
+              category: "MESSAGE_BATCH_ERROR",
+              message: `Error processing batch ${batchId}`,
+              data: { error: batchError.message }
+            });
+          }
         }
 
         // Mark messages as processed
@@ -236,7 +392,7 @@ serve(async (req: Request) => {
     await supabaseAdmin.from("webhook_debug_logs").insert({
       category: "MESSAGE_BATCH_ERROR",
       message: "Error in message batch processor",
-      data: { error: error.message }
+      data: { error: error.message, stack: error.stack }
     });
 
     return new Response(JSON.stringify({
