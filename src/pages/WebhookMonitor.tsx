@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,7 +32,7 @@ const WebhookMonitor = () => {
   } = useAuth();
   const [messages, setMessages] = useState<WebhookMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(isDeleting);
+  const [isDeleting, setIsDeleting] = useState(false); // Fixed: Set initial value to false instead of using isDeleting
   const [activeTab, setActiveTab] = useState('all');
   const [lastMessageTime, setLastMessageTime] = useState<Date | null>(null);
   const [receivingStatus, setReceivingStatus] = useState<'active' | 'inactive' | 'unknown'>('unknown');
