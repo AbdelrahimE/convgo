@@ -2,4 +2,3 @@
 [functions.process-message-batches]
 path = "functions/process-message-batches"
 verify_jwt = false  # No JWT verification for scheduled function
-schedule = "*/8 * * * * *"  # Run every 8 seconds
