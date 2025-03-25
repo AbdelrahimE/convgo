@@ -11,7 +11,7 @@ SELECT cron.schedule(
   SELECT
     net.http_post(
       url:='https://okoaoguvtjauiecfajri.supabase.co/functions/v1/scheduled-cleanup',
-      headers:='{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb
+      headers:='{"Content-Type": "application/json", "Authorization": "Bearer ${SUPABASE_SERVICE_ROLE_KEY}"}'::jsonb
     ) as request_id;
   $$
 );
@@ -24,7 +24,7 @@ SELECT cron.schedule(
   SELECT
     net.http_post(
       url:='https://okoaoguvtjauiecfajri.supabase.co/functions/v1/process-message-batches',
-      headers:='{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb
+      headers:='{"Content-Type": "application/json", "Authorization": "Bearer ${SUPABASE_SERVICE_ROLE_KEY}"}'::jsonb
     ) as request_id;
   $$
 );
