@@ -2,11 +2,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Info } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { InfoCircledIcon } from '@radix-ui/react-icons';
 
 export function BatchProcessTrigger() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -53,7 +52,7 @@ export function BatchProcessTrigger() {
       </CardHeader>
       <CardContent>
         <Alert className="mb-4">
-          <InfoCircledIcon className="h-4 w-4" />
+          <Info className="h-4 w-4" />
           <AlertTitle>Debug Tool</AlertTitle>
           <AlertDescription>
             This tool is for testing purposes. It manually triggers the same function that runs on schedule to process queued WhatsApp messages. 
