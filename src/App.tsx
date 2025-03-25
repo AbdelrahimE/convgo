@@ -14,11 +14,7 @@ import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './App.css';
-
-// Create a client
-const queryClient = new QueryClient();
 
 function AppContent() {
   const location = useLocation();
@@ -94,14 +90,12 @@ function App() {
   return (
     <ErrorBoundary>
       <NetworkErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <Router>
-              <AppContent />
-              <Toaster />
-            </Router>
-          </AuthProvider>
-        </QueryClientProvider>
+        <AuthProvider>
+          <Router>
+            <AppContent />
+            <Toaster />
+          </Router>
+        </AuthProvider>
       </NetworkErrorBoundary>
     </ErrorBoundary>
   );

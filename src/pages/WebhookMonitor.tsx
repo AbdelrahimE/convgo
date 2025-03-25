@@ -14,8 +14,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import WebhookEndpointInfo from '@/components/WebhookEndpointInfo';
 import { DebugLogsTable } from '@/components/DebugLogsTable';
-import { MessageBatchingInfo } from '@/components/MessageBatchingInfo';
-
 interface WebhookMessage {
   id: string;
   instance: string;
@@ -23,7 +21,6 @@ interface WebhookMessage {
   data: any;
   received_at: string;
 }
-
 const WebhookMonitor = () => {
   const {
     user
@@ -39,7 +36,6 @@ const WebhookMonitor = () => {
   const [showIntroAlert, setShowIntroAlert] = useState(true);
   const navigate = useNavigate();
   const pollingRef = useRef<number | null>(null);
-
   useEffect(() => {
     if (user) {
       fetchMessages();
@@ -51,13 +47,11 @@ const WebhookMonitor = () => {
       }
     };
   }, [user]);
-
   const startPolling = () => {
     pollingRef.current = window.setInterval(() => {
       fetchMessages(false);
     }, 15000);
   };
-
   const fetchMessages = async (showToast = true) => {
     try {
       setIsLoading(true);
@@ -95,7 +89,6 @@ const WebhookMonitor = () => {
       setIsLoading(false);
     }
   };
-
   const clearMessages = async () => {
     try {
       setIsDeleting(true);
@@ -114,11 +107,9 @@ const WebhookMonitor = () => {
       setIsDeleting(false);
     }
   };
-
   const handleRefresh = () => {
     fetchMessages();
   };
-
   const getEventColor = (event: string) => {
     switch (event) {
       case 'messages.upsert':
@@ -137,7 +128,6 @@ const WebhookMonitor = () => {
         return 'bg-gray-500';
     }
   };
-
   const getEventIcon = (event: string) => {
     switch (event) {
       case 'messages.upsert':
@@ -156,7 +146,6 @@ const WebhookMonitor = () => {
         return <span className="mr-1">📋</span>;
     }
   };
-
   const downloadJson = () => {
     const jsonStr = JSON.stringify(messages, null, 2);
     const blob = new Blob([jsonStr], {
@@ -172,7 +161,6 @@ const WebhookMonitor = () => {
     URL.revokeObjectURL(href);
     toast.success('Webhook messages downloaded');
   };
-
   const filteredMessages = messages.filter(message => {
     if (activeTab !== 'all' && message.event !== activeTab) return false;
     if (searchTerm) {
@@ -181,7 +169,6 @@ const WebhookMonitor = () => {
     }
     return true;
   });
-
   return <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
@@ -212,7 +199,7 @@ const WebhookMonitor = () => {
         </div>
       </div>
       
-      <MessageBatchingInfo />
+      {showIntroAlert}
       
       <WebhookEndpointInfo />
       
@@ -331,5 +318,4 @@ const WebhookMonitor = () => {
       </Tabs>
     </div>;
 };
-
 export default WebhookMonitor;
