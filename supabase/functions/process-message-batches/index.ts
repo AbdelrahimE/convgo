@@ -12,24 +12,42 @@ serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Initialize Supabase client with service role key
+  let supabaseAdmin = null;
   try {
-    // Initialize Supabase client with service role key
-    const supabaseAdmin = createClient(
+    supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") || "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
       { auth: { persistSession: false } }
     );
-
-    // Log function start with more detailed info
-    await supabaseAdmin.from("webhook_debug_logs").insert({
-      category: "MESSAGE_BATCH_PROCESSOR",
-      message: "Message batch processor started",
-      data: { 
-        timestamp: new Date().toISOString(),
-        request_method: req.method,
-        trigger_source: req.headers.get('x-trigger-source') || 'direct' 
-      }
+  } catch (initError) {
+    console.error("Error initializing Supabase client:", initError.message);
+    return new Response(JSON.stringify({
+      status: "error",
+      message: "Failed to initialize database connection",
+      error: initError.message
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
     });
+  }
+
+  try {
+    // Log function start with more detailed info
+    try {
+      await supabaseAdmin.from("webhook_debug_logs").insert({
+        category: "MESSAGE_BATCH_PROCESSOR",
+        message: "Message batch processor started",
+        data: { 
+          timestamp: new Date().toISOString(),
+          request_method: req.method,
+          trigger_source: req.headers.get('x-trigger-source') || 'direct' 
+        }
+      });
+    } catch (logError) {
+      console.error("Failed to write initial log:", logError.message);
+      // Continue execution even if logging fails
+    }
 
     // Check if we're processing a specific message (from trigger)
     let requestData = {};
@@ -38,117 +56,164 @@ serve(async (req: Request) => {
         requestData = await req.json();
         
         // Log the request data
-        await supabaseAdmin.from("webhook_debug_logs").insert({
-          category: "MESSAGE_BATCH_PROCESSOR",
-          message: "Received message processing request",
-          data: { requestData }
-        });
+        try {
+          await supabaseAdmin.from("webhook_debug_logs").insert({
+            category: "MESSAGE_BATCH_PROCESSOR",
+            message: "Received message processing request",
+            data: { requestData }
+          });
+        } catch (logError) {
+          console.error("Failed to log request data:", logError.message);
+        }
         
         // Process single message if specified
         if (requestData && requestData.message_id) {
-          const { data: messageData, error: messageError } = await supabaseAdmin
-            .from("whatsapp_message_buffer")
-            .select("*")
-            .eq("id", requestData.message_id)
-            .eq("status", "pending")
-            .single();
+          try {
+            const { data: messageData, error: messageError } = await supabaseAdmin
+              .from("whatsapp_message_buffer")
+              .select("*")
+              .eq("id", requestData.message_id)
+              .eq("status", "pending")
+              .maybeSingle();
+              
+            if (messageError) {
+              throw new Error(`Error fetching specific message: ${messageError.message}`);
+            }
             
-          if (messageError) {
-            throw new Error(`Error fetching specific message: ${messageError.message}`);
-          }
-          
-          if (messageData) {
-            // Process this single message
-            await supabaseAdmin.from("webhook_debug_logs").insert({
-              category: "MESSAGE_BATCH_PROCESSOR",
-              message: `Processing specific message from trigger: ${messageData.id}`,
-              data: { message: messageData }
-            });
-            
-            // Call the webhook handler directly for immediate processing
-            try {
-              const webhookResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-webhook`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                  "X-Batch-Id": crypto.randomUUID(),
-                  "X-Single-Message": "true"
-                },
-                body: JSON.stringify({
-                  single_message: true,
-                  message_id: messageData.message_id,
-                  instance: messageData.instance_id,
-                  user_phone: messageData.user_phone,
-                  message_content: messageData.message_content,
-                  message_type: messageData.message_type,
-                  media_url: messageData.media_url
-                })
-              });
+            if (messageData) {
+              // Process this single message
+              try {
+                await supabaseAdmin.from("webhook_debug_logs").insert({
+                  category: "MESSAGE_BATCH_PROCESSOR",
+                  message: `Processing specific message from trigger: ${messageData.id}`,
+                  data: { message: messageData }
+                });
+              } catch (logError) {
+                console.error("Failed to log message processing:", logError.message);
+              }
               
-              const responseStatus = webhookResponse.status;
-              const responseOk = webhookResponse.ok;
-              
-              await supabaseAdmin.from("webhook_debug_logs").insert({
-                category: "MESSAGE_BATCH_PROCESSOR",
-                message: `Processed specific message ${messageData.id} with result: ${responseStatus}`,
-                data: { 
-                  status: responseStatus,
-                  ok: responseOk
-                }
-              });
-              
-              // Mark message as processed if the webhook call was successful
-              if (responseOk) {
-                await supabaseAdmin
-                  .from("whatsapp_message_buffer")
-                  .update({ 
-                    status: "processed", 
-                    processed_at: new Date().toISOString() 
+              // Call the webhook handler directly for immediate processing
+              try {
+                const webhookResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-webhook`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                    "X-Batch-Id": crypto.randomUUID(),
+                    "X-Single-Message": "true"
+                  },
+                  body: JSON.stringify({
+                    single_message: true,
+                    message_id: messageData.message_id,
+                    instance: messageData.instance_id,
+                    user_phone: messageData.user_phone,
+                    message_content: messageData.message_content,
+                    message_type: messageData.message_type,
+                    media_url: messageData.media_url
                   })
-                  .eq("id", messageData.id);
-              } else {
-                // Log the error response
-                let errorText = "";
+                });
+                
+                const responseStatus = webhookResponse.status;
+                const responseOk = webhookResponse.ok;
+                
                 try {
-                  errorText = await webhookResponse.text();
-                } catch (e) {
-                  errorText = "Failed to read error response";
+                  await supabaseAdmin.from("webhook_debug_logs").insert({
+                    category: "MESSAGE_BATCH_PROCESSOR",
+                    message: `Processed specific message ${messageData.id} with result: ${responseStatus}`,
+                    data: { 
+                      status: responseStatus,
+                      ok: responseOk
+                    }
+                  });
+                } catch (logError) {
+                  console.error("Failed to log webhook response:", logError.message);
                 }
                 
-                await supabaseAdmin.from("webhook_debug_logs").insert({
-                  category: "MESSAGE_BATCH_ERROR",
-                  message: `Error processing specific message ${messageData.id}`,
-                  data: { 
-                    status: responseStatus,
-                    errorText 
+                // Mark message as processed if the webhook call was successful
+                if (responseOk) {
+                  await supabaseAdmin
+                    .from("whatsapp_message_buffer")
+                    .update({ 
+                      status: "processed", 
+                      processed_at: new Date().toISOString() 
+                    })
+                    .eq("id", messageData.id);
+                } else {
+                  // Log the error response
+                  let errorText = "";
+                  try {
+                    errorText = await webhookResponse.text();
+                  } catch (e) {
+                    errorText = "Failed to read error response";
                   }
-                });
+                  
+                  try {
+                    await supabaseAdmin.from("webhook_debug_logs").insert({
+                      category: "MESSAGE_BATCH_ERROR",
+                      message: `Error processing specific message ${messageData.id}`,
+                      data: { 
+                        status: responseStatus,
+                        errorText 
+                      }
+                    });
+                  } catch (logError) {
+                    console.error("Failed to log error response:", logError.message);
+                  }
+                }
+              } catch (singleMsgError) {
+                try {
+                  await supabaseAdmin.from("webhook_debug_logs").insert({
+                    category: "MESSAGE_BATCH_ERROR",
+                    message: `Exception processing specific message ${messageData.id}`,
+                    data: { error: singleMsgError.message }
+                  });
+                } catch (logError) {
+                  console.error("Failed to log single message error:", logError.message);
+                }
               }
-            } catch (singleMsgError) {
+              
+              return new Response(JSON.stringify({
+                status: "success",
+                message: `Processed specific message: ${messageData.id}`
+              }), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+                status: 200,
+              });
+            }
+          } catch (specificMessageError) {
+            console.error("Error processing specific message:", specificMessageError.message);
+            try {
               await supabaseAdmin.from("webhook_debug_logs").insert({
                 category: "MESSAGE_BATCH_ERROR",
-                message: `Exception processing specific message ${messageData.id}`,
-                data: { error: singleMsgError.message }
+                message: "Error processing specific message request",
+                data: { error: specificMessageError.message, stack: specificMessageError.stack }
               });
+            } catch (logError) {
+              console.error("Failed to log specific message error:", logError.message);
             }
             
             return new Response(JSON.stringify({
-              status: "success",
-              message: `Processed specific message: ${messageData.id}`
+              status: "error",
+              message: "Error processing specific message",
+              error: specificMessageError.message
             }), {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
-              status: 200,
+              status: 500,
             });
           }
         }
       }
     } catch (jsonError) {
-      await supabaseAdmin.from("webhook_debug_logs").insert({
-        category: "MESSAGE_BATCH_ERROR",
-        message: "Error parsing request JSON",
-        data: { error: jsonError.message }
-      });
+      console.error("Error parsing request JSON:", jsonError.message);
+      try {
+        await supabaseAdmin.from("webhook_debug_logs").insert({
+          category: "MESSAGE_BATCH_ERROR",
+          message: "Error parsing request JSON",
+          data: { error: jsonError.message }
+        });
+      } catch (logError) {
+        console.error("Failed to log JSON parsing error:", logError.message);
+      }
       // Continue with normal batch processing
     }
 
@@ -162,10 +227,22 @@ serve(async (req: Request) => {
       .group_by("conversation_id, user_phone, instance_id");
 
     if (conversationsError) {
+      console.error("Error fetching conversations:", conversationsError.message);
+      try {
+        await supabaseAdmin.from("webhook_debug_logs").insert({
+          category: "MESSAGE_BATCH_ERROR",
+          message: "Error fetching conversations with pending messages",
+          data: { error: conversationsError.message }
+        });
+      } catch (logError) {
+        console.error("Failed to log conversations error:", logError.message);
+      }
+      
       throw new Error(`Error fetching conversations: ${conversationsError.message}`);
     }
 
     if (!conversationsWithPendingMessages || conversationsWithPendingMessages.length === 0) {
+      console.log("No pending messages found");
       return new Response(JSON.stringify({
         status: "success",
         message: "No pending messages found"
@@ -176,41 +253,71 @@ serve(async (req: Request) => {
     }
 
     // Log the conversations found
-    await supabaseAdmin.from("webhook_debug_logs").insert({
-      category: "MESSAGE_BATCH_PROCESSOR",
-      message: `Found ${conversationsWithPendingMessages.length} conversations with pending messages`,
-      data: { conversations: conversationsWithPendingMessages }
-    });
+    try {
+      await supabaseAdmin.from("webhook_debug_logs").insert({
+        category: "MESSAGE_BATCH_PROCESSOR",
+        message: `Found ${conversationsWithPendingMessages.length} conversations with pending messages`,
+        data: { conversations: conversationsWithPendingMessages }
+      });
+    } catch (logError) {
+      console.error("Failed to log conversations found:", logError.message);
+    }
 
     // 2. Process each conversation
     for (const conversation of conversationsWithPendingMessages) {
       try {
         // Check if there are any AI configurations for this instance
-        const { data: aiConfig } = await supabaseAdmin
+        const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
           .from("whatsapp_ai_config")
           .select("*")
           .eq("whatsapp_instance_id", conversation.instance_id)
           .eq("is_active", true)
-          .single();
+          .maybeSingle();
+
+        if (aiConfigError) {
+          console.error("Error fetching AI config:", aiConfigError.message);
+          try {
+            await supabaseAdmin.from("webhook_debug_logs").insert({
+              category: "MESSAGE_BATCH_ERROR",
+              message: `Error fetching AI config for instance ${conversation.instance_id}`,
+              data: { error: aiConfigError.message }
+            });
+          } catch (logError) {
+            console.error("Failed to log AI config error:", logError.message);
+          }
+        }
 
         if (!aiConfig) {
           // If AI is not enabled for this instance, mark messages as skipped
-          const { data: messageIds } = await supabaseAdmin
-            .from("whatsapp_message_buffer")
-            .select("id")
-            .eq("conversation_id", conversation.conversation_id)
-            .eq("status", "pending");
-
-          if (messageIds && messageIds.length > 0) {
-            await supabaseAdmin
+          try {
+            const { data: messageIds, error: messageIdsError } = await supabaseAdmin
               .from("whatsapp_message_buffer")
-              .update({ status: "skipped", processed_at: new Date().toISOString() })
-              .in("id", messageIds.map(m => m.id));
+              .select("id")
+              .eq("conversation_id", conversation.conversation_id)
+              .eq("status", "pending");
 
-            await supabaseAdmin.from("webhook_debug_logs").insert({
-              category: "MESSAGE_BATCH_PROCESSOR",
-              message: `Skipped ${messageIds.length} messages for conversation ${conversation.conversation_id} as AI is not enabled`,
-            });
+            if (messageIdsError) {
+              console.error("Error fetching message IDs:", messageIdsError.message);
+              continue;
+            }
+
+            if (messageIds && messageIds.length > 0) {
+              await supabaseAdmin
+                .from("whatsapp_message_buffer")
+                .update({ status: "skipped", processed_at: new Date().toISOString() })
+                .in("id", messageIds.map(m => m.id));
+
+              try {
+                await supabaseAdmin.from("webhook_debug_logs").insert({
+                  category: "MESSAGE_BATCH_PROCESSOR",
+                  message: `Skipped ${messageIds.length} messages for conversation ${conversation.conversation_id} as AI is not enabled`,
+                });
+              } catch (logError) {
+                console.error("Failed to log skipped messages:", logError.message);
+              }
+            }
+          } catch (skipError) {
+            console.error("Error skipping messages:", skipError.message);
           }
           continue;
         }
@@ -226,6 +333,17 @@ serve(async (req: Request) => {
           .limit(MAX_BATCH_SIZE);
 
         if (messagesError) {
+          console.error("Error fetching pending messages:", messagesError.message);
+          try {
+            await supabaseAdmin.from("webhook_debug_logs").insert({
+              category: "MESSAGE_BATCH_ERROR",
+              message: `Error fetching pending messages for conversation ${conversation.conversation_id}`,
+              data: { error: messagesError.message }
+            });
+          } catch (logError) {
+            console.error("Failed to log pending messages error:", logError.message);
+          }
+          
           throw new Error(`Error fetching pending messages: ${messagesError.message}`);
         }
 
@@ -237,17 +355,35 @@ serve(async (req: Request) => {
         const batchId = crypto.randomUUID();
 
         // Tag all messages with the batch ID
-        await supabaseAdmin
+        const { error: updateError } = await supabaseAdmin
           .from("whatsapp_message_buffer")
           .update({ batch_id: batchId })
           .in("id", pendingMessages.map(m => m.id));
+          
+        if (updateError) {
+          console.error("Error updating batch ID:", updateError.message);
+          try {
+            await supabaseAdmin.from("webhook_debug_logs").insert({
+              category: "MESSAGE_BATCH_ERROR",
+              message: `Error updating batch ID for messages in conversation ${conversation.conversation_id}`,
+              data: { error: updateError.message, batchId }
+            });
+          } catch (logError) {
+            console.error("Failed to log batch ID update error:", logError.message);
+          }
+          continue;
+        }
 
         // Log the batch creation
-        await supabaseAdmin.from("webhook_debug_logs").insert({
-          category: "MESSAGE_BATCH_PROCESSOR",
-          message: `Created batch ${batchId} with ${pendingMessages.length} messages for conversation ${conversation.conversation_id}`,
-          data: { batch_id: batchId, message_count: pendingMessages.length }
-        });
+        try {
+          await supabaseAdmin.from("webhook_debug_logs").insert({
+            category: "MESSAGE_BATCH_PROCESSOR",
+            message: `Created batch ${batchId} with ${pendingMessages.length} messages for conversation ${conversation.conversation_id}`,
+            data: { batch_id: batchId, message_count: pendingMessages.length }
+          });
+        } catch (logError) {
+          console.error("Failed to log batch creation:", logError.message);
+        }
 
         // If there's only one message, process it individually
         if (pendingMessages.length === 1) {
@@ -276,27 +412,43 @@ serve(async (req: Request) => {
               })
             });
 
-            const responseText = await response.text();
+            let responseText = "";
+            try {
+              responseText = await response.text();
+            } catch (textError) {
+              responseText = "Unable to read response text: " + textError.message;
+            }
             
-            await supabaseAdmin.from("webhook_debug_logs").insert({
-              category: "MESSAGE_BATCH_PROCESSOR",
-              message: `Processed single message in batch ${batchId}`,
-              data: { 
-                status: response.status,
-                ok: response.ok,
-                response: responseText.substring(0, 500) // Limit response text size
-              }
-            });
+            try {
+              await supabaseAdmin.from("webhook_debug_logs").insert({
+                category: "MESSAGE_BATCH_PROCESSOR",
+                message: `Processed single message in batch ${batchId}`,
+                data: { 
+                  status: response.status,
+                  ok: response.ok,
+                  response: responseText.substring(0, 500) // Limit response text size
+                }
+              });
+            } catch (logError) {
+              console.error("Failed to log single message processing:", logError.message);
+            }
             
             if (!response.ok) {
+              console.error(`Error processing single message: ${response.status} - ${responseText}`);
               throw new Error(`Error processing single message: ${response.status} - ${responseText}`);
             }
           } catch (singleError) {
-            await supabaseAdmin.from("webhook_debug_logs").insert({
-              category: "MESSAGE_BATCH_ERROR",
-              message: `Error processing single message in batch ${batchId}`,
-              data: { error: singleError.message }
-            });
+            console.error("Error processing single message:", singleError.message);
+            try {
+              await supabaseAdmin.from("webhook_debug_logs").insert({
+                category: "MESSAGE_BATCH_ERROR",
+                message: `Error processing single message in batch ${batchId}`,
+                data: { error: singleError.message }
+              });
+            } catch (logError) {
+              console.error("Failed to log single message error:", logError.message);
+            }
+            continue; // Continue with other conversations
           }
         } else {
           // Combine multiple messages into a single batched message
@@ -332,44 +484,78 @@ serve(async (req: Request) => {
               })
             });
 
-            const responseText = await response.text();
+            let responseText = "";
+            try {
+              responseText = await response.text();
+            } catch (textError) {
+              responseText = "Unable to read response text: " + textError.message;
+            }
             
-            await supabaseAdmin.from("webhook_debug_logs").insert({
-              category: "MESSAGE_BATCH_PROCESSOR",
-              message: `Processed batch ${batchId} with ${pendingMessages.length} messages`,
-              data: { 
-                status: response.status,
-                ok: response.ok,
-                message_count: pendingMessages.length,
-                response: responseText.substring(0, 500) // Limit response text size
-              }
-            });
+            try {
+              await supabaseAdmin.from("webhook_debug_logs").insert({
+                category: "MESSAGE_BATCH_PROCESSOR",
+                message: `Processed batch ${batchId} with ${pendingMessages.length} messages`,
+                data: { 
+                  status: response.status,
+                  ok: response.ok,
+                  message_count: pendingMessages.length,
+                  response: responseText.substring(0, 500) // Limit response text size
+                }
+              });
+            } catch (logError) {
+              console.error("Failed to log batch processing:", logError.message);
+            }
             
             if (!response.ok) {
+              console.error(`Error processing batch: ${response.status} - ${responseText}`);
               throw new Error(`Error processing batch: ${response.status} - ${responseText}`);
             }
           } catch (batchError) {
-            await supabaseAdmin.from("webhook_debug_logs").insert({
-              category: "MESSAGE_BATCH_ERROR",
-              message: `Error processing batch ${batchId}`,
-              data: { error: batchError.message }
-            });
+            console.error("Error processing batch:", batchError.message);
+            try {
+              await supabaseAdmin.from("webhook_debug_logs").insert({
+                category: "MESSAGE_BATCH_ERROR",
+                message: `Error processing batch ${batchId}`,
+                data: { error: batchError.message }
+              });
+            } catch (logError) {
+              console.error("Failed to log batch error:", logError.message);
+            }
+            continue; // Continue with other conversations
           }
         }
 
         // Mark messages as processed
-        await supabaseAdmin
+        const { error: processedError } = await supabaseAdmin
           .from("whatsapp_message_buffer")
           .update({ status: "processed", processed_at: new Date().toISOString() })
           .eq("batch_id", batchId);
+          
+        if (processedError) {
+          console.error("Error marking messages as processed:", processedError.message);
+          try {
+            await supabaseAdmin.from("webhook_debug_logs").insert({
+              category: "MESSAGE_BATCH_ERROR",
+              message: `Error marking messages as processed for batch ${batchId}`,
+              data: { error: processedError.message }
+            });
+          } catch (logError) {
+            console.error("Failed to log processed marking error:", logError.message);
+          }
+        }
         
       } catch (conversationError) {
         // Log any errors processing a specific conversation
-        await supabaseAdmin.from("webhook_debug_logs").insert({
-          category: "MESSAGE_BATCH_ERROR",
-          message: `Error processing conversation ${conversation.conversation_id}`,
-          data: { error: conversationError.message }
-        });
+        console.error("Error processing conversation:", conversationError.message);
+        try {
+          await supabaseAdmin.from("webhook_debug_logs").insert({
+            category: "MESSAGE_BATCH_ERROR",
+            message: `Error processing conversation ${conversation.conversation_id}`,
+            data: { error: conversationError.message }
+          });
+        } catch (logError) {
+          console.error("Failed to log conversation error:", logError.message);
+        }
       }
     }
 
@@ -383,17 +569,18 @@ serve(async (req: Request) => {
 
   } catch (error) {
     // Log any uncaught errors
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") || "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
-      { auth: { persistSession: false } }
-    );
-
-    await supabaseAdmin.from("webhook_debug_logs").insert({
-      category: "MESSAGE_BATCH_ERROR",
-      message: "Error in message batch processor",
-      data: { error: error.message, stack: error.stack }
-    });
+    console.error("Uncaught error in message batch processor:", error.message, error.stack);
+    try {
+      if (supabaseAdmin) {
+        await supabaseAdmin.from("webhook_debug_logs").insert({
+          category: "MESSAGE_BATCH_ERROR",
+          message: "Error in message batch processor",
+          data: { error: error.message, stack: error.stack }
+        });
+      }
+    } catch (logError) {
+      console.error("Failed to log uncaught error:", logError.message);
+    }
 
     return new Response(JSON.stringify({
       status: "error",
