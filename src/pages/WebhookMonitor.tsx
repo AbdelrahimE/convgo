@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import WebhookEndpointInfo from '@/components/WebhookEndpointInfo';
 import { DebugLogsTable } from '@/components/DebugLogsTable';
 import { MessageBatchingInfo } from '@/components/MessageBatchingInfo';
+import { BatchProcessTrigger } from '@/components/BatchProcessTrigger';
 
 interface WebhookMessage {
   id: string;
@@ -212,12 +213,16 @@ const WebhookMonitor = () => {
         </div>
       </div>
       
-      <MessageBatchingInfo />
-      
-      <WebhookEndpointInfo />
-      
       <Tabs defaultValue="messages" className="space-y-6">
+        <TabsList className="w-full">
+          <TabsTrigger value="messages">Messages</TabsTrigger>
+          <TabsTrigger value="debug">Debug Logs</TabsTrigger>
+          <TabsTrigger value="tools">Tools</TabsTrigger>
+        </TabsList>
         
+        <MessageBatchingInfo />
+        
+        <WebhookEndpointInfo />
         
         <TabsContent value="messages">
           <Card>
@@ -327,6 +332,10 @@ const WebhookMonitor = () => {
         
         <TabsContent value="debug">
           <DebugLogsTable />
+        </TabsContent>
+        
+        <TabsContent value="tools">
+          <BatchProcessTrigger />
         </TabsContent>
       </Tabs>
     </div>;
