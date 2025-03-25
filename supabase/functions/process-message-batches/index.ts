@@ -89,10 +89,7 @@ serve(async (req: Request) => {
           continue;
         }
 
-        // Find pending messages for this conversation within the batch window
-        const cutoffTime = new Date();
-        cutoffTime.setSeconds(cutoffTime.getSeconds() - BATCH_WINDOW_SECONDS);
-
+        // Find pending messages for this conversation
         const { data: pendingMessages, error: messagesError } = await supabaseAdmin
           .from("whatsapp_message_buffer")
           .select("*")
@@ -126,7 +123,7 @@ serve(async (req: Request) => {
           data: { batch_id: batchId, message_count: pendingMessages.length }
         });
 
-        // If there's only one message, process it immediately
+        // If there's only one message, process it individually
         if (pendingMessages.length === 1) {
           // Prepare the webhook event to forward to the webhook handler
           const singleMessage = pendingMessages[0];
@@ -147,6 +144,7 @@ serve(async (req: Request) => {
               user_phone: singleMessage.user_phone,
               message_content: singleMessage.message_content,
               message_type: singleMessage.message_type,
+              media_url: singleMessage.media_url,
               batch_id: batchId
             })
           });
@@ -185,6 +183,8 @@ serve(async (req: Request) => {
               individual_messages: pendingMessages.map(m => ({
                 id: m.id,
                 content: m.message_content,
+                type: m.message_type,
+                media_url: m.media_url,
                 received_at: m.received_at
               }))
             })
