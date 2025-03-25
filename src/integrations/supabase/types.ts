@@ -631,6 +631,66 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_message_buffer: {
+        Row: {
+          batch_id: string | null
+          conversation_id: string
+          id: string
+          instance_id: string
+          media_url: string | null
+          message_content: string
+          message_id: string | null
+          message_type: string
+          processed_at: string | null
+          received_at: string
+          status: string
+          user_phone: string
+        }
+        Insert: {
+          batch_id?: string | null
+          conversation_id: string
+          id?: string
+          instance_id: string
+          media_url?: string | null
+          message_content: string
+          message_id?: string | null
+          message_type?: string
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+          user_phone: string
+        }
+        Update: {
+          batch_id?: string | null
+          conversation_id?: string
+          id?: string
+          instance_id?: string
+          media_url?: string | null
+          message_content?: string
+          message_id?: string | null
+          message_type?: string
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+          user_phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_message_buffer_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_message_buffer_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_webhook_config: {
         Row: {
           created_at: string
