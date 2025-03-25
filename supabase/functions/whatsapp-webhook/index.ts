@@ -985,7 +985,40 @@ async function processMessageForAI(instance: string, messageData: any) {
       });
     }
 
-    // Generate and send the response with improved context and token management
+  // At the end of the processMessageForAI function
+  // Instead of immediately processing, store message in buffer
+  try {
+    await logDebug('MESSAGE_BATCHING', 'Storing message in buffer for batch processing', {
+      conversationId,
+      userPhone: fromNumber,
+      messageLength: messageText?.length || 0,
+      hasImage: !!imageUrl
+    });
+  
+    // Store the message in the buffer for batch processing
+    await supabaseAdmin
+      .from('whatsapp_message_buffer')
+      .insert({
+        conversation_id: conversationId,
+        instance_id: instanceData.id,
+        user_phone: fromNumber,
+        message_content: messageText,
+        message_type: imageUrl ? 'image' : 'text',
+        media_url: imageUrl || null,
+        message_id: messageData.key?.id || null,
+        status: 'pending'
+      });
+      
+    await logDebug('MESSAGE_BUFFERED', 'Message successfully buffered for batch processing', { 
+      conversationId, 
+      fromNumber 
+    });
+    
+    return true; // Return early without calling AI processing
+  } catch (error) {
+    await logDebug('MESSAGE_BUFFER_ERROR', 'Error storing message in buffer', { error });
+    
+    // Fall back to immediate processing if buffering fails
     return await generateAndSendAIResponse(
       messageText,
       context,
@@ -997,6 +1030,8 @@ async function processMessageForAI(instance: string, messageData: any) {
       conversationId,
       imageUrl
     );
+  }
+
   } catch (error) {
     await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
     console.error('Error in processMessageForAI:', error);
