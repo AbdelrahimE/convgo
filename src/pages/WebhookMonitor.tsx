@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,7 +15,6 @@ import { Input } from '@/components/ui/input';
 import WebhookEndpointInfo from '@/components/WebhookEndpointInfo';
 import { DebugLogsTable } from '@/components/DebugLogsTable';
 import { MessageBatchingInfo } from '@/components/MessageBatchingInfo';
-import { BatchProcessTrigger } from '@/components/BatchProcessTrigger';
 
 interface WebhookMessage {
   id: string;
@@ -32,7 +30,7 @@ const WebhookMonitor = () => {
   } = useAuth();
   const [messages, setMessages] = useState<WebhookMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false); // Fixed: Set initial value to false instead of using isDeleting
+  const [isDeleting, setIsDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   const [lastMessageTime, setLastMessageTime] = useState<Date | null>(null);
   const [receivingStatus, setReceivingStatus] = useState<'active' | 'inactive' | 'unknown'>('unknown');
@@ -214,16 +212,12 @@ const WebhookMonitor = () => {
         </div>
       </div>
       
+      <MessageBatchingInfo />
+      
+      <WebhookEndpointInfo />
+      
       <Tabs defaultValue="messages" className="space-y-6">
-        <TabsList className="w-full">
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-          <TabsTrigger value="debug">Debug Logs</TabsTrigger>
-          <TabsTrigger value="tools">Tools</TabsTrigger>
-        </TabsList>
         
-        <MessageBatchingInfo />
-        
-        <WebhookEndpointInfo />
         
         <TabsContent value="messages">
           <Card>
@@ -233,12 +227,7 @@ const WebhookMonitor = () => {
                 View incoming messages from the EVOLUTION API server
               </CardDescription>
               <div className="mt-4">
-                <Input
-                  placeholder="Search messages..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="max-w-sm"
-                />
+                
               </div>
             </CardHeader>
             <CardContent>
@@ -252,27 +241,13 @@ const WebhookMonitor = () => {
                     Messages
                     {eventCounts['messages.upsert'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['messages.upsert']}</Badge>}
                   </TabsTrigger>
-                  <TabsTrigger value="connection.update">
-                    Connection
-                    {eventCounts['connection.update'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['connection.update']}</Badge>}
-                  </TabsTrigger>
-                  <TabsTrigger value="qrcode.updated">
-                    QR Code
-                    {eventCounts['qrcode.updated'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['qrcode.updated']}</Badge>}
-                  </TabsTrigger>
-                  <TabsTrigger value="send.message">
-                    Send Message
-                    {eventCounts['send.message'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['send.message']}</Badge>}
-                  </TabsTrigger>
-                  <TabsTrigger value="call">
-                    Call
-                    {eventCounts['call'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['call']}</Badge>}
-                  </TabsTrigger>
-                  <TabsTrigger value="errors">
-                    Errors
-                    {eventCounts['errors'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['errors']}</Badge>}
-                  </TabsTrigger>
+                  
+                  
+                  
+                  
+                  
                 </TabsList>
+                
                 <TabsContent value={activeTab} className="mt-0">
                   {isLoading ? <div className="flex justify-center py-8">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -352,10 +327,6 @@ const WebhookMonitor = () => {
         
         <TabsContent value="debug">
           <DebugLogsTable />
-        </TabsContent>
-        
-        <TabsContent value="tools">
-          <BatchProcessTrigger />
         </TabsContent>
       </Tabs>
     </div>;
