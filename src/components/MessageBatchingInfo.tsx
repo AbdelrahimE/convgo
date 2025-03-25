@@ -39,21 +39,34 @@ export function MessageBatchingInfo() {
       
       if (processedError) throw processedError;
       
-      // Get average batch size
-      const { data: batchSizes, error: batchError } = await supabase
+      // Get batch information for calculating average size
+      // Instead of using group_by, we'll get all processed messages with batch_ids
+      const { data: batchedMessages, error: batchError } = await supabase
         .from('whatsapp_message_buffer')
-        .select('batch_id, count')
+        .select('batch_id, id')
         .eq('status', 'processed')
-        .not('batch_id', 'is', null)
-        .group_by('batch_id')
-        .order('count', { ascending: false });
+        .not('batch_id', 'is', null);
       
       if (batchError) throw batchError;
       
+      // Calculate average batch size by counting messages per batch_id
       let averageBatchSize = 0;
-      if (batchSizes && batchSizes.length > 0) {
-        const total = batchSizes.reduce((sum, item) => sum + item.count, 0);
-        averageBatchSize = total / batchSizes.length;
+      if (batchedMessages && batchedMessages.length > 0) {
+        // Create a map to count messages per batch
+        const batchCounts = new Map<string, number>();
+        
+        batchedMessages.forEach(message => {
+          if (!message.batch_id) return;
+          
+          const batchId = message.batch_id;
+          batchCounts.set(batchId, (batchCounts.get(batchId) || 0) + 1);
+        });
+        
+        // Calculate the average
+        if (batchCounts.size > 0) {
+          const total = Array.from(batchCounts.values()).reduce((sum, count) => sum + count, 0);
+          averageBatchSize = total / batchCounts.size;
+        }
       }
       
       return {
