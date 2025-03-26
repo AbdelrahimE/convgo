@@ -48,6 +48,9 @@ export interface WebhookData {
   data: MessageData;
 }
 
+// Default API URL - Set to the correct Evolution API URL
+const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
+
 /**
  * Core logic for checking if a message should be escalated to human support
  */
@@ -214,11 +217,14 @@ export async function handleSupportEscalation(
       return { success: false, error: 'Failed to create escalation record', details: escalationError, skip_ai_processing: false };
     }
 
+    // Ensure evolutionApiUrl has a valid value, using the default if necessary
+    const apiBaseUrl = evolutionApiUrl || DEFAULT_EVOLUTION_API_URL;
+
     // Step 7: Send message to customer
     if (escalation_message) {
       try {
-        // Use direct string concatenation, just like in the working webhook function
-        const apiUrl = `${evolutionApiUrl}/message/sendText/${instance}`;
+        // Use customer's phone number (phoneNumber) and ensure full URL with protocol
+        const apiUrl = `${apiBaseUrl}/message/sendText/${instance}`;
         console.log(`Sending escalation message to customer via: ${apiUrl}`);
         
         const customerResponse = await fetch(apiUrl, {
@@ -228,7 +234,7 @@ export async function handleSupportEscalation(
             'apikey': evolutionApiKey
           },
           body: JSON.stringify({
-            number: phoneNumber,
+            number: phoneNumber, // Send TO the customer phone number
             options: {
               delay: 1000
             },
@@ -254,8 +260,8 @@ export async function handleSupportEscalation(
         // Create a customized notification message with the customer message and other details
         const customNotification = `${notification_message}\n\nFrom: +${phoneNumber}\nKeyword: ${matchedKeyword}${keywordCategory ? `\nCategory: ${keywordCategory}` : ''}\nMessage: "${messageContent.substring(0, 100)}${messageContent.length > 100 ? '...' : ''}"`;
         
-        // Use direct string concatenation, just like in the working webhook function
-        const apiUrl = `${evolutionApiUrl}/message/sendText/${instance}`;
+        // Use support agent's phone number and ensure full URL with protocol
+        const apiUrl = `${apiBaseUrl}/message/sendText/${instance}`;
         console.log(`Sending notification to support agent via: ${apiUrl}`);
         
         const supportResponse = await fetch(apiUrl, {
@@ -265,7 +271,7 @@ export async function handleSupportEscalation(
             'apikey': evolutionApiKey
           },
           body: JSON.stringify({
-            number: support_phone_number,
+            number: support_phone_number, // Send TO the support phone number
             options: {
               delay: 1000
             },
