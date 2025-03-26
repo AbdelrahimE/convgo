@@ -217,11 +217,11 @@ export async function handleSupportEscalation(
     // Step 7: Send message to customer
     if (escalation_message) {
       try {
-        // Ensure the API URL is properly formatted with a protocol
-        const apiUrl = new URL(`message/sendText/${instance}`, evolutionApiUrl);
-        console.log(`Sending escalation message to customer via: ${apiUrl.toString()}`);
+        // Use direct string concatenation, just like in the working webhook function
+        const apiUrl = `${evolutionApiUrl}/message/sendText/${instance}`;
+        console.log(`Sending escalation message to customer via: ${apiUrl}`);
         
-        const customerResponse = await fetch(apiUrl.toString(), {
+        const customerResponse = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -254,11 +254,11 @@ export async function handleSupportEscalation(
         // Create a customized notification message with the customer message and other details
         const customNotification = `${notification_message}\n\nFrom: +${phoneNumber}\nKeyword: ${matchedKeyword}${keywordCategory ? `\nCategory: ${keywordCategory}` : ''}\nMessage: "${messageContent.substring(0, 100)}${messageContent.length > 100 ? '...' : ''}"`;
         
-        // Ensure the API URL is properly formatted with a protocol
-        const apiUrl = new URL(`message/sendText/${instance}`, evolutionApiUrl);
-        console.log(`Sending notification to support agent via: ${apiUrl.toString()}`);
+        // Use direct string concatenation, just like in the working webhook function
+        const apiUrl = `${evolutionApiUrl}/message/sendText/${instance}`;
+        console.log(`Sending notification to support agent via: ${apiUrl}`);
         
-        const supportResponse = await fetch(apiUrl.toString(), {
+        const supportResponse = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
