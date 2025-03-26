@@ -21,6 +21,9 @@ const WhatsAppSupportConfig = () => {
   const [notificationMessage, setNotificationMessage] = useState(
     'A customer needs support. Please check your WhatsApp Support dashboard.'
   );
+  const [escalationMessage, setEscalationMessage] = useState(
+    'Thank you for your message. A support representative will get back to you as soon as possible.'
+  );
   const [keywords, setKeywords] = useState<Array<{ id: string; keyword: string; category: string | null }>>([]);
   const [newKeyword, setNewKeyword] = useState('');
   const [newCategory, setNewCategory] = useState('');
@@ -39,6 +42,7 @@ const WhatsAppSupportConfig = () => {
     } else {
       setSupportPhoneNumber('');
       setNotificationMessage('A customer needs support. Please check your WhatsApp Support dashboard.');
+      setEscalationMessage('Thank you for your message. A support representative will get back to you as soon as possible.');
       setKeywords([]);
     }
   }, [selectedInstance]);
@@ -80,6 +84,7 @@ const WhatsAppSupportConfig = () => {
           // No config found, use defaults
           setSupportPhoneNumber('');
           setNotificationMessage('A customer needs support. Please check your WhatsApp Support dashboard.');
+          setEscalationMessage('Thank you for your message. A support representative will get back to you as soon as possible.');
           return;
         }
         throw error;
@@ -88,6 +93,9 @@ const WhatsAppSupportConfig = () => {
       setSupportPhoneNumber(data.support_phone_number || '');
       setNotificationMessage(
         data.notification_message || 'A customer needs support. Please check your WhatsApp Support dashboard.'
+      );
+      setEscalationMessage(
+        data.escalation_message || 'Thank you for your message. A support representative will get back to you as soon as possible.'
       );
     } catch (error) {
       console.error('Error loading support config:', error);
@@ -150,6 +158,7 @@ const WhatsAppSupportConfig = () => {
           .update({
             support_phone_number: supportPhoneNumber,
             notification_message: notificationMessage,
+            escalation_message: escalationMessage,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingConfig.id);
@@ -163,7 +172,8 @@ const WhatsAppSupportConfig = () => {
             whatsapp_instance_id: selectedInstance,
             user_id: user?.id,
             support_phone_number: supportPhoneNumber,
-            notification_message: notificationMessage
+            notification_message: notificationMessage,
+            escalation_message: escalationMessage
           });
         
         if (error) throw error;
@@ -301,6 +311,20 @@ const WhatsAppSupportConfig = () => {
                     />
                     <p className="text-xs text-muted-foreground">
                       Customize the message that will be sent to the support number
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="escalation-message">Customer Escalation Message</Label>
+                    <Textarea
+                      id="escalation-message"
+                      placeholder="Message to send to customers when their request is escalated"
+                      value={escalationMessage}
+                      onChange={(e) => setEscalationMessage(e.target.value)}
+                      rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Customize the message that will be sent to customers when their conversation is escalated to human support
                     </p>
                   </div>
                   
