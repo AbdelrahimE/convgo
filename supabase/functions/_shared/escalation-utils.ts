@@ -1,3 +1,4 @@
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 // Simple fuzzy matching function
@@ -57,7 +58,7 @@ export async function handleSupportEscalation(
   evolutionApiUrl: string,
   evolutionApiKey: string,
   supabaseServiceRoleKey?: string, // Added parameter for service role key
-  foundInstanceId?: string // New parameter to accept an already-found instance ID
+  foundInstanceId?: string // Parameter to accept an already-found instance ID
 ): Promise<{
   success: boolean;
   action?: string;
@@ -93,10 +94,10 @@ export async function handleSupportEscalation(
 
     console.log(`Processing message from ${phoneNumber} in instance ${instance}: "${messageContent.substring(0, 50)}..."`);
 
-    // If we already have a verified instance ID from the webhook, use it directly
-    // Otherwise, try to look it up (backward compatibility)
+    // Use the found instance ID if provided (coming from webhook)
     let instanceId = foundInstanceId;
     
+    // Only look up the instance if we don't already have the ID
     if (!instanceId) {
       // Use the instance name directly from the webhook data
       const instanceName = instance;
