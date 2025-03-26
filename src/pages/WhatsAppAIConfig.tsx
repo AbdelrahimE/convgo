@@ -34,7 +34,7 @@ interface AIConfig {
   voice_message_default_response: string;
 }
 
-const WhatsAppAIConfig = () => {
+export const WhatsAppAIConfig = () => {
   const {
     user
   } = useAuth();
@@ -624,6 +624,3 @@ const WhatsAppAIConfig = () => {
       </Dialog>
     </div>;
 };
-
-
-

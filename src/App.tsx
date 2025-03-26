@@ -10,7 +10,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
 import WhatsAppFileConfig from '@/pages/WhatsAppFileConfig';
-import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
+import { WhatsAppAIConfig } from '@/pages/WhatsAppAIConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
