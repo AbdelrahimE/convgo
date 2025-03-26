@@ -1,4 +1,3 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 // Simple fuzzy matching function
@@ -57,7 +56,8 @@ export async function handleSupportEscalation(
   supabaseAnonKey: string,
   evolutionApiUrl: string,
   evolutionApiKey: string,
-  supabaseServiceRoleKey?: string // Added parameter for service role key
+  supabaseServiceRoleKey?: string, // Added parameter for service role key
+  foundInstanceId?: string // New parameter to accept an already-found instance ID
 ): Promise<{
   success: boolean;
   action?: string;
@@ -93,29 +93,34 @@ export async function handleSupportEscalation(
 
     console.log(`Processing message from ${phoneNumber} in instance ${instance}: "${messageContent.substring(0, 50)}..."`);
 
-    // Use the instance name directly from the webhook data
-    const instanceName = instance;
+    // If we already have a verified instance ID from the webhook, use it directly
+    // Otherwise, try to look it up (backward compatibility)
+    let instanceId = foundInstanceId;
+    
+    if (!instanceId) {
+      // Use the instance name directly from the webhook data
+      const instanceName = instance;
 
-    // Simplified instance lookup - match exactly how the webhook function does it
-    // ONLY try to get the instance by name, no fallbacks
-    const { data: instanceData, error: instanceError } = await supabaseAdmin
-      .from('whatsapp_instances')
-      .select('id')
-      .eq('instance_name', instanceName)
-      .single();
-    
-    if (instanceError || !instanceData) {
-      console.error(`Instance not found: ${instanceName}`, instanceError);
-      // Log details for troubleshooting
-      await supabaseAdmin.from('webhook_debug_logs').insert({
-        category: 'escalation_error',
-        message: `Failed to find instance: ${instanceName}`,
-        data: { error: instanceError, webhook_data: webhookData }
-      });
-      return { success: false, error: 'Instance not found', details: instanceError, skip_ai_processing: false };
+      // Try to get the instance by name
+      const { data: instanceData, error: instanceError } = await supabaseAdmin
+        .from('whatsapp_instances')
+        .select('id')
+        .eq('instance_name', instanceName)
+        .single();
+      
+      if (instanceError || !instanceData) {
+        console.error(`Instance not found: ${instanceName}`, instanceError);
+        // Log details for troubleshooting
+        await supabaseAdmin.from('webhook_debug_logs').insert({
+          category: 'escalation_error',
+          message: `Failed to find instance: ${instanceName}`,
+          data: { error: instanceError, webhook_data: webhookData }
+        });
+        return { success: false, error: 'Instance not found', details: instanceError, skip_ai_processing: false };
+      }
+      
+      instanceId = instanceData.id;
     }
-    
-    const instanceId = instanceData.id;
 
     // Step 2: Check if conversation is already escalated
     const { data: existingEscalation } = await supabaseAdmin
@@ -133,7 +138,7 @@ export async function handleSupportEscalation(
         action: 'already_escalated', 
         escalation_id: existingEscalation.id,
         // When already escalated, we usually want to skip AI processing
-        // You may want to make this configurable in your support settings
+        // You may want to make this configurable via a support settings
         skip_ai_processing: true 
       };
     }
@@ -211,7 +216,7 @@ export async function handleSupportEscalation(
     // Step 7: Send message to customer
     if (escalation_message) {
       try {
-        const customerResponse = await fetch(`${evolutionApiUrl}/message/sendText/${instanceName}`, {
+        const customerResponse = await fetch(`${evolutionApiUrl}/message/sendText/${instance}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -244,7 +249,7 @@ export async function handleSupportEscalation(
         // Create a customized notification message with the customer message and other details
         const customNotification = `${notification_message}\n\nFrom: +${phoneNumber}\nKeyword: ${matchedKeyword}${keywordCategory ? `\nCategory: ${keywordCategory}` : ''}\nMessage: "${messageContent.substring(0, 100)}${messageContent.length > 100 ? '...' : ''}"`;
         
-        const supportResponse = await fetch(`${evolutionApiUrl}/message/sendText/${instanceName}`, {
+        const supportResponse = await fetch(`${evolutionApiUrl}/message/sendText/${instance}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -276,7 +281,7 @@ export async function handleSupportEscalation(
       category: 'escalation',
       message: `Escalated conversation with ${phoneNumber} due to keyword "${matchedKeyword}"`,
       data: {
-        instance: instanceName,
+        instance: instance,
         phone: phoneNumber,
         keyword: matchedKeyword,
         category: keywordCategory,
