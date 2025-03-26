@@ -67,7 +67,8 @@ export async function handleSupportEscalation(
   details?: any;
   skip_ai_processing?: boolean;
 }> {
-  // Initialize Supabase client
+  // Initialize Supabase client with service role key instead of anon key for consistent behavior
+  // with the main webhook handler which uses supabaseAdmin
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
   
   try {
@@ -91,12 +92,35 @@ export async function handleSupportEscalation(
 
     console.log(`Processing message from ${phoneNumber} in instance ${instance}: "${messageContent.substring(0, 50)}..."`);
 
-    // Step 1: Get instance ID from the instance name
-    const { data: instanceData, error: instanceError } = await supabase
+    // Modified approach to get instance ID:
+    // First try to directly get the instance by name
+    let { data: instanceData, error: instanceError } = await supabase
       .from('whatsapp_instances')
       .select('id')
       .eq('instance_name', instance)
       .single();
+    
+    // If that fails, try searching by ID in case the instance parameter is actually an ID
+    if (instanceError || !instanceData) {
+      // Try getting by ID directly 
+      ({ data: instanceData, error: instanceError } = await supabase
+        .from('whatsapp_instances')
+        .select('id')
+        .eq('id', instance)
+        .single());
+      
+      // If that still fails, try a more flexible search
+      if (instanceError || !instanceData) {
+        console.log(`Could not find instance by name or ID: ${instance}, trying more flexible search`);
+        
+        // Try to find any instance that might match this name in some format
+        ({ data: instanceData, error: instanceError } = await supabase
+          .from('whatsapp_instances')
+          .select('id')
+          .ilike('instance_name', `%${instance}%`)
+          .single());
+      }
+    }
     
     if (instanceError || !instanceData) {
       console.error(`Instance not found: ${instance}`, instanceError);
