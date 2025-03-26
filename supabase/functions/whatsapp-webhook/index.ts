@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
@@ -1458,8 +1459,31 @@ serve(async (req) => {
       
       // Process for support escalation if this is a message event
       let skipAiProcessing = false;
+      let foundInstanceId = null;
+      
+      // Look up the instance ID if this is a message event
       if (event === 'messages.upsert') {
         try {
+          // Get instance ID from instance name before checking for escalation
+          const { data: instanceData, error: instanceError } = await supabaseAdmin
+            .from('whatsapp_instances')
+            .select('id')
+            .eq('instance_name', instanceName)
+            .single();
+            
+          if (!instanceError && instanceData) {
+            foundInstanceId = instanceData.id;
+            await logDebug('INSTANCE_LOOKUP_SUCCESS', 'Found instance ID for escalation check', { 
+              instanceName, 
+              instanceId: foundInstanceId 
+            });
+          } else {
+            await logDebug('INSTANCE_LOOKUP_ERROR', 'Failed to find instance ID for escalation check', { 
+              instanceName, 
+              error: instanceError 
+            });
+          }
+          
           // Prepare webhook data for escalation check
           const webhookData = {
             instance: instanceName,
@@ -1477,13 +1501,15 @@ serve(async (req) => {
           const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL') || '';
           const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || '';
           
-          // Check for support escalation
+          // Check for support escalation - passing the found instance ID
           const escalationResult = await handleSupportEscalation(
             webhookData,
             supabaseUrl,
             supabaseAnonKey,
             evolutionApiUrl,
-            evolutionApiKey
+            evolutionApiKey,
+            supabaseServiceKey,
+            foundInstanceId // Pass the already-found instance ID
           );
           
           await logDebug('SUPPORT_ESCALATION_RESULT', 'Support escalation check result', { 
