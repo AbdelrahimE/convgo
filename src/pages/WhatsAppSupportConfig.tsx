@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, Tags, X, MessageSquare, Phone, Save, Trash2 } from 'lucide-react';
+import { EscalatedConversations } from '@/components/EscalatedConversations';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const WhatsAppSupportConfig = () => {
   const { user } = useAuth();
@@ -276,159 +277,188 @@ const WhatsAppSupportConfig = () => {
             </Card>
           ) : (
             <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Phone className="h-5 w-5 mr-2" />
-                    Support Contact Settings
-                  </CardTitle>
-                  <CardDescription>
-                    Configure the phone number that will receive support requests
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="support-phone">Support WhatsApp Number</Label>
-                    <Input
-                      id="support-phone"
-                      placeholder="e.g. +1234567890 (with country code)"
-                      value={supportPhoneNumber}
-                      onChange={(e) => setSupportPhoneNumber(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Enter the phone number that will receive notifications when a customer needs support
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="notification-message">Support Notification Message</Label>
-                    <Textarea
-                      id="notification-message"
-                      placeholder="Message to send to support agents"
-                      value={notificationMessage}
-                      onChange={(e) => setNotificationMessage(e.target.value)}
-                      rows={3}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Customize the message that will be sent to the support number
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="escalation-message">Customer Escalation Message</Label>
-                    <Textarea
-                      id="escalation-message"
-                      placeholder="Message to send to customers when their request is escalated"
-                      value={escalationMessage}
-                      onChange={(e) => setEscalationMessage(e.target.value)}
-                      rows={3}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Customize the message that will be sent to customers when their conversation is escalated to human support
-                    </p>
-                  </div>
-                  
-                  <Button 
-                    onClick={saveSupportConfig} 
-                    disabled={isSaving || !supportPhoneNumber}
-                    className="w-full"
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Save Support Settings
-                      </>
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Tags className="h-5 w-5 mr-2" />
-                    Support Keywords
-                  </CardTitle>
-                  <CardDescription>
-                    Manage keywords that will trigger automatic support escalation
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-4 mb-6">
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <div className="flex-1">
-                        <Label htmlFor="new-keyword">New Keyword</Label>
+              <Tabs defaultValue="settings" className="space-y-6">
+                <TabsList>
+                  <TabsTrigger value="settings">Settings</TabsTrigger>
+                  <TabsTrigger value="keywords">Keywords</TabsTrigger>
+                  <TabsTrigger value="escalated">Escalated Conversations</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="settings">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <Phone className="h-5 w-5 mr-2" />
+                        Support Contact Settings
+                      </CardTitle>
+                      <CardDescription>
+                        Configure the phone number that will receive support requests
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="support-phone">Support WhatsApp Number</Label>
                         <Input
-                          id="new-keyword"
-                          placeholder="e.g. help, urgent, support"
-                          value={newKeyword}
-                          onChange={(e) => setNewKeyword(e.target.value)}
+                          id="support-phone"
+                          placeholder="e.g. +1234567890 (with country code)"
+                          value={supportPhoneNumber}
+                          onChange={(e) => setSupportPhoneNumber(e.target.value)}
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Enter the phone number that will receive notifications when a customer needs support
+                        </p>
                       </div>
-                      <div className="flex-1">
-                        <Label htmlFor="new-category">Category (Optional)</Label>
-                        <Input
-                          id="new-category"
-                          placeholder="e.g. billing, technical"
-                          value={newCategory}
-                          onChange={(e) => setNewCategory(e.target.value)}
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="notification-message">Support Notification Message</Label>
+                        <Textarea
+                          id="notification-message"
+                          placeholder="Message to send to support agents"
+                          value={notificationMessage}
+                          onChange={(e) => setNotificationMessage(e.target.value)}
+                          rows={3}
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Customize the message that will be sent to the support number
+                        </p>
                       </div>
-                      <div className="flex items-end">
-                        <Button 
-                          onClick={addKeyword} 
-                          disabled={isAddingKeyword || !newKeyword.trim()} 
-                          className="w-full sm:w-auto"
-                        >
-                          {isAddingKeyword ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Plus className="h-4 w-4 mr-2" />
-                              Add
-                            </>
-                          )}
-                        </Button>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="escalation-message">Customer Escalation Message</Label>
+                        <Textarea
+                          id="escalation-message"
+                          placeholder="Message to send to customers when their request is escalated"
+                          value={escalationMessage}
+                          onChange={(e) => setEscalationMessage(e.target.value)}
+                          rows={3}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Customize the message that will be sent to customers when their conversation is escalated to human support
+                        </p>
                       </div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-medium mb-2">Current Keywords</h3>
-                    {keywords.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-4">
-                        No keywords added yet. Keywords help identify when a customer message should be escalated to human support.
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {keywords.map((keyword) => (
-                          <div key={keyword.id} className="flex items-center bg-muted px-3 py-1 rounded-full">
-                            <span className="text-sm font-medium mr-1">{keyword.keyword}</span>
-                            {keyword.category && (
-                              <Badge variant="outline" className="mr-1 h-5">
-                                {keyword.category}
-                              </Badge>
-                            )}
+                      
+                      <Button 
+                        onClick={saveSupportConfig} 
+                        disabled={isSaving || !supportPhoneNumber}
+                        className="w-full"
+                      >
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="mr-2 h-4 w-4" />
+                            Save Support Settings
+                          </>
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                
+                <TabsContent value="keywords">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <Tags className="h-5 w-5 mr-2" />
+                        Support Keywords
+                      </CardTitle>
+                      <CardDescription>
+                        Manage keywords that will trigger automatic support escalation
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-4 mb-6">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <div className="flex-1">
+                            <Label htmlFor="new-keyword">New Keyword</Label>
+                            <Input
+                              id="new-keyword"
+                              placeholder="e.g. help, urgent, support"
+                              value={newKeyword}
+                              onChange={(e) => setNewKeyword(e.target.value)}
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <Label htmlFor="new-category">Category (Optional)</Label>
+                            <Input
+                              id="new-category"
+                              placeholder="e.g. billing, technical"
+                              value={newCategory}
+                              onChange={(e) => setNewCategory(e.target.value)}
+                            />
+                          </div>
+                          <div className="flex items-end">
                             <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-5 w-5 rounded-full" 
-                              onClick={() => deleteKeyword(keyword.id)}
+                              onClick={addKeyword} 
+                              disabled={isAddingKeyword || !newKeyword.trim()} 
+                              className="w-full sm:w-auto"
                             >
-                              <X className="h-3 w-3" />
+                              {isAddingKeyword ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Add
+                                </>
+                              )}
                             </Button>
                           </div>
-                        ))}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                      
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-medium mb-2">Current Keywords</h3>
+                        {keywords.length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-4">
+                            No keywords added yet. Keywords help identify when a customer message should be escalated to human support.
+                          </p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {keywords.map((keyword) => (
+                              <div key={keyword.id} className="flex items-center bg-muted px-3 py-1 rounded-full">
+                                <span className="text-sm font-medium mr-1">{keyword.keyword}</span>
+                                {keyword.category && (
+                                  <Badge variant="outline" className="mr-1 h-5">
+                                    {keyword.category}
+                                  </Badge>
+                                )}
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-5 w-5 rounded-full" 
+                                  onClick={() => deleteKeyword(keyword.id)}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                
+                <TabsContent value="escalated">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <MessageSquare className="h-5 w-5 mr-2" />
+                        Escalated Conversations
+                      </CardTitle>
+                      <CardDescription>
+                        View and manage conversations that have been escalated to human support
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <EscalatedConversations instanceId={selectedInstance} />
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
             </div>
           )}
         </div>

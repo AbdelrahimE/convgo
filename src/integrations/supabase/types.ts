@@ -669,6 +669,7 @@ export type Database = {
       whatsapp_support_config: {
         Row: {
           created_at: string
+          escalation_message: string
           id: string
           notification_message: string
           support_phone_number: string
@@ -678,6 +679,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          escalation_message?: string
           id?: string
           notification_message?: string
           support_phone_number: string
@@ -687,6 +689,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          escalation_message?: string
           id?: string
           notification_message?: string
           support_phone_number?: string
