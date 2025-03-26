@@ -68,9 +68,9 @@ export async function handleSupportEscalation(
   details?: any;
   skip_ai_processing?: boolean;
 }> {
-  // Initialize Supabase client with service role key instead of anon key for consistent behavior
-  // with the main webhook handler which uses supabaseAdmin
-  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey || supabaseAnonKey);
+  // Initialize Supabase client with service role key (renamed to supabaseAdmin for consistency)
+  // This matches the approach used in the webhook function
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey || supabaseAnonKey);
   
   try {
     const { instance, data } = webhookData;
@@ -98,7 +98,7 @@ export async function handleSupportEscalation(
 
     // Modified approach to get instance ID:
     // First try to directly get the instance by name
-    let { data: instanceData, error: instanceError } = await supabase
+    let { data: instanceData, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
       .select('id')
       .eq('instance_name', instanceName)
@@ -107,7 +107,7 @@ export async function handleSupportEscalation(
     // If that fails, try searching by ID in case the instance parameter is actually an ID
     if (instanceError || !instanceData) {
       // Try getting by ID directly 
-      ({ data: instanceData, error: instanceError } = await supabase
+      ({ data: instanceData, error: instanceError } = await supabaseAdmin
         .from('whatsapp_instances')
         .select('id')
         .eq('id', instanceName)
@@ -118,7 +118,7 @@ export async function handleSupportEscalation(
         console.log(`Could not find instance by name or ID: ${instanceName}, trying more flexible search`);
         
         // Try to find any instance that might match this name in some format
-        ({ data: instanceData, error: instanceError } = await supabase
+        ({ data: instanceData, error: instanceError } = await supabaseAdmin
           .from('whatsapp_instances')
           .select('id')
           .ilike('instance_name', `%${instanceName}%`)
@@ -134,7 +134,7 @@ export async function handleSupportEscalation(
     const instanceId = instanceData.id;
 
     // Step 2: Check if conversation is already escalated
-    const { data: existingEscalation } = await supabase
+    const { data: existingEscalation } = await supabaseAdmin
       .from('whatsapp_escalated_conversations')
       .select('id')
       .eq('whatsapp_instance_id', instanceId)
@@ -155,7 +155,7 @@ export async function handleSupportEscalation(
     }
 
     // Step 3: Get support keywords for this instance
-    const { data: keywords, error: keywordsError } = await supabase
+    const { data: keywords, error: keywordsError } = await supabaseAdmin
       .from('whatsapp_support_keywords')
       .select('keyword, category')
       .eq('is_active', true);
@@ -190,7 +190,7 @@ export async function handleSupportEscalation(
     console.log(`Matched keyword "${matchedKeyword}" in category "${keywordCategory || 'uncategorized'}"`);
 
     // Step 5: Get support configuration
-    const { data: supportConfig, error: configError } = await supabase
+    const { data: supportConfig, error: configError } = await supabaseAdmin
       .from('whatsapp_support_config')
       .select('support_phone_number, escalation_message, notification_message')
       .eq('whatsapp_instance_id', instanceId)
@@ -209,7 +209,7 @@ export async function handleSupportEscalation(
     }
 
     // Step 6: Create escalation record
-    const { data: escalation, error: escalationError } = await supabase
+    const { data: escalation, error: escalationError } = await supabaseAdmin
       .from('whatsapp_escalated_conversations')
       .insert({
         whatsapp_instance_id: instanceId,
@@ -288,7 +288,7 @@ export async function handleSupportEscalation(
     }
 
     // Log the escalation action for debug purposes
-    await supabase.from('webhook_debug_logs').insert({
+    await supabaseAdmin.from('webhook_debug_logs').insert({
       category: 'escalation',
       message: `Escalated conversation with ${phoneNumber} due to keyword "${matchedKeyword}"`,
       data: {
