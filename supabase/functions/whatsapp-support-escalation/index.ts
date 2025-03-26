@@ -37,12 +37,9 @@ serve(async (req) => {
       });
     }
 
-    // Extract parameters from URL if provided
+    // Check URL parameters for already found instance ID
     const url = new URL(req.url);
-    const foundInstanceId = url.searchParams.get('instanceId');
-
-    // Debug log for tracking the instance ID
-    console.log(`[ESCALATION_FUNCTION] Processing with instanceId: ${foundInstanceId || 'not provided'}`);
+    const foundInstanceId = url.searchParams.get('foundInstanceId');
 
     // Process the message using the extracted core logic
     const result = await handleSupportEscalation(
@@ -51,8 +48,8 @@ serve(async (req) => {
       SUPABASE_ANON_KEY,
       EVOLUTION_API_URL,
       EVOLUTION_API_KEY,
-      SUPABASE_SERVICE_ROLE_KEY,
-      foundInstanceId
+      SUPABASE_SERVICE_ROLE_KEY,  // Pass the service role key
+      foundInstanceId  // Pass the already-found instance ID if available
     );
 
     return new Response(JSON.stringify(result), { 
