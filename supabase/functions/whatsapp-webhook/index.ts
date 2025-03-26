@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
 
 // Define standard CORS headers
 const corsHeaders = {
@@ -1455,8 +1456,65 @@ serve(async (req) => {
         await logDebug('WEBHOOK_SAVED', 'Webhook message saved successfully');
       }
       
-      // Process for AI if this is a message event
+      // Process for support escalation if this is a message event
+      let skipAiProcessing = false;
       if (event === 'messages.upsert') {
+        try {
+          // Prepare webhook data for escalation check
+          const webhookData = {
+            instance: instanceName,
+            event: event,
+            data: normalizedData
+          };
+          
+          await logDebug('SUPPORT_ESCALATION_CHECK', 'Checking message for support escalation', { 
+            instance: instanceName
+          });
+          
+          // Get Supabase URL and API keys from environment
+          const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+          const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+          const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL') || '';
+          const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || '';
+          
+          // Check for support escalation
+          const escalationResult = await handleSupportEscalation(
+            webhookData,
+            supabaseUrl,
+            supabaseAnonKey,
+            evolutionApiUrl,
+            evolutionApiKey
+          );
+          
+          await logDebug('SUPPORT_ESCALATION_RESULT', 'Support escalation check result', { 
+            success: escalationResult.success,
+            action: escalationResult.action,
+            escalated: escalationResult.action === 'escalated',
+            skipAi: !!escalationResult.skip_ai_processing
+          });
+          
+          // Set flag to skip AI processing if needed
+          if (escalationResult.skip_ai_processing) {
+            skipAiProcessing = true;
+            await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing due to support escalation', {
+              action: escalationResult.action,
+              matchedKeyword: escalationResult.matched_keyword,
+              category: escalationResult.category
+            });
+          }
+        } catch (error) {
+          // Log error but continue with AI processing
+          await logDebug('SUPPORT_ESCALATION_ERROR', 'Error checking for support escalation', { 
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+          });
+          console.error('Error checking for support escalation:', error);
+          // Continue with AI processing despite escalation error
+        }
+      }
+      
+      // Process for AI if this is a message event and not escalated
+      if (event === 'messages.upsert' && !skipAiProcessing) {
         await logDebug('AI_PROCESS_ATTEMPT', 'Attempting to process message for AI response');
         await processMessageForAI(instanceName, normalizedData);
       }
@@ -1508,4 +1566,3 @@ serve(async (req) => {
     );
   }
 });
-
