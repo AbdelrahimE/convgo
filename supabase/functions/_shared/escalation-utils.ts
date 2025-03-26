@@ -56,7 +56,8 @@ export async function handleSupportEscalation(
   supabaseUrl: string,
   supabaseAnonKey: string,
   evolutionApiUrl: string,
-  evolutionApiKey: string
+  evolutionApiKey: string,
+  supabaseServiceRoleKey?: string // Added parameter for service role key
 ): Promise<{
   success: boolean;
   action?: string;
@@ -69,7 +70,7 @@ export async function handleSupportEscalation(
 }> {
   // Initialize Supabase client with service role key instead of anon key for consistent behavior
   // with the main webhook handler which uses supabaseAdmin
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey || supabaseAnonKey);
   
   try {
     const { instance, data } = webhookData;
