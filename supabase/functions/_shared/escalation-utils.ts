@@ -93,41 +93,25 @@ export async function handleSupportEscalation(
 
     console.log(`Processing message from ${phoneNumber} in instance ${instance}: "${messageContent.substring(0, 50)}..."`);
 
-    // FIXED: Changed variable name from 'instance' to 'instanceName' to match webhook convention
+    // Use the instance name directly from the webhook data
     const instanceName = instance;
 
-    // Modified approach to get instance ID:
-    // First try to directly get the instance by name
-    let { data: instanceData, error: instanceError } = await supabaseAdmin
+    // Simplified instance lookup - match exactly how the webhook function does it
+    // ONLY try to get the instance by name, no fallbacks
+    const { data: instanceData, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
       .select('id')
       .eq('instance_name', instanceName)
       .single();
     
-    // If that fails, try searching by ID in case the instance parameter is actually an ID
-    if (instanceError || !instanceData) {
-      // Try getting by ID directly 
-      ({ data: instanceData, error: instanceError } = await supabaseAdmin
-        .from('whatsapp_instances')
-        .select('id')
-        .eq('id', instanceName)
-        .single());
-      
-      // If that still fails, try a more flexible search
-      if (instanceError || !instanceData) {
-        console.log(`Could not find instance by name or ID: ${instanceName}, trying more flexible search`);
-        
-        // Try to find any instance that might match this name in some format
-        ({ data: instanceData, error: instanceError } = await supabaseAdmin
-          .from('whatsapp_instances')
-          .select('id')
-          .ilike('instance_name', `%${instanceName}%`)
-          .single());
-      }
-    }
-    
     if (instanceError || !instanceData) {
       console.error(`Instance not found: ${instanceName}`, instanceError);
+      // Log details for troubleshooting
+      await supabaseAdmin.from('webhook_debug_logs').insert({
+        category: 'escalation_error',
+        message: `Failed to find instance: ${instanceName}`,
+        data: { error: instanceError, webhook_data: webhookData }
+      });
       return { success: false, error: 'Instance not found', details: instanceError, skip_ai_processing: false };
     }
     
