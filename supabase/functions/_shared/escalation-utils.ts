@@ -235,12 +235,7 @@ export async function handleSupportEscalation(
           },
           body: JSON.stringify({
             number: phoneNumber, // Send TO the customer phone number
-            options: {
-              delay: 1000
-            },
-            textMessage: {
-              text: escalation_message
-            }
+            text: escalation_message // Simplified format that matches the working example
           })
         });
         
@@ -272,12 +267,7 @@ export async function handleSupportEscalation(
           },
           body: JSON.stringify({
             number: support_phone_number, // Send TO the support phone number
-            options: {
-              delay: 1000
-            },
-            textMessage: {
-              text: customNotification
-            }
+            text: customNotification // Simplified format that matches the working example
           })
         });
         
