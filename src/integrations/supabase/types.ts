@@ -559,6 +559,41 @@ export type Database = {
           },
         ]
       }
+      whatsapp_escalated_conversations: {
+        Row: {
+          escalated_at: string
+          id: string
+          is_resolved: boolean
+          resolved_at: string | null
+          user_phone: string
+          whatsapp_instance_id: string
+        }
+        Insert: {
+          escalated_at?: string
+          id?: string
+          is_resolved?: boolean
+          resolved_at?: string | null
+          user_phone: string
+          whatsapp_instance_id: string
+        }
+        Update: {
+          escalated_at?: string
+          id?: string
+          is_resolved?: boolean
+          resolved_at?: string | null
+          user_phone?: string
+          whatsapp_instance_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_escalated_conversations_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_file_mappings: {
         Row: {
           created_at: string
@@ -630,6 +665,86 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      whatsapp_support_config: {
+        Row: {
+          created_at: string
+          id: string
+          notification_message: string
+          support_phone_number: string
+          updated_at: string
+          user_id: string
+          whatsapp_instance_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notification_message?: string
+          support_phone_number: string
+          updated_at?: string
+          user_id: string
+          whatsapp_instance_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notification_message?: string
+          support_phone_number?: string
+          updated_at?: string
+          user_id?: string
+          whatsapp_instance_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_support_config_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_support_config_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_support_keywords: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          keyword: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keyword: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keyword?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_support_keywords_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_webhook_config: {
         Row: {
