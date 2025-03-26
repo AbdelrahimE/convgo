@@ -93,12 +93,15 @@ export async function handleSupportEscalation(
 
     console.log(`Processing message from ${phoneNumber} in instance ${instance}: "${messageContent.substring(0, 50)}..."`);
 
+    // FIXED: Changed variable name from 'instance' to 'instanceName' to match webhook convention
+    const instanceName = instance;
+
     // Modified approach to get instance ID:
     // First try to directly get the instance by name
     let { data: instanceData, error: instanceError } = await supabase
       .from('whatsapp_instances')
       .select('id')
-      .eq('instance_name', instance)
+      .eq('instance_name', instanceName)
       .single();
     
     // If that fails, try searching by ID in case the instance parameter is actually an ID
@@ -107,24 +110,24 @@ export async function handleSupportEscalation(
       ({ data: instanceData, error: instanceError } = await supabase
         .from('whatsapp_instances')
         .select('id')
-        .eq('id', instance)
+        .eq('id', instanceName)
         .single());
       
       // If that still fails, try a more flexible search
       if (instanceError || !instanceData) {
-        console.log(`Could not find instance by name or ID: ${instance}, trying more flexible search`);
+        console.log(`Could not find instance by name or ID: ${instanceName}, trying more flexible search`);
         
         // Try to find any instance that might match this name in some format
         ({ data: instanceData, error: instanceError } = await supabase
           .from('whatsapp_instances')
           .select('id')
-          .ilike('instance_name', `%${instance}%`)
+          .ilike('instance_name', `%${instanceName}%`)
           .single());
       }
     }
     
     if (instanceError || !instanceData) {
-      console.error(`Instance not found: ${instance}`, instanceError);
+      console.error(`Instance not found: ${instanceName}`, instanceError);
       return { success: false, error: 'Instance not found', details: instanceError, skip_ai_processing: false };
     }
     
@@ -224,7 +227,7 @@ export async function handleSupportEscalation(
     // Step 7: Send message to customer
     if (escalation_message) {
       try {
-        const customerResponse = await fetch(`${evolutionApiUrl}/message/sendText/${instance}`, {
+        const customerResponse = await fetch(`${evolutionApiUrl}/message/sendText/${instanceName}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -257,7 +260,7 @@ export async function handleSupportEscalation(
         // Create a customized notification message with the customer message and other details
         const customNotification = `${notification_message}\n\nFrom: +${phoneNumber}\nKeyword: ${matchedKeyword}${keywordCategory ? `\nCategory: ${keywordCategory}` : ''}\nMessage: "${messageContent.substring(0, 100)}${messageContent.length > 100 ? '...' : ''}"`;
         
-        const supportResponse = await fetch(`${evolutionApiUrl}/message/sendText/${instance}`, {
+        const supportResponse = await fetch(`${evolutionApiUrl}/message/sendText/${instanceName}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -289,7 +292,7 @@ export async function handleSupportEscalation(
       category: 'escalation',
       message: `Escalated conversation with ${phoneNumber} due to keyword "${matchedKeyword}"`,
       data: {
-        instance,
+        instance: instanceName,
         phone: phoneNumber,
         keyword: matchedKeyword,
         category: keywordCategory,
