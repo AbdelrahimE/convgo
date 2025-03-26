@@ -126,7 +126,7 @@ export async function handleSupportEscalation(
       instanceId = instanceData.id;
     }
 
-    // Step 2: Check if conversation is already escalated
+    // Step 2: Check if conversation is already escalated (ONLY currently active escalations)
     const { data: existingEscalation } = await supabaseAdmin
       .from('whatsapp_escalated_conversations')
       .select('id')
