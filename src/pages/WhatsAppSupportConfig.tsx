@@ -113,6 +113,7 @@ const WhatsAppSupportConfig = () => {
         .from('whatsapp_support_keywords')
         .select('id, keyword, category')
         .eq('user_id', user?.id)
+        .eq('whatsapp_instance_id', selectedInstance)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -140,7 +141,6 @@ const WhatsAppSupportConfig = () => {
     try {
       setIsSaving(true);
       
-      // Check if configuration exists
       const { data: existingConfig, error: checkError } = await supabase
         .from('whatsapp_support_config')
         .select('id')
@@ -153,7 +153,6 @@ const WhatsAppSupportConfig = () => {
       }
       
       if (existingConfig) {
-        // Update existing config
         const { error } = await supabase
           .from('whatsapp_support_config')
           .update({
@@ -166,7 +165,6 @@ const WhatsAppSupportConfig = () => {
         
         if (error) throw error;
       } else {
-        // Insert new config
         const { error } = await supabase
           .from('whatsapp_support_config')
           .insert({
@@ -195,6 +193,11 @@ const WhatsAppSupportConfig = () => {
       return;
     }
 
+    if (!selectedInstance) {
+      toast.error('Please select a WhatsApp instance');
+      return;
+    }
+
     try {
       setIsAddingKeyword(true);
       
@@ -202,6 +205,7 @@ const WhatsAppSupportConfig = () => {
         .from('whatsapp_support_keywords')
         .insert({
           user_id: user?.id,
+          whatsapp_instance_id: selectedInstance,
           keyword: newKeyword.trim(),
           category: newCategory.trim() || null
         })
@@ -363,10 +367,10 @@ const WhatsAppSupportConfig = () => {
                     <CardHeader>
                       <CardTitle className="flex items-center">
                         <Tags className="h-5 w-5 mr-2" />
-                        Support Keywords
+                        Support Keywords for {instances.find(i => i.id === selectedInstance)?.instance_name}
                       </CardTitle>
                       <CardDescription>
-                        Manage keywords that will trigger automatic support escalation
+                        Manage keywords that will trigger automatic support escalation for this WhatsApp number
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -379,6 +383,7 @@ const WhatsAppSupportConfig = () => {
                               placeholder="e.g. help, urgent, support"
                               value={newKeyword}
                               onChange={(e) => setNewKeyword(e.target.value)}
+                              disabled={!selectedInstance}
                             />
                           </div>
                           <div className="flex-1">
@@ -388,12 +393,13 @@ const WhatsAppSupportConfig = () => {
                               placeholder="e.g. billing, technical"
                               value={newCategory}
                               onChange={(e) => setNewCategory(e.target.value)}
+                              disabled={!selectedInstance}
                             />
                           </div>
                           <div className="flex items-end">
                             <Button 
                               onClick={addKeyword} 
-                              disabled={isAddingKeyword || !newKeyword.trim()} 
+                              disabled={isAddingKeyword || !newKeyword.trim() || !selectedInstance} 
                               className="w-full sm:w-auto"
                             >
                               {isAddingKeyword ? (
@@ -410,10 +416,10 @@ const WhatsAppSupportConfig = () => {
                       </div>
                       
                       <div className="space-y-2">
-                        <h3 className="text-sm font-medium mb-2">Current Keywords</h3>
+                        <h3 className="text-sm font-medium mb-2">Current Keywords for this WhatsApp Number</h3>
                         {keywords.length === 0 ? (
                           <p className="text-sm text-muted-foreground py-4">
-                            No keywords added yet. Keywords help identify when a customer message should be escalated to human support.
+                            No keywords added yet for this WhatsApp number. Keywords help identify when a customer message should be escalated to human support.
                           </p>
                         ) : (
                           <div className="flex flex-wrap gap-2">
