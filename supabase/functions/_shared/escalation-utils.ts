@@ -77,9 +77,10 @@ export async function handleSupportEscalation(
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey || supabaseAnonKey);
   
   try {
-    // Ensure we're using the correct instance name from the webhook data
-    // This helps prevent mixing up instances in the webhook flow
+    // Extract and validate the primary business instance name from the webhook data
+    // This is critical for ensuring we're always using the correct instance for escalation logic
     const { instance, data } = webhookData;
+    const businessInstanceName = instance; // Store the original business instance name
     
     // Extract the message content and phone number
     const messageContent = data.message.conversation || 
@@ -97,42 +98,40 @@ export async function handleSupportEscalation(
       return { success: true, action: 'skipped_empty_message', skip_ai_processing: false };
     }
 
-    console.log(`Processing message from ${phoneNumber} in instance ${instance}: "${messageContent.substring(0, 50)}..."`);
+    console.log(`Processing message from ${phoneNumber} in business instance ${businessInstanceName}: "${messageContent.substring(0, 50)}..."`);
 
     // Use the found instance ID if provided (coming from webhook)
-    let instanceId = foundInstanceId;
+    let businessInstanceId = foundInstanceId;
     
     // Only look up the instance if we don't already have the ID
-    if (!instanceId) {
-      // Use the instance name directly from the webhook data
-      const instanceName = instance;
-
-      // Try to get the instance by name
+    if (!businessInstanceId) {
+      // Always use the original business instance name, not any support instance
       const { data: instanceData, error: instanceError } = await supabaseAdmin
         .from('whatsapp_instances')
         .select('id')
-        .eq('instance_name', instanceName)
+        .eq('instance_name', businessInstanceName)
         .single();
       
       if (instanceError || !instanceData) {
-        console.error(`Instance not found: ${instanceName}`, instanceError);
+        console.error(`Business instance not found: ${businessInstanceName}`, instanceError);
         // Log details for troubleshooting
         await supabaseAdmin.from('webhook_debug_logs').insert({
           category: 'escalation_error',
-          message: `Failed to find instance: ${instanceName}`,
+          message: `Failed to find business instance: ${businessInstanceName}`,
           data: { error: instanceError, webhook_data: webhookData }
         });
-        return { success: false, error: 'Instance not found', details: instanceError, skip_ai_processing: false };
+        return { success: false, error: 'Business instance not found', details: instanceError, skip_ai_processing: false };
       }
       
-      instanceId = instanceData.id;
+      businessInstanceId = instanceData.id;
     }
 
     // Step 2: Check if conversation is already escalated (ONLY currently active escalations)
+    // We use the correct business instance ID here, not a support agent instance
     const { data: existingEscalation } = await supabaseAdmin
       .from('whatsapp_escalated_conversations')
       .select('id')
-      .eq('whatsapp_instance_id', instanceId)
+      .eq('whatsapp_instance_id', businessInstanceId)
       .eq('user_phone', phoneNumber)
       .eq('is_resolved', false)
       .single();
@@ -143,8 +142,6 @@ export async function handleSupportEscalation(
         success: true, 
         action: 'already_escalated', 
         escalation_id: existingEscalation.id,
-        // When already escalated, we usually want to skip AI processing
-        // You may want to make this configurable via a support settings
         skip_ai_processing: true 
       };
     }
@@ -184,30 +181,30 @@ export async function handleSupportEscalation(
     
     console.log(`Matched keyword "${matchedKeyword}" in category "${keywordCategory || 'uncategorized'}"`);
 
-    // Step 5: Get support configuration
+    // Step 5: Get support configuration - ALWAYS use the business instance ID
     const { data: supportConfig, error: configError } = await supabaseAdmin
       .from('whatsapp_support_config')
       .select('support_phone_number, escalation_message, notification_message')
-      .eq('whatsapp_instance_id', instanceId)
+      .eq('whatsapp_instance_id', businessInstanceId)
       .single();
     
     if (configError || !supportConfig) {
-      console.error('Support config not found for instance:', instanceId, configError);
+      console.error('Support config not found for business instance:', businessInstanceId, configError);
       return { success: false, error: 'Support config not found', details: configError, skip_ai_processing: false };
     }
     
     const { support_phone_number, escalation_message, notification_message } = supportConfig;
     
     if (!support_phone_number) {
-      console.error('Support phone number not configured for instance:', instanceId);
+      console.error('Support phone number not configured for business instance:', businessInstanceId);
       return { success: false, error: 'Support phone number not configured', skip_ai_processing: false };
     }
 
-    // Step 6: Create escalation record
+    // Step 6: Create escalation record with business instance ID
     const { data: escalation, error: escalationError } = await supabaseAdmin
       .from('whatsapp_escalated_conversations')
       .insert({
-        whatsapp_instance_id: instanceId,
+        whatsapp_instance_id: businessInstanceId, // Use business instance ID, never support instance
         user_phone: phoneNumber,
         is_resolved: false
       })
@@ -222,12 +219,12 @@ export async function handleSupportEscalation(
     // Ensure evolutionApiUrl has a valid value, using the default if necessary
     const apiBaseUrl = evolutionApiUrl || DEFAULT_EVOLUTION_API_URL;
 
-    // Step 7: Send message to customer
+    // Step 7: Send message to customer using the business instance
     if (escalation_message) {
       try {
         // Use customer's phone number (phoneNumber) and ensure full URL with protocol
-        const apiUrl = `${apiBaseUrl}/message/sendText/${instance}`;
-        console.log(`Sending escalation message to customer via: ${apiUrl}`);
+        const apiUrl = `${apiBaseUrl}/message/sendText/${businessInstanceName}`;
+        console.log(`Sending escalation message to customer via business instance ${businessInstanceName} at URL: ${apiUrl}`);
         
         const customerResponse = await fetch(apiUrl, {
           method: 'POST',
@@ -251,15 +248,15 @@ export async function handleSupportEscalation(
       }
     }
 
-    // Step 8: Notify support agent
+    // Step 8: Notify support agent - Also use the business instance
     if (notification_message) {
       try {
         // Create a customized notification message with the customer message and other details
         const customNotification = `${notification_message}\n\nFrom: +${phoneNumber}\nKeyword: ${matchedKeyword}${keywordCategory ? `\nCategory: ${keywordCategory}` : ''}\nMessage: "${messageContent.substring(0, 100)}${messageContent.length > 100 ? '...' : ''}"`;
         
-        // Use support agent's phone number and ensure full URL with protocol
-        const apiUrl = `${apiBaseUrl}/message/sendText/${instance}`;
-        console.log(`Sending notification to support agent via: ${apiUrl}`);
+        // Use the business instance to send to the support agent
+        const apiUrl = `${apiBaseUrl}/message/sendText/${businessInstanceName}`;
+        console.log(`Sending notification to support agent via business instance ${businessInstanceName} at URL: ${apiUrl}`);
         
         const supportResponse = await fetch(apiUrl, {
           method: 'POST',
@@ -286,9 +283,10 @@ export async function handleSupportEscalation(
     // Log the escalation action for debug purposes
     await supabaseAdmin.from('webhook_debug_logs').insert({
       category: 'escalation',
-      message: `Escalated conversation with ${phoneNumber} due to keyword "${matchedKeyword}"`,
+      message: `Escalated conversation with ${phoneNumber} due to keyword "${matchedKeyword}" using business instance ${businessInstanceName}`,
       data: {
-        instance: instance,
+        business_instance: businessInstanceName,
+        business_instance_id: businessInstanceId,
         phone: phoneNumber,
         keyword: matchedKeyword,
         category: keywordCategory,
@@ -303,8 +301,6 @@ export async function handleSupportEscalation(
       matched_keyword: matchedKeyword,
       category: keywordCategory,
       escalation_id: escalation.id,
-      // When escalated, typically we want to skip AI processing
-      // This could be made configurable via a database setting
       skip_ai_processing: true
     };
   } catch (error) {
