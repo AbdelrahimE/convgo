@@ -334,7 +334,8 @@ const WhatsAppLink = () => {
         }
       });
       if (error) throw error;
-      await supabase.from('whatsapp_instances').delete().eq('id', instanceId);
+      const { error: dbError } = await supabase.from('whatsapp_instances').delete().eq('id', instanceId);
+      if (dbError) throw dbError;
       setInstances(prev => prev.filter(instance => instance.id !== instanceId));
       toast.success('WhatsApp instance deleted successfully');
     } catch (error) {
