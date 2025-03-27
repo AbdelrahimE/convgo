@@ -1,29 +1,116 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
-// Simple fuzzy matching function
+// Enhanced fuzzy matching function with balanced cross-language support
 export function fuzzyMatch(text: string, keyword: string): boolean {
-  // Convert both to lowercase for case-insensitive matching
-  const textLower = text.toLowerCase();
-  const keywordLower = keyword.toLowerCase();
-
-  // Direct match
-  if (textLower.includes(keywordLower)) {
+  // Detect language context
+  const isArabic = /[\u0600-\u06FF]/.test(keyword);
+  
+  // Apply appropriate normalization
+  const normalizedText = normalizeText(text, isArabic);
+  const normalizedKeyword = normalizeText(keyword, isArabic);
+  
+  // Exact match after normalization
+  if (normalizedText.includes(normalizedKeyword)) {
     return true;
   }
-
-  // Allow one character difference (very simple fuzzy)
-  // This is a basic implementation - you might want to use a proper fuzzy matching library
-  if (keywordLower.length > 3) {
-    for (let i = 0; i < keywordLower.length; i++) {
-      const fuzzyKeyword = keywordLower.substring(0, i) + keywordLower.substring(i + 1);
-      if (textLower.includes(fuzzyKeyword)) {
+  
+  // Character omission test (works for both languages)
+  if (normalizedKeyword.length > 3) {
+    for (let i = 0; i < normalizedKeyword.length; i++) {
+      const fuzzyKeyword = normalizedKeyword.slice(0, i) + normalizedKeyword.slice(i + 1);
+      if (normalizedText.includes(fuzzyKeyword)) {
         return true;
       }
     }
   }
-
+  
+  // For Arabic, try common prefix/suffix variations
+  if (isArabic && normalizedKeyword.length > 3) {
+    // Common prefixes: ال، و، ب، ل، ف
+    const withoutPrefix = normalizedKeyword.replace(/^(ال|و|ب|ل|ف)/, '');
+    if (normalizedText.includes(withoutPrefix) && withoutPrefix.length > 2) {
+      return true;
+    }
+    
+    // Common suffixes: ة، ه، ها، ات، ون، ين
+    const withoutSuffix = normalizedKeyword.replace(/(ة|ه|ها|ات|ون|ين)$/, '');
+    if (normalizedText.includes(withoutSuffix) && withoutSuffix.length > 2) {
+      return true;
+    }
+  }
+  
+  // For English, handle common plurals and word forms
+  if (!isArabic && normalizedKeyword.length > 3) {
+    // Simple plurals
+    if (normalizedKeyword.endsWith('s')) {
+      const singular = normalizedKeyword.slice(0, -1);
+      if (normalizedText.includes(singular) && singular.length > 2) {
+        return true;
+      }
+    } else {
+      const plural = normalizedKeyword + 's';
+      if (normalizedText.includes(plural)) {
+        return true;
+      }
+    }
+    
+    // Simple suffixes: ing, ed, er
+    for (const suffix of ['ing', 'ed', 'er']) {
+      if (normalizedKeyword.endsWith(suffix)) {
+        const base = normalizedKeyword.slice(0, -suffix.length);
+        if (normalizedText.includes(base) && base.length > 2) {
+          return true;
+        }
+      }
+    }
+  }
+  
+  // For both languages: limited edit distance for short keywords
+  if (normalizedKeyword.length <= 5) {
+    const words = normalizedText.split(/\s+/);
+    for (const word of words) {
+      if (simpleEditDistance(word, normalizedKeyword) <= 1) {
+        return true;
+      }
+    }
+  }
+  
   return false;
+}
+
+// Helper function for text normalization
+function normalizeText(text: string, isArabic: boolean): string {
+  // Basic normalization for all languages
+  let normalized = text.toLowerCase().trim();
+  
+  // Arabic-specific normalization
+  if (isArabic || /[\u0600-\u06FF]/.test(normalized)) {
+    normalized = normalized
+      // Remove diacritics
+      .replace(/[\u064B-\u065F]/g, '')
+      // Normalize alef forms
+      .replace(/[أإآ]/g, 'ا')
+      // Normalize ya/alef maksura
+      .replace(/[ى]/g, 'ي');
+  }
+  
+  return normalized;
+}
+
+// Simple edit distance calculation (efficient for short strings)
+function simpleEditDistance(s1: string, s2: string): number {
+  if (Math.abs(s1.length - s2.length) > 1) return 2; // Early exit for efficiency
+  
+  let distance = 0;
+  const len = Math.min(s1.length, s2.length);
+  
+  for (let i = 0; i < len; i++) {
+    if (s1[i] !== s2[i]) distance++;
+    if (distance > 1) return distance; // Early exit if distance exceeds 1
+  }
+  
+  distance += Math.abs(s1.length - s2.length);
+  return distance;
 }
 
 export interface MessageData {
