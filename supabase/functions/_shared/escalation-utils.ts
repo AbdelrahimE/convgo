@@ -252,10 +252,12 @@ export async function handleSupportEscalation(
     }
 
     // Step 3: Get support keywords for this instance
+    // UPDATE: Modified to filter keywords by the specific instance ID
     const { data: keywords, error: keywordsError } = await supabaseAdmin
       .from('whatsapp_support_keywords')
       .select('keyword, category')
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .eq('whatsapp_instance_id', businessInstanceId);
     
     if (keywordsError) {
       console.error('Error fetching keywords:', keywordsError);

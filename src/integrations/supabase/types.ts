@@ -722,6 +722,7 @@ export type Database = {
           is_active: boolean
           keyword: string
           user_id: string
+          whatsapp_instance_id: string | null
         }
         Insert: {
           category?: string | null
@@ -730,6 +731,7 @@ export type Database = {
           is_active?: boolean
           keyword: string
           user_id: string
+          whatsapp_instance_id?: string | null
         }
         Update: {
           category?: string | null
@@ -738,8 +740,16 @@ export type Database = {
           is_active?: boolean
           keyword?: string
           user_id?: string
+          whatsapp_instance_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_whatsapp_support_keywords_instance"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "whatsapp_support_keywords_user_id_fkey"
             columns: ["user_id"]
