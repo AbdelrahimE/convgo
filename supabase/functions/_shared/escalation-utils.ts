@@ -25,7 +25,7 @@ export function fuzzyMatch(text: string, keyword: string): boolean {
     }
   }
   
-  // NEW: Character transposition test (for both languages)
+  // Character transposition test (for both languages)
   if (normalizedKeyword.length > 3) {
     for (let i = 0; i < normalizedKeyword.length - 1; i++) {
       const transposedKeyword = 
@@ -107,7 +107,9 @@ function normalizeText(text: string, isArabic: boolean): string {
       // Normalize alef forms
       .replace(/[أإآ]/g, 'ا')
       // Normalize ya/alef maksura
-      .replace(/[ى]/g, 'ي');
+      .replace(/[ى]/g, 'ي')
+      // Normalize taa marbutah and haa (treating ة and ه as equivalent)
+      .replace(/[ة]/g, 'ه');
   }
   
   return normalized;
