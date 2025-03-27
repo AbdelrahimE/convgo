@@ -1,4 +1,3 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 // Enhanced fuzzy matching function with balanced cross-language support
@@ -20,21 +19,6 @@ export function fuzzyMatch(text: string, keyword: string): boolean {
     for (let i = 0; i < normalizedKeyword.length; i++) {
       const fuzzyKeyword = normalizedKeyword.slice(0, i) + normalizedKeyword.slice(i + 1);
       if (normalizedText.includes(fuzzyKeyword)) {
-        return true;
-      }
-    }
-  }
-  
-  // NEW: Character transposition test (for both languages)
-  if (normalizedKeyword.length > 3) {
-    for (let i = 0; i < normalizedKeyword.length - 1; i++) {
-      const transposedKeyword = 
-        normalizedKeyword.slice(0, i) + 
-        normalizedKeyword[i+1] + 
-        normalizedKeyword[i] + 
-        normalizedKeyword.slice(i+2);
-      
-      if (normalizedText.includes(transposedKeyword)) {
         return true;
       }
     }
