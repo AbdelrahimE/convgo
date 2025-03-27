@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -109,10 +110,12 @@ const WhatsAppSupportConfig = () => {
   const loadKeywords = async () => {
     try {
       setIsLoading(true);
+      // Updated query to filter by whatsapp_instance_id
       const { data, error } = await supabase
         .from('whatsapp_support_keywords')
         .select('id, keyword, category')
         .eq('user_id', user?.id)
+        .eq('whatsapp_instance_id', selectedInstance)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -195,13 +198,20 @@ const WhatsAppSupportConfig = () => {
       return;
     }
 
+    if (!selectedInstance) {
+      toast.error('Please select a WhatsApp instance');
+      return;
+    }
+
     try {
       setIsAddingKeyword(true);
       
+      // Updated insert to include whatsapp_instance_id
       const { data, error } = await supabase
         .from('whatsapp_support_keywords')
         .insert({
           user_id: user?.id,
+          whatsapp_instance_id: selectedInstance,
           keyword: newKeyword.trim(),
           category: newCategory.trim() || null
         })
@@ -366,7 +376,7 @@ const WhatsAppSupportConfig = () => {
                         Support Keywords
                       </CardTitle>
                       <CardDescription>
-                        Manage keywords that will trigger automatic support escalation
+                        Manage keywords for this WhatsApp number that will trigger automatic support escalation
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -393,7 +403,7 @@ const WhatsAppSupportConfig = () => {
                           <div className="flex items-end">
                             <Button 
                               onClick={addKeyword} 
-                              disabled={isAddingKeyword || !newKeyword.trim()} 
+                              disabled={isAddingKeyword || !newKeyword.trim() || !selectedInstance} 
                               className="w-full sm:w-auto"
                             >
                               {isAddingKeyword ? (
@@ -410,10 +420,10 @@ const WhatsAppSupportConfig = () => {
                       </div>
                       
                       <div className="space-y-2">
-                        <h3 className="text-sm font-medium mb-2">Current Keywords</h3>
+                        <h3 className="text-sm font-medium mb-2">Current Keywords for this WhatsApp Number</h3>
                         {keywords.length === 0 ? (
                           <p className="text-sm text-muted-foreground py-4">
-                            No keywords added yet. Keywords help identify when a customer message should be escalated to human support.
+                            No keywords added yet for this WhatsApp number. Keywords help identify when a customer message should be escalated to human support.
                           </p>
                         ) : (
                           <div className="flex flex-wrap gap-2">
