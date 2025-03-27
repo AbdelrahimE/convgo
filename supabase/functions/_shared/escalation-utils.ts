@@ -77,6 +77,8 @@ export async function handleSupportEscalation(
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey || supabaseAnonKey);
   
   try {
+    // Ensure we're using the correct instance name from the webhook data
+    // This helps prevent mixing up instances in the webhook flow
     const { instance, data } = webhookData;
     
     // Extract the message content and phone number
@@ -235,7 +237,7 @@ export async function handleSupportEscalation(
           },
           body: JSON.stringify({
             number: phoneNumber, // Send TO the customer phone number
-            text: escalation_message // Simplified format that matches the working example
+            text: escalation_message // Use the simple text format
           })
         });
         
@@ -267,7 +269,7 @@ export async function handleSupportEscalation(
           },
           body: JSON.stringify({
             number: support_phone_number, // Send TO the support phone number
-            text: customNotification // Simplified format that matches the working example
+            text: customNotification // Use the simple text format
           })
         });
         
