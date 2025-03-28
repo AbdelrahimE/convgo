@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
@@ -517,7 +516,8 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Extract key information from the message
     const instanceName = instance;
     const fromNumber = messageData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
-    let messageText = messageData.message?.conversation || 
+    let messageText = messageData.transcribedText || // Use already transcribed text if available
+                    messageData.message?.conversation || 
                     messageData.message?.extendedTextMessage?.text ||
                     messageData.message?.imageMessage?.caption ||
                     null;
@@ -1460,6 +1460,7 @@ serve(async (req) => {
       // Process for support escalation if this is a message event
       let skipAiProcessing = false;
       let foundInstanceId = null;
+      let transcribedText = null; // Add variable to store transcribed text for voice messages
       
       // Look up the instance ID if this is a message event
       if (event === 'messages.upsert') {
@@ -1484,6 +1485,34 @@ serve(async (req) => {
             });
           }
           
+          // Modified flow: First check if this is a voice message that needs transcription
+          let needsTranscription = false;
+          
+          if (hasAudioContent(normalizedData)) {
+            await logDebug('VOICE_MESSAGE_ESCALATION', 'Detected voice message, will transcribe before escalation check');
+            
+            // Extract audio details
+            const audioDetails = extractAudioDetails(normalizedData);
+            
+            // Get API keys for transcription
+            const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || normalizedData.apikey;
+            
+            // Process the audio for transcription first
+            const transcriptionResult = await processAudioMessage(audioDetails, instanceName, 
+              normalizedData.key?.remoteJid?.split('@')[0] || '', evolutionApiKey);
+            
+            if (transcriptionResult.success && transcriptionResult.transcription) {
+              transcribedText = transcriptionResult.transcription;
+              await logDebug('VOICE_TRANSCRIPTION_FOR_ESCALATION', 'Successfully transcribed voice message for escalation check', {
+                transcription: transcribedText
+              });
+            } else {
+              await logDebug('VOICE_TRANSCRIPTION_FAILED_FOR_ESCALATION', 'Failed to transcribe voice message for escalation check', {
+                error: transcriptionResult.error
+              });
+            }
+          }
+          
           // Prepare webhook data for escalation check
           const webhookData = {
             instance: instanceName,
@@ -1492,7 +1521,8 @@ serve(async (req) => {
           };
           
           await logDebug('SUPPORT_ESCALATION_CHECK', 'Checking message for support escalation', { 
-            instance: instanceName
+            instance: instanceName,
+            hasTranscribedText: !!transcribedText
           });
           
           // Get Supabase URL and API keys from environment
@@ -1501,7 +1531,7 @@ serve(async (req) => {
           const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL') || '';
           const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || '';
           
-          // Check for support escalation - passing the found instance ID
+          // Check for support escalation - passing the found instance ID and transcribed text
           const escalationResult = await handleSupportEscalation(
             webhookData,
             supabaseUrl,
@@ -1509,14 +1539,16 @@ serve(async (req) => {
             evolutionApiUrl,
             evolutionApiKey,
             supabaseServiceKey,
-            foundInstanceId // Pass the already-found instance ID
+            foundInstanceId,  // Pass the already-found instance ID
+            transcribedText   // Pass the transcribed text if available
           );
           
           await logDebug('SUPPORT_ESCALATION_RESULT', 'Support escalation check result', { 
             success: escalationResult.success,
             action: escalationResult.action,
             escalated: escalationResult.action === 'escalated',
-            skipAi: !!escalationResult.skip_ai_processing
+            skipAi: !!escalationResult.skip_ai_processing,
+            usedTranscribedText: !!transcribedText
           });
           
           // Set flag to skip AI processing if needed
@@ -1542,6 +1574,13 @@ serve(async (req) => {
       // Process for AI if this is a message event and not escalated
       if (event === 'messages.upsert' && !skipAiProcessing) {
         await logDebug('AI_PROCESS_ATTEMPT', 'Attempting to process message for AI response');
+        if (transcribedText) {
+          // If we already transcribed the message for escalation, pass it to AI processing
+          normalizedData.transcribedText = transcribedText;
+          await logDebug('AI_USING_TRANSCRIPTION', 'Using already transcribed text for AI processing', {
+            transcription: transcribedText
+          });
+        }
         await processMessageForAI(instanceName, normalizedData);
       }
       
