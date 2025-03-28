@@ -432,9 +432,16 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
     // Check if voice processing is disabled for this instance
     const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
       .from('whatsapp_ai_config')
-      .select('process_voice_messages, voice_message_default_response')
+      .select('process_voice_messages, voice_message_default_response, default_voice_language')
       .eq('whatsapp_instance_id', instanceData.id)
       .maybeSingle();
+
+    // Get the preferred language from AI config if available
+    const preferredLanguage = aiConfig?.default_voice_language || 'auto';
+    await logDebug('AUDIO_LANGUAGE_PREFERENCE', 'Using voice language preference from AI config', { 
+     preferredLanguage, 
+     instanceId: instanceData.id 
+    });
 
     if (!aiConfigError && aiConfig && aiConfig.process_voice_messages === false) {
       await logDebug('AUDIO_PROCESSING_DISABLED', 'Voice message processing is disabled for this instance', { 
@@ -475,7 +482,7 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
     
     await logDebug('AUDIO_URL_RETRIEVED', 'Successfully retrieved audio URL for transcription');
     
-    // Call the transcription function
+    // Call the transcription function with the preferred language parameter
     const transcriptionResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-voice-transcribe`, {
       method: 'POST',
       headers: {
@@ -487,7 +494,8 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
         mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus',
         instanceName: instanceName,
         evolutionApiKey: evolutionApiKey,
-        mediaKey: audioDetails.mediaKey
+        mediaKey: audioDetails.mediaKey,
+        preferredLanguage: preferredLanguage  // Pass the language preference
       })
     });
     
@@ -516,6 +524,7 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
     
     await logDebug('AUDIO_TRANSCRIPTION_SUCCESS', 'Successfully transcribed audio', { 
       language: transcriptionResult.language,
+      preferredLanguage: preferredLanguage,
       transcription: transcriptionResult.transcription?.substring(0, 100) + '...'
     });
     
