@@ -229,20 +229,38 @@ export async function handleSupportEscalation(
         .from('whatsapp_instances')
         .select('id')
         .eq('instance_name', businessInstanceName)
-        .single();
+        .maybeSingle(); // Changed from single() to maybeSingle()
       
-      if (instanceError || !instanceData) {
-        console.error(`Business instance not found: ${businessInstanceName}`, instanceError);
-        // Log details for troubleshooting
+      if (instanceError) {
+        console.error(`Error looking up business instance: ${businessInstanceName}`, instanceError);
+        // Log details for troubleshooting but continue processing
         await supabaseAdmin.from('webhook_debug_logs').insert({
           category: 'escalation_error',
-          message: `Failed to find business instance: ${businessInstanceName}`,
+          message: `Failed to look up business instance: ${businessInstanceName}`,
           data: { error: instanceError, webhook_data: webhookData }
         });
-        return { success: false, error: 'Business instance not found', details: instanceError, skip_ai_processing: false };
+        // Continue with a null instance ID - the rest of the function will handle this gracefully
+      } else if (!instanceData) {
+        console.error(`Business instance not found: ${businessInstanceName}`);
+        // Log detail for troubleshooting but continue processing
+        await supabaseAdmin.from('webhook_debug_logs').insert({
+          category: 'escalation_warning',
+          message: `Business instance not found in database: ${businessInstanceName}`,
+          data: { webhook_data: webhookData }
+        });
+        // Continue with a null instance ID - the rest of the function will handle this gracefully
+      } else {
+        businessInstanceId = instanceData.id;
       }
-      
-      businessInstanceId = instanceData.id;
+    }
+
+    // If we still don't have a business instance ID, we can't proceed with escalation
+    if (!businessInstanceId) {
+      return { 
+        success: false, 
+        error: 'Business instance not found or invalid', 
+        skip_ai_processing: false 
+      };
     }
 
     // Step 2: Check if conversation is already escalated (ONLY currently active escalations)
@@ -253,7 +271,7 @@ export async function handleSupportEscalation(
       .eq('whatsapp_instance_id', businessInstanceId)
       .eq('user_phone', phoneNumber)
       .eq('is_resolved', false)
-      .single();
+      .maybeSingle(); // Changed from single() to maybeSingle()
     
     if (existingEscalation) {
       console.log(`Conversation with ${phoneNumber} is already escalated, skipping keyword check`);
