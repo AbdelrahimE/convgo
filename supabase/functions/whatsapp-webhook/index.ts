@@ -13,6 +13,31 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+// NEW FUNCTION: Check if a phone number is registered as a support phone number
+async function isSupportPhoneNumber(instanceName: string): Promise<boolean> {
+  try {
+    // Query the support config table for matching support phone numbers
+    const { data, error } = await supabaseAdmin
+      .from('whatsapp_support_config')
+      .select('support_phone_number')
+      .eq('support_phone_number', instanceName)
+      .maybeSingle();
+    
+    // If there's an error in the query, log it but continue (default to false)
+    if (error) {
+      console.error('Error checking support phone number:', error);
+      return false;
+    }
+    
+    // Return true if the instance name matches a support phone number
+    return !!data;
+  } catch (error) {
+    // Handle any unexpected errors
+    console.error('Exception checking support phone number:', error);
+    return false;
+  }
+}
+
 // Helper function to find or create a conversation with improved timeout management and handling of unique constraint
 async function findOrCreateConversation(instanceId: string, userPhone: string) {
   try {
@@ -1395,6 +1420,21 @@ serve(async (req) => {
     // If we have identified an instance name, process the webhook
     if (instanceName) {
       await logDebug('WEBHOOK_INSTANCE', `Processing webhook for instance: ${instanceName}`);
+      
+      // NEW CODE: Check if the instance is a support phone number
+      const isSupportNumber = await isSupportPhoneNumber(instanceName);
+      if (isSupportNumber) {
+        await logDebug('SUPPORT_NUMBER_DETECTED', `Ignoring webhook from support phone number: ${instanceName}`);
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'Ignored webhook from support phone number' 
+        }), {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
       
       // Different webhook events have different structures
       // We need to normalize based on the structure
