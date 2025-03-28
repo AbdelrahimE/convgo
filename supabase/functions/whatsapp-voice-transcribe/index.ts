@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -31,10 +32,11 @@ serve(async (req) => {
       hasAudioUrl: !!requestData.audioUrl,
       hasMimeType: !!requestData.mimeType,
       hasMediaKey: !!requestData.mediaKey,
-      instanceName: requestData.instanceName || 'test'
+      instanceName: requestData.instanceName || 'test',
+      preferredLanguage: requestData.preferredLanguage || 'auto'
     }));
     
-    const { audioUrl, mimeType, instanceName, evolutionApiKey, mediaKey } = requestData;
+    const { audioUrl, mimeType, instanceName, evolutionApiKey, mediaKey, preferredLanguage } = requestData;
     
     if (!audioUrl) {
       console.error("ERROR: Missing audio URL in request");
@@ -46,6 +48,7 @@ serve(async (req) => {
     console.log(`MIME type: ${mimeType || 'Not provided'}`);
     console.log(`Media Key provided: ${!!mediaKey}`);
     console.log(`$$$$$ DEPLOYMENT VERIFICATION: Media Key value: ${mediaKey ? mediaKey.substring(0, 10) + '...' : 'None'} $$$$$`);
+    console.log(`Preferred language: ${preferredLanguage || 'auto'}`);
 
     // Set up headers for EVOLUTION API calls
     let headers = {};
@@ -202,8 +205,13 @@ serve(async (req) => {
     formData.append('file', audioBlob, 'audio.mp3');
     formData.append('model', 'whisper-1');
     
-    // Removing the default language parameter to allow Whisper to auto-detect language
-    // This will improve detection for both English and Arabic without bias
+    // Add language parameter if provided and not set to auto
+    if (preferredLanguage && preferredLanguage !== 'auto') {
+      console.log(`Setting language parameter to: ${preferredLanguage}`);
+      formData.append('language', preferredLanguage);
+    } else {
+      console.log('Using language auto-detection (no language specified)');
+    }
     
     // Set response format to verbose JSON to get more info including language
     formData.append('response_format', 'verbose_json');
