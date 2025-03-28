@@ -383,6 +383,7 @@ export type Database = {
       whatsapp_ai_config: {
         Row: {
           created_at: string
+          default_voice_language: string
           id: string
           is_active: boolean
           process_voice_messages: boolean
@@ -395,6 +396,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          default_voice_language?: string
           id?: string
           is_active?: boolean
           process_voice_messages?: boolean
@@ -407,6 +409,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          default_voice_language?: string
           id?: string
           is_active?: boolean
           process_voice_messages?: boolean
