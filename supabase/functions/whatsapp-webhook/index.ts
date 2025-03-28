@@ -393,7 +393,7 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
       .from('whatsapp_instances')
       .select('id')
       .eq('instance_name', instanceName)
-      .single();
+      .maybeSingle();
 
     if (instanceError) {
       await logDebug('AUDIO_PROCESSING_INSTANCE_ERROR', 'Failed to get instance data', { error: instanceError });
@@ -409,7 +409,7 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
       .from('whatsapp_ai_config')
       .select('process_voice_messages, voice_message_default_response')
       .eq('whatsapp_instance_id', instanceData.id)
-      .single();
+      .maybeSingle();
 
     if (!aiConfigError && aiConfig && aiConfig.process_voice_messages === false) {
       await logDebug('AUDIO_PROCESSING_DISABLED', 'Voice message processing is disabled for this instance', { 
@@ -677,7 +677,7 @@ async function processMessageForAI(instance: string, messageData: any) {
               .from('whatsapp_instances')
               .select('id')
               .eq('instance_name', instanceName)
-              .single();
+              .maybeSingle();
 
             if (instanceError) {
               await logDebug('DIRECT_RESPONSE_ERROR', 'Failed to get instance data', { error: instanceError });
@@ -689,7 +689,7 @@ async function processMessageForAI(instance: string, messageData: any) {
               .from('whatsapp_webhook_config')
               .select('webhook_url')
               .eq('whatsapp_instance_id', instanceData.id)
-              .single();
+              .maybeSingle();
               
             if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
               // Extract base URL from webhook URL
@@ -783,7 +783,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       .from('whatsapp_instances')
       .select('id, status')
       .eq('instance_name', instanceName)
-      .single();
+      .maybeSingle();
 
     if (instanceError || !instanceData) {
       await logDebug('AI_CONFIG_ERROR', 'Instance not found in database', { 
@@ -820,7 +820,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       .select('*')
       .eq('whatsapp_instance_id', instanceId)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
     if (aiConfigError || !aiConfig) {
       await logDebug('AI_DISABLED', 'AI is not enabled for this instance', { 
@@ -883,7 +883,7 @@ async function processMessageForAI(instance: string, messageData: any) {
           .from('whatsapp_webhook_config')
           .select('webhook_url')
           .eq('whatsapp_instance_id', instanceId)
-          .single();
+          .maybeSingle();
           
         if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
           // Extract base URL from webhook URL
@@ -1221,7 +1221,7 @@ async function processConnectionStatus(instanceName: string, statusData: any) {
       .from('whatsapp_instances')
       .select('id, status')
       .eq('instance_name', instanceName)
-      .single();
+      .maybeSingle();
       
     if (instanceError) {
       await logDebug('CONNECTION_STATUS_ERROR', `Instance not found: ${instanceName}`, { error: instanceError });
@@ -1470,21 +1470,23 @@ serve(async (req) => {
             .from('whatsapp_instances')
             .select('id')
             .eq('instance_name', instanceName)
-            .single();
+            .maybeSingle();
             
-          if (!instanceError && instanceData) {
+          if (instanceData) {
             foundInstanceId = instanceData.id;
             await logDebug('INSTANCE_LOOKUP_SUCCESS', 'Found instance ID for escalation check', { 
               instanceName, 
               instanceId: foundInstanceId 
             });
           } else {
-            await logDebug('INSTANCE_LOOKUP_ERROR', 'Failed to find instance ID for escalation check', { 
+            // Handle case where instance isn't found without throwing errors
+            await logDebug('INSTANCE_LOOKUP_WARNING', 'Instance not found but continuing processing', { 
               instanceName, 
               error: instanceError 
             });
+            // Allow processing to continue without the instance ID
           }
-          
+
           // Modified flow: First check if this is a voice message that needs transcription
           let needsTranscription = false;
           
