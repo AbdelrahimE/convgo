@@ -166,8 +166,7 @@ export async function handleSupportEscalation(
   evolutionApiUrl: string,
   evolutionApiKey: string,
   supabaseServiceRoleKey?: string, // Added parameter for service role key
-  foundInstanceId?: string, // Parameter to accept an already-found instance ID
-  transcribedText?: string // New parameter to accept transcribed text from voice messages
+  foundInstanceId?: string // Parameter to accept an already-found instance ID
 ): Promise<{
   success: boolean;
   action?: string;
@@ -189,16 +188,9 @@ export async function handleSupportEscalation(
     const businessInstanceName = instance; // Store the original business instance name
     
     // Extract the message content and phone number
-    let messageContent = data.message.conversation || 
-                       data.message.extendedTextMessage?.text || 
-                       '';
-    
-    // Use transcribed text from voice message if available
-    if (transcribedText && !messageContent.trim()) {
-      console.log(`Using transcribed text for escalation check: "${transcribedText}"`);
-      messageContent = transcribedText;
-    }
-    
+    const messageContent = data.message.conversation || 
+                         data.message.extendedTextMessage?.text || 
+                         '';
     const phoneNumber = data.key.remoteJid.split('@')[0];
     
     // Skip messages sent by the bot itself
