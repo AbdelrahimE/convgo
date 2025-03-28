@@ -40,6 +40,7 @@ serve(async (req) => {
     // Check URL parameters for already found instance ID
     const url = new URL(req.url);
     const foundInstanceId = url.searchParams.get('foundInstanceId');
+    const transcribedText = url.searchParams.get('transcribedText');
 
     // Process the message using the extracted core logic
     const result = await handleSupportEscalation(
@@ -49,7 +50,8 @@ serve(async (req) => {
       EVOLUTION_API_URL,
       EVOLUTION_API_KEY,
       SUPABASE_SERVICE_ROLE_KEY,  // Pass the service role key
-      foundInstanceId  // Pass the already-found instance ID if available
+      foundInstanceId,  // Pass the already-found instance ID if available
+      transcribedText   // Pass the transcribed text if available
     );
 
     return new Response(JSON.stringify(result), { 
