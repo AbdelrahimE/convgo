@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,13 +20,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
-
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
-
 interface AIConfig {
   id: string;
   system_prompt: string;
@@ -37,14 +34,21 @@ interface AIConfig {
   voice_message_default_response: string;
   default_voice_language: string;
 }
-
 const WhatsAppAIConfig = () => {
-  const { user } = useAuth();
+  const {
+    user
+  } = useAuth();
   const navigate = useNavigate();
-  const { search } = useSimpleSearch();
-  const { generateResponse, cleanupTestConversations, isGenerating, responseResult } = useAIResponse();
+  const {
+    search
+  } = useSimpleSearch();
+  const {
+    generateResponse,
+    cleanupTestConversations,
+    isGenerating,
+    responseResult
+  } = useAIResponse();
   const isMobile = useIsMobile();
-  
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [systemPrompt, setSystemPrompt] = useState<string>('');
@@ -55,7 +59,10 @@ const WhatsAppAIConfig = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('config');
   const [testQuery, setTestQuery] = useState('');
-  const [conversation, setConversation] = useState<{ role: string; content: string; }[]>([]);
+  const [conversation, setConversation] = useState<{
+    role: string;
+    content: string;
+  }[]>([]);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const [userDescription, setUserDescription] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
@@ -63,7 +70,6 @@ const WhatsAppAIConfig = () => {
   const [useRealConversation, setUseRealConversation] = useState(true);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [showVoiceFeature, setShowVoiceFeature] = useState(true);
-
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
     try {
@@ -91,13 +97,11 @@ const WhatsAppAIConfig = () => {
       setIsCleaningUp(false);
     }
   }, []);
-
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
-
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -108,7 +112,6 @@ const WhatsAppAIConfig = () => {
       setDefaultVoiceLanguage('ar');
     }
   }, [selectedInstance]);
-
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
@@ -122,23 +125,19 @@ const WhatsAppAIConfig = () => {
       }
     };
   }, [testConversationId, useRealConversation, cleanupTestConversation]);
-
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
     }
   }, [activeTab, selectedInstance, useRealConversation]);
-
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('whatsapp_instances')
-        .select('id, instance_name, status')
-        .eq('user_id', user?.id);
-        
+      const {
+        data,
+        error
+      } = await supabase.from('whatsapp_instances').select('id, instance_name, status').eq('user_id', user?.id);
       if (error) throw error;
-      
       setInstances(data || []);
       if (data && data.length > 0) {
         setSelectedInstance(data[0].id);
@@ -150,17 +149,13 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('whatsapp_ai_config')
-        .select('*')
-        .eq('whatsapp_instance_id', selectedInstance)
-        .eq('user_id', user?.id)
-        .single();
-        
+      const {
+        data,
+        error
+      } = await supabase.from('whatsapp_ai_config').select('*').eq('whatsapp_instance_id', selectedInstance).eq('user_id', user?.id).single();
       if (error) {
         if (error.code === 'PGRST116') {
           setSystemPrompt('You are a helpful AI assistant. Answer questions based on the context provided.');
@@ -171,7 +166,6 @@ const WhatsAppAIConfig = () => {
         }
         throw error;
       }
-      
       setSystemPrompt(data.system_prompt || '');
       setProcessVoiceMessages(data.process_voice_messages !== undefined ? data.process_voice_messages : true);
       setVoiceMessageDefaultResponse(data.voice_message_default_response || "I'm sorry, but I cannot process voice messages at the moment. Please send your question as text, and I'll be happy to assist you.");
@@ -183,62 +177,51 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
       return;
     }
-    
     if (!processVoiceMessages && !voiceMessageDefaultResponse.trim()) {
       toast.error('Please provide a default response for voice messages');
       return;
     }
-    
     try {
       setIsSaving(true);
-      const { data: existingConfig, error: checkError } = await supabase
-        .from('whatsapp_ai_config')
-        .select('id')
-        .eq('whatsapp_instance_id', selectedInstance)
-        .eq('user_id', user?.id)
-        .single();
-        
+      const {
+        data: existingConfig,
+        error: checkError
+      } = await supabase.from('whatsapp_ai_config').select('id').eq('whatsapp_instance_id', selectedInstance).eq('user_id', user?.id).single();
       if (checkError && checkError.code !== 'PGRST116') {
         throw checkError;
       }
-      
       if (existingConfig) {
-        const { error } = await supabase
-          .from('whatsapp_ai_config')
-          .update({
-            system_prompt: systemPrompt,
-            temperature: 1.0,
-            process_voice_messages: processVoiceMessages,
-            voice_message_default_response: voiceMessageDefaultResponse,
-            default_voice_language: defaultVoiceLanguage,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingConfig.id);
-          
+        const {
+          error
+        } = await supabase.from('whatsapp_ai_config').update({
+          system_prompt: systemPrompt,
+          temperature: 1.0,
+          process_voice_messages: processVoiceMessages,
+          voice_message_default_response: voiceMessageDefaultResponse,
+          default_voice_language: defaultVoiceLanguage,
+          updated_at: new Date().toISOString()
+        }).eq('id', existingConfig.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('whatsapp_ai_config')
-          .insert({
-            whatsapp_instance_id: selectedInstance,
-            user_id: user?.id,
-            system_prompt: systemPrompt,
-            temperature: 1.0,
-            is_active: true,
-            process_voice_messages: processVoiceMessages,
-            voice_message_default_response: voiceMessageDefaultResponse,
-            default_voice_language: defaultVoiceLanguage
-          });
-          
+        const {
+          error
+        } = await supabase.from('whatsapp_ai_config').insert({
+          whatsapp_instance_id: selectedInstance,
+          user_id: user?.id,
+          system_prompt: systemPrompt,
+          temperature: 1.0,
+          is_active: true,
+          process_voice_messages: processVoiceMessages,
+          voice_message_default_response: voiceMessageDefaultResponse,
+          default_voice_language: defaultVoiceLanguage
+        });
         if (error) throw error;
       }
-      
       toast.success('AI configuration saved successfully');
     } catch (error) {
       console.error('Error saving AI config:', error);
@@ -247,11 +230,9 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
-
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
-
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
@@ -259,7 +240,10 @@ const WhatsAppAIConfig = () => {
     }
     try {
       setIsGeneratingPrompt(true);
-      const { data, error } = await supabase.functions.invoke('generate-system-prompt', {
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('generate-system-prompt', {
         body: {
           description: userDescription
         }
@@ -280,7 +264,6 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
-
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
     try {
@@ -291,7 +274,10 @@ const WhatsAppAIConfig = () => {
         console.log(`Cleaned up ${cleanupResult.count} stale test conversations`);
       }
       const uniqueId = new Date().getTime().toString();
-      const { data, error } = await supabase.from('whatsapp_conversations').insert({
+      const {
+        data,
+        error
+      } = await supabase.from('whatsapp_conversations').insert({
         instance_id: selectedInstance,
         user_phone: `test-user-${uniqueId}`,
         status: 'active',
@@ -309,7 +295,6 @@ const WhatsAppAIConfig = () => {
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
-
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       const idToDelete = testConversationId;
@@ -324,7 +309,6 @@ const WhatsAppAIConfig = () => {
       setConversation([]);
     }
   };
-
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -350,7 +334,10 @@ const WhatsAppAIConfig = () => {
           }
         });
       }
-      const { data: fileMappings, error: mappingError } = await supabase.from('whatsapp_file_mappings').select('file_id').eq('whatsapp_instance_id', selectedInstance).eq('user_id', user?.id);
+      const {
+        data: fileMappings,
+        error: mappingError
+      } = await supabase.from('whatsapp_file_mappings').select('file_id').eq('whatsapp_instance_id', selectedInstance).eq('user_id', user?.id);
       if (mappingError) throw mappingError;
       if (!fileMappings || fileMappings.length === 0) {
         toast.error('No files associated with this WhatsApp instance');
@@ -403,88 +390,62 @@ const WhatsAppAIConfig = () => {
       }]);
     }
   };
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }} 
-      animate={{ opacity: 1, y: 0 }} 
-      transition={{ duration: 0.3 }}
-      className="container mx-auto px-4 py-8 max-w-7xl"
-    >
+  return <motion.div initial={{
+    opacity: 0,
+    y: 20
+  }} animate={{
+    opacity: 1,
+    y: 0
+  }} transition={{
+    duration: 0.3
+  }} className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="space-y-8">
-        <motion.h1 
-          initial={{ opacity: 0, x: -20 }} 
-          animate={{ opacity: 1, x: 0 }} 
-          transition={{ delay: 0.2 }}
-          className="text-2xl font-bold text-left md:text-3xl lg:text-4xl"
-        >
+        <motion.h1 initial={{
+        opacity: 0,
+        x: -20
+      }} animate={{
+        opacity: 1,
+        x: 0
+      }} transition={{
+        delay: 0.2
+      }} className="text-2xl font-bold text-left md:text-3xl lg:text-4xl">
           AI Configuration
         </motion.h1>
         
         <div className="grid gap-8">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ delay: 0.3 }}
-          >
+          <motion.div initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.3
+        }}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="md:col-span-1 space-y-6">
                 <div>
                   <Label htmlFor="whatsapp-instance">Choose WhatsApp Number</Label>
-                  <select 
-                    id="whatsapp-instance" 
-                    value={selectedInstance} 
-                    onChange={e => setSelectedInstance(e.target.value)} 
-                    disabled={isLoading || instances.length === 0} 
-                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 my-[8px]"
-                  >
-                    {instances.length === 0 ? (
-                      <option value="">No WhatsApp numbers available</option>
-                    ) : (
-                      instances.map(instance => (
-                        <option key={instance.id} value={instance.id}>
+                  <select id="whatsapp-instance" value={selectedInstance} onChange={e => setSelectedInstance(e.target.value)} disabled={isLoading || instances.length === 0} className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 my-[8px]">
+                    {instances.length === 0 ? <option value="">No WhatsApp numbers available</option> : instances.map(instance => <option key={instance.id} value={instance.id}>
                           {instance.instance_name} ({instance.status})
-                        </option>
-                      ))
-                    )}
+                        </option>)}
                   </select>
                   
-                  {selectedInstance && instances.length > 0 && (
-                    <WhatsAppAIToggle 
-                      instanceId={selectedInstance} 
-                      instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} 
-                    />
-                  )}
+                  {selectedInstance && instances.length > 0 && <WhatsAppAIToggle instanceId={selectedInstance} instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} />}
                 </div>
 
-                {showVoiceFeature && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm flex items-center">
-                        <Headphones className="h-4 w-4 mr-2" />
-                        Voice Message Support
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground">
-                        Your WhatsApp AI can now understand voice messages! Users can send voice recordings, and the system will transcribe and respond to them automatically.
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
+                {showVoiceFeature}
               </div>
               
               <div className="md:col-span-2">
-                {!selectedInstance ? (
-                  <Card>
+                {!selectedInstance ? <Card>
                     <CardContent className="pt-6">
                       <p className="text-center text-muted-foreground">
                         Please select a WhatsApp instance to configure AI settings
                       </p>
                     </CardContent>
-                  </Card>
-                ) : (
-                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  </Card> : <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger value="config">Configuration</TabsTrigger>
                       <TabsTrigger value="test">Test ChatBot</TabsTrigger>
@@ -502,24 +463,12 @@ const WhatsAppAIConfig = () => {
                           <div className="space-y-2">
                             <div className="flex justify-between items-center">
                               <Label htmlFor="system-prompt">System Prompt</Label>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={generateSystemPrompt}
-                                disabled={isLoading || !selectedInstance}
-                              >
+                              <Button variant="outline" size="sm" onClick={generateSystemPrompt} disabled={isLoading || !selectedInstance}>
                                 <Lightbulb className="mr-2 h-4 w-4" />
                                 Auto-Generate Prompt
                               </Button>
                             </div>
-                            <Textarea 
-                              id="system-prompt" 
-                              value={systemPrompt} 
-                              onChange={e => setSystemPrompt(e.target.value)} 
-                              rows={8}
-                              placeholder="Provide instructions for how the AI should respond to messages..." 
-                              className="resize-y" 
-                            />
+                            <Textarea id="system-prompt" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={8} placeholder="Provide instructions for how the AI should respond to messages..." className="resize-y" />
                           </div>
                           
                           <div className="space-y-4 pt-4 border-t">
@@ -532,19 +481,12 @@ const WhatsAppAIConfig = () => {
                                   When enabled, your AI will transcribe and respond to voice messages
                                 </p>
                               </div>
-                              <Switch 
-                                id="process-voice" 
-                                checked={processVoiceMessages} 
-                                onCheckedChange={setProcessVoiceMessages} 
-                              />
+                              <Switch id="process-voice" checked={processVoiceMessages} onCheckedChange={setProcessVoiceMessages} />
                             </div>
                             
                             <div className="space-y-2">
                               <Label htmlFor="voice-language">Voice Message Language</Label>
-                              <Select
-                                value={defaultVoiceLanguage}
-                                onValueChange={setDefaultVoiceLanguage}
-                              >
+                              <Select value={defaultVoiceLanguage} onValueChange={setDefaultVoiceLanguage}>
                                 <SelectTrigger id="voice-language" className="w-full">
                                   <SelectValue placeholder="Select a language" />
                                 </SelectTrigger>
@@ -561,30 +503,18 @@ const WhatsAppAIConfig = () => {
                               </p>
                             </div>
                             
-                            {!processVoiceMessages && (
-                              <div className="space-y-2 mt-4">
+                            {!processVoiceMessages && <div className="space-y-2 mt-4">
                                 <Label htmlFor="voice-default-response">
                                   Default Response for Voice Messages
                                 </Label>
-                                <Textarea 
-                                  id="voice-default-response" 
-                                  value={voiceMessageDefaultResponse} 
-                                  onChange={e => setVoiceMessageDefaultResponse(e.target.value)}
-                                  placeholder="Message to send when a voice message is received"
-                                  rows={3} 
-                                />
+                                <Textarea id="voice-default-response" value={voiceMessageDefaultResponse} onChange={e => setVoiceMessageDefaultResponse(e.target.value)} placeholder="Message to send when a voice message is received" rows={3} />
                                 <p className="text-xs text-muted-foreground">
                                   This message will be sent automatically when a voice message is received
                                 </p>
-                              </div>
-                            )}
+                              </div>}
                           </div>
                           
-                          <Button 
-                            onClick={saveAIConfig} 
-                            disabled={isSaving || !systemPrompt.trim() || !selectedInstance || (!processVoiceMessages && !voiceMessageDefaultResponse.trim())} 
-                            className="w-full"
-                          >
+                          <Button onClick={saveAIConfig} disabled={isSaving || !systemPrompt.trim() || !selectedInstance || !processVoiceMessages && !voiceMessageDefaultResponse.trim()} className="w-full">
                             {isSaving ? 'Saving...' : 'Save Configuration'}
                           </Button>
                         </CardContent>
@@ -610,16 +540,12 @@ const WhatsAppAIConfig = () => {
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <div className="flex items-center space-x-2">
-                                      <Switch 
-                                        id="conversation-mode" 
-                                        checked={useRealConversation} 
-                                        onCheckedChange={value => {
-                                          setUseRealConversation(value);
-                                          if (value && !testConversationId) {
-                                            createTestConversation();
-                                          }
-                                        }} 
-                                      />
+                                      <Switch id="conversation-mode" checked={useRealConversation} onCheckedChange={value => {
+                                    setUseRealConversation(value);
+                                    if (value && !testConversationId) {
+                                      createTestConversation();
+                                    }
+                                  }} />
                                       <Label htmlFor="conversation-mode">Conversation Memory</Label>
                                     </div>
                                   </TooltipTrigger>
@@ -630,66 +556,37 @@ const WhatsAppAIConfig = () => {
                               </TooltipProvider>
                             </div>
                             
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={resetTestConversation} 
-                              disabled={conversation.length === 0 || isCleaningUp}
-                            >
+                            <Button variant="outline" size="sm" onClick={resetTestConversation} disabled={conversation.length === 0 || isCleaningUp}>
                               <RotateCcw className="mr-2 h-4 w-4" />
                               Reset Conversation
                             </Button>
                           </div>
                           
-                          {useRealConversation && (
-                            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800 flex items-start">
+                          {useRealConversation && <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800 flex items-start">
                               <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 mt-0.5 flex-shrink-0" />
                               <p className="text-sm text-amber-700 dark:text-amber-300">
                                 Test conversations are stored temporarily in the database and will be automatically cleaned up when you leave this page or reset the conversation.
                               </p>
-                            </div>
-                          )}
+                            </div>}
                           
                           <div className="bg-secondary/50 rounded-lg p-4 h-80 overflow-y-auto mb-4 flex flex-col gap-2">
-                            {conversation.length === 0 ? (
-                              <p className="text-center text-muted-foreground p-4">
+                            {conversation.length === 0 ? <p className="text-center text-muted-foreground p-4">
                                 Send a message to start the conversation
-                              </p>
-                            ) : (
-                              conversation.map((msg, index) => (
-                                <div 
-                                  key={index} 
-                                  className={`max-w-[80%] px-4 py-2 rounded-lg ${
-                                    msg.role === 'user' 
-                                      ? 'bg-primary text-primary-foreground self-end' 
-                                      : 'bg-muted self-start'
-                                  }`}
-                                >
+                              </p> : conversation.map((msg, index) => <div key={index} className={`max-w-[80%] px-4 py-2 rounded-lg ${msg.role === 'user' ? 'bg-primary text-primary-foreground self-end' : 'bg-muted self-start'}`}>
                                   {msg.content}
-                                </div>
-                              ))
-                            )}
+                                </div>)}
                           </div>
                           
                           <div className="flex gap-2">
-                            <Input 
-                              value={testQuery} 
-                              onChange={e => setTestQuery(e.target.value)} 
-                              placeholder="Type a message to test..." 
-                              onKeyDown={e => e.key === 'Enter' && sendTestMessage()} 
-                            />
-                            <Button 
-                              onClick={sendTestMessage} 
-                              disabled={isGenerating || !testQuery.trim() || !selectedInstance}
-                            >
+                            <Input value={testQuery} onChange={e => setTestQuery(e.target.value)} placeholder="Type a message to test..." onKeyDown={e => e.key === 'Enter' && sendTestMessage()} />
+                            <Button onClick={sendTestMessage} disabled={isGenerating || !testQuery.trim() || !selectedInstance}>
                               {isGenerating ? 'Sending...' : 'Send'}
                             </Button>
                           </div>
                         </CardContent>
                       </Card>
                     </TabsContent>
-                  </Tabs>
-                )}
+                  </Tabs>}
               </div>
             </div>
           </motion.div>
@@ -710,13 +607,7 @@ const WhatsAppAIConfig = () => {
               <Label htmlFor="description" className="text-sm font-medium">
                 Your Description
               </Label>
-              <Textarea 
-                id="description" 
-                placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone." 
-                value={userDescription} 
-                onChange={e => setUserDescription(e.target.value)} 
-                className="min-h-[120px]" 
-              />
+              <Textarea id="description" placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone." value={userDescription} onChange={e => setUserDescription(e.target.value)} className="min-h-[120px]" />
             </div>
             
             <div className="space-y-2">
@@ -734,18 +625,14 @@ const WhatsAppAIConfig = () => {
               Cancel
             </Button>
             <Button onClick={handleGenerateSystemPrompt} disabled={isGeneratingPrompt || !userDescription.trim()}>
-              {isGeneratingPrompt ? (
-                <>
+              {isGeneratingPrompt ? <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
                   Generating...
-                </>
-              ) : 'Generate Prompt'}
+                </> : 'Generate Prompt'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </motion.div>
-  );
+    </motion.div>;
 };
-
 export default WhatsAppAIConfig;
