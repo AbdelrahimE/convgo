@@ -142,13 +142,6 @@ export interface MessageData {
     extendedTextMessage?: {
       text: string;
     };
-    audioMessage?: {
-      url: string;
-      mediaKey: string;
-      mimetype: string;
-      duration: number;
-      ptt?: boolean;
-    };
   };
   messageTimestamp: number;
   pushName: string;
@@ -173,8 +166,7 @@ export async function handleSupportEscalation(
   evolutionApiUrl: string,
   evolutionApiKey: string,
   supabaseServiceRoleKey?: string, // Added parameter for service role key
-  foundInstanceId?: string, // Parameter to accept an already-found instance ID
-  transcribedText?: string // Added parameter for transcribed voice messages
+  foundInstanceId?: string // Parameter to accept an already-found instance ID
 ): Promise<{
   success: boolean;
   action?: string;
@@ -196,15 +188,9 @@ export async function handleSupportEscalation(
     const businessInstanceName = instance; // Store the original business instance name
     
     // Extract the message content and phone number
-    let messageContent = data.message.conversation || 
-                        data.message.extendedTextMessage?.text || 
-                        '';
-    
-    // If we have transcribed text from voice message, use that
-    if (transcribedText) {
-      messageContent = transcribedText;
-    }
-    
+    const messageContent = data.message.conversation || 
+                         data.message.extendedTextMessage?.text || 
+                         '';
     const phoneNumber = data.key.remoteJid.split('@')[0];
     
     // Skip messages sent by the bot itself
