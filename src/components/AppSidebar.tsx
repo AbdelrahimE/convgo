@@ -1,3 +1,4 @@
+
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupConte
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { LogoWithText } from "./Logo";
 
 const FULL_NAME_MAX_LENGTH = 25;
 const navigation = [
@@ -69,7 +71,7 @@ export function AppSidebar() {
   return (
     <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"}>
       <SidebarHeader className="flex items-center justify-between p-4">
-        <div className="text-2xl font-bold text-primary">ConvGo.com</div>
+        <LogoWithText className="text-xl" />
         {isMobile && (
           <SidebarTrigger className="md:hidden">
             <AlignJustify className="h-10 w-10" />
