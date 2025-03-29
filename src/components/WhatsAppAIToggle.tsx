@@ -89,7 +89,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       <CardHeader>
         <CardTitle className="flex items-center">
           <Zap className="mr-2 h-6 w-6 text-yellow-500" />
-          AI Response Status
+          AI Auto-Response Status
         </CardTitle>
         <CardDescription>
           Enable or disable AI responses for incoming WhatsApp messages
