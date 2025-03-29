@@ -24,8 +24,8 @@ export function LogoWithText({ className }: { className?: string }) {
     <div className={`flex items-center justify-start gap-2 ${className}`}>
       <img 
         src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/sign/avatars/convgo.com-logo.png?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJhdmF0YXJzL2NvbnZnby5jb20tbG9nby5wbmciLCJpYXQiOjE3NDMyMTY4NjQsImV4cCI6MTc3NDc1Mjg2NH0.R3K-C4PoUN09kOo3L3owR6WhejU_At37_vUmORrcCDo" 
-        alt="ConvGo Logo" 
-        className="w-[175px] h-[40px] object-contain"
+        alt="ConvGo.com Logo" 
+        className="w-[260px] h-[60px] object-contain"
       />
     </div>
   );
