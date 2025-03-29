@@ -1,10 +1,9 @@
-
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "react-router-dom";
-import { Folder, Home, LogOut, Phone, Link2, Radio, AlignJustify, Headphones } from "lucide-react";
+import { Folder, LogOut, Phone, Link2, Radio, AlignJustify, Headphones } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,20 +12,15 @@ import { cn } from "@/lib/utils";
 const FULL_NAME_MAX_LENGTH = 25;
 const navigation = [
   {
-    name: 'Dashboard',
-    href: '/dashboard',
-    icon: Home
+    name: 'WhatsApp Numbers',
+    href: '/whatsapp',
+    icon: Phone
   }, 
   {
     name: 'My Files',
     href: '/files',
     icon: Folder
   }, 
-  {
-    name: 'WhatsApp Numbers',
-    href: '/whatsapp',
-    icon: Phone
-  },
   {
     name: 'Linked Files',
     href: '/whatsapp-file-config',
