@@ -4,8 +4,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "react-router-dom";
-import { Folder, Home, LogOut, Phone, Link2, Radio, MessageSquare } from "lucide-react";
-import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { Folder, Home, LogOut, Phone, Link2, Radio, MessageSquare, Menu } from "lucide-react";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -74,8 +74,13 @@ export function AppSidebar() {
   
   return (
     <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"}>
-      <SidebarHeader className="flex items-center justify-center p-4">
+      <SidebarHeader className="flex items-center justify-between p-4">
         <div className="text-2xl font-bold text-primary">ConvGo.com</div>
+        {isMobile && (
+          <SidebarTrigger className="md:hidden">
+            <Menu className="h-5 w-5" />
+          </SidebarTrigger>
+        )}
       </SidebarHeader>
 
       <SidebarContent>

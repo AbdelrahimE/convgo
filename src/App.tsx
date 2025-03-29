@@ -6,7 +6,7 @@ import Auth from '@/pages/Auth';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import FileManagement from '@/pages/FileManagement';
 import { AppSidebar } from '@/components/AppSidebar';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
 import WhatsAppFileConfig from '@/pages/WhatsAppFileConfig';
@@ -15,80 +15,92 @@ import WhatsAppSupportConfig from '@/pages/WhatsAppSupportConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
+import { Menu } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import './App.css';
 
 function AppContent() {
   const location = useLocation();
   const isAuthPage = location.pathname === '/auth';
+  const isMobile = useIsMobile();
 
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         {!isAuthPage && <AppSidebar />}
-        <main className="flex-1 px-4 py-8 overflow-auto">
-          <ErrorBoundary>
-            <NetworkErrorBoundary>
-              <Routes>
-                <Route path="/auth" element={<Auth />} />
-                <Route
-                  path="/"
-                  element={
-                    <ProtectedRoute>
-                      <div>Dashboard (coming soon)</div>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/files"
-                  element={
-                    <ProtectedRoute>
-                      <FileManagement />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/whatsapp"
-                  element={
-                    <ProtectedRoute>
-                      <WhatsAppLink />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/whatsapp-file-config"
-                  element={
-                    <ProtectedRoute>
-                      <WhatsAppFileConfig />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/whatsapp-ai-config"
-                  element={
-                    <ProtectedRoute>
-                      <WhatsAppAIConfig />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/whatsapp-support-config"
-                  element={
-                    <ProtectedRoute>
-                      <WhatsAppSupportConfig />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/webhook-monitor"
-                  element={
-                    <ProtectedRoute>
-                      <WebhookMonitor />
-                    </ProtectedRoute>
-                  }
-                />
-              </Routes>
-            </NetworkErrorBoundary>
-          </ErrorBoundary>
+        <main className="flex-1 overflow-auto">
+          {!isAuthPage && isMobile && (
+            <div className="p-4 md:hidden">
+              <SidebarTrigger className="h-10 w-10">
+                <Menu className="h-6 w-6" />
+              </SidebarTrigger>
+            </div>
+          )}
+          <div className="px-4 py-4 md:py-8">
+            <ErrorBoundary>
+              <NetworkErrorBoundary>
+                <Routes>
+                  <Route path="/auth" element={<Auth />} />
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <div>Dashboard (coming soon)</div>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/files"
+                    element={
+                      <ProtectedRoute>
+                        <FileManagement />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/whatsapp"
+                    element={
+                      <ProtectedRoute>
+                        <WhatsAppLink />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/whatsapp-file-config"
+                    element={
+                      <ProtectedRoute>
+                        <WhatsAppFileConfig />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/whatsapp-ai-config"
+                    element={
+                      <ProtectedRoute>
+                        <WhatsAppAIConfig />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/whatsapp-support-config"
+                    element={
+                      <ProtectedRoute>
+                        <WhatsAppSupportConfig />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/webhook-monitor"
+                    element={
+                      <ProtectedRoute>
+                        <WebhookMonitor />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Routes>
+              </NetworkErrorBoundary>
+            </ErrorBoundary>
+          </div>
         </main>
       </div>
     </SidebarProvider>
