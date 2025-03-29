@@ -71,11 +71,11 @@ export function AppSidebar() {
   return (
     <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"}>
       <SidebarHeader className="flex items-center p-4">
-        <div className="flex items-center justify-start w-full">
+        <div className="flex items-center justify-between w-full">
           <LogoWithText className="text-xl" />
           {isMobile && (
             <SidebarTrigger className="md:hidden ml-2">
-              <AlignJustify className="h-8 w-8" />
+              <AlignJustify className="h-10 w-10" />
             </SidebarTrigger>
           )}
         </div>
