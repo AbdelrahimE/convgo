@@ -477,13 +477,13 @@ const WhatsAppAIConfig = () => {
                   <CardHeader>
                     <CardTitle>AI System Prompt</CardTitle>
                     <CardDescription>
-                      Define how the AI assistant should respond to WhatsApp messages
+                      Set instructions that guide how the AI responds to incoming WhatsApp messages.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <Label htmlFor="system-prompt">System Prompt</Label>
+                        <Label htmlFor="system-prompt">Prompt</Label>
                         <Button variant="outline" size="sm" onClick={generateSystemPrompt} disabled={isLoading || !selectedInstance}>
                           <Lightbulb className="mr-2 h-4 w-4" />
                           Auto-Generate Prompt
