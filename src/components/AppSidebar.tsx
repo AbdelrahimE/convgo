@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "react-router-dom";
-import { Folder, Home, LogOut, Phone, Link2, Radio, MessageSquare, AlignJustify } from "lucide-react";
+import { Folder, Home, LogOut, Phone, Link2, Radio, AlignJustify, Headphones } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
