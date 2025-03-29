@@ -236,10 +236,10 @@ const WhatsAppFileConfig = () => {
           delay: 0.3
         }}>
             <Card>
-              <CardHeader className="flex flex-col space-y-2 pb-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-                <div>
+              <CardHeader className="flex flex-col space-y-2 pb-2 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+                <div className="sm:max-w-[70%] md:max-w-[60%] lg:max-w-[75%]">
                   <CardTitle>WhatsApp Instance</CardTitle>
-                  <CardDescription className="my-[6px] text-left">Choose which WhatsApp number you want to configure</CardDescription>
+                  <CardDescription className="my-[6px] text-left max-w-none">Choose which WhatsApp number you want to configure</CardDescription>
                 </div>
                 
                 {selectedInstanceId && <div className="flex flex-row items-center justify-start sm:justify-start md:justify-end gap-2 mt-2 sm:mt-0 min-w-max w-full">
@@ -292,7 +292,7 @@ const WhatsAppFileConfig = () => {
               <Card>
                 <CardHeader>
                   <CardTitle>Select Files</CardTitle>
-                  <CardDescription>
+                  <CardDescription className="max-w-none">
                     Select the files that the AI will use to respond to inquiries received on the specified WhatsApp number. 
                     Any files not selected here will be ignored.
                   </CardDescription>
