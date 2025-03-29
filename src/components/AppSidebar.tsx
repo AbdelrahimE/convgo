@@ -78,7 +78,7 @@ export function AppSidebar() {
         <div className="text-2xl font-bold text-primary">ConvGo.com</div>
         {isMobile && (
           <SidebarTrigger className="md:hidden">
-            <AlignJustify className="h-6 w-6" />
+            <AlignJustify className="h-10 w-10" />
           </SidebarTrigger>
         )}
       </SidebarHeader>
