@@ -498,7 +498,7 @@ const WhatsAppAIConfig = () => {
                   <CardHeader>
                     <CardTitle>Voice Message Settings</CardTitle>
                     <CardDescription>
-                      Configure how your AI handles voice messages
+                      Set how your AI assistant handles incoming voice messages on WhatsApp
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
@@ -506,7 +506,7 @@ const WhatsAppAIConfig = () => {
                       <div className="space-y-0.5">
                         <Label htmlFor="process-voice">Process Voice Messages</Label>
                         <p className="text-sm text-muted-foreground">
-                          When enabled, your AI will transcribe and respond to voice messages
+                          Enable to let the AI transcribe and reply to incoming voice messages automatically.
                         </p>
                       </div>
                       <Switch id="process-voice" checked={processVoiceMessages} onCheckedChange={setProcessVoiceMessages} />
@@ -527,7 +527,7 @@ const WhatsAppAIConfig = () => {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Specify the language for more accurate voice transcription
+                        Select the language spoken in the voice messages to improve transcription accuracy.
                       </p>
                     </div>
                     
@@ -537,7 +537,7 @@ const WhatsAppAIConfig = () => {
                         </Label>
                         <Textarea id="voice-default-response" value={voiceMessageDefaultResponse} onChange={e => setVoiceMessageDefaultResponse(e.target.value)} placeholder="Message to send when a voice message is received" rows={3} />
                         <p className="text-xs text-muted-foreground">
-                          This message will be sent automatically when a voice message is received
+                          This reply will be automatically sent when a customer sends a voice message and voice processing is disabled.
                         </p>
                       </div>}
                     
