@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,17 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, CheckSquare, PhoneCall, Clock, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 interface EscalatedConversation {
   id: string;
   user_phone: string;
@@ -28,53 +17,51 @@ interface EscalatedConversation {
   resolved_at: string | null;
   instance_name?: string;
 }
-
 interface EscalatedConversationsProps {
   instanceId?: string;
 }
-
-export const EscalatedConversations = ({ instanceId }: EscalatedConversationsProps) => {
-  const { user } = useAuth();
+export const EscalatedConversations = ({
+  instanceId
+}: EscalatedConversationsProps) => {
+  const {
+    user
+  } = useAuth();
   const [conversations, setConversations] = useState<EscalatedConversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isResolving, setIsResolving] = useState<Record<string, boolean>>({});
   const [isDeleting, setIsDeleting] = useState<Record<string, boolean>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
-
   useEffect(() => {
     if (user) {
       loadEscalatedConversations();
     }
   }, [user, instanceId]);
-
   const loadEscalatedConversations = async () => {
     try {
       setIsLoading(true);
-      
-      let query = supabase
-        .from('whatsapp_escalated_conversations')
-        .select(`
+      let query = supabase.from('whatsapp_escalated_conversations').select(`
           *,
           whatsapp_instances!inner(instance_name)
-        `)
-        .order('escalated_at', { ascending: false });
-      
+        `).order('escalated_at', {
+        ascending: false
+      });
+
       // Filter by instance if specified
       if (instanceId) {
         query = query.eq('whatsapp_instance_id', instanceId);
       }
-      
-      const { data, error } = await query;
-      
+      const {
+        data,
+        error
+      } = await query;
       if (error) throw error;
-      
+
       // Format the data to include instance_name
       const formattedData = data.map(item => ({
         ...item,
         instance_name: item.whatsapp_instances?.instance_name
       }));
-      
       setConversations(formattedData || []);
     } catch (error) {
       console.error('Error loading escalated conversations:', error);
@@ -83,100 +70,88 @@ export const EscalatedConversations = ({ instanceId }: EscalatedConversationsPro
       setIsLoading(false);
     }
   };
-
   const markAsResolved = async (id: string) => {
     try {
-      setIsResolving(prev => ({ ...prev, [id]: true }));
-      
-      const { error } = await supabase
-        .from('whatsapp_escalated_conversations')
-        .update({
-          is_resolved: true,
-          resolved_at: new Date().toISOString()
-        })
-        .eq('id', id);
-      
+      setIsResolving(prev => ({
+        ...prev,
+        [id]: true
+      }));
+      const {
+        error
+      } = await supabase.from('whatsapp_escalated_conversations').update({
+        is_resolved: true,
+        resolved_at: new Date().toISOString()
+      }).eq('id', id);
       if (error) throw error;
-      
       toast.success('Conversation marked as resolved');
-      
+
       // Update the local state
-      setConversations(prev => 
-        prev.map(conv => 
-          conv.id === id 
-            ? { ...conv, is_resolved: true, resolved_at: new Date().toISOString() } 
-            : conv
-        )
-      );
+      setConversations(prev => prev.map(conv => conv.id === id ? {
+        ...conv,
+        is_resolved: true,
+        resolved_at: new Date().toISOString()
+      } : conv));
     } catch (error) {
       console.error('Error resolving conversation:', error);
       toast.error('Failed to resolve conversation');
     } finally {
-      setIsResolving(prev => ({ ...prev, [id]: false }));
+      setIsResolving(prev => ({
+        ...prev,
+        [id]: false
+      }));
     }
   };
-
   const confirmDelete = (id: string) => {
     setConversationToDelete(id);
     setDeleteDialogOpen(true);
   };
-
   const deleteEscalation = async () => {
     if (!conversationToDelete) return;
-    
     const id = conversationToDelete;
     try {
-      setIsDeleting(prev => ({ ...prev, [id]: true }));
-      
-      const { error } = await supabase
-        .from('whatsapp_escalated_conversations')
-        .delete()
-        .eq('id', id);
-      
+      setIsDeleting(prev => ({
+        ...prev,
+        [id]: true
+      }));
+      const {
+        error
+      } = await supabase.from('whatsapp_escalated_conversations').delete().eq('id', id);
       if (error) throw error;
-      
       toast.success('Conversation deleted successfully');
-      
+
       // Remove the conversation from the local state
       setConversations(prev => prev.filter(conv => conv.id !== id));
     } catch (error) {
       console.error('Error deleting conversation:', error);
       toast.error('Failed to delete conversation');
     } finally {
-      setIsDeleting(prev => ({ ...prev, [id]: false }));
+      setIsDeleting(prev => ({
+        ...prev,
+        [id]: false
+      }));
       setConversationToDelete(null);
       setDeleteDialogOpen(false);
     }
   };
-
   const formatPhone = (phone: string) => {
     // Remove any non-numeric characters except the plus sign
     const cleaned = phone.replace(/[^\d+]/g, '');
     // Check if it has a plus sign, if not add it
     return cleaned.startsWith('+') ? cleaned : `+${cleaned}`;
   };
-
   if (isLoading) {
-    return (
-      <div className="flex justify-center p-6">
+    return <div className="flex justify-center p-6">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+      </div>;
   }
-
   if (conversations.length === 0) {
-    return (
-      <div className="text-center p-6 text-muted-foreground">
+    return <div className="text-center p-6 text-muted-foreground">
         <p>No escalated conversations found.</p>
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="space-y-4">
+  return <div className="space-y-4">
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {conversations.map(conversation => (
-          <Card key={conversation.id} className={conversation.is_resolved ? 'border-green-200 bg-green-50/30' : 'border-red-200'}>
+        {conversations.map(conversation => <Card key={conversation.id} className={conversation.is_resolved ? 'border-green-200 bg-green-50/30' : 'border-red-200'}>
             <CardHeader className="pb-2">
               <div className="flex justify-between items-start">
                 <div>
@@ -202,57 +177,24 @@ export const EscalatedConversations = ({ instanceId }: EscalatedConversationsPro
                 </span>
               </div>
               
-              {conversation.is_resolved && conversation.resolved_at && (
-                <div className="flex items-center text-muted-foreground mt-1">
+              {conversation.is_resolved && conversation.resolved_at && <div className="flex items-center text-muted-foreground mt-1">
                   <CheckSquare className="h-3.5 w-3.5 mr-1" />
                   Resolved {formatDistanceToNow(new Date(conversation.resolved_at))} ago
-                </div>
-              )}
+                </div>}
             </CardContent>
             <CardFooter className="flex gap-2 flex-col sm:flex-row">
-              {!conversation.is_resolved && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full"
-                  onClick={() => markAsResolved(conversation.id)}
-                  disabled={isResolving[conversation.id]}
-                >
-                  {isResolving[conversation.id] ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-                      Resolving...
-                    </>
-                  ) : (
-                    <>
-                      <CheckSquare className="h-3.5 w-3.5 mr-2" />
-                      Mark as Resolved
-                    </>
-                  )}
-                </Button>
-              )}
-              <Button 
-                variant="destructive" 
-                size="sm" 
-                className="w-full"
-                onClick={() => confirmDelete(conversation.id)}
-                disabled={isDeleting[conversation.id]}
-              >
-                {isDeleting[conversation.id] ? (
-                  <>
+              {!conversation.is_resolved}
+              <Button variant="destructive" size="sm" className="w-full" onClick={() => confirmDelete(conversation.id)} disabled={isDeleting[conversation.id]}>
+                {isDeleting[conversation.id] ? <>
                     <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
                     Deleting...
-                  </>
-                ) : (
-                  <>
+                  </> : <>
                     <Trash2 className="h-3.5 w-3.5 mr-2" />
                     Delete
-                  </>
-                )}
+                  </>}
               </Button>
             </CardFooter>
-          </Card>
-        ))}
+          </Card>)}
       </div>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -272,8 +214,6 @@ export const EscalatedConversations = ({ instanceId }: EscalatedConversationsPro
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
+    </div>;
 };
-
 export default EscalatedConversations;
