@@ -20,11 +20,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
+
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
+
 interface AIConfig {
   id: string;
   system_prompt: string;
@@ -34,6 +36,7 @@ interface AIConfig {
   voice_message_default_response: string;
   default_voice_language: string;
 }
+
 const WhatsAppAIConfig = () => {
   const {
     user
@@ -70,6 +73,7 @@ const WhatsAppAIConfig = () => {
   const [useRealConversation, setUseRealConversation] = useState(true);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [showVoiceFeature, setShowVoiceFeature] = useState(true);
+
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
     try {
@@ -97,11 +101,13 @@ const WhatsAppAIConfig = () => {
       setIsCleaningUp(false);
     }
   }, []);
+
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
+
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -112,6 +118,7 @@ const WhatsAppAIConfig = () => {
       setDefaultVoiceLanguage('ar');
     }
   }, [selectedInstance]);
+
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
@@ -125,11 +132,13 @@ const WhatsAppAIConfig = () => {
       }
     };
   }, [testConversationId, useRealConversation, cleanupTestConversation]);
+
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
     }
   }, [activeTab, selectedInstance, useRealConversation]);
+
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -149,6 +158,7 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
+
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
@@ -177,6 +187,7 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
+
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
@@ -230,9 +241,11 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
+
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
+
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
@@ -264,6 +277,7 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
+
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
     try {
@@ -295,6 +309,7 @@ const WhatsAppAIConfig = () => {
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
+
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       const idToDelete = testConversationId;
@@ -309,6 +324,7 @@ const WhatsAppAIConfig = () => {
       setConversation([]);
     }
   };
+
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -390,6 +406,7 @@ const WhatsAppAIConfig = () => {
       }]);
     }
   };
+
   return <motion.div initial={{
     opacity: 0,
     y: 20
@@ -398,9 +415,9 @@ const WhatsAppAIConfig = () => {
     y: 0
   }} transition={{
     duration: 0.3
-  }} className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="space-y-8">
-        <motion.h1 initial={{
+  }} className="container mx-auto px-4 py-8 max-w-5xl">
+    <div className="space-y-8">
+      <motion.h1 initial={{
         opacity: 0,
         x: -20
       }} animate={{
@@ -409,11 +426,11 @@ const WhatsAppAIConfig = () => {
       }} transition={{
         delay: 0.2
       }} className="text-2xl font-bold text-left md:text-3xl lg:text-4xl">
-          AI Configuration
-        </motion.h1>
-        
-        <div className="grid gap-8">
-          <motion.div initial={{
+        AI Configuration
+      </motion.h1>
+      
+      <div className="space-y-6">
+        <motion.div initial={{
           opacity: 0,
           y: 20
         }} animate={{
@@ -422,217 +439,269 @@ const WhatsAppAIConfig = () => {
         }} transition={{
           delay: 0.3
         }}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="md:col-span-1 space-y-6">
-                <div>
-                  <Label htmlFor="whatsapp-instance">Choose WhatsApp Number</Label>
-                  <select id="whatsapp-instance" value={selectedInstance} onChange={e => setSelectedInstance(e.target.value)} disabled={isLoading || instances.length === 0} className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 my-[8px]">
-                    {instances.length === 0 ? <option value="">No WhatsApp numbers available</option> : instances.map(instance => <option key={instance.id} value={instance.id}>
-                          {instance.instance_name} ({instance.status})
-                        </option>)}
-                  </select>
-                  
-                  {selectedInstance && instances.length > 0 && <WhatsAppAIToggle instanceId={selectedInstance} instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} />}
-                </div>
-
-                {showVoiceFeature}
-              </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Choose WhatsApp Number</CardTitle>
+              <CardDescription>
+                Select the WhatsApp number you want to configure for AI responses
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <select id="whatsapp-instance" value={selectedInstance} onChange={e => setSelectedInstance(e.target.value)} disabled={isLoading || instances.length === 0} className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                {instances.length === 0 ? <option value="">No WhatsApp numbers available</option> : instances.map(instance => <option key={instance.id} value={instance.id}>
+                  {instance.instance_name} ({instance.status})
+                </option>)}
+              </select>
+            </CardContent>
+          </Card>
+        </motion.div>
+        
+        {selectedInstance && instances.length > 0 && (
+          <motion.div initial={{
+            opacity: 0,
+            y: 20
+          }} animate={{
+            opacity: 1,
+            y: 0
+          }} transition={{
+            delay: 0.4
+          }}>
+            <WhatsAppAIToggle instanceId={selectedInstance} instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} />
+          </motion.div>
+        )}
+        
+        <motion.div initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.5
+        }}>
+          {!selectedInstance ? (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-center text-muted-foreground">
+                  Please select a WhatsApp instance to configure AI settings
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="config">Configuration</TabsTrigger>
+                <TabsTrigger value="test">Test ChatBot</TabsTrigger>
+              </TabsList>
               
-              <div className="md:col-span-2">
-                {!selectedInstance ? <Card>
-                    <CardContent className="pt-6">
-                      <p className="text-center text-muted-foreground">
-                        Please select a WhatsApp instance to configure AI settings
+              <TabsContent value="config" className="space-y-6 mt-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>AI System Prompt</CardTitle>
+                    <CardDescription>
+                      Define how the AI assistant should respond to WhatsApp messages
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <Label htmlFor="system-prompt">System Prompt</Label>
+                        <Button variant="outline" size="sm" onClick={generateSystemPrompt} disabled={isLoading || !selectedInstance}>
+                          <Lightbulb className="mr-2 h-4 w-4" />
+                          Auto-Generate Prompt
+                        </Button>
+                      </div>
+                      <Textarea id="system-prompt" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={8} placeholder="Provide instructions for how the AI should respond to messages..." className="resize-y" />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Voice Message Settings</CardTitle>
+                    <CardDescription>
+                      Configure how your AI handles voice messages
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="process-voice">Process Voice Messages</Label>
+                        <p className="text-sm text-muted-foreground">
+                          When enabled, your AI will transcribe and respond to voice messages
+                        </p>
+                      </div>
+                      <Switch id="process-voice" checked={processVoiceMessages} onCheckedChange={setProcessVoiceMessages} />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="voice-language">Voice Message Language</Label>
+                      <Select value={defaultVoiceLanguage} onValueChange={setDefaultVoiceLanguage}>
+                        <SelectTrigger id="voice-language" className="w-full">
+                          <SelectValue placeholder="Select a language" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ar">Arabic</SelectItem>
+                          <SelectItem value="en">English</SelectItem>
+                          <SelectItem value="fr">French</SelectItem>
+                          <SelectItem value="es">Spanish</SelectItem>
+                          <SelectItem value="auto">Auto-detect</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Specify the language for more accurate voice transcription
                       </p>
-                    </CardContent>
-                  </Card> : <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="config">Configuration</TabsTrigger>
-                      <TabsTrigger value="test">Test ChatBot</TabsTrigger>
-                    </TabsList>
+                    </div>
                     
-                    <TabsContent value="config" className="space-y-4 mt-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>AI System Prompt</CardTitle>
-                          <CardDescription>
-                            Define how the AI assistant should respond to WhatsApp messages
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                              <Label htmlFor="system-prompt">System Prompt</Label>
-                              <Button variant="outline" size="sm" onClick={generateSystemPrompt} disabled={isLoading || !selectedInstance}>
-                                <Lightbulb className="mr-2 h-4 w-4" />
-                                Auto-Generate Prompt
-                              </Button>
-                            </div>
-                            <Textarea id="system-prompt" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={8} placeholder="Provide instructions for how the AI should respond to messages..." className="resize-y" />
-                          </div>
-                          
-                          <div className="space-y-4 pt-4 border-t">
-                            <h3 className="text-lg font-semibold text-left">Voice Message Settings</h3>
-                            
-                            <div className="flex items-center justify-between">
-                              <div className="space-y-0.5">
-                                <Label htmlFor="process-voice">Process Voice Messages</Label>
-                                <p className="text-sm text-muted-foreground">
-                                  When enabled, your AI will transcribe and respond to voice messages
-                                </p>
-                              </div>
-                              <Switch id="process-voice" checked={processVoiceMessages} onCheckedChange={setProcessVoiceMessages} />
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label htmlFor="voice-language">Voice Message Language</Label>
-                              <Select value={defaultVoiceLanguage} onValueChange={setDefaultVoiceLanguage}>
-                                <SelectTrigger id="voice-language" className="w-full">
-                                  <SelectValue placeholder="Select a language" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="ar">Arabic</SelectItem>
-                                  <SelectItem value="en">English</SelectItem>
-                                  <SelectItem value="fr">French</SelectItem>
-                                  <SelectItem value="es">Spanish</SelectItem>
-                                  <SelectItem value="auto">Auto-detect</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <p className="text-xs text-muted-foreground">
-                                Specify the language for more accurate voice transcription
-                              </p>
-                            </div>
-                            
-                            {!processVoiceMessages && <div className="space-y-2 mt-4">
-                                <Label htmlFor="voice-default-response">
-                                  Default Response for Voice Messages
-                                </Label>
-                                <Textarea id="voice-default-response" value={voiceMessageDefaultResponse} onChange={e => setVoiceMessageDefaultResponse(e.target.value)} placeholder="Message to send when a voice message is received" rows={3} />
-                                <p className="text-xs text-muted-foreground">
-                                  This message will be sent automatically when a voice message is received
-                                </p>
-                              </div>}
-                          </div>
-                          
-                          <Button onClick={saveAIConfig} disabled={isSaving || !systemPrompt.trim() || !selectedInstance || !processVoiceMessages && !voiceMessageDefaultResponse.trim()} className="w-full">
-                            {isSaving ? 'Saving...' : 'Save Configuration'}
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
+                    {!processVoiceMessages && (
+                      <div className="space-y-2">
+                        <Label htmlFor="voice-default-response">
+                          Default Response for Voice Messages
+                        </Label>
+                        <Textarea id="voice-default-response" value={voiceMessageDefaultResponse} onChange={e => setVoiceMessageDefaultResponse(e.target.value)} placeholder="Message to send when a voice message is received" rows={3} />
+                        <p className="text-xs text-muted-foreground">
+                          This message will be sent automatically when a voice message is received
+                        </p>
+                      </div>
+                    )}
                     
-                    <TabsContent value="test" className="space-y-4 mt-4">
-                      <Card>
-                        <CardHeader>
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <CardTitle>Test Your ChatBot</CardTitle>
-                              <CardDescription>
-                                Send test messages to see how your AI will respond using the configured files
-                              </CardDescription>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="mb-4 flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="flex items-center space-x-2">
-                                      <Switch id="conversation-mode" checked={useRealConversation} onCheckedChange={value => {
+                    <Button onClick={saveAIConfig} disabled={isSaving || !systemPrompt.trim() || !selectedInstance || (!processVoiceMessages && !voiceMessageDefaultResponse.trim())} className="w-full">
+                      {isSaving ? 'Saving...' : 'Save Configuration'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="test" className="space-y-6 mt-6">
+                <Card>
+                  <CardHeader>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <CardTitle>Test Your ChatBot</CardTitle>
+                        <CardDescription>
+                          Send test messages to see how your AI will respond using the configured files
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center space-x-2">
+                                <Switch 
+                                  id="conversation-mode" 
+                                  checked={useRealConversation} 
+                                  onCheckedChange={value => {
                                     setUseRealConversation(value);
                                     if (value && !testConversationId) {
                                       createTestConversation();
                                     }
-                                  }} />
-                                      <Label htmlFor="conversation-mode">Conversation Memory</Label>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>When enabled, the AI will remember previous messages in this conversation</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                            
-                            <Button variant="outline" size="sm" onClick={resetTestConversation} disabled={conversation.length === 0 || isCleaningUp}>
-                              <RotateCcw className="mr-2 h-4 w-4" />
-                              Reset Conversation
-                            </Button>
-                          </div>
-                          
-                          {useRealConversation && <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800 flex items-start">
-                              <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 mt-0.5 flex-shrink-0" />
-                              <p className="text-sm text-amber-700 dark:text-amber-300">
-                                Test conversations are stored temporarily in the database and will be automatically cleaned up when you leave this page or reset the conversation.
-                              </p>
-                            </div>}
-                          
-                          <div className="bg-secondary/50 rounded-lg p-4 h-80 overflow-y-auto mb-4 flex flex-col gap-2">
-                            {conversation.length === 0 ? <p className="text-center text-muted-foreground p-4">
-                                Send a message to start the conversation
-                              </p> : conversation.map((msg, index) => <div key={index} className={`max-w-[80%] px-4 py-2 rounded-lg ${msg.role === 'user' ? 'bg-primary text-primary-foreground self-end' : 'bg-muted self-start'}`}>
-                                  {msg.content}
-                                </div>)}
-                          </div>
-                          
-                          <div className="flex gap-2">
-                            <Input value={testQuery} onChange={e => setTestQuery(e.target.value)} placeholder="Type a message to test..." onKeyDown={e => e.key === 'Enter' && sendTestMessage()} />
-                            <Button onClick={sendTestMessage} disabled={isGenerating || !testQuery.trim() || !selectedInstance}>
-                              {isGenerating ? 'Sending...' : 'Send'}
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-                  </Tabs>}
-              </div>
-            </div>
-          </motion.div>
-        </div>
+                                  }} 
+                                />
+                                <Label htmlFor="conversation-mode">Conversation Memory</Label>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>When enabled, the AI will remember previous messages in this conversation</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                      
+                      <Button variant="outline" size="sm" onClick={resetTestConversation} disabled={conversation.length === 0 || isCleaningUp}>
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Reset Conversation
+                      </Button>
+                    </div>
+                    
+                    {useRealConversation && (
+                      <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800 flex items-start">
+                        <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm text-amber-700 dark:text-amber-300">
+                          Test conversations are stored temporarily in the database and will be automatically cleaned up when you leave this page or reset the conversation.
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div className="bg-secondary/50 rounded-lg p-4 h-80 overflow-y-auto mb-4 flex flex-col gap-2">
+                      {conversation.length === 0 ? (
+                        <p className="text-center text-muted-foreground p-4">
+                          Send a message to start the conversation
+                        </p>
+                      ) : conversation.map((msg, index) => (
+                        <div key={index} className={`max-w-[80%] px-4 py-2 rounded-lg ${msg.role === 'user' ? 'bg-primary text-primary-foreground self-end' : 'bg-muted self-start'}`}>
+                          {msg.content}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Input value={testQuery} onChange={e => setTestQuery(e.target.value)} placeholder="Type a message to test..." onKeyDown={e => e.key === 'Enter' && sendTestMessage()} />
+                      <Button onClick={sendTestMessage} disabled={isGenerating || !testQuery.trim() || !selectedInstance}>
+                        {isGenerating ? 'Sending...' : 'Send'}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          )}
+        </motion.div>
       </div>
+    </div>
 
-      <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>AI Prompt Generator</DialogTitle>
-            <DialogDescription>
-              Describe what you want the AI to do in your own words, and we'll create a powerful system prompt for you.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="description" className="text-sm font-medium">
-                Your Description
-              </Label>
-              <Textarea id="description" placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone." value={userDescription} onChange={e => setUserDescription(e.target.value)} className="min-h-[120px]" />
-            </div>
-            
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Example Descriptions:</p>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>• I need an AI bot that helps customers troubleshoot technical issues with our software</p>
-                <p>• I want an assistant that provides factual information about our company policies</p>
-                <p>• I need a sales assistant that can answer questions about our products and pricing</p>
-              </div>
-            </div>
+    <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>AI Prompt Generator</DialogTitle>
+          <DialogDescription>
+            Describe what you want the AI to do in your own words, and we'll create a powerful system prompt for you.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="description" className="text-sm font-medium">
+              Your Description
+            </Label>
+            <Textarea 
+              id="description" 
+              placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone." 
+              value={userDescription} 
+              onChange={e => setUserDescription(e.target.value)} 
+              className="min-h-[120px]" 
+            />
           </div>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPromptDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleGenerateSystemPrompt} disabled={isGeneratingPrompt || !userDescription.trim()}>
-              {isGeneratingPrompt ? <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
-                  Generating...
-                </> : 'Generate Prompt'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </motion.div>;
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Example Descriptions:</p>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>• I need an AI bot that helps customers troubleshoot technical issues with our software</p>
+              <p>• I want an assistant that provides factual information about our company policies</p>
+              <p>• I need a sales assistant that can answer questions about our products and pricing</p>
+            </div>
+          </div>
+        </div>
+        
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setPromptDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleGenerateSystemPrompt} disabled={isGeneratingPrompt || !userDescription.trim()}>
+            {isGeneratingPrompt ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                Generating...
+              </>
+            ) : 'Generate Prompt'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </motion.div>;
 };
+
 export default WhatsAppAIConfig;
