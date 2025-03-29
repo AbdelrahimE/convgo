@@ -387,7 +387,7 @@ const WhatsAppSupportConfig = () => {
                         <CardHeader>
                           <CardTitle className="flex items-center">
                             <Tags className="h-5 w-5 mr-2" />
-                            Support Keywords for {instances.find(i => i.id === selectedInstance)?.instance_name}
+                            Support Keywords
                           </CardTitle>
                           <CardDescription>
                             Manage keywords that will trigger automatic support escalation for this WhatsApp number
