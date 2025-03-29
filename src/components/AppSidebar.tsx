@@ -40,7 +40,7 @@ const navigation = [
   {
     name: 'Support Config',
     href: '/whatsapp-support-config',
-    icon: MessageSquare
+    icon: Headphones
   }
 ];
 
