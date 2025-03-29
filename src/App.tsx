@@ -15,7 +15,7 @@ import WhatsAppSupportConfig from '@/pages/WhatsAppSupportConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
-import { Menu } from 'lucide-react';
+import { AlignJustify } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import './App.css';
 
@@ -31,8 +31,8 @@ function AppContent() {
         <main className="flex-1 overflow-auto">
           {!isAuthPage && isMobile && (
             <div className="p-4 md:hidden">
-              <SidebarTrigger className="h-10 w-10">
-                <Menu className="h-6 w-6" />
+              <SidebarTrigger className="h-11 w-11 flex items-center justify-center">
+                <AlignJustify className="h-7 w-7" />
               </SidebarTrigger>
             </div>
           )}

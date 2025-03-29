@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "react-router-dom";
-import { Folder, Home, LogOut, Phone, Link2, Radio, MessageSquare, Menu } from "lucide-react";
+import { Folder, Home, LogOut, Phone, Link2, Radio, MessageSquare, AlignJustify } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -78,7 +78,7 @@ export function AppSidebar() {
         <div className="text-2xl font-bold text-primary">ConvGo.com</div>
         {isMobile && (
           <SidebarTrigger className="md:hidden">
-            <Menu className="h-5 w-5" />
+            <AlignJustify className="h-6 w-6" />
           </SidebarTrigger>
         )}
       </SidebarHeader>
