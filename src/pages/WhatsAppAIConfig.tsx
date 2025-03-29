@@ -581,12 +581,7 @@ const WhatsAppAIConfig = () => {
                       </Button>
                     </div>
                     
-                    {useRealConversation && <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800 flex items-start">
-                        <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 mt-0.5 flex-shrink-0" />
-                        <p className="text-sm text-amber-700 dark:text-amber-300">
-                          Test conversations are stored temporarily in the database and will be automatically cleaned up when you leave this page or reset the conversation.
-                        </p>
-                      </div>}
+                    {useRealConversation}
                     
                     <div className="bg-secondary/50 rounded-lg p-4 h-80 overflow-y-auto mb-4 flex flex-col gap-2">
                       {conversation.length === 0 ? <p className="text-center text-muted-foreground p-4">
