@@ -32,7 +32,7 @@ function AppContent() {
           {!isAuthPage && isMobile && (
            <div className="p-4 md:hidden">
              <SidebarTrigger className="h-11 w-11 flex items-center justify-center">
-               <AlignJustify className="h-10 w-10" />
+               <AlignJustify className="h-12 w-12" />
              </SidebarTrigger>
            </div>
           )}
