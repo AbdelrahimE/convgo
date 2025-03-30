@@ -287,7 +287,7 @@ export function FileList() {
           </div>;
       }
       if (status === 'complete') {
-        return <div className="ml-auto flex items-center gap-1 text-green-600">
+        return <div className="ml-auto flex items-center gap-1 text-blue-700">
             <CheckCircle2 className="h-4 w-4" />
             <span className="text-sm text-center text-blue-700 font-normal">Embeddings Ready</span>
           </div>;
