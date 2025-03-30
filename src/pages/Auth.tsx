@@ -1121,7 +1121,7 @@ export default function Auth() {
     } else {
       return {
         title: "Get Started with ConvGo",
-        description: "Power up your WhatsApp Business with AI automation — create your ConvGo account now."
+        description: "Automate WhatsApp with AI — Join ConvGo now."
       };
     }
   };
