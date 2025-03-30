@@ -98,7 +98,7 @@ const InstanceActions = ({
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="destructive" disabled={isLoading} className="w-full sm:w-auto">
+            <Button variant="destructive" disabled={isLoading} className="w-full sm:w-auto bg-blue-700 hover:bg-blue-600 text-center">
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
             </Button>
