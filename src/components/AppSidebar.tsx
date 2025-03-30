@@ -70,7 +70,7 @@ export function AppSidebar() {
     `${profile.name.slice(0, FULL_NAME_MAX_LENGTH)}...` : profile?.name;
   
   return (
-    <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"} className="flex flex-col">
+    <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"} className="flex flex-col h-full">
       <SidebarHeader className="flex items-center p-4">
         <div className="flex items-center justify-between w-full">
           <LogoWithText className="text-xl" />
