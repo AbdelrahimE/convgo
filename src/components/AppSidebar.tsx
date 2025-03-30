@@ -104,7 +104,7 @@ export function AppSidebar() {
                           isActive ? "text-sidebar-primary" : ""
                         )} />
                         <span className={cn(
-                          "transition-all duration-200 group-hover:text-sidebar-primary font-bold",
+                          "transition-all duration-200 group-hover:text-sidebar-primary font-semibold",
                           isActive ? "text-sidebar-primary" : ""
                         )}>
                           {item.name}
