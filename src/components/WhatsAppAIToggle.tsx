@@ -5,10 +5,12 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+
 interface WhatsAppAIToggleProps {
   instanceId: string;
   instanceName: string;
 }
+
 const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
   instanceId,
   instanceName
@@ -16,11 +18,13 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+
   useEffect(() => {
     if (instanceId) {
       fetchAIStatus();
     }
   }, [instanceId]);
+
   const fetchAIStatus = async () => {
     try {
       setIsLoading(true);
@@ -30,7 +34,6 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       } = await supabase.from('whatsapp_ai_config').select('is_active').eq('whatsapp_instance_id', instanceId).single();
       if (error) {
         if (error.code === 'PGRST116') {
-          // No record found, AI is disabled by default
           setIsEnabled(false);
         } else {
           throw error;
@@ -45,6 +48,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       setIsLoading(false);
     }
   };
+
   const toggleAI = async () => {
     try {
       setIsUpdating(true);
@@ -85,6 +89,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       setIsUpdating(false);
     }
   };
+
   return <Card className="w-full">
       <CardHeader>
         <CardTitle className="flex items-center">
@@ -107,9 +112,10 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
                 {isEnabled ? 'This WhatsApp number will automatically respond to incoming messages using AI' : 'This WhatsApp number will not send automated AI responses'}
               </p>
             </div>
-            <Switch id="ai-toggle" checked={isEnabled} onCheckedChange={toggleAI} disabled={isUpdating} className="bg-blue-700 hover:bg-blue-600" />
+            <Switch id="ai-toggle" checked={isEnabled} onCheckedChange={toggleAI} disabled={isUpdating} className="data-[state=checked]:bg-[#0066FF] data-[state=checked]:hover:bg-[#0066FF]/90" />
           </div>}
       </CardContent>
     </Card>;
 };
+
 export default WhatsAppAIToggle;
