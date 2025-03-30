@@ -1120,7 +1120,7 @@ export default function Auth() {
     return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
         <Card className="w-full max-w-md">
           <CardHeader className="text-left">
-            <CardTitle>Reset Your Password</CardTitle>
+            <CardTitle className="font-bold text-left">Reset Your Password</CardTitle>
             <CardDescription>Enter your email to receive a password reset link</CardDescription>
           </CardHeader>
           <CardContent>
@@ -1130,7 +1130,7 @@ export default function Auth() {
                 <Input id="reset-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
               </div>
               <div className="flex gap-4">
-                <Button type="submit" className="flex-1" disabled={loading}>
+                <Button type="submit" disabled={loading} className="flex-1 bg-blue-700 hover:bg-blue-600">
                   {loading ? 'Sending...' : 'Send Reset Link'}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setShowResetPassword(false)} className="flex-1">
