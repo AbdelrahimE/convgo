@@ -21,11 +21,11 @@ export function LogoIcon({ className }: { className?: string }) {
 
 export function LogoWithText({ className }: { className?: string }) {
   return (
-    <div className={`flex items-center ${className}`}>
+    <div className={`flex items-center justify-center ${className}`}>
       <img 
         src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon//convgo.com-logo.png" 
         alt="ConvGo.com Logo" 
-        className="h-8 w-auto object-contain"
+        className="h-10 w-auto object-contain"
       />
     </div>
   );

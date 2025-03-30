@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { LogoWithText } from '@/components/Logo';
 
 const countryCodes = [{
   code: '+93',
@@ -1079,7 +1080,7 @@ export default function Auth() {
         password
       });
       if (signInError) throw signInError;
-      navigate('/whatsapp');
+      navigate('/whatsapp'); // Fixed: Now redirecting to /whatsapp instead of /dashboard
     } catch (error: any) {
       toast.error("Error", {
         description: error.message
@@ -1131,9 +1132,10 @@ export default function Auth() {
   if (showResetPassword) {
     return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
         <Card className="w-full max-w-md">
-          <CardHeader className="text-left">
-            <CardTitle className="font-bold text-left">Reset Your Password</CardTitle>
-            <CardDescription className="text-center">Enter your email to receive a password reset link</CardDescription>
+          <CardHeader className="text-center">
+            <LogoWithText className="mb-4" />
+            <CardTitle className="font-bold">Reset Your Password</CardTitle>
+            <CardDescription>Enter your email to receive a password reset link</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleResetPassword} className="space-y-4">
@@ -1158,6 +1160,7 @@ export default function Auth() {
   return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          <LogoWithText className="mb-4" />
           <CardTitle className="text-2xl font-bold text-center">{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
