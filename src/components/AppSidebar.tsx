@@ -97,7 +97,7 @@ export function AppSidebar() {
                     >
                       <Link to={item.href} className={cn(
                         "relative",
-                        isActive && "after:content-[''] after:absolute after:bottom-0 after:left-1 after:top-0 after:w-1 after:bg-sidebar-primary after:rounded-r-md after:animate-in after:fade-in-0 after:zoom-in-95"
+                        isActive && "pl-3 after:content-[''] after:absolute after:bottom-0 after:left-1 after:top-0 after:w-1 after:bg-sidebar-primary after:rounded-r-md after:animate-in after:fade-in-0 after:zoom-in-95"
                       )}>
                         <item.icon className={cn(
                           "transition-all duration-200 group-hover:scale-110 group-hover:text-sidebar-primary",
