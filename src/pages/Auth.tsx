@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
 const countryCodes = [{
   code: '+93',
   country: 'AF',
@@ -990,10 +989,11 @@ const countryCodes = [{
   flag: '🇿🇼',
   name: 'Zimbabwe'
 }].sort((a, b) => a.name.localeCompare(b.name));
-
 export default function Auth() {
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const {
+    toast
+  } = useToast();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1002,9 +1002,7 @@ export default function Auth() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('US+1');
   const [showResetPassword, setShowResetPassword] = useState(false);
-
   const countryCode = selectedCountry.split('+')[1];
-
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -1014,14 +1012,15 @@ export default function Auth() {
       if (fullName.length < 3) {
         throw new Error('Full name must be at least 3 characters long');
       }
-
       if (password.length < 6) {
         throw new Error('Password must be at least 6 characters long');
       }
-
       console.log('Attempting to sign up with email:', email); // Debug log
 
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const {
+        data,
+        error: signUpError
+      } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -1032,8 +1031,10 @@ export default function Auth() {
           }
         }
       });
-
-      console.log('Sign up response:', { data, error: signUpError }); // Debug log
+      console.log('Sign up response:', {
+        data,
+        error: signUpError
+      }); // Debug log
 
       if (signUpError) {
         if (signUpError.message.includes('User already registered')) {
@@ -1068,7 +1069,6 @@ export default function Auth() {
       setLoading(false);
     }
   };
-
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -1091,7 +1091,6 @@ export default function Auth() {
       setLoading(false);
     }
   };
-
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -1117,10 +1116,8 @@ export default function Auth() {
       setLoading(false);
     }
   };
-
   if (showResetPassword) {
-    return (
-      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
+    return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
         <Card className="w-full max-w-md">
           <CardHeader className="text-left">
             <CardTitle>Reset Your Password</CardTitle>
@@ -1143,16 +1140,13 @@ export default function Auth() {
             </form>
           </CardContent>
         </Card>
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
+  return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle>Welcome</CardTitle>
-          <CardDescription>Sign in to your account or create a new one</CardDescription>
+          <CardTitle className="text-2xl text-center font-bold">Sign in to ConvGo</CardTitle>
+          <CardDescription>Welcome back! Please sign in to continue</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
@@ -1174,7 +1168,7 @@ export default function Auth() {
                 <Button type="button" variant="link" onClick={() => setShowResetPassword(true)} className="px-0 justify-start w-auto h-auto text-left my-0 mx-0 py-0">
                   Can't access your account?
                 </Button>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-600">
                   {loading ? 'Signing in...' : 'Sign In'}
                 </Button>
               </form>
@@ -1208,21 +1202,19 @@ export default function Auth() {
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent className="max-h-[300px] overflow-y-auto bg-white">
-                        {countryCodes.map(country => (
-                          <SelectItem key={country.country} value={`${country.country}${country.code}`}>
+                        {countryCodes.map(country => <SelectItem key={country.country} value={`${country.country}${country.code}`}>
                             <span className="flex items-center gap-2">
                               <span>{country.flag}</span>
                               <span>{country.code}</span>
                               <span className="text-gray-500 text-sm">({country.name})</span>
                             </span>
-                          </SelectItem>
-                        ))}
+                          </SelectItem>)}
                       </SelectContent>
                     </Select>
                     <Input id="phone-number" type="tel" placeholder="Enter phone number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required />
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-600">
                   {loading ? 'Signing up...' : 'Sign Up'}
                 </Button>
               </form>
@@ -1230,6 +1222,5 @@ export default function Auth() {
           </Tabs>
         </CardContent>
       </Card>
-    </div>
-  );
+    </div>;
 }
