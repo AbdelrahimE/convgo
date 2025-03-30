@@ -93,19 +93,19 @@ export function AppSidebar() {
                       asChild
                       isActive={isActive}
                       tooltip={item.name}
-                      className="group"
+                      className="group transition-all duration-200"
                     >
                       <Link to={item.href} className={cn(
                         "relative",
-                        isActive && "after:content-[''] after:absolute after:bottom-0 after:left-4 after:right-4 after:h-0.5 after:bg-primary after:animate-in after:fade-in-0 after:zoom-in-95"
+                        isActive && "after:content-[''] after:absolute after:bottom-0 after:left-1 after:top-0 after:w-1 after:bg-sidebar-primary after:rounded-r-md after:animate-in after:fade-in-0 after:zoom-in-95"
                       )}>
                         <item.icon className={cn(
-                          "transition-transform duration-200 group-hover:scale-110",
-                          isActive ? "text-primary group-hover:text-primary" : "group-hover:text-primary/80"
+                          "transition-all duration-200 group-hover:scale-110 group-hover:text-sidebar-primary",
+                          isActive ? "text-sidebar-primary" : ""
                         )} />
                         <span className={cn(
-                          "transition-colors duration-200",
-                          isActive ? "text-primary group-hover:text-primary" : "group-hover:text-primary/80" 
+                          "transition-all duration-200 group-hover:text-sidebar-primary font-medium",
+                          isActive ? "text-sidebar-primary" : ""
                         )}>
                           {item.name}
                         </span>
@@ -136,7 +136,7 @@ export function AppSidebar() {
             <div className="p-4 pt-0">
               <Button 
                 variant="outline" 
-                className="w-full justify-start gap-2 transition hover:scale-105 active:scale-95" 
+                className="w-full justify-start gap-2 transition hover:bg-sidebar-primary/10 text-sidebar-foreground hover:text-sidebar-primary hover:border-sidebar-primary active:scale-95" 
                 onClick={handleLogout}
               >
                 <LogOut className="h-4 w-4" />
