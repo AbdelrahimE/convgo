@@ -71,6 +71,36 @@ export default function AccountSettings() {
     }
   };
 
+  const deleteOldAvatar = async (oldAvatarUrl: string): Promise<boolean> => {
+    if (!oldAvatarUrl || !oldAvatarUrl.includes('avatars/')) return true;
+    
+    try {
+      // Extract the filename from the URL
+      // The URL format will be like: https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/avatars/filename
+      const urlParts = oldAvatarUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1];
+      
+      if (!fileName) return true;
+      
+      // Delete the file from Supabase storage
+      const { error } = await supabase.storage
+        .from('avatars')
+        .remove([fileName]);
+
+      if (error) {
+        console.error('Error deleting old avatar:', error);
+        // Don't block the rest of the process if deletion fails
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error in deleteOldAvatar:', error);
+      // Don't block the rest of the process if deletion fails
+      return false;
+    }
+  };
+
   const uploadAvatar = async (): Promise<string | null> => {
     if (!avatarFile || !user) return avatarUrl;
 
@@ -109,6 +139,12 @@ export default function AccountSettings() {
       
       // Upload new avatar if provided
       if (avatarFile) {
+        // Delete the old avatar if it exists
+        if (user?.user_metadata?.avatar_url) {
+          await deleteOldAvatar(user.user_metadata.avatar_url);
+        }
+        
+        // Upload the new avatar
         const uploadedUrl = await uploadAvatar();
         if (uploadedUrl) {
           newAvatarUrl = uploadedUrl;
