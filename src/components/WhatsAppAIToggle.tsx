@@ -107,7 +107,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
                 {isEnabled ? 'This WhatsApp number will automatically respond to incoming messages using AI' : 'This WhatsApp number will not send automated AI responses'}
               </p>
             </div>
-            <Switch id="ai-toggle" checked={isEnabled} onCheckedChange={toggleAI} disabled={isUpdating} />
+            <Switch id="ai-toggle" checked={isEnabled} onCheckedChange={toggleAI} disabled={isUpdating} className="bg-blue-700 hover:bg-blue-600" />
           </div>}
       </CardContent>
     </Card>;

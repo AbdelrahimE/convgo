@@ -509,7 +509,7 @@ const WhatsAppAIConfig = () => {
                           Enable to let the AI transcribe and reply to incoming voice messages automatically.
                         </p>
                       </div>
-                      <Switch id="process-voice" checked={processVoiceMessages} onCheckedChange={setProcessVoiceMessages} />
+                      <Switch id="process-voice" checked={processVoiceMessages} onCheckedChange={setProcessVoiceMessages} className="bg-blue-700 hover:bg-blue-600" />
                     </div>
                     
                     <div className="space-y-2">
@@ -541,7 +541,7 @@ const WhatsAppAIConfig = () => {
                         </p>
                       </div>}
                     
-                    <Button onClick={saveAIConfig} disabled={isSaving || !systemPrompt.trim() || !selectedInstance || !processVoiceMessages && !voiceMessageDefaultResponse.trim()} className="w-full">
+                    <Button onClick={saveAIConfig} disabled={isSaving || !systemPrompt.trim() || !selectedInstance || !processVoiceMessages && !voiceMessageDefaultResponse.trim()} className="w-full bg-blue-700 hover:bg-blue-600">
                       {isSaving ? 'Saving...' : 'Save Configuration'}
                     </Button>
                   </CardContent>
