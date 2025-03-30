@@ -509,7 +509,7 @@ const WhatsAppAIConfig = () => {
                           Enable to let the AI transcribe and reply to incoming voice messages automatically.
                         </p>
                       </div>
-                      <Switch id="process-voice" checked={processVoiceMessages} onCheckedChange={setProcessVoiceMessages} className="bg-blue-700 hover:bg-blue-600" />
+                      <Switch id="process-voice" checked={processVoiceMessages} onCheckedChange={setProcessVoiceMessages} className="data-[state=checked]:bg-[#0066FF] data-[state=checked]:hover:bg-[#0066FF]/90" />
                     </div>
                     
                     <div className="space-y-2">
