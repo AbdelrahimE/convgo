@@ -74,7 +74,7 @@ const InstanceActions = ({
       <div className="flex items-center justify-end space-x-2">
         {instance.status === 'CONNECTED' && <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="secondary" onClick={onLogout} disabled={isLoading} className="w-full sm:w-auto">
+              <Button variant="secondary" onClick={onLogout} disabled={isLoading} className="w-full sm:w-auto font-semibold">
                 <LogOut className="mr-2 h-4 w-4" />
                 Disconnect
               </Button>
@@ -98,7 +98,7 @@ const InstanceActions = ({
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="destructive" disabled={isLoading} className="w-full sm:w-auto bg-blue-700 hover:bg-blue-600 text-center">
+            <Button variant="destructive" disabled={isLoading} className="w-full sm:w-auto bg-blue-700 hover:bg-blue-600 text-center font-semibold">
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
             </Button>
@@ -508,17 +508,17 @@ const WhatsAppLink = () => {
         x: 0
       }} transition={{
         delay: 0.2
-      }} className="text-2xl font-bold text-left md:text-3xl lg:text-4xl">
+      }} className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl">
           WhatsApp Instances
         </motion.h1>
         
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <p className="text-sm md:text-base text-muted-foreground">
+            <p className="text-sm text-muted-foreground md:text-base font-medium text-left">
               {instances.length} of {instanceLimit} instances used
             </p>
           </div>
-          <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-auto bg-blue-700 hover:bg-blue-600">
+          <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-auto bg-blue-700 hover:bg-blue-600 font-semibold">
             <Plus className="mr-2 h-4 w-4" />
             New Instance
           </Button>
@@ -590,7 +590,7 @@ const WhatsAppLink = () => {
               {instances.map(instance => <Card key={instance.id} className="flex flex-col transition-all duration-200 hover:shadow-lg">
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-base md:text-lg">{instance.instance_name}</CardTitle>
+                      <CardTitle className="text-base md:text-lg font-bold">{instance.instance_name}</CardTitle>
                       <StatusBadge status={instance.status} />
                     </div>
                   </CardHeader>
