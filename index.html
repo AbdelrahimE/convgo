@@ -8,8 +8,16 @@
     <meta name="description" content="AI-powered WhatsApp automation for customer support" />
     <meta name="author" content="ConvGo" />
     <meta property="og:image" content="/og-image.png" />
+    <!-- Simplify by using a single icon reference with specific style -->
     <link rel="icon" type="image/png" href="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon//convgo.com-icon.png" />
-    <link rel="alternate icon" href="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon//convgo.com-icon.png" type="image/png" sizes="24x20" />
+    <style>
+      /* Add CSS to ensure the icon displays at exactly 24x20 dimensions */
+      link[rel="icon"] {
+        width: 24px !important;
+        height: 20px !important;
+        object-fit: contain;
+      }
+    </style>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
   </head>
 

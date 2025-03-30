@@ -50,3 +50,16 @@
   direction: ltr;
   text-align: left;
 }
+
+/* Ensure icons maintain their original dimensions */
+img.icon, .icon img {
+  object-fit: contain;
+  width: auto;
+  height: auto;
+}
+
+/* This ensures favicon and other browser icons respect their original dimensions */
+link[rel="icon"], link[rel="alternate icon"] {
+  width: 24px !important;
+  height: 20px !important;
+}
