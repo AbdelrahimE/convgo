@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { LogoWithText } from "./Logo";
+import { ScrollArea } from "./ui/scroll-area";
 
 const FULL_NAME_MAX_LENGTH = 25;
 const navigation = [
@@ -69,7 +70,7 @@ export function AppSidebar() {
     `${profile.name.slice(0, FULL_NAME_MAX_LENGTH)}...` : profile?.name;
   
   return (
-    <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"}>
+    <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"} className="flex flex-col">
       <SidebarHeader className="flex items-center p-4">
         <div className="flex items-center justify-between w-full">
           <LogoWithText className="text-xl" />
@@ -81,48 +82,50 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navigation.map(item => {
-                const isActive = location.pathname === item.href;
-                return (
-                  <SidebarMenuItem key={item.name}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive}
-                      tooltip={item.name}
-                      className="group transition-all duration-200"
-                    >
-                      <Link to={item.href} className={cn(
-                        "relative",
-                        isActive && "pl-3 after:content-[''] after:absolute after:bottom-0 after:left-1 after:top-0 after:w-1 after:bg-sidebar-primary after:rounded-r-md after:animate-in after:fade-in-0 after:zoom-in-95"
-                      )}>
-                        <item.icon className={cn(
-                          "transition-all duration-200 group-hover:scale-110 group-hover:text-sidebar-primary",
-                          isActive ? "text-sidebar-primary" : ""
-                        )} />
-                        <span className={cn(
-                          "transition-all duration-200 group-hover:text-sidebar-primary font-semibold",
-                          isActive ? "text-sidebar-primary" : ""
+      <SidebarContent className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full">
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {navigation.map(item => {
+                  const isActive = location.pathname === item.href;
+                  return (
+                    <SidebarMenuItem key={item.name}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={item.name}
+                        className="group transition-all duration-200"
+                      >
+                        <Link to={item.href} className={cn(
+                          "relative",
+                          isActive && "pl-3 after:content-[''] after:absolute after:bottom-0 after:left-1 after:top-0 after:w-1 after:bg-sidebar-primary after:rounded-r-md after:animate-in after:fade-in-0 after:zoom-in-95"
                         )}>
-                          {item.name}
-                        </span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                          <item.icon className={cn(
+                            "transition-all duration-200 group-hover:scale-110 group-hover:text-sidebar-primary",
+                            isActive ? "text-sidebar-primary" : ""
+                          )} />
+                          <span className={cn(
+                            "transition-all duration-200 group-hover:text-sidebar-primary font-semibold",
+                            isActive ? "text-sidebar-primary" : ""
+                          )}>
+                            {item.name}
+                          </span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </ScrollArea>
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="mt-auto border-t border-sidebar-border">
         {profile && (
           <>
-            <div className="flex items-center gap-3 px-4 pb-4">
+            <div className="flex items-center gap-3 px-4 pb-4 pt-4">
               <Avatar>
                 <AvatarImage src={profile.avatarUrl || undefined} />
                 <AvatarFallback>{getInitials(profile.name)}</AvatarFallback>
