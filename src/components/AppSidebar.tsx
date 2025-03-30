@@ -1,4 +1,3 @@
-
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -11,46 +10,38 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { LogoWithText } from "./Logo";
 import { ScrollArea } from "./ui/scroll-area";
-
 const FULL_NAME_MAX_LENGTH = 25;
-const navigation = [
-  {
-    name: 'WhatsApp Numbers',
-    href: '/whatsapp',
-    icon: Phone
-  }, 
-  {
-    name: 'My Files',
-    href: '/files',
-    icon: Folder
-  }, 
-  {
-    name: 'Linked Files',
-    href: '/whatsapp-file-config',
-    icon: Link2
-  },
-  {
-    name: 'AI Settings',
-    href: '/whatsapp-ai-config',
-    icon: Radio
-  },
-  {
-    name: 'Support Config',
-    href: '/whatsapp-support-config',
-    icon: Headphones
-  }
-];
-
+const navigation = [{
+  name: 'WhatsApp Numbers',
+  href: '/whatsapp',
+  icon: Phone
+}, {
+  name: 'My Files',
+  href: '/files',
+  icon: Folder
+}, {
+  name: 'Linked Files',
+  href: '/whatsapp-file-config',
+  icon: Link2
+}, {
+  name: 'AI Settings',
+  href: '/whatsapp-ai-config',
+  icon: Radio
+}, {
+  name: 'Support Config',
+  href: '/whatsapp-support-config',
+  icon: Headphones
+}];
 function getInitials(name: string | null): string {
   if (!name) return '?';
   return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
 }
-
 export function AppSidebar() {
-  const { user } = useAuth();
+  const {
+    user
+  } = useAuth();
   const location = useLocation();
   const isMobile = useIsMobile();
-  
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -60,64 +51,41 @@ export function AppSidebar() {
       toast.error("Failed to log out");
     }
   };
-  
   const profile = user ? {
     name: user.user_metadata?.full_name || 'User',
     avatarUrl: user.user_metadata?.avatar_url
   } : null;
-  
-  const truncatedName = profile?.name && profile.name.length > FULL_NAME_MAX_LENGTH ? 
-    `${profile.name.slice(0, FULL_NAME_MAX_LENGTH)}...` : profile?.name;
-  
-  return (
-    <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"} className="flex flex-col h-screen">
+  const truncatedName = profile?.name && profile.name.length > FULL_NAME_MAX_LENGTH ? `${profile.name.slice(0, FULL_NAME_MAX_LENGTH)}...` : profile?.name;
+  return <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"} className="flex flex-col h-screen">
       <div className="flex flex-col h-full">
         <SidebarHeader className="flex items-center p-4 flex-shrink-0">
           <div className="flex items-center justify-between w-full">
             <LogoWithText className="text-xl" />
-            {isMobile && (
-              <SidebarTrigger className="md:hidden ml-2">
+            {isMobile && <SidebarTrigger className="md:hidden ml-2">
                 <AlignJustify className="h-10 w-10" />
-              </SidebarTrigger>
-            )}
+              </SidebarTrigger>}
           </div>
         </SidebarHeader>
 
         <SidebarContent className="flex-1 min-h-0 overflow-hidden">
           <div className="flex flex-col h-full">
             <ScrollArea className="flex-1 px-2">
-              <SidebarGroup>
+              <SidebarGroup className="px-0">
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {navigation.map(item => {
-                      const isActive = location.pathname === item.href;
-                      return (
-                        <SidebarMenuItem key={item.name}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={isActive}
-                            tooltip={item.name}
-                            className="group transition-all duration-200"
-                          >
-                            <Link to={item.href} className={cn(
-                              "relative",
-                              isActive && "pl-3 after:content-[''] after:absolute after:bottom-0 after:left-1 after:top-0 after:w-1 after:bg-sidebar-primary after:rounded-r-md after:animate-in after:fade-in-0 after:zoom-in-95"
-                            )}>
-                              <item.icon className={cn(
-                                "transition-all duration-200 group-hover:scale-110 group-hover:text-sidebar-primary",
-                                isActive ? "text-sidebar-primary" : ""
-                              )} />
-                              <span className={cn(
-                                "transition-all duration-200 group-hover:text-sidebar-primary font-semibold",
-                                isActive ? "text-sidebar-primary" : ""
-                              )}>
+                    const isActive = location.pathname === item.href;
+                    return <SidebarMenuItem key={item.name}>
+                          <SidebarMenuButton asChild isActive={isActive} tooltip={item.name} className="group transition-all duration-200">
+                            <Link to={item.href} className={cn("relative", isActive && "pl-3 after:content-[''] after:absolute after:bottom-0 after:left-1 after:top-0 after:w-1 after:bg-sidebar-primary after:rounded-r-md after:animate-in after:fade-in-0 after:zoom-in-95")}>
+                              <item.icon className={cn("transition-all duration-200 group-hover:scale-110 group-hover:text-sidebar-primary", isActive ? "text-sidebar-primary" : "")} />
+                              <span className={cn("transition-all duration-200 group-hover:text-sidebar-primary font-semibold", isActive ? "text-sidebar-primary" : "")}>
                                 {item.name}
                               </span>
                             </Link>
                           </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
+                        </SidebarMenuItem>;
+                  })}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
@@ -126,9 +94,8 @@ export function AppSidebar() {
         </SidebarContent>
 
         <SidebarFooter className="border-t border-sidebar-border flex-shrink-0">
-          {profile && (
-            <>
-              <div className="px-4 py-4">
+          {profile && <>
+              <div className="py-4 px-0">
                 <Link to="/account-settings" className="flex items-center gap-3 hover:bg-sidebar-primary/10 p-2 rounded-md transition-colors">
                   <Avatar>
                     <AvatarImage src={profile.avatarUrl || undefined} />
@@ -145,20 +112,14 @@ export function AppSidebar() {
                   </div>
                 </Link>
               </div>
-              <div className="p-4 pt-0">
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-start gap-2 transition hover:bg-sidebar-primary/10 text-sidebar-foreground hover:text-sidebar-primary hover:border-sidebar-primary active:scale-95" 
-                  onClick={handleLogout}
-                >
+              <div className="p-4 pt-0 px-0">
+                <Button variant="outline" onClick={handleLogout} className="w-full justify-start gap-2 transition hover:bg-sidebar-primary/10 text-sidebar-foreground hover:text-sidebar-primary hover:border-sidebar-primary active:scale-95 py-0 px-[16px] text-base font-medium text-left rounded-lg">
                   <LogOut className="h-4 w-4" />
                   Logout
                 </Button>
               </div>
-            </>
-          )}
+            </>}
         </SidebarFooter>
       </div>
-    </Sidebar>
-  );
+    </Sidebar>;
 }
