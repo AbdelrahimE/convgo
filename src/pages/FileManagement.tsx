@@ -30,7 +30,7 @@ export default function FileManagement() {
         x: 0
       }} transition={{
         delay: 0.2
-      }} className="text-2xl font-bold text-left md:text-3xl lg:text-4xl">
+      }} className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl">
           File Management
         </motion.h1>
         <div className="grid gap-8">
