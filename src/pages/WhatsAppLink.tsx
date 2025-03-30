@@ -12,7 +12,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Loader2, Plus, Check, X, MoreVertical, RefreshCw, LogOut, Trash2, MessageSquare, ArrowRight, FileText, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
@@ -20,7 +19,6 @@ interface WhatsAppInstance {
   last_connected: string | null;
   qr_code?: string;
 }
-
 const statusConfig = {
   CONNECTED: {
     color: "text-green-500 bg-green-50 dark:bg-green-950/50",
@@ -47,7 +45,6 @@ const statusConfig = {
     label: "Connecting"
   }
 };
-
 const StatusBadge = ({
   status
 }: {
@@ -60,7 +57,6 @@ const StatusBadge = ({
       {config.label}
     </div>;
 };
-
 const InstanceActions = ({
   instance,
   isLoading,
@@ -123,7 +119,6 @@ const InstanceActions = ({
       </div>
     </TooltipProvider>;
 };
-
 const EmptyState = ({
   onCreateClick
 }: {
@@ -186,7 +181,6 @@ const EmptyState = ({
       </CardContent>
     </Card>;
 };
-
 const WhatsAppLink = () => {
   const {
     user,
@@ -199,7 +193,6 @@ const WhatsAppLink = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [instanceLimit, setInstanceLimit] = useState(0);
   const [isValidName, setIsValidName] = useState(true);
-
   useEffect(() => {
     if (!authLoading && user) {
       fetchInstances();
@@ -208,7 +201,6 @@ const WhatsAppLink = () => {
       setInitialLoading(false);
     }
   }, [user, authLoading]);
-
   const fetchUserProfile = async () => {
     try {
       const {
@@ -222,7 +214,6 @@ const WhatsAppLink = () => {
       toast.error('Failed to fetch user profile');
     }
   };
-
   const fetchInstances = async () => {
     try {
       setInitialLoading(true);
@@ -240,7 +231,6 @@ const WhatsAppLink = () => {
       setInitialLoading(false);
     }
   };
-
   const checkInstanceStatus = async (name: string) => {
     try {
       const {
@@ -278,7 +268,6 @@ const WhatsAppLink = () => {
       return false;
     }
   };
-
   const createInstance = async (instanceName: string) => {
     try {
       if (instances.length >= instanceLimit) {
@@ -322,7 +311,6 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
-
   const handleDelete = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -344,7 +332,6 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
-
   const handleLogout = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -373,7 +360,6 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
-
   const handleReconnect = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -421,13 +407,11 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
-
   const validateInstanceName = (name: string) => {
     const isValid = /^[a-zA-Z0-9]+$/.test(name);
     setIsValidName(isValid);
     return isValid;
   };
-
   const extractQRCode = (data: any): string | null => {
     console.log('Extracting QR code from response:', data);
     if (data.base64 && data.base64.startsWith('data:image/')) {
@@ -448,7 +432,6 @@ const WhatsAppLink = () => {
     console.log('No QR code found in response');
     return null;
   };
-
   const formatQrCodeDataUrl = (qrCodeData: string) => {
     if (!qrCodeData) return '';
     try {
@@ -462,7 +445,6 @@ const WhatsAppLink = () => {
       return '';
     }
   };
-
   useEffect(() => {
     const instancePolling = instances.map(instance => {
       let intervalId: ReturnType<typeof setInterval>;
@@ -485,7 +467,6 @@ const WhatsAppLink = () => {
       instancePolling.forEach(cleanup => cleanup());
     };
   }, [instances]);
-
   if (authLoading || initialLoading) {
     return <div className="container mx-auto max-w-5xl py-8">
         <Card>
@@ -498,7 +479,6 @@ const WhatsAppLink = () => {
         </Card>
       </div>;
   }
-
   if (!user) {
     return <div className="container mx-auto max-w-5xl py-8">
         <Card>
@@ -510,18 +490,25 @@ const WhatsAppLink = () => {
         </Card>
       </div>;
   }
-
-  return <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="container mx-auto px-4 py-8 max-w-7xl">
+  return <motion.div initial={{
+    opacity: 0,
+    y: 20
+  }} animate={{
+    opacity: 1,
+    y: 0
+  }} transition={{
+    duration: 0.3
+  }} className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="space-y-8">
-        <motion.h1 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-2xl font-bold text-left md:text-3xl lg:text-4xl">
+        <motion.h1 initial={{
+        opacity: 0,
+        x: -20
+      }} animate={{
+        opacity: 1,
+        x: 0
+      }} transition={{
+        delay: 0.2
+      }} className="text-2xl font-bold text-left md:text-3xl lg:text-4xl">
           WhatsApp Instances
         </motion.h1>
         
@@ -531,22 +518,21 @@ const WhatsAppLink = () => {
               {instances.length} of {instanceLimit} instances used
             </p>
           </div>
-          <Button 
-            onClick={() => setShowCreateForm(true)} 
-            disabled={instances.length >= instanceLimit || showCreateForm}
-            className="w-full sm:w-auto" 
-            size="lg">
+          <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-auto bg-blue-700 hover:bg-blue-600">
             <Plus className="mr-2 h-4 w-4" />
             New Instance
           </Button>
         </div>
 
-        {showCreateForm && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
+        {showCreateForm && <motion.div initial={{
+        opacity: 0,
+        y: 20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        delay: 0.3
+      }}>
             <Card className="mb-6 md:mb-8">
               <CardHeader className="space-y-1">
                 <CardTitle className="text-xl md:text-2xl">Create New Instance</CardTitle>
@@ -556,73 +542,52 @@ const WhatsAppLink = () => {
               </CardHeader>
               <CardContent>
                 <form onSubmit={e => {
-                  e.preventDefault();
-                  if (validateInstanceName(instanceName)) {
-                    createInstance(instanceName);
-                  }
-                }} className="space-y-4 md:space-y-6">
+              e.preventDefault();
+              if (validateInstanceName(instanceName)) {
+                createInstance(instanceName);
+              }
+            }} className="space-y-4 md:space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="instanceName">Instance Name</Label>
-                    <Input 
-                      id="instanceName" 
-                      value={instanceName} 
-                      onChange={e => {
-                        setInstanceName(e.target.value);
-                        validateInstanceName(e.target.value);
-                      }} 
-                      placeholder="Enter instance name" 
-                      className={!isValidName ? 'border-red-500' : ''} 
-                      required 
-                    />
-                    {!isValidName && (
-                      <p className="text-sm text-red-500">
+                    <Input id="instanceName" value={instanceName} onChange={e => {
+                  setInstanceName(e.target.value);
+                  validateInstanceName(e.target.value);
+                }} placeholder="Enter instance name" className={!isValidName ? 'border-red-500' : ''} required />
+                    {!isValidName && <p className="text-sm text-red-500">
                         Instance name can only contain letters and numbers
-                      </p>
-                    )}
+                      </p>}
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4">
-                    <Button 
-                      type="submit" 
-                      disabled={isLoading || !isValidName || !instanceName} 
-                      className="w-full sm:flex-1" 
-                      size="lg"
-                    >
-                      {isLoading ? (
-                        <>
+                    <Button type="submit" disabled={isLoading || !isValidName || !instanceName} className="w-full sm:flex-1" size="lg">
+                      {isLoading ? <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Creating...
-                        </>
-                      ) : 'Create Instance'}
+                        </> : 'Create Instance'}
                     </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => {
-                        setShowCreateForm(false);
-                        setInstanceName('');
-                        setIsValidName(true);
-                      }} 
-                      className="w-full sm:flex-1" 
-                      size="lg"
-                    >
+                    <Button type="button" variant="outline" onClick={() => {
+                  setShowCreateForm(false);
+                  setInstanceName('');
+                  setIsValidName(true);
+                }} className="w-full sm:flex-1" size="lg">
                       Cancel
                     </Button>
                   </div>
                 </form>
               </CardContent>
             </Card>
-          </motion.div>
-        )}
+          </motion.div>}
 
-        {instances.length > 0 ? (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
+        {instances.length > 0 ? <motion.div initial={{
+        opacity: 0,
+        y: 20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        delay: 0.4
+      }}>
             <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              {instances.map(instance => (
-                <Card key={instance.id} className="flex flex-col transition-all duration-200 hover:shadow-lg">
+              {instances.map(instance => <Card key={instance.id} className="flex flex-col transition-all duration-200 hover:shadow-lg">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base md:text-lg">{instance.instance_name}</CardTitle>
@@ -630,41 +595,26 @@ const WhatsAppLink = () => {
                     </div>
                   </CardHeader>
                   <CardContent className="flex-grow">
-                    {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && (
-                      <div className="flex flex-col items-center space-y-2 mb-4">
+                    {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && <div className="flex flex-col items-center space-y-2 mb-4">
                         <p className="text-sm font-medium">Scan QR Code to Connect</p>
-                        <img 
-                          src={instance.qr_code} 
-                          alt="WhatsApp QR Code" 
-                          className="w-full max-w-[200px] h-auto mx-auto" 
-                        />
-                      </div>
-                    )}
-                    <InstanceActions 
-                      instance={instance} 
-                      isLoading={isLoading} 
-                      onLogout={() => handleLogout(instance.id, instance.instance_name)} 
-                      onReconnect={() => handleReconnect(instance.id, instance.instance_name)} 
-                      onDelete={() => handleDelete(instance.id, instance.instance_name)} 
-                    />
+                        <img src={instance.qr_code} alt="WhatsApp QR Code" className="w-full max-w-[200px] h-auto mx-auto" />
+                      </div>}
+                    <InstanceActions instance={instance} isLoading={isLoading} onLogout={() => handleLogout(instance.id, instance.instance_name)} onReconnect={() => handleReconnect(instance.id, instance.instance_name)} onDelete={() => handleDelete(instance.id, instance.instance_name)} />
                   </CardContent>
-                </Card>
-              ))}
+                </Card>)}
             </div>
-          </motion.div>
-        ) : (
-          !showCreateForm && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
+          </motion.div> : !showCreateForm && <motion.div initial={{
+        opacity: 0,
+        y: 20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        delay: 0.4
+      }}>
               <EmptyState onCreateClick={() => setShowCreateForm(true)} />
-            </motion.div>
-          )
-        )}
+            </motion.div>}
       </div>
     </motion.div>;
 };
-
 export default WhatsAppLink;
