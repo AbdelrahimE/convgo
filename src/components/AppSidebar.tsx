@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "react-router-dom";
-import { Folder, LogOut, Phone, Link2, Radio, AlignJustify, Headphones } from "lucide-react";
+import { Folder, LogOut, Phone, Link2, Radio, AlignJustify, Headphones, UserCog } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -128,16 +128,22 @@ export function AppSidebar() {
         <SidebarFooter className="border-t border-sidebar-border flex-shrink-0">
           {profile && (
             <>
-              <div className="flex items-center gap-3 px-4 pb-4 pt-4">
-                <Avatar>
-                  <AvatarImage src={profile.avatarUrl || undefined} />
-                  <AvatarFallback>{getInitials(profile.name)}</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col overflow-hidden">
-                  <span className="truncate font-medium text-sm">
-                    {truncatedName}
-                  </span>
-                </div>
+              <div className="px-4 py-4">
+                <Link to="/account-settings" className="flex items-center gap-3 hover:bg-sidebar-primary/10 p-2 rounded-md transition-colors">
+                  <Avatar>
+                    <AvatarImage src={profile.avatarUrl || undefined} />
+                    <AvatarFallback>{getInitials(profile.name)}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="truncate font-medium text-sm">
+                      {truncatedName}
+                    </span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <UserCog className="h-3 w-3" />
+                      Account Settings
+                    </span>
+                  </div>
+                </Link>
               </div>
               <div className="p-4 pt-0">
                 <Button 

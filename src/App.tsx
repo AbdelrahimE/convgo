@@ -13,6 +13,7 @@ import WhatsAppFileConfig from '@/pages/WhatsAppFileConfig';
 import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
 import WhatsAppSupportConfig from '@/pages/WhatsAppSupportConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
+import AccountSettings from '@/pages/AccountSettings';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import { AlignJustify } from 'lucide-react';
@@ -98,6 +99,14 @@ function AppContent() {
                     element={
                       <ProtectedRoute>
                         <WebhookMonitor />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/account-settings"
+                    element={
+                      <ProtectedRoute>
+                        <AccountSettings />
                       </ProtectedRoute>
                     }
                   />
