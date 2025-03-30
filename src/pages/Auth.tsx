@@ -1078,7 +1078,7 @@ export default function Auth() {
         password
       });
       if (signInError) throw signInError;
-      navigate('/dashboard');
+      navigate('/whatsapp');
     } catch (error: any) {
       toast.error("Error", {
         description: error.message
