@@ -70,7 +70,7 @@ export function AppSidebar() {
         <SidebarContent className="flex-1 min-h-0 overflow-hidden">
           <div className="flex flex-col h-full">
             <ScrollArea className="flex-1 px-2">
-              <SidebarGroup className="px-0">
+              <SidebarGroup className="px-[5px]">
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {navigation.map(item => {
@@ -112,8 +112,8 @@ export function AppSidebar() {
                   </div>
                 </Link>
               </div>
-              <div className="p-4 pt-0 px-0">
-                <Button variant="outline" onClick={handleLogout} className="w-full justify-start gap-2 transition hover:bg-sidebar-primary/10 text-sidebar-foreground hover:text-sidebar-primary hover:border-sidebar-primary active:scale-95 py-0 px-[16px] text-base font-medium text-left rounded-lg">
+              <div className="p-4 pt-0 px-[5px]">
+                <Button variant="outline" onClick={handleLogout} className="w-full justify-start gap-2 transition hover:bg-sidebar-primary/10 text-sidebar-foreground hover:text-sidebar-primary hover:border-sidebar-primary active:scale-95 py-0 px-[16px] text-base font-medium text-left rounded-md">
                   <LogOut className="h-4 w-4" />
                   Logout
                 </Button>
