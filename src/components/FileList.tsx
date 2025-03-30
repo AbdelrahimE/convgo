@@ -288,8 +288,8 @@ export function FileList() {
       }
       if (status === 'complete') {
         return <div className="ml-auto flex items-center gap-1 text-green-600">
-            <CheckCircle2 className="h-3 w-3" />
-            <span className="font-normal text-sm text-center">Embeddings Ready</span>
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="text-sm text-center text-blue-700 font-normal">Embeddings Ready</span>
           </div>;
       }
       if (status === 'partial') {
