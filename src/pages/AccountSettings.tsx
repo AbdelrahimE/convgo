@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 import { Loader2, Building } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function AccountSettings() {
   const { user } = useAuth();
@@ -20,6 +21,7 @@ export default function AccountSettings() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isPasswordResetSent, setIsPasswordResetSent] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (user) {
@@ -29,7 +31,6 @@ export default function AccountSettings() {
       setPhoneNumber(user.user_metadata?.phone || '');
       setAvatarUrl(user.user_metadata?.avatar_url || '');
 
-      // If business name is not in user metadata, try to fetch it from profiles table
       if (!user.user_metadata?.business_name) {
         fetchBusinessNameFromProfile();
       }
@@ -75,28 +76,23 @@ export default function AccountSettings() {
     if (!oldAvatarUrl || !oldAvatarUrl.includes('avatars/')) return true;
     
     try {
-      // Extract the filename from the URL
-      // The URL format will be like: https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/avatars/filename
       const urlParts = oldAvatarUrl.split('/');
       const fileName = urlParts[urlParts.length - 1];
       
       if (!fileName) return true;
       
-      // Delete the file from Supabase storage
       const { error } = await supabase.storage
         .from('avatars')
         .remove([fileName]);
 
       if (error) {
         console.error('Error deleting old avatar:', error);
-        // Don't block the rest of the process if deletion fails
         return false;
       }
       
       return true;
     } catch (error) {
       console.error('Error in deleteOldAvatar:', error);
-      // Don't block the rest of the process if deletion fails
       return false;
     }
   };
@@ -105,12 +101,10 @@ export default function AccountSettings() {
     if (!avatarFile || !user) return avatarUrl;
 
     try {
-      // Create a unique file name
       const fileExt = avatarFile.name.split('.').pop();
       const fileName = `${user.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      // Upload the file to Supabase storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, avatarFile);
@@ -121,7 +115,6 @@ export default function AccountSettings() {
         return null;
       }
 
-      // Get the public URL
       const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
       return data.publicUrl;
     } catch (error) {
@@ -137,21 +130,17 @@ export default function AccountSettings() {
     try {
       let newAvatarUrl = avatarUrl;
       
-      // Upload new avatar if provided
       if (avatarFile) {
-        // Delete the old avatar if it exists
         if (user?.user_metadata?.avatar_url) {
           await deleteOldAvatar(user.user_metadata.avatar_url);
         }
         
-        // Upload the new avatar
         const uploadedUrl = await uploadAvatar();
         if (uploadedUrl) {
           newAvatarUrl = uploadedUrl;
         }
       }
 
-      // Update user metadata in auth
       const { error: authUpdateError } = await supabase.auth.updateUser({
         data: {
           full_name: fullName,
@@ -165,7 +154,6 @@ export default function AccountSettings() {
         throw authUpdateError;
       }
 
-      // Update profiles table
       const { error: profileUpdateError } = await supabase
         .from('profiles')
         .update({
@@ -226,138 +214,159 @@ export default function AccountSettings() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
-      </div>
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }} 
+      animate={{ opacity: 1, y: 0 }} 
+      transition={{ duration: 0.3 }} 
+      className="container mx-auto px-4 py-8 max-w-7xl"
+    >
+      <div className="space-y-8">
+        <motion.h1 
+          initial={{ opacity: 0, x: -20 }} 
+          animate={{ opacity: 1, x: 0 }} 
+          transition={{ delay: 0.2 }}
+          className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl"
+        >
+          Account Settings
+        </motion.h1>
+        
+        <div className="grid gap-8">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ delay: 0.3 }}
+          >
+            <Card className="w-full">
+              <CardHeader>
+                <CardTitle>Profile Information</CardTitle>
+                <CardDescription>Update your account profile details</CardDescription>
+              </CardHeader>
+              <form onSubmit={handleSubmit}>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col items-center space-y-4 mb-6">
+                    <Avatar className="h-24 w-24">
+                      <AvatarImage src={avatarUrl} alt={fullName} />
+                      <AvatarFallback>{fullName ? getInitials(fullName) : 'U'}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <Label htmlFor="avatar" className="cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md">
+                        Change Avatar
+                      </Label>
+                      <Input 
+                        id="avatar" 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleAvatarChange} 
+                        className="hidden" 
+                      />
+                    </div>
+                  </div>
 
-      {/* Changed from grid to flex with flex-col to stack cards vertically */}
-      <div className="flex flex-col space-y-6 max-w-3xl mx-auto">
-        {/* Profile Information */}
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle>Profile Information</CardTitle>
-            <CardDescription>Update your account profile details</CardDescription>
-          </CardHeader>
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col items-center space-y-4 mb-6">
-                <Avatar className="h-24 w-24">
-                  <AvatarImage src={avatarUrl} alt={fullName} />
-                  <AvatarFallback>{fullName ? getInitials(fullName) : 'U'}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <Label htmlFor="avatar" className="cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md">
-                    Change Avatar
-                  </Label>
-                  <Input 
-                    id="avatar" 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={handleAvatarChange} 
-                    className="hidden" 
-                  />
-                </div>
-              </div>
+                  <div>
+                    <Label htmlFor="fullName">Full Name</Label>
+                    <Input
+                      id="fullName"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Enter your full name"
+                    />
+                  </div>
 
-              <div>
-                <Label htmlFor="fullName">Full Name</Label>
-                <Input
-                  id="fullName"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Enter your full name"
-                />
-              </div>
+                  <div>
+                    <Label htmlFor="businessName">Business Name</Label>
+                    <div className="flex items-center relative">
+                      <Building className="absolute left-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="businessName"
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        placeholder="Enter your business name"
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <Label htmlFor="businessName">Business Name</Label>
-                <div className="flex items-center relative">
-                  <Building className="absolute left-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="businessName"
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    placeholder="Enter your business name"
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  disabled
-                  className="bg-muted/50"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Email address cannot be changed
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="phoneNumber">Phone Number</Label>
-                <Input
-                  id="phoneNumber"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="Enter your phone number"
-                />
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
+                  <div>
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      disabled
+                      className="bg-muted/50"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Email address cannot be changed
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="phoneNumber">Phone Number</Label>
+                    <Input
+                      id="phoneNumber"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="Enter your phone number"
+                    />
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </Button>
+                </CardFooter>
+              </form>
+            </Card>
+          </motion.div>
+          
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ delay: 0.4 }}
+          >
+            <Card className="w-full">
+              <CardHeader>
+                <CardTitle>Password</CardTitle>
+                <CardDescription>Update or reset your password</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {isPasswordResetSent ? (
+                  <p className="text-sm text-muted-foreground">
+                    Password reset email has been sent to your email address.
+                    Please check your inbox and follow the instructions.
+                  </p>
                 ) : (
-                  'Save Changes'
+                  <p className="text-sm text-muted-foreground">
+                    For security reasons, you'll receive a password reset link via email.
+                  </p>
                 )}
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
-
-        {/* Password Card */}
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle>Password</CardTitle>
-            <CardDescription>Update or reset your password</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isPasswordResetSent ? (
-              <p className="text-sm text-muted-foreground">
-                Password reset email has been sent to your email address.
-                Please check your inbox and follow the instructions.
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                For security reasons, you'll receive a password reset link via email.
-              </p>
-            )}
-          </CardContent>
-          <CardFooter>
-            <Button
-              variant="outline"
-              onClick={handlePasswordReset}
-              disabled={isLoading || isPasswordResetSent}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                'Send Password Reset Email'
-              )}
-            </Button>
-          </CardFooter>
-        </Card>
+              </CardContent>
+              <CardFooter>
+                <Button
+                  variant="outline"
+                  onClick={handlePasswordReset}
+                  disabled={isLoading || isPasswordResetSent}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    'Send Password Reset Email'
+                  )}
+                </Button>
+              </CardFooter>
+            </Card>
+          </motion.div>
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
