@@ -1145,7 +1145,7 @@ export default function Auth() {
   return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl text-center font-bold">Sign in to ConvGo</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">Sign in to ConvGo</CardTitle>
           <CardDescription>Welcome back! Please sign in to continue</CardDescription>
         </CardHeader>
         <CardContent>
