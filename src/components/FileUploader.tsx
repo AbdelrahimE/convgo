@@ -421,7 +421,7 @@ export function FileUploader() {
               <div className="pt-2">
                 <Slider id="chunk-size" min={100} max={2000} step={16} value={[chunkingSettings.chunkSize]} onValueChange={handleChunkSizeChange} />
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-1 my-[12px]">
                 Controls how large each text chunk will be. Larger chunks (768-1024) provide more context but may be less precise. 
                 Smaller chunks (256-512) are more precise but may miss broader context.
               </p>
@@ -435,7 +435,7 @@ export function FileUploader() {
               <div className="pt-2">
                 <Slider id="chunk-overlap" min={0} max={200} step={8} value={[chunkingSettings.chunkOverlap]} onValueChange={handleChunkOverlapChange} />
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-1 my-[12px]">
                 Controls how much text overlaps between chunks. Higher overlap (60-100) preserves context between chunks 
                 but creates more redundancy. Lower values (20-40) reduce redundancy but may cause context loss.
               </p>
@@ -446,7 +446,7 @@ export function FileUploader() {
                 <Switch id="structure-aware" checked={chunkingSettings.structureAware} onCheckedChange={toggleStructureAware} />
                 <Label htmlFor="structure-aware" className="text-sm">Structure-Aware Chunking</Label>
               </div>
-              <p className="text-xs text-gray-500 pl-7">
+              <p className="text-xs text-gray-500 pl-7 text-left px-0">
                 Enables smart chunking that respects document structure like headings, paragraphs, and tables.
                 This helps keep related content together and improves context preservation.
               </p>
@@ -457,7 +457,7 @@ export function FileUploader() {
                 <Switch id="preserve-tables" checked={chunkingSettings.preserveTables} onCheckedChange={togglePreserveTables} />
                 <Label htmlFor="preserve-tables" className="text-sm">Preserve Table Integrity</Label>
               </div>
-              <p className="text-xs text-gray-500 pl-7">
+              <p className="text-xs text-gray-500 pl-7 text-left px-0">
                 Keeps tables intact during chunking by identifying tabular data and treating 
                 them as special elements. Prevents table rows from being split across chunks.
               </p>
@@ -468,7 +468,7 @@ export function FileUploader() {
                 <Switch id="clean-redundant" checked={chunkingSettings.cleanRedundantData} onCheckedChange={toggleCleanRedundantData} />
                 <Label htmlFor="clean-redundant" className="text-sm">Clean Redundant Data</Label>
               </div>
-              <p className="text-xs text-gray-500 pl-7">
+              <p className="text-xs text-gray-500 pl-7 text-left px-0">
                 Removes repeated information like duplicate contact details, reformats tables for better readability, 
                 and normalizes spacing to improve overall text quality.
               </p>
@@ -479,7 +479,7 @@ export function FileUploader() {
                 <Switch id="split-sentence" checked={chunkingSettings.splitBySentence} onCheckedChange={toggleSplitBySentence} />
                 <Label htmlFor="split-sentence" className="text-sm">Respect Sentence Boundaries</Label>
               </div>
-              <p className="text-xs text-gray-500 pl-7">
+              <p className="text-xs text-gray-500 pl-7 text-left px-0">
                 Tries to keep complete sentences together when creating chunks, which helps maintain semantic meaning.
                 Disable this if you prefer strict size-based chunking.
               </p>
@@ -487,7 +487,7 @@ export function FileUploader() {
           </div>
 
           <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-            <p className="text-xs text-blue-700">
+            <p className="text-xs text-blue-700 text-left px-0">
               <strong>Recommended settings by document type:</strong><br />
               • Technical/Reference with Tables: Enable "Preserve Table Integrity" for best results<br />
               • Technical/Reference: 512-768 chunk size, 40-60 overlap, Structure-Aware ON<br />
