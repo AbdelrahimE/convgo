@@ -71,7 +71,7 @@ export function AppSidebar() {
   
   return (
     <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"} className="flex flex-col h-full">
-      <SidebarHeader className="flex items-center p-4">
+      <SidebarHeader className="flex items-center p-4 flex-shrink-0">
         <div className="flex items-center justify-between w-full">
           <LogoWithText className="text-xl" />
           {isMobile && (
@@ -83,7 +83,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full">
+        <ScrollArea className="h-full px-2">
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
@@ -122,7 +122,7 @@ export function AppSidebar() {
         </ScrollArea>
       </SidebarContent>
 
-      <SidebarFooter className="mt-auto border-t border-sidebar-border">
+      <SidebarFooter className="mt-auto border-t border-sidebar-border flex-shrink-0">
         {profile && (
           <>
             <div className="flex items-center gap-3 px-4 pb-4 pt-4">

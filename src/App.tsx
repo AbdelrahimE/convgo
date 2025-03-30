@@ -27,9 +27,9 @@ function AppContent() {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full overflow-hidden">
         {!isAuthPage && <AppSidebar />}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto relative w-full">
           {!isAuthPage && isMobile && (
            <div className="p-4 md:hidden flex items-center">
              <div className="flex items-center gap-2">
