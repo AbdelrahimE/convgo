@@ -235,13 +235,16 @@ export default function AccountSettings() {
 
               <div>
                 <Label htmlFor="businessName">Business Name</Label>
-                <Input
-                  id="businessName"
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="Enter your business name"
-                  icon={<Building className="h-4 w-4 text-muted-foreground" />}
-                />
+                <div className="flex items-center relative">
+                  <Building className="absolute left-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="businessName"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="Enter your business name"
+                    className="pl-10"
+                  />
+                </div>
               </div>
 
               <div>
