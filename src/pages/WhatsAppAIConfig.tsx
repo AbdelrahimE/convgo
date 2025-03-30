@@ -593,7 +593,7 @@ const WhatsAppAIConfig = () => {
                     
                     <div className="flex gap-2">
                       <Input value={testQuery} onChange={e => setTestQuery(e.target.value)} placeholder="Type a message to test..." onKeyDown={e => e.key === 'Enter' && sendTestMessage()} />
-                      <Button onClick={sendTestMessage} disabled={isGenerating || !testQuery.trim() || !selectedInstance}>
+                      <Button onClick={sendTestMessage} disabled={isGenerating || !testQuery.trim() || !selectedInstance} className="bg-blue-700 hover:bg-blue-600">
                         {isGenerating ? 'Sending...' : 'Send'}
                       </Button>
                     </div>
