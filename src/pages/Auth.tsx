@@ -1121,7 +1121,7 @@ export default function Auth() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-left">
             <CardTitle className="font-bold text-left">Reset Your Password</CardTitle>
-            <CardDescription>Enter your email to receive a password reset link</CardDescription>
+            <CardDescription className="text-center">Enter your email to receive a password reset link</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleResetPassword} className="space-y-4">
