@@ -301,7 +301,7 @@ const WhatsAppFileConfig = () => {
                           {files.map(file => <motion.div key={file.id} whileHover={{
                       scale: 1.01
                     }} onMouseEnter={() => setHoveredFileId(file.id)} onMouseLeave={() => setHoveredFileId(null)} className={cn("flex items-start space-x-2 p-2 rounded-md border border-transparent transition-all duration-200", hoveredFileId === file.id && "border-border bg-accent/30 shadow-sm")}>
-                              <Checkbox id={`file-${file.id}`} checked={selectedFileIds.has(file.id)} onCheckedChange={() => handleFileToggle(file.id)} />
+                              <Checkbox id={`file-${file.id}`} checked={selectedFileIds.has(file.id)} onCheckedChange={() => handleFileToggle(file.id)} className="rounded-full text-left my-[2px]" />
                               <Label htmlFor={`file-${file.id}`} className="text-sm font-normal cursor-pointer flex-1">
                                 {file.original_name || file.filename}
                               </Label>
