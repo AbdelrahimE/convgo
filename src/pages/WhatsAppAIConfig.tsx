@@ -7,8 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
+import { LanguageAwareTextarea } from '@/components/ui/language-aware-textarea';
+import { LanguageAwareInput } from '@/components/ui/language-aware-input';
 import { useSimpleSearch } from '@/hooks/use-simple-search';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -20,11 +20,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
+
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
+
 interface AIConfig {
   id: string;
   system_prompt: string;
@@ -34,6 +36,7 @@ interface AIConfig {
   voice_message_default_response: string;
   default_voice_language: string;
 }
+
 const WhatsAppAIConfig = () => {
   const {
     user
@@ -70,6 +73,7 @@ const WhatsAppAIConfig = () => {
   const [useRealConversation, setUseRealConversation] = useState(true);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [showVoiceFeature, setShowVoiceFeature] = useState(true);
+
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
     try {
@@ -97,11 +101,13 @@ const WhatsAppAIConfig = () => {
       setIsCleaningUp(false);
     }
   }, []);
+
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
+
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -112,6 +118,7 @@ const WhatsAppAIConfig = () => {
       setDefaultVoiceLanguage('ar');
     }
   }, [selectedInstance]);
+
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
@@ -125,11 +132,13 @@ const WhatsAppAIConfig = () => {
       }
     };
   }, [testConversationId, useRealConversation, cleanupTestConversation]);
+
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
     }
   }, [activeTab, selectedInstance, useRealConversation]);
+
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -149,6 +158,7 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
+
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
@@ -177,6 +187,7 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
+
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
@@ -230,9 +241,11 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
+
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
+
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
@@ -264,6 +277,7 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
+
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
     try {
@@ -295,6 +309,7 @@ const WhatsAppAIConfig = () => {
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
+
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       const idToDelete = testConversationId;
@@ -309,6 +324,7 @@ const WhatsAppAIConfig = () => {
       setConversation([]);
     }
   };
+
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -390,6 +406,7 @@ const WhatsAppAIConfig = () => {
       }]);
     }
   };
+
   return <motion.div initial={{
     opacity: 0,
     y: 20
@@ -489,7 +506,14 @@ const WhatsAppAIConfig = () => {
                           Auto-Generate Prompt
                         </Button>
                       </div>
-                      <Textarea id="system-prompt" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={8} placeholder="Provide instructions for how the AI should respond to messages..." className="resize-y" />
+                      <LanguageAwareTextarea 
+                        id="system-prompt" 
+                        value={systemPrompt} 
+                        onChange={e => setSystemPrompt(e.target.value)} 
+                        rows={8} 
+                        placeholder="Provide instructions for how the AI should respond to messages..." 
+                        className="resize-y" 
+                      />
                     </div>
                   </CardContent>
                 </Card>
@@ -535,7 +559,13 @@ const WhatsAppAIConfig = () => {
                         <Label htmlFor="voice-default-response">
                           Default Response for Voice Messages
                         </Label>
-                        <Textarea id="voice-default-response" value={voiceMessageDefaultResponse} onChange={e => setVoiceMessageDefaultResponse(e.target.value)} placeholder="Message to send when a voice message is received" rows={3} />
+                        <LanguageAwareTextarea 
+                          id="voice-default-response" 
+                          value={voiceMessageDefaultResponse} 
+                          onChange={e => setVoiceMessageDefaultResponse(e.target.value)} 
+                          placeholder="Message to send when a voice message is received" 
+                          rows={3} 
+                        />
                         <p className="text-xs text-muted-foreground">
                           This reply will be automatically sent when a customer sends a voice message and voice processing is disabled.
                         </p>
@@ -592,7 +622,12 @@ const WhatsAppAIConfig = () => {
                     </div>
                     
                     <div className="flex gap-2">
-                      <Input value={testQuery} onChange={e => setTestQuery(e.target.value)} placeholder="Type a message to test..." onKeyDown={e => e.key === 'Enter' && sendTestMessage()} />
+                      <LanguageAwareInput 
+                        value={testQuery} 
+                        onChange={e => setTestQuery(e.target.value)} 
+                        placeholder="Type a message to test..." 
+                        onKeyDown={e => e.key === 'Enter' && sendTestMessage()} 
+                      />
                       <Button onClick={sendTestMessage} disabled={isGenerating || !testQuery.trim() || !selectedInstance} className="bg-blue-700 hover:bg-blue-600">
                         {isGenerating ? 'Sending...' : 'Send'}
                       </Button>
@@ -619,7 +654,13 @@ const WhatsAppAIConfig = () => {
             <Label htmlFor="description" className="text-sm font-medium">
               Your Description
             </Label>
-            <Textarea id="description" placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone." value={userDescription} onChange={e => setUserDescription(e.target.value)} className="min-h-[120px]" />
+            <LanguageAwareTextarea 
+              id="description" 
+              placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone." 
+              value={userDescription} 
+              onChange={e => setUserDescription(e.target.value)} 
+              className="min-h-[120px]" 
+            />
           </div>
           
           <div className="space-y-2">
@@ -647,4 +688,5 @@ const WhatsAppAIConfig = () => {
     </Dialog>
   </motion.div>;
 };
+
 export default WhatsAppAIConfig;

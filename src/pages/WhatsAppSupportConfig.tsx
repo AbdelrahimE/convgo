@@ -5,13 +5,14 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { LanguageAwareInput } from '@/components/ui/language-aware-input';
+import { LanguageAwareTextarea } from '@/components/ui/language-aware-textarea';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, Tags, X, MessageSquare, Phone, Save, Trash2 } from 'lucide-react';
 import { EscalatedConversations } from '@/components/EscalatedConversations';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { motion } from 'framer-motion';
+
 const WhatsAppSupportConfig = () => {
   const {
     user
@@ -35,11 +36,13 @@ const WhatsAppSupportConfig = () => {
   const [newKeyword, setNewKeyword] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [isAddingKeyword, setIsAddingKeyword] = useState(false);
+
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
+
   useEffect(() => {
     if (selectedInstance) {
       loadSupportConfig();
@@ -51,6 +54,7 @@ const WhatsAppSupportConfig = () => {
       setKeywords([]);
     }
   }, [selectedInstance]);
+
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -70,6 +74,7 @@ const WhatsAppSupportConfig = () => {
       setIsLoading(false);
     }
   };
+
   const loadSupportConfig = async () => {
     try {
       setIsLoading(true);
@@ -97,6 +102,7 @@ const WhatsAppSupportConfig = () => {
       setIsLoading(false);
     }
   };
+
   const loadKeywords = async () => {
     try {
       setIsLoading(true);
@@ -115,6 +121,7 @@ const WhatsAppSupportConfig = () => {
       setIsLoading(false);
     }
   };
+
   const saveSupportConfig = async () => {
     if (!selectedInstance) {
       toast.error('Please select a WhatsApp instance');
@@ -163,6 +170,7 @@ const WhatsAppSupportConfig = () => {
       setIsSaving(false);
     }
   };
+
   const addKeyword = async () => {
     if (!newKeyword.trim()) {
       toast.error('Please enter a keyword');
@@ -195,6 +203,7 @@ const WhatsAppSupportConfig = () => {
       setIsAddingKeyword(false);
     }
   };
+
   const deleteKeyword = async (id: string) => {
     try {
       const {
@@ -208,6 +217,7 @@ const WhatsAppSupportConfig = () => {
       toast.error('Failed to delete keyword');
     }
   };
+
   return <motion.div initial={{
     opacity: 0,
     y: 20
@@ -278,7 +288,12 @@ const WhatsAppSupportConfig = () => {
                         <CardContent className="space-y-4">
                           <div className="space-y-2">
                             <Label htmlFor="support-phone">Support WhatsApp Number</Label>
-                            <Input id="support-phone" placeholder="e.g. +1234567890 (with country code)" value={supportPhoneNumber} onChange={e => setSupportPhoneNumber(e.target.value)} />
+                            <LanguageAwareInput 
+                              id="support-phone" 
+                              placeholder="e.g. +1234567890 (with country code)" 
+                              value={supportPhoneNumber} 
+                              onChange={e => setSupportPhoneNumber(e.target.value)} 
+                            />
                             <p className="text-xs text-muted-foreground">
                               Enter the phone number that will receive notifications when a customer needs support
                             </p>
@@ -286,7 +301,13 @@ const WhatsAppSupportConfig = () => {
                           
                           <div className="space-y-2">
                             <Label htmlFor="notification-message">Support Notification Message</Label>
-                            <Textarea id="notification-message" placeholder="Message to send to support agents" value={notificationMessage} onChange={e => setNotificationMessage(e.target.value)} rows={3} />
+                            <LanguageAwareTextarea 
+                              id="notification-message" 
+                              placeholder="Message to send to support agents" 
+                              value={notificationMessage} 
+                              onChange={e => setNotificationMessage(e.target.value)} 
+                              rows={3} 
+                            />
                             <p className="text-xs text-muted-foreground">
                               Customize the message that will be sent to the support number
                             </p>
@@ -294,7 +315,13 @@ const WhatsAppSupportConfig = () => {
                           
                           <div className="space-y-2">
                             <Label htmlFor="escalation-message">Customer Escalation Message</Label>
-                            <Textarea id="escalation-message" placeholder="Message to send to customers when their request is escalated" value={escalationMessage} onChange={e => setEscalationMessage(e.target.value)} rows={3} />
+                            <LanguageAwareTextarea 
+                              id="escalation-message" 
+                              placeholder="Message to send to customers when their request is escalated" 
+                              value={escalationMessage} 
+                              onChange={e => setEscalationMessage(e.target.value)} 
+                              rows={3} 
+                            />
                             <p className="text-xs text-muted-foreground">
                               Customize the message that will be sent to customers when their conversation is escalated to human support
                             </p>
@@ -329,11 +356,23 @@ const WhatsAppSupportConfig = () => {
                             <div className="flex flex-col sm:flex-row gap-2">
                               <div className="flex-1">
                                 <Label htmlFor="new-keyword">New Keyword</Label>
-                                <Input id="new-keyword" placeholder="e.g. help, urgent, support" value={newKeyword} onChange={e => setNewKeyword(e.target.value)} disabled={!selectedInstance} />
+                                <LanguageAwareInput 
+                                  id="new-keyword" 
+                                  placeholder="e.g. help, urgent, support" 
+                                  value={newKeyword} 
+                                  onChange={e => setNewKeyword(e.target.value)} 
+                                  disabled={!selectedInstance} 
+                                />
                               </div>
                               <div className="flex-1">
                                 <Label htmlFor="new-category">Category (Optional)</Label>
-                                <Input id="new-category" placeholder="e.g. billing, technical" value={newCategory} onChange={e => setNewCategory(e.target.value)} disabled={!selectedInstance} />
+                                <LanguageAwareInput 
+                                  id="new-category" 
+                                  placeholder="e.g. billing, technical" 
+                                  value={newCategory} 
+                                  onChange={e => setNewCategory(e.target.value)} 
+                                  disabled={!selectedInstance} 
+                                />
                               </div>
                               <div className="flex items-end">
                                 <Button onClick={addKeyword} disabled={isAddingKeyword || !newKeyword.trim() || !selectedInstance} className="w-full sm:w-auto bg-blue-700 hover:bg-blue-600">
@@ -390,4 +429,5 @@ const WhatsAppSupportConfig = () => {
       </div>
     </motion.div>;
 };
+
 export default WhatsAppSupportConfig;
