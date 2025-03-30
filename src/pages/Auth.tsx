@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 const countryCodes = [{
   code: '+93',
   country: 'AF',
@@ -471,7 +472,7 @@ const countryCodes = [{
 }, {
   code: '+856',
   country: 'LA',
-  flag: '🇱🇦',
+  flag: '🇱��',
   name: 'Laos'
 }, {
   code: '+371',
@@ -989,11 +990,9 @@ const countryCodes = [{
   flag: '🇿🇼',
   name: 'Zimbabwe'
 }].sort((a, b) => a.name.localeCompare(b.name));
+
 export default function Auth() {
   const navigate = useNavigate();
-  const {
-    toast
-  } = useToast();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1003,6 +1002,7 @@ export default function Auth() {
   const [selectedCountry, setSelectedCountry] = useState('US+1');
   const [showResetPassword, setShowResetPassword] = useState(false);
   const countryCode = selectedCountry.split('+')[1];
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -1045,8 +1045,7 @@ export default function Auth() {
 
       // Check if the sign-up was successful
       if (data?.user) {
-        toast({
-          title: "Success!",
+        toast.success("Success!", {
           description: "Please check your email to confirm your account."
         });
         // Optional: Clear the form
@@ -1060,15 +1059,14 @@ export default function Auth() {
       }
     } catch (error: any) {
       console.error('Sign up error:', error); // Debug log
-      toast({
-        variant: "destructive",
-        title: "Error",
+      toast.error("Error", {
         description: error.message
       });
     } finally {
       setLoading(false);
     }
   };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -1082,15 +1080,14 @@ export default function Auth() {
       if (signInError) throw signInError;
       navigate('/dashboard');
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
+      toast.error("Error", {
         description: error.message
       });
     } finally {
       setLoading(false);
     }
   };
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -1101,21 +1098,19 @@ export default function Auth() {
         redirectTo: `${window.location.origin}/auth/reset-password`
       });
       if (error) throw error;
-      toast({
-        title: "Success!",
+      toast.success("Success!", {
         description: "Check your email for the password reset link."
       });
       setShowResetPassword(false);
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
+      toast.error("Error", {
         description: error.message
       });
     } finally {
       setLoading(false);
     }
   };
+
   if (showResetPassword) {
     return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
         <Card className="w-full max-w-md">
@@ -1142,6 +1137,7 @@ export default function Auth() {
         </Card>
       </div>;
   }
+
   return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
