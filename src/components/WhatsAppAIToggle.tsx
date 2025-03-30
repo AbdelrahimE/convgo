@@ -5,12 +5,10 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-
 interface WhatsAppAIToggleProps {
   instanceId: string;
   instanceName: string;
 }
-
 const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
   instanceId,
   instanceName
@@ -18,13 +16,11 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
-
   useEffect(() => {
     if (instanceId) {
       fetchAIStatus();
     }
   }, [instanceId]);
-
   const fetchAIStatus = async () => {
     try {
       setIsLoading(true);
@@ -48,7 +44,6 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       setIsLoading(false);
     }
   };
-
   const toggleAI = async () => {
     try {
       setIsUpdating(true);
@@ -89,10 +84,9 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       setIsUpdating(false);
     }
   };
-
   return <Card className="w-full">
       <CardHeader>
-        <CardTitle className="flex items-center">
+        <CardTitle className="flex items-center font-bold">
           <Zap className="mr-2 h-6 w-6 text-yellow-500" />
           AI Auto-Response Status
         </CardTitle>
@@ -117,5 +111,4 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       </CardContent>
     </Card>;
 };
-
 export default WhatsAppAIToggle;

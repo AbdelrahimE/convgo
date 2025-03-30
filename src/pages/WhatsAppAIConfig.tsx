@@ -424,7 +424,7 @@ const WhatsAppAIConfig = () => {
         }}>
           <Card>
             <CardHeader>
-              <CardTitle>Choose WhatsApp Number</CardTitle>
+              <CardTitle className="font-bold">Choose WhatsApp Number</CardTitle>
               <CardDescription>
                 Select the WhatsApp number you want to configure for AI responses
               </CardDescription>
@@ -475,7 +475,7 @@ const WhatsAppAIConfig = () => {
               <TabsContent value="config" className="space-y-6 mt-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>AI System Prompt</CardTitle>
+                    <CardTitle className="font-bold">AI System Prompt</CardTitle>
                     <CardDescription>
                       Set instructions that guide how the AI responds to incoming WhatsApp messages.
                     </CardDescription>
@@ -496,7 +496,7 @@ const WhatsAppAIConfig = () => {
                 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Voice Message Settings</CardTitle>
+                    <CardTitle className="font-bold">Voice Message Settings</CardTitle>
                     <CardDescription>
                       Set how your AI assistant handles incoming voice messages on WhatsApp
                     </CardDescription>
@@ -553,7 +553,7 @@ const WhatsAppAIConfig = () => {
                   <CardHeader>
                     <div className="flex justify-between items-center">
                       <div>
-                        <CardTitle>Test Your ChatBot</CardTitle>
+                        <CardTitle className="font-bold">Test Your ChatBot</CardTitle>
                         <CardDescription>
                           Send test messages to see how your AI will respond using the configured files
                         </CardDescription>
@@ -575,7 +575,7 @@ const WhatsAppAIConfig = () => {
                         </TooltipProvider>
                       </div>
                       
-                      <Button variant="outline" size="sm" onClick={resetTestConversation} disabled={conversation.length === 0 || isCleaningUp}>
+                      <Button variant="outline" size="sm" onClick={resetTestConversation} disabled={conversation.length === 0 || isCleaningUp} className="font-normal">
                         <RotateCcw className="mr-2 h-4 w-4" />
                         Reset Conversation
                       </Button>
@@ -593,7 +593,7 @@ const WhatsAppAIConfig = () => {
                     
                     <div className="flex gap-2">
                       <LanguageAwareInput value={testQuery} onChange={e => setTestQuery(e.target.value)} placeholder="Type a message to test..." onKeyDown={e => e.key === 'Enter' && sendTestMessage()} />
-                      <Button onClick={sendTestMessage} disabled={isGenerating || !testQuery.trim() || !selectedInstance} className="bg-blue-700 hover:bg-blue-600">
+                      <Button onClick={sendTestMessage} disabled={isGenerating || !testQuery.trim() || !selectedInstance} className="bg-blue-700 hover:bg-blue-600 font-bold">
                         {isGenerating ? 'Sending...' : 'Send'}
                       </Button>
                     </div>
