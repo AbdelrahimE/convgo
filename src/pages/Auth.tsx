@@ -1001,6 +1001,7 @@ export default function Auth() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('US+1');
   const [showResetPassword, setShowResetPassword] = useState(false);
+  const [activeTab, setActiveTab] = useState('signin');
   const countryCode = selectedCountry.split('+')[1];
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -1111,6 +1112,22 @@ export default function Auth() {
     }
   };
 
+  const getTabContent = (tab) => {
+    if (tab === 'signin') {
+      return {
+        title: "Sign in to ConvGo",
+        description: "Welcome back! Please sign in to continue"
+      };
+    } else {
+      return {
+        title: "Create a ConvGo Account",
+        description: "Register to start automating your WhatsApp communications"
+      };
+    }
+  };
+
+  const { title, description } = getTabContent(activeTab);
+
   if (showResetPassword) {
     return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
         <Card className="w-full max-w-md">
@@ -1141,11 +1158,11 @@ export default function Auth() {
   return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-center">Sign in to ConvGo</CardTitle>
-          <CardDescription>Welcome back! Please sign in to continue</CardDescription>
+          <CardTitle className="text-2xl font-bold text-center">{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
+          <Tabs defaultValue="signin" className="w-full" onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
