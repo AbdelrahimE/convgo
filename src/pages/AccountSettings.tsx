@@ -231,9 +231,10 @@ export default function AccountSettings() {
         <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* Changed from grid to flex with flex-col to stack cards vertically */}
+      <div className="flex flex-col space-y-6 max-w-3xl mx-auto">
         {/* Profile Information */}
-        <Card>
+        <Card className="w-full">
           <CardHeader>
             <CardTitle>Profile Information</CardTitle>
             <CardDescription>Update your account profile details</CardDescription>
@@ -322,7 +323,7 @@ export default function AccountSettings() {
         </Card>
 
         {/* Password Card */}
-        <Card>
+        <Card className="w-full">
           <CardHeader>
             <CardTitle>Password</CardTitle>
             <CardDescription>Update or reset your password</CardDescription>
