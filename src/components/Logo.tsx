@@ -23,7 +23,7 @@ export function LogoWithText({ className }: { className?: string }) {
   return (
     <div className={`flex items-center ${className}`}>
       <img 
-        src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/sign/avatars/convgo.com-logo.png?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJhdmF0YXJzL2NvbnZnby5jb20tbG9nby5wbmciLCJpYXQiOjE3NDMyOTM0ODcsImV4cCI6MTc3NDgyOTQ4N30.4byW0YYrYx1bjSkNAYT01hDkSX-ypmNVCF2pUyDv5ZY" 
+        src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon//convgo.com-logo.png" 
         alt="ConvGo.com Logo" 
         className="h-8 w-auto object-contain"
       />
