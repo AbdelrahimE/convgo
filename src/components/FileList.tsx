@@ -320,18 +320,16 @@ export function FileList() {
         </Button>;
     };
     return <Card key={file.id} className="group relative">
-        <CardHeader>
-          <CardTitle className="flex items-center">
+        <CardHeader className="py-[8px]">
+          <CardTitle className="flex items-center text-base">
             {getFileIcon(file.mime_type)}
             {truncatedFilename}
           </CardTitle>
-          <CardDescription>
-            {new Date(file.created_at).toLocaleDateString()}
-          </CardDescription>
+          
         </CardHeader>
-        <CardContent>
+        <CardContent className="py-[5px]">
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               Size: {formatFileSize(file.size_bytes)}
             </p>
             <div className="flex items-center gap-2">
@@ -340,7 +338,7 @@ export function FileList() {
           </div>
         </CardContent>
         
-        <CardFooter className="flex justify-between items-center pt-2 gap-2">
+        <CardFooter className="flex justify-between items-center pt-2 gap-2 py-[5px]">
           <div className="flex items-center">
             {renderLanguageInfo()}
           </div>
