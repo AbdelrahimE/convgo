@@ -8,11 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Building } from 'lucide-react';
 
 export default function AccountSettings() {
   const { user } = useAuth();
   const [fullName, setFullName] = useState(user?.user_metadata?.full_name || '');
+  const [businessName, setBusinessName] = useState(user?.user_metadata?.business_name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phoneNumber, setPhoneNumber] = useState(user?.user_metadata?.phone || '');
   const [avatarUrl, setAvatarUrl] = useState(user?.user_metadata?.avatar_url || '');
@@ -23,11 +24,40 @@ export default function AccountSettings() {
   useEffect(() => {
     if (user) {
       setFullName(user.user_metadata?.full_name || '');
+      setBusinessName(user.user_metadata?.business_name || '');
       setEmail(user.email || '');
       setPhoneNumber(user.user_metadata?.phone || '');
       setAvatarUrl(user.user_metadata?.avatar_url || '');
+
+      // If business name is not in user metadata, try to fetch it from profiles table
+      if (!user.user_metadata?.business_name) {
+        fetchBusinessNameFromProfile();
+      }
     }
   }, [user]);
+
+  const fetchBusinessNameFromProfile = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('business_name')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching business name:', error);
+        return;
+      }
+
+      if (data && data.business_name) {
+        setBusinessName(data.business_name);
+      }
+    } catch (error) {
+      console.error('Error fetching business name:', error);
+    }
+  };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -85,17 +115,32 @@ export default function AccountSettings() {
         }
       }
 
-      // Update user metadata
-      const { error } = await supabase.auth.updateUser({
+      // Update user metadata in auth
+      const { error: authUpdateError } = await supabase.auth.updateUser({
         data: {
           full_name: fullName,
+          business_name: businessName,
           phone: phoneNumber,
           avatar_url: newAvatarUrl
         }
       });
 
-      if (error) {
-        throw error;
+      if (authUpdateError) {
+        throw authUpdateError;
+      }
+
+      // Update profiles table
+      const { error: profileUpdateError } = await supabase
+        .from('profiles')
+        .update({
+          full_name: fullName,
+          business_name: businessName,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user!.id);
+
+      if (profileUpdateError) {
+        throw profileUpdateError;
       }
 
       toast.success('Profile updated successfully');
@@ -187,6 +232,18 @@ export default function AccountSettings() {
                   placeholder="Enter your full name"
                 />
               </div>
+
+              <div>
+                <Label htmlFor="businessName">Business Name</Label>
+                <Input
+                  id="businessName"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="Enter your business name"
+                  icon={<Building className="h-4 w-4 text-muted-foreground" />}
+                />
+              </div>
+
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input

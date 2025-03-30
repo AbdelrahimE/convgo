@@ -245,7 +245,6 @@ export type Database = {
       }
       profiles: {
         Row: {
-          avatar_url: string | null
           business_name: string | null
           created_at: string | null
           full_name: string | null
@@ -254,10 +253,8 @@ export type Database = {
           is_active: boolean | null
           storage_limit_mb: number
           updated_at: string | null
-          webhook_url: string | null
         }
         Insert: {
-          avatar_url?: string | null
           business_name?: string | null
           created_at?: string | null
           full_name?: string | null
@@ -266,10 +263,8 @@ export type Database = {
           is_active?: boolean | null
           storage_limit_mb?: number
           updated_at?: string | null
-          webhook_url?: string | null
         }
         Update: {
-          avatar_url?: string | null
           business_name?: string | null
           created_at?: string | null
           full_name?: string | null
@@ -278,7 +273,6 @@ export type Database = {
           is_active?: boolean | null
           storage_limit_mb?: number
           updated_at?: string | null
-          webhook_url?: string | null
         }
         Relationships: []
       }
