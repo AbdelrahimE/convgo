@@ -4,6 +4,7 @@
   margin: 0;
   padding: 0;
   text-align: left;
+  font-family: 'Nunito Sans', system-ui, sans-serif;
 }
 
 .logo {
@@ -45,11 +46,22 @@
 .direction-rtl {
   direction: rtl;
   text-align: right;
+  font-family: 'Tajawal', Arial, sans-serif;
 }
 
 .direction-ltr {
   direction: ltr;
   text-align: left;
+  font-family: 'Nunito Sans', system-ui, sans-serif;
+}
+
+/* Auto language detection classes */
+.lang-ar {
+  font-family: 'Tajawal', Arial, sans-serif;
+}
+
+.lang-en {
+  font-family: 'Nunito Sans', system-ui, sans-serif;
 }
 
 /* Ensure icons maintain their original dimensions */
