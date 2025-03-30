@@ -25,7 +25,7 @@ export function LogoWithText({ className }: { className?: string }) {
       <img 
         src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon//convgo.com-logo.png" 
         alt="ConvGo.com Logo" 
-        className="h-8 w-auto object-contain"
+        className="h-full w-auto object-contain"
       />
     </div>
   );

@@ -17,6 +17,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import { AlignJustify } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { LogoWithText } from '@/components/Logo';
 import './App.css';
 
 function AppContent() {
@@ -30,10 +31,13 @@ function AppContent() {
         {!isAuthPage && <AppSidebar />}
         <main className="flex-1 overflow-auto">
           {!isAuthPage && isMobile && (
-           <div className="p-4 md:hidden">
-             <SidebarTrigger className="h-11 w-11 flex items-center justify-center">
-               <AlignJustify className="h-12 w-12" />
-             </SidebarTrigger>
+           <div className="p-4 md:hidden flex items-center">
+             <div className="flex items-center gap-2">
+               <SidebarTrigger className="h-11 w-11 flex items-center justify-center">
+                 <AlignJustify className="h-12 w-12" />
+               </SidebarTrigger>
+               <LogoWithText className="h-8" />
+             </div>
            </div>
           )}
           <div className="px-4 py-4 md:py-8">

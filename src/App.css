@@ -1,3 +1,4 @@
+
 #root {
   max-width: 100%;
   margin: 0;
@@ -62,4 +63,27 @@ img.icon, .icon img {
 link[rel="icon"], link[rel="alternate icon"] {
   width: 24px !important;
   height: 20px !important;
+}
+
+/* Mobile header responsive adjustments */
+@media (max-width: 767px) {
+  .mobile-header {
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* Tablet Portrait adjustments */
+@media (max-width: 1024px) and (min-width: 768px) {
+  /* Add specific tablet portrait styles if needed */
+}
+
+/* Tablet Landscape adjustments */
+@media (max-width: 1200px) and (min-width: 1025px) {
+  /* Add specific tablet landscape styles if needed */
+}
+
+/* Laptop adjustments */
+@media (max-width: 1366px) and (min-width: 1201px) {
+  /* Add specific laptop styles if needed */
 }
