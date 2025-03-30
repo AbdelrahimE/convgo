@@ -590,7 +590,7 @@ const WhatsAppLink = () => {
               {instances.map(instance => <Card key={instance.id} className="flex flex-col transition-all duration-200 hover:shadow-lg">
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-base md:text-lg text-left">{instance.instance_name}</CardTitle>
+                      <CardTitle className="text-base md:text-lg">{instance.instance_name}</CardTitle>
                       <StatusBadge status={instance.status} />
                     </div>
                   </CardHeader>
