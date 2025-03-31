@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { corsHeaders } from "../_shared/cors.ts";
+import logger from '@/utils/logger';
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -16,7 +17,7 @@ serve(async (req) => {
       throw new Error('Evolution API key not configured');
     }
 
-    console.log(`Attempting to connect WhatsApp instance: ${instanceName}`);
+    logger.log(`Attempting to connect WhatsApp instance: ${instanceName}`);
 
     const response = await fetch(`https://api.convgo.com/instance/connect/${instanceName}`, {
       method: 'GET',
@@ -27,12 +28,12 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('Error from Evolution API:', errorData);
+      logger.error('Error from Evolution API:', errorData);
       throw new Error(`Failed to connect instance: ${errorData.error || response.statusText}`);
     }
 
     const data = await response.json();
-    console.log('Response from Evolution API:', data);
+    logger.log('Response from Evolution API:', data);
 
     // Check for QR code in various formats and ensure it's properly formatted
     let qrCode = null;
@@ -61,7 +62,7 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    console.error('Error in connect function:', error);
+    logger.error('Error in connect function:', error);
     return new Response(JSON.stringify({ 
       error: error.message,
       status: 'error'
