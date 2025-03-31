@@ -2,6 +2,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import type { MetadataField, ValidationError } from "@/types/metadata";
+import logger from '@/utils/logger';
 
 const VALIDATION_RULES = {
   name: {
@@ -90,7 +91,7 @@ export function useMetadataValidation(profileId: string) {
 
       return null;
     } catch (error) {
-      console.error('Error checking duplicate name:', error);
+      logger.error('Error checking duplicate name:', error);
       return 'Error checking for duplicate name';
     }
   }, [profileId]);
