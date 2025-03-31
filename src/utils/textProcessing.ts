@@ -2,6 +2,7 @@
  * Text processing utilities for RAG implementation
  * Handles document chunking and preprocessing for embeddings
  */
+import logger from '@/utils/logger';
 
 import { 
   isCSVContent, 
@@ -205,7 +206,7 @@ export function chunkText(text: string, options: ChunkingOptions = {}): string[]
 
   // CSV detection and special handling
   if (isCSVContent(text)) {
-    console.log("CSV content detected, using specialized CSV chunking with headers");
+    logger.log("CSV content detected, using specialized CSV chunking with headers");
     // Explicitly pass the ensureHeaderInChunks option to chunkCSVContent
     // and force it to true for consistency
     return chunkCSVContent(text, chunkSize, true); // Force headers to be included
@@ -925,7 +926,7 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
   if (!text) return [];
   
   const detectedLang = detectLanguage(text);
-  console.log("Detected language:", detectedLang);
+  logger.log("Detected language:", detectedLang);
   
   // Extract all words using Unicode property escapes to support all scripts
   const allWords = text.match(/\p{L}+/gu) || [];
