@@ -251,6 +251,9 @@ export type Database = {
           id: string
           instance_limit: number
           is_active: boolean | null
+          last_responses_reset_date: string | null
+          monthly_ai_response_limit: number
+          monthly_ai_responses_used: number
           storage_limit_mb: number
           updated_at: string | null
         }
@@ -261,6 +264,9 @@ export type Database = {
           id: string
           instance_limit?: number
           is_active?: boolean | null
+          last_responses_reset_date?: string | null
+          monthly_ai_response_limit?: number
+          monthly_ai_responses_used?: number
           storage_limit_mb?: number
           updated_at?: string | null
         }
@@ -271,6 +277,9 @@ export type Database = {
           id?: string
           instance_limit?: number
           is_active?: boolean | null
+          last_responses_reset_date?: string | null
+          monthly_ai_response_limit?: number
+          monthly_ai_responses_used?: number
           storage_limit_mb?: number
           updated_at?: string | null
         }
@@ -949,6 +958,10 @@ export type Database = {
           similarity: number
           language: string
         }[]
+      }
+      reset_monthly_ai_responses: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       sparsevec_out: {
         Args: {
