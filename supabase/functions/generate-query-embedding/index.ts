@@ -1,6 +1,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { corsHeaders } from '../_shared/cors.ts'
+import logger from '@/utils/logger';
 
 interface RequestBody {
   text: string;
@@ -47,7 +48,7 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('OpenAI API error:', errorData);
+      logger.error('OpenAI API error:', errorData);
       throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
@@ -64,7 +65,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Error in generate-query-embedding function:', error);
+    logger.error('Error in generate-query-embedding function:', error);
     
     return new Response(
       JSON.stringify({
