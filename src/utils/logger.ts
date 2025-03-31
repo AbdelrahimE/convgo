@@ -8,7 +8,7 @@
 const loggingEnabled = import.meta.env.VITE_ENABLE_LOGS === 'true';
 
 // Console output will only appear if VITE_ENABLE_LOGS=true
-const createLogger = (consoleMethod: keyof typeof console) => {
+const createLogger = (consoleMethod: keyof Pick<Console, 'log' | 'info' | 'warn' | 'error' | 'debug'>) => {
   return (...args: any[]): void => {
     if (loggingEnabled) {
       console[consoleMethod](...args);
