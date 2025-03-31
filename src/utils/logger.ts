@@ -5,7 +5,7 @@
  */
 
 const isProduction = import.meta.env.PROD;
-const isLoggingEnabled = import.meta.env.VITE_ENABLE_LOGS === 'true';
+const isLoggingEnabled = import.meta.env.VITE_ENABLE_LOGS === 'false';
 
 /**
  * Log a message to the console (only in development or if enabled in production)
