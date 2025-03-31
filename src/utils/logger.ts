@@ -11,6 +11,7 @@ const loggingEnabled = import.meta.env.VITE_ENABLE_LOGS === 'true';
 const createLogger = (consoleMethod: keyof Pick<Console, 'log' | 'info' | 'warn' | 'error' | 'debug'>) => {
   return (...args: any[]): void => {
     if (loggingEnabled) {
+      // Fix: Access console methods correctly using bracket notation
       console[consoleMethod](...args);
     }
   };
