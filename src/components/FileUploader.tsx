@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useDocumentEmbeddings } from "@/hooks/use-document-embeddings";
 import { Switch } from "@/components/ui/switch";
+import logger from '@/utils/logger';
 interface UploadingFile {
   file: File;
   id?: string;
@@ -155,7 +156,7 @@ export function FileUploader() {
       try {
         await generateEmbeddings(fileId);
       } catch (embeddingError) {
-        console.error('Error generating embeddings:', embeddingError);
+        logger.error('Error generating embeddings:', embeddingError);
         toast({
           variant: "destructive",
           title: "Embeddings Generation",
@@ -164,7 +165,7 @@ export function FileUploader() {
       }
       resetRetryState();
     } catch (error: any) {
-      console.error('Error in processing:', error);
+      logger.error('Error in processing:', error);
       toast({
         variant: "destructive",
         title: "Processing Error",
