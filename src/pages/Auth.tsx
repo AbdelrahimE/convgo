@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LogoWithText } from '@/components/Logo';
+import logger from '@/utils/logger';
 
 const countryCodes = [{
   code: '+93',
@@ -1008,7 +1009,7 @@ export default function Auth() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    console.log('Starting sign up process...'); // Debug log
+    logger.info('Starting sign up process...');
 
     try {
       if (fullName.length < 3) {
@@ -1017,7 +1018,7 @@ export default function Auth() {
       if (password.length < 6) {
         throw new Error('Password must be at least 6 characters long');
       }
-      console.log('Attempting to sign up with email:', email); // Debug log
+      logger.info('Attempting to sign up with email:', email);
 
       const {
         data,
@@ -1033,10 +1034,10 @@ export default function Auth() {
           }
         }
       });
-      console.log('Sign up response:', {
+      logger.info('Sign up response:', {
         data,
         error: signUpError
-      }); // Debug log
+      });
 
       if (signUpError) {
         if (signUpError.message.includes('User already registered')) {
@@ -1045,12 +1046,10 @@ export default function Auth() {
         throw signUpError;
       }
 
-      // Check if the sign-up was successful
       if (data?.user) {
         toast.success("Success!", {
           description: "Please check your email to confirm your account."
         });
-        // Optional: Clear the form
         setEmail('');
         setPassword('');
         setFullName('');
@@ -1060,7 +1059,7 @@ export default function Auth() {
         throw new Error('Failed to create account. Please try again.');
       }
     } catch (error: any) {
-      console.error('Sign up error:', error); // Debug log
+      logger.error('Sign up error:', error);
       toast.error("Error", {
         description: error.message
       });
@@ -1080,7 +1079,7 @@ export default function Auth() {
         password
       });
       if (signInError) throw signInError;
-      navigate('/whatsapp'); // Fixed: Now redirecting to /whatsapp instead of /dashboard
+      navigate('/whatsapp');
     } catch (error: any) {
       toast.error("Error", {
         description: error.message
