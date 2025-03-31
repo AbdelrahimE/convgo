@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import logger from '@/utils/logger';
 
 interface GenerateSystemPromptRequest {
   description: string;
@@ -30,7 +31,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Generating system prompt from description: "${description}"`);
+    logger.log(`Generating system prompt from description: "${description}"`);
 
     // Call OpenAI API to generate system prompt
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -84,7 +85,7 @@ ${description}`
       }
     );
   } catch (error) {
-    console.error('Error in generate-system-prompt function:', error);
+    logger.error('Error in generate-system-prompt function:', error);
     
     return new Response(
       JSON.stringify({
