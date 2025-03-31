@@ -8,6 +8,7 @@ import { Loader2, CheckSquare, PhoneCall, Clock, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import logger from '@/utils/logger';
 
 interface EscalatedConversation {
   id: string;
@@ -68,7 +69,7 @@ export const EscalatedConversations = ({
       }));
       setConversations(formattedData || []);
     } catch (error) {
-      console.error('Error loading escalated conversations:', error);
+      logger.error('Error loading escalated conversations:', error);
       toast.error('Failed to load escalated conversations');
     } finally {
       setIsLoading(false);
@@ -96,7 +97,7 @@ export const EscalatedConversations = ({
         resolved_at: new Date().toISOString()
       } : conv));
     } catch (error) {
-      console.error('Error resolving conversation:', error);
+      logger.error('Error resolving conversation:', error);
       toast.error('Failed to resolve conversation');
     } finally {
       setIsResolving(prev => ({
@@ -127,7 +128,7 @@ export const EscalatedConversations = ({
 
       setConversations(prev => prev.filter(conv => conv.id !== id));
     } catch (error) {
-      console.error('Error deleting conversation:', error);
+      logger.error('Error deleting conversation:', error);
       toast.error('Failed to delete conversation');
     } finally {
       setIsDeleting(prev => ({
