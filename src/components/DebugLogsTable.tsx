@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, RefreshCw, Search, X } from 'lucide-react';
 import { format } from 'date-fns';
+import logger from '@/utils/logger';
 
 interface DebugLog {
   id: string;
@@ -47,7 +48,7 @@ export function DebugLogsTable() {
       const { data, error } = await query;
       
       if (error) {
-        console.error('Error fetching debug logs:', error);
+        logger.error('Error fetching debug logs:', error);
         throw error;
       }
       
@@ -65,7 +66,7 @@ export function DebugLogsTable() {
         .order('category');
       
       if (error) {
-        console.error('Error fetching categories:', error);
+        logger.error('Error fetching categories:', error);
         return [];
       }
       
