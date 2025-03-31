@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import WebhookEndpointInfo from '@/components/WebhookEndpointInfo';
 import { DebugLogsTable } from '@/components/DebugLogsTable';
+import logger from '@/utils/logger';
 interface WebhookMessage {
   id: string;
   instance: string;
@@ -81,7 +82,7 @@ const WebhookMonitor = () => {
         toast.success('Webhook messages refreshed');
       }
     } catch (error) {
-      console.error('Error fetching webhook messages:', error);
+      logger.error('Error fetching webhook messages:', error);
       if (showToast) {
         toast.error('Failed to load webhook messages');
       }
@@ -101,7 +102,7 @@ const WebhookMonitor = () => {
       setReceivingStatus('inactive');
       setLastMessageTime(null);
     } catch (error) {
-      console.error('Error clearing webhook messages:', error);
+      logger.error('Error clearing webhook messages:', error);
       toast.error('Failed to clear webhook messages');
     } finally {
       setIsDeleting(false);
