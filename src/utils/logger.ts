@@ -1,60 +1,45 @@
 
 /**
- * Centralized logging utility for the application
- * Provides environment-aware logging functions that can be toggled in production
+ * Simplified logging utility for the application
+ * Uses a single environment variable to control all logging behavior
  */
 
-const isProduction = import.meta.env.PROD;
-const isLoggingEnabled = import.meta.env.VITE_ENABLE_LOGS === 'true';
+// Single control variable for all logging
+const loggingEnabled = import.meta.env.VITE_ENABLE_LOGS === 'true';
 
-/**
- * Log a message to the console (only in development or if enabled in production)
- * @param args - Arguments to pass to console.log
- */
-export const log = (...args: any[]): void => {
-  if (!isProduction || isLoggingEnabled) {
-    console.log(...args);
-  }
+// Console output will only appear if VITE_ENABLE_LOGS=true
+const createLogger = (consoleMethod: keyof typeof console) => {
+  return (...args: any[]): void => {
+    if (loggingEnabled) {
+      console[consoleMethod](...args);
+    }
+  };
 };
 
 /**
- * Log an informational message to the console
- * @param args - Arguments to pass to console.info
+ * Log a message using console.log
  */
-export const info = (...args: any[]): void => {
-  if (!isProduction || isLoggingEnabled) {
-    console.info(...args);
-  }
-};
+export const log = createLogger('log');
 
 /**
- * Log a warning message to the console
- * @param args - Arguments to pass to console.warn
+ * Log an informational message using console.info
  */
-export const warn = (...args: any[]): void => {
-  if (!isProduction || isLoggingEnabled) {
-    console.warn(...args);
-  }
-};
+export const info = createLogger('info');
 
 /**
- * Log an error message to the console (always displayed)
- * @param args - Arguments to pass to console.error
+ * Log a warning message using console.warn
  */
-export const error = (...args: any[]): void => {
-  // Errors are always logged, even in production
-  console.error(...args);
-};
+export const warn = createLogger('warn');
 
 /**
- * Log a debug message to the console (only in development)
- * @param args - Arguments to pass to console.debug
+ * Log an error message using console.error
  */
-export const debug = (...args: any[]): void => {
-  if (!isProduction || isLoggingEnabled) {
-    console.debug(...args);
-  }
-};
+export const error = createLogger('error');
+
+/**
+ * Log a debug message using console.debug
+ */
+export const debug = createLogger('debug');
 
 const logger = {
   log,
