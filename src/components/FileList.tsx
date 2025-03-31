@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Json } from "@/integrations/supabase/types";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { FileMetadataForm } from "@/components/FileMetadataForm";
+import logger from '@/utils/logger';
 interface File {
   id: string;
   filename: string;
@@ -87,7 +88,7 @@ export function FileList() {
         ascending: false
       });
       if (filesError) {
-        console.error("Error fetching files:", filesError);
+        logger.error("Error fetching files:", filesError);
         toast({
           variant: "destructive",
           title: "Error",
@@ -128,13 +129,13 @@ export function FileList() {
             }, {} as Record<string, any>);
           }
         } catch (err) {
-          console.error(`Error fetching metadata for file ${file.id}:`, err);
+          logger.error(`Error fetching metadata for file ${file.id}:`, err);
         }
       }
       setFiles([...filesWithMetadata]);
       setFilteredFiles([...filesWithMetadata]);
     } catch (error) {
-      console.error("Error in fetchFiles:", error);
+      logger.error("Error in fetchFiles:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -150,7 +151,7 @@ export function FileList() {
         error
       } = await supabase.from('files').delete().eq('id', fileId);
       if (error) {
-        console.error("Error deleting file:", error);
+        logger.error("Error deleting file:", error);
         toast({
           variant: "destructive",
           title: "Error",
@@ -164,7 +165,7 @@ export function FileList() {
         });
       }
     } catch (error) {
-      console.error("Error deleting file:", error);
+      logger.error("Error deleting file:", error);
       toast({
         variant: "destructive",
         title: "Error",
