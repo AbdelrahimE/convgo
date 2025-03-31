@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { corsHeaders } from "../_shared/cors.ts";
+import logger from '@/utils/logger';
 
 serve(async (req) => {
   // Handle CORS
@@ -20,7 +21,7 @@ serve(async (req) => {
       throw new Error('Instance name is required');
     }
 
-    console.log(`Checking connection state for instance: ${instanceName}`);
+    logger.log(`Checking connection state for instance: ${instanceName}`);
 
     const response = await fetch(`https://api.convgo.com/instance/connectionState/${instanceName.trim()}`, {
       method: 'GET',
@@ -30,9 +31,9 @@ serve(async (req) => {
       }
     });
 
-    console.log('API response status:', response.status);
+    logger.log('API response status:', response.status);
     const data = await response.json();
-    console.log('API response data:', JSON.stringify(data, null, 2));
+    logger.log('API response data:', JSON.stringify(data, null, 2));
 
     // Map Evolution API connection state to our expected states
     let state = 'close';
@@ -54,7 +55,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in status check:', error);
+    logger.error('Error in status check:', error);
     return new Response(JSON.stringify({
       error: error.message,
       timestamp: new Date().toISOString()
