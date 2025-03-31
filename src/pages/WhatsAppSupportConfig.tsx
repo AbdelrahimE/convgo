@@ -12,6 +12,7 @@ import { Loader2, Plus, Tags, X, MessageSquare, Phone, Save, Trash2 } from 'luci
 import { EscalatedConversations } from '@/components/EscalatedConversations';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { motion } from 'framer-motion';
+import logger from '@/utils/logger';
 const WhatsAppSupportConfig = () => {
   const {
     user
@@ -64,7 +65,7 @@ const WhatsAppSupportConfig = () => {
         setSelectedInstance(data[0].id);
       }
     } catch (error) {
-      console.error('Error loading WhatsApp instances:', error);
+      logger.error('Error loading WhatsApp instances:', error);
       toast.error('Failed to load WhatsApp instances');
     } finally {
       setIsLoading(false);
@@ -91,7 +92,7 @@ const WhatsAppSupportConfig = () => {
       setNotificationMessage(data.notification_message || 'A customer needs support. Please check your WhatsApp Support dashboard.');
       setEscalationMessage(data.escalation_message || 'Thank you for your message. A support representative will get back to you as soon as possible.');
     } catch (error) {
-      console.error('Error loading support config:', error);
+      logger.error('Error loading support config:', error);
       toast.error('Failed to load support configuration');
     } finally {
       setIsLoading(false);
@@ -109,7 +110,7 @@ const WhatsAppSupportConfig = () => {
       if (error) throw error;
       setKeywords(data || []);
     } catch (error) {
-      console.error('Error loading keywords:', error);
+      logger.error('Error loading keywords:', error);
       toast.error('Failed to load support keywords');
     } finally {
       setIsLoading(false);
@@ -157,7 +158,7 @@ const WhatsAppSupportConfig = () => {
       }
       toast.success('Support configuration saved successfully');
     } catch (error) {
-      console.error('Error saving support config:', error);
+      logger.error('Error saving support config:', error);
       toast.error('Failed to save support configuration');
     } finally {
       setIsSaving(false);
@@ -189,7 +190,7 @@ const WhatsAppSupportConfig = () => {
       setNewCategory('');
       toast.success('Keyword added successfully');
     } catch (error) {
-      console.error('Error adding keyword:', error);
+      logger.error('Error adding keyword:', error);
       toast.error('Failed to add keyword');
     } finally {
       setIsAddingKeyword(false);
@@ -204,7 +205,7 @@ const WhatsAppSupportConfig = () => {
       setKeywords(keywords.filter(keyword => keyword.id !== id));
       toast.success('Keyword removed successfully');
     } catch (error) {
-      console.error('Error deleting keyword:', error);
+      logger.error('Error deleting keyword:', error);
       toast.error('Failed to delete keyword');
     }
   };
