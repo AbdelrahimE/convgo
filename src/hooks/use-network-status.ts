@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from 'react';
+import logger from '@/utils/logger';
 
 interface NetworkStatus {
   online: boolean;
@@ -65,7 +66,7 @@ export function useNetworkStatus() {
           return true;
         }
       } catch (error) {
-        console.error('Network retry failed:', error);
+        logger.error('Network retry failed:', error);
       }
 
       // Update retry delay with exponential backoff
