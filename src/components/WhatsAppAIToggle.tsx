@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import logger from '@/utils/logger';
 interface WhatsAppAIToggleProps {
   instanceId: string;
   instanceName: string;
@@ -38,7 +39,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
         setIsEnabled(data.is_active || false);
       }
     } catch (error) {
-      console.error('Error fetching AI status:', error);
+      logger.error('Error fetching AI status:', error);
       toast.error('Failed to load AI status');
     } finally {
       setIsLoading(false);
@@ -78,7 +79,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       setIsEnabled(newStatus);
       toast.success(`AI responses ${newStatus ? 'enabled' : 'disabled'} for ${instanceName}`);
     } catch (error) {
-      console.error('Error toggling AI status:', error);
+      logger.error('Error toggling AI status:', error);
       toast.error('Failed to update AI status');
     } finally {
       setIsUpdating(false);
