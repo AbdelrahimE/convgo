@@ -1,4 +1,6 @@
 
+import logger from '@/utils/logger';
+
 import { 
   chunkText, 
   preprocessText, 
@@ -45,7 +47,7 @@ export async function processDocumentForChunking(
   options: ChunkingOptions = DEFAULT_CHUNKING_OPTIONS
 ): Promise<ProcessingResult> {
   // Log options
-  console.log(`Processing document ${documentId} with options:`, options);
+  logger.log(`Processing document ${documentId} with options:`, options);
   
   // 1. Preprocess the text
   const processedText = preprocessText(text);
@@ -53,7 +55,7 @@ export async function processDocumentForChunking(
   // 2. Split into chunks using provided options
   const textChunks = chunkText(processedText, options);
   
-  console.log(`Created ${textChunks.length} chunks with settings:`, 
+  logger.log(`Created ${textChunks.length} chunks with settings:`, 
     `chunk size: ${options.chunkSize}, overlap: ${options.chunkOverlap}`);
   
   // 3. Add metadata to chunks
