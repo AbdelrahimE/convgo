@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Loader2, Plus, Check, X, MoreVertical, RefreshCw, LogOut, Trash2, MessageSquare, ArrowRight, FileText, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import logger from '@/utils/logger';
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
@@ -210,7 +211,7 @@ const WhatsAppLink = () => {
       if (error) throw error;
       setInstanceLimit(profile.instance_limit);
     } catch (error) {
-      console.error('Error fetching user profile:', error);
+      logger.error('Error fetching user profile:', error);
       toast.error('Failed to fetch user profile');
     }
   };
@@ -225,7 +226,7 @@ const WhatsAppLink = () => {
       setInstances(data || []);
       await Promise.all(data?.map(instance => checkInstanceStatus(instance.instance_name)) || []);
     } catch (error) {
-      console.error('Error fetching WhatsApp instances:', error);
+      logger.error('Error fetching WhatsApp instances:', error);
       toast.error('Failed to fetch WhatsApp instances');
     } finally {
       setInitialLoading(false);
@@ -264,7 +265,7 @@ const WhatsAppLink = () => {
       }
       return false;
     } catch (error: any) {
-      console.error('Status check error:', error);
+      logger.error('Status check error:', error);
       return false;
     }
   };
@@ -284,7 +285,7 @@ const WhatsAppLink = () => {
         }
       });
       if (error) throw error;
-      console.log('Response from create:', data);
+      logger.log('Response from create:', data);
       const qrCodeData = extractQRCode(data);
       if (!qrCodeData) {
         throw new Error('No QR code received from server');
@@ -305,7 +306,7 @@ const WhatsAppLink = () => {
       setShowCreateForm(false);
       setInstanceName('');
     } catch (error: any) {
-      console.error('Error creating WhatsApp instance:', error);
+      logger.error('Error creating WhatsApp instance:', error);
       toast.error(`Failed to create WhatsApp instance: ${error.message}`);
     } finally {
       setIsLoading(false);
@@ -326,7 +327,7 @@ const WhatsAppLink = () => {
       setInstances(prev => prev.filter(instance => instance.id !== instanceId));
       toast.success('WhatsApp instance deleted successfully');
     } catch (error) {
-      console.error('Error deleting WhatsApp instance:', error);
+      logger.error('Error deleting WhatsApp instance:', error);
       toast.error('Failed to delete WhatsApp instance');
     } finally {
       setIsLoading(false);
@@ -354,7 +355,7 @@ const WhatsAppLink = () => {
       } : instance));
       toast.success('WhatsApp instance logged out successfully');
     } catch (error) {
-      console.error('Error logging out WhatsApp instance:', error);
+      logger.error('Error logging out WhatsApp instance:', error);
       toast.error('Failed to logout WhatsApp instance');
     } finally {
       setIsLoading(false);
@@ -382,7 +383,7 @@ const WhatsAppLink = () => {
         }
       });
       if (error) throw error;
-      console.log('Response from reconnect:', data);
+      logger.log('Response from reconnect:', data);
       const qrCodeData = extractQRCode(data);
       if (!qrCodeData) {
         throw new Error('No QR code received from server');
@@ -394,7 +395,7 @@ const WhatsAppLink = () => {
       } : instance));
       toast.success('Scan the QR code to reconnect your WhatsApp instance');
     } catch (error: any) {
-      console.error('Error reconnecting WhatsApp instance:', error);
+      logger.error('Error reconnecting WhatsApp instance:', error);
       toast.error('Failed to reconnect WhatsApp instance');
       await supabase.from('whatsapp_instances').update({
         status: 'DISCONNECTED'
@@ -413,23 +414,23 @@ const WhatsAppLink = () => {
     return isValid;
   };
   const extractQRCode = (data: any): string | null => {
-    console.log('Extracting QR code from response:', data);
+    logger.log('Extracting QR code from response:', data);
     if (data.base64 && data.base64.startsWith('data:image/')) {
-      console.log('Found ready-to-use base64 image');
+      logger.log('Found ready-to-use base64 image');
       return data.base64;
     }
     if (data.qrcode) {
-      console.log('Found QR code in qrcode object');
+      logger.log('Found QR code in qrcode object');
       const qrData = data.qrcode.base64 || data.qrcode.code || data.qrcode;
       if (qrData) {
         return qrData.startsWith('data:image/') ? qrData : `data:image/png;base64,${qrData}`;
       }
     }
     if (data.code) {
-      console.log('Found QR code in code field');
+      logger.log('Found QR code in code field');
       return data.code.startsWith('data:image/') ? data.code : `data:image/png;base64,${data.code}`;
     }
-    console.log('No QR code found in response');
+    logger.log('No QR code found in response');
     return null;
   };
   const formatQrCodeDataUrl = (qrCodeData: string) => {
@@ -441,7 +442,7 @@ const WhatsAppLink = () => {
       const cleanBase64 = qrCodeData.trim().replace(/[\n\r\s]/g, '').replace(/-/g, '+').replace(/_/g, '/');
       return `data:image/png;base64,${cleanBase64}`;
     } catch (error) {
-      console.error('Error formatting QR code:', error);
+      logger.error('Error formatting QR code:', error);
       return '';
     }
   };
