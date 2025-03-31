@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import logger from '@/utils/logger';
 import {
   Select,
   SelectContent,
@@ -249,7 +250,7 @@ function MetadataFieldForm({ field, onSave, onCancel }: MetadataFieldFormProps) 
         options: parsedOptions
       });
     } catch (error: any) {
-      console.error('Error parsing options:', error);
+      logger.error('Error parsing options:', error);
     }
   };
 
