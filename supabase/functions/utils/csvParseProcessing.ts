@@ -6,6 +6,7 @@
 
 // Import Papa Parse from a CDN URL that's compatible with Deno
 import Papa from 'https://esm.sh/papaparse@5.4.1';
+import logger from '@/utils/logger';
 
 /**
  * Extracts text from CSV using Papa Parse
@@ -13,7 +14,7 @@ import Papa from 'https://esm.sh/papaparse@5.4.1';
  * @returns Parsed CSV content with preserved structure
  */
 export function parseCSVContent(fileContent: string): any {
-  console.log('Parsing CSV content with Papa Parse');
+  logger.log('Parsing CSV content with Papa Parse');
   
   try {
     // Use Papa Parse to parse the CSV with header detection
@@ -24,11 +25,11 @@ export function parseCSVContent(fileContent: string): any {
       encoding: 'utf8',    // UTF-8 encoding
     });
     
-    console.log(`Successfully parsed CSV with ${result.data.length} rows and ${result.meta.fields?.length || 0} columns`);
+    logger.log(`Successfully parsed CSV with ${result.data.length} rows and ${result.meta.fields?.length || 0} columns`);
     
     return result;
   } catch (error) {
-    console.error('Error parsing CSV content:', error);
+    logger.error('Error parsing CSV content:', error);
     throw new Error(`Failed to parse CSV: ${error.message}`);
   }
 }
@@ -42,7 +43,7 @@ export function parseCSVContent(fileContent: string): any {
  */
 export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50000): string[] {
   if (!parsedResult.data || parsedResult.data.length === 0) {
-    console.log('No CSV data to chunk');
+    logger.log('No CSV data to chunk');
     return [];
   }
   
@@ -50,7 +51,7 @@ export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50000): st
   const headers = meta.fields || [];
   
   if (headers.length === 0) {
-    console.log('No headers found in CSV');
+    logger.log('No headers found in CSV');
     throw new Error('No headers found in CSV data');
   }
   
@@ -73,13 +74,13 @@ export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50000): st
   const avgRowSize = sampleSize > 0 ? totalSize / sampleSize : 100;
   const headerSize = headerRow.length + 1; // +1 for newline
   
-  console.log(`Average row size: ${avgRowSize} chars, Header size: ${headerSize} chars`);
+  logger.log(`Average row size: ${avgRowSize} chars, Header size: ${headerSize} chars`);
   
   // Calculate optimal rows per chunk to approach target chunk size
   // Accounting for header size and average row size
   const rowsPerChunk = Math.max(1, Math.floor((chunkSize - headerSize) / avgRowSize));
   
-  console.log(`Chunking CSV with ${data.length} rows into chunks of ~${rowsPerChunk} rows (target: ~${chunkSize} chars)`);
+  logger.log(`Chunking CSV with ${data.length} rows into chunks of ~${rowsPerChunk} rows (target: ~${chunkSize} chars)`);
   
   // Split data into chunks
   const chunks: string[] = [];
@@ -95,7 +96,7 @@ export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50000): st
     });
     
     chunks.push(csvString);
-    console.log(`Created chunk ${chunks.length} with ${chunkData.length} rows, approximately ${csvString.length} chars`);
+    logger.log(`Created chunk ${chunks.length} with ${chunkData.length} rows, approximately ${csvString.length} chars`);
   }
   
   return chunks;
