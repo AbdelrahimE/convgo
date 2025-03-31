@@ -27,5 +27,6 @@ export const isProduction = (): boolean => {
  * @returns boolean indicating if logging is enabled
  */
 export const isLoggingEnabled = (): boolean => {
-  return import.meta.env.VITE_ENABLE_LOGS === 'true';
+  return import.meta.env.VITE_ENABLE_LOGS !== 'false' && 
+    (import.meta.env.VITE_ENABLE_LOGS === 'true' || import.meta.env.DEV === true);
 };

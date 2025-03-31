@@ -1,11 +1,7 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/utils/logger';
-
-// Direct console log test to see if ANY logs appear
-console.log("DIRECT LOG TEST");
 
 interface AuthContextType {
   session: Session | null;
