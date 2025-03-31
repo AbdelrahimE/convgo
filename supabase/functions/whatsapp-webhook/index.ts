@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
+import logger from '@/utils/logger';
 
 // Define standard CORS headers
 const corsHeaders = {
@@ -25,7 +26,7 @@ async function isSupportPhoneNumber(instanceName: string): Promise<boolean> {
     
     // If there's an error in the query, log it but continue (default to false)
     if (error) {
-      console.error('Error checking support phone number:', error);
+      logger.error('Error checking support phone number:', error);
       return false;
     }
     
@@ -33,7 +34,7 @@ async function isSupportPhoneNumber(instanceName: string): Promise<boolean> {
     return !!data;
   } catch (error) {
     // Handle any unexpected errors
-    console.error('Exception checking support phone number:', error);
+    logger.error('Exception checking support phone number:', error);
     return false;
   }
 }
@@ -182,7 +183,7 @@ async function findOrCreateConversation(instanceId: string, userPhone: string) {
     
     return newConversation.id;
   } catch (error) {
-    console.error('Error in findOrCreateConversation:', error);
+    logger.error('Error in findOrCreateConversation:', error);
     await logDebug('CONVERSATION_ERROR', `Error in findOrCreateConversation`, { error });
     throw error;
   }
@@ -226,7 +227,7 @@ async function getRecentConversationHistory(conversationId: string, maxTokens = 
     
     return data.reverse();
   } catch (error) {
-    console.error('Error in getRecentConversationHistory:', error);
+    logger.error('Error in getRecentConversationHistory:', error);
     return [];
   }
 }
@@ -270,7 +271,7 @@ async function storeMessageInConversation(conversationId: string, role: 'user' |
       })
       .eq('id', conversationId);
   } catch (error) {
-    console.error('Error in storeMessageInConversation:', error);
+    logger.error('Error in storeMessageInConversation:', error);
     throw error;
   }
 }
@@ -280,7 +281,7 @@ const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
 
 // Debug logging function that logs to both console and database
 async function logDebug(category: string, message: string, data?: any) {
-  console.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
+  logger.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
   
   try {
     await supabaseAdmin.from('webhook_debug_logs').insert({
@@ -289,7 +290,7 @@ async function logDebug(category: string, message: string, data?: any) {
       data: data || null
     });
   } catch (error) {
-    console.error('Failed to log debug info to database:', error);
+    logger.error('Failed to log debug info to database:', error);
   }
 }
 
@@ -306,14 +307,14 @@ async function saveWebhookMessage(instance: string, event: string, data: any) {
     
     if (error) {
       await logDebug('WEBHOOK_SAVE_ERROR', 'Error saving webhook message', { error, instance, event });
-      console.error('Error saving webhook message:', error);
+      logger.error('Error saving webhook message:', error);
       return false;
     }
     
     return true;
   } catch (error) {
     await logDebug('WEBHOOK_SAVE_EXCEPTION', 'Exception when saving webhook message', { error, instance, event });
-    console.error('Exception when saving webhook message:', error);
+    logger.error('Exception when saving webhook message:', error);
     return false;
   }
 }
@@ -824,7 +825,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         instanceName, 
         error: instanceError 
       });
-      console.error('Error getting instance data:', instanceError);
+      logger.error('Error getting instance data:', instanceError);
       return false;
     }
 
@@ -861,7 +862,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         instanceId, 
         error: aiConfigError 
       });
-      console.error('AI not enabled for this instance:', aiConfigError || 'No active config found');
+      logger.error('AI not enabled for this instance:', aiConfigError || 'No active config found');
       return false;
     }
 
@@ -882,7 +883,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         instanceId, 
         error: fileMappingsError 
       });
-      console.error('Error getting file mappings:', fileMappingsError);
+      logger.error('Error getting file mappings:', fileMappingsError);
       return false;
     }
 
@@ -971,7 +972,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         status: searchResponse.status,
         error: errorText
       });
-      console.error('Semantic search failed:', errorText);
+      logger.error('Semantic search failed:', errorText);
       
       // Continue with empty context instead of failing
       await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
@@ -1035,7 +1036,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     );
   } catch (error) {
     await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
-    console.error('Error in processMessageForAI:', error);
+    logger.error('Error in processMessageForAI:', error);
     return false;
   }
 }
@@ -1087,7 +1088,7 @@ async function generateAndSendAIResponse(
         status: responseGenResponse.status,
         error: errorText
       });
-      console.error('AI response generation failed:', errorText);
+      logger.error('AI response generation failed:', errorText);
       return false;
     }
 
@@ -1130,7 +1131,7 @@ async function generateAndSendAIResponse(
         await logDebug('AI_INTERACTION_SAVE_ERROR', 'Error saving AI interaction', {
           error: interactionError
         });
-        console.error('Error saving AI interaction:', interactionError);
+        logger.error('Error saving AI interaction:', interactionError);
       } else {
         await logDebug('AI_INTERACTION_SAVED', 'AI interaction saved successfully');
       }
@@ -1138,7 +1139,7 @@ async function generateAndSendAIResponse(
       await logDebug('AI_INTERACTION_SAVE_EXCEPTION', 'Exception saving AI interaction', {
         error
       });
-      console.error('Exception saving AI interaction:', error);
+      logger.error('Exception saving AI interaction:', error);
     }
 
     // Send response back through WhatsApp
@@ -1154,7 +1155,7 @@ async function generateAndSendAIResponse(
       
       if (!evolutionApiKey) {
         await logDebug('AI_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable not set and no apikey in payload');
-        console.error('EVOLUTION_API_KEY environment variable not set and no apikey in payload');
+        logger.error('EVOLUTION_API_KEY environment variable not set and no apikey in payload');
         return false;
       }
 
@@ -1190,7 +1191,7 @@ async function generateAndSendAIResponse(
               text: responseData.answer.substring(0, 50) + '...'
             }
           });
-          console.error('Error sending WhatsApp message:', errorText);
+          logger.error('Error sending WhatsApp message:', errorText);
           return false;
         }
 
@@ -1204,7 +1205,7 @@ async function generateAndSendAIResponse(
           instanceBaseUrl,
           fromNumber
         });
-        console.error('Exception sending WhatsApp message:', error);
+        logger.error('Exception sending WhatsApp message:', error);
         return false;
       }
     } else {
@@ -1309,7 +1310,7 @@ async function processConnectionStatus(instanceName: string, statusData: any) {
     
   } catch (error) {
     await logDebug('CONNECTION_STATUS_EXCEPTION', `Exception processing connection status`, { error, instanceName });
-    console.error('Error in processConnectionStatus:', error);
+    logger.error('Error in processConnectionStatus:', error);
     return false;
   }
 }
@@ -1617,7 +1618,7 @@ serve(async (req) => {
             error: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined
           });
-          console.error('Error checking for support escalation:', error);
+          logger.error('Error checking for support escalation:', error);
           // Continue with AI processing despite escalation error
         }
       }
@@ -1664,7 +1665,7 @@ serve(async (req) => {
       stack: error instanceof Error ? error.stack : undefined
     });
     
-    console.error('Error processing webhook:', error);
+    logger.error('Error processing webhook:', error);
     
     return new Response(
       JSON.stringify({
