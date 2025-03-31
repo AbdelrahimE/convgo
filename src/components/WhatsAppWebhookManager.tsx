@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Loader2, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAIResponse } from '@/hooks/use-ai-response';
+import logger from '@/utils/logger';
 
 const WhatsAppWebhookManager: React.FC<{
   instanceName: string;
@@ -72,7 +73,7 @@ const WhatsAppWebhookManager: React.FC<{
         });
       }
     } catch (error) {
-      console.error('Error checking webhook status:', error);
+      logger.error('Error checking webhook status:', error);
       setStatus('error');
       // Don't show error toast on routine checks
     } finally {
@@ -85,7 +86,7 @@ const WhatsAppWebhookManager: React.FC<{
       // This is just a test audio URL - in production this would come from the webhook
       // Using a reliable, small public audio file for testing
       const testAudioUrl = "https://audio-samples.github.io/samples/mp3/blizzard_biased/sample-1.mp3";
-      console.log("Starting test audio transcription");
+      logger.log("Starting test audio transcription");
       const result = await transcribeAudio({
         audioUrl: testAudioUrl,
         mimeType: "audio/mp3",
@@ -93,13 +94,13 @@ const WhatsAppWebhookManager: React.FC<{
       });
       if (result.success) {
         toast.success(`Transcription test successful: "${result.transcription}"`);
-        console.log("Transcription details:", result);
+        logger.log("Transcription details:", result);
       } else {
-        console.error("Transcription test failed:", result.error);
+        logger.error("Transcription test failed:", result.error);
         toast.error(`Transcription test failed: ${result.error}`);
       }
     } catch (error) {
-      console.error("Error testing transcription:", error);
+      logger.error("Error testing transcription:", error);
       toast.error(`Transcription test failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
