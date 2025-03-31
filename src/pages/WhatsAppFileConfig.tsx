@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Save, RefreshCw, CheckCircle2, Wifi, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import logger from '@/utils/logger';
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
@@ -67,7 +68,7 @@ const WhatsAppFileConfig = () => {
         }
         setFiles(filesData || []);
       } catch (error) {
-        console.error('Error fetching data:', error);
+        logger.error('Error fetching data:', error);
         toast({
           variant: 'destructive',
           title: 'Error',
@@ -94,7 +95,7 @@ const WhatsAppFileConfig = () => {
         const mappedFileIds = new Set((data || []).map(mapping => mapping.file_id));
         setSelectedFileIds(mappedFileIds);
       } catch (error) {
-        console.error('Error fetching mappings:', error);
+        logger.error('Error fetching mappings:', error);
         toast({
           variant: 'destructive',
           title: 'Error',
@@ -148,7 +149,7 @@ const WhatsAppFileConfig = () => {
         setSaveSuccess(false);
       }, 2000);
     } catch (error) {
-      console.error('Error saving mappings:', error);
+      logger.error('Error saving mappings:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -176,7 +177,7 @@ const WhatsAppFileConfig = () => {
         description: 'File mappings refreshed successfully'
       });
     } catch (error) {
-      console.error('Error refreshing mappings:', error);
+      logger.error('Error refreshing mappings:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
