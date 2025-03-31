@@ -4,13 +4,14 @@ import { FileUploader } from "@/components/FileUploader";
 import { FileList } from "@/components/FileList";
 import { motion } from "framer-motion";
 import { useEffect } from "react";
+import logger from '@/utils/logger';
 export default function FileManagement() {
   const {
     user
   } = useAuth();
   const isMobile = useIsMobile();
   useEffect(() => {
-    console.log('FileManagement mounted, current user:', user);
+    logger.log('FileManagement mounted, current user:', user);
   }, [user]);
   return <motion.div initial={{
     opacity: 0,
