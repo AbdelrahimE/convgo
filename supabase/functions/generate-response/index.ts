@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import logger from '@/utils/logger';
 
 interface GenerateResponseRequest {
   query: string;
@@ -69,7 +70,7 @@ async function getConversationHistory(conversationId: string, maxTokens: number 
       .limit(10);  // Limit to last 10 messages
     
     if (error) {
-      console.error('Error fetching conversation history:', error);
+      logger.error('Error fetching conversation history:', error);
       return '';
     }
     
@@ -97,7 +98,7 @@ async function getConversationHistory(conversationId: string, maxTokens: number 
     
     return historyText.trim();
   } catch (error) {
-    console.error('Failed to get conversation history:', error);
+    logger.error('Failed to get conversation history:', error);
     return '';
   }
 }
@@ -259,9 +260,9 @@ async function storeResponseInConversation(conversationId: string, responseText:
         content: responseText
       });
     
-    console.log(`Stored AI response in conversation ${conversationId}`);
+    logger.log(`Stored AI response in conversation ${conversationId}`);
   } catch (error) {
-    console.error('Error storing response in conversation:', error);
+    logger.error('Error storing response in conversation:', error);
   }
 }
 
@@ -297,11 +298,11 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Generating response for query: "${query}" with model: ${model}, temperature: ${temperature}`);
-    console.log(`Context available: ${context ? 'Yes' : 'No'}`);
-    console.log(`Image URL provided: ${imageUrl ? 'Yes' : 'No'}`);
+    logger.log(`Generating response for query: "${query}" with model: ${model}, temperature: ${temperature}`);
+    logger.log(`Context available: ${context ? 'Yes' : 'No'}`);
+    logger.log(`Image URL provided: ${imageUrl ? 'Yes' : 'No'}`);
     if (conversationId) {
-      console.log(`Using conversation ID: ${conversationId}`);
+      logger.log(`Using conversation ID: ${conversationId}`);
     }
 
     // Use the provided system prompt or fall back to the default
@@ -328,7 +329,7 @@ serve(async (req) => {
     let conversationHistory = '';
     if (includeConversationHistory && conversationId) {
       conversationHistory = await getConversationHistory(conversationId, MAX_CONVERSATION_TOKENS);
-      console.log(`Retrieved conversation history: ${conversationHistory ? 'Yes' : 'No'}`);
+      logger.log(`Retrieved conversation history: ${conversationHistory ? 'Yes' : 'No'}`);
     }
 
     // Apply advanced token management to balance conversation history and RAG content
@@ -338,7 +339,7 @@ serve(async (req) => {
       maxContextTokens
     );
     
-    console.log(`Token allocation - Conversation: ${tokenCounts.conversation}, RAG: ${tokenCounts.rag}, Total: ${tokenCounts.total}`);
+    logger.log(`Token allocation - Conversation: ${tokenCounts.conversation}, RAG: ${tokenCounts.rag}, Total: ${tokenCounts.total}`);
 
     // Prepare the user message with the balanced context
     const userMessage = finalContext ? 
@@ -359,14 +360,14 @@ serve(async (req) => {
           { type: 'image_url', image_url: { url: imageUrl } }
         ]
       });
-      console.log(`Added image to message content: ${imageUrl.substring(0, 50)}...`);
+      logger.log(`Added image to message content: ${imageUrl.substring(0, 50)}...`);
     } else {
       // Regular text-only message
       messages.push({ role: 'user', content: userMessage });
     }
 
     // Call OpenAI API to generate response
-    console.log(`Calling OpenAI API with ${messages.length} messages, model: ${model}`);
+    logger.log(`Calling OpenAI API with ${messages.length} messages, model: ${model}`);
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -382,7 +383,7 @@ serve(async (req) => {
 
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.json();
-      console.error(`OpenAI API error (${openaiResponse.status}):`, errorData);
+      logger.error(`OpenAI API error (${openaiResponse.status}):`, errorData);
       throw new Error(`OpenAI API error: ${errorData.error?.message || JSON.stringify(errorData)}`);
     }
 
@@ -415,7 +416,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Error in generate-response function:', error);
+    logger.error('Error in generate-response function:', error);
     
     return new Response(
       JSON.stringify({
