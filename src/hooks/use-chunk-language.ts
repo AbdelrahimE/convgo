@@ -1,6 +1,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import logger from '@/utils/logger';
 
 interface LanguageInfo {
   language: string;
@@ -22,7 +23,7 @@ export function useChunkLanguages(fileId: string | null) {
         .order('chunk_order', { ascending: true });
       
       if (error) {
-        console.error('Error fetching chunk languages:', error);
+        logger.error('Error fetching chunk languages:', error);
         throw error;
       }
       
