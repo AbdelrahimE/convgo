@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { LogoWithText } from "./Logo";
 import { ScrollArea } from "./ui/scroll-area";
+import logger from '@/utils/logger';
 const FULL_NAME_MAX_LENGTH = 25;
 const navigation = [{
   name: 'WhatsApp Numbers',
@@ -47,7 +48,7 @@ export function AppSidebar() {
       await supabase.auth.signOut();
       toast.success("Logged out successfully");
     } catch (error) {
-      console.error('Error logging out:', error);
+      logger.error('Error logging out:', error);
       toast.error("Failed to log out");
     }
   };
