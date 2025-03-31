@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
+import logger from '@/utils/logger';
 
 export type EmbeddingStatus = 'pending' | 'processing' | 'complete' | 'error' | 'partial';
 
@@ -74,7 +75,7 @@ export function useDocumentEmbeddings() {
       clearInterval(progressInterval);
       
       if (error) {
-        console.error('Error generating embeddings:', error);
+        logger.error('Error generating embeddings:', error);
         setError(error instanceof Error ? error : new Error('Failed to generate embeddings'));
         toast.error('Failed to generate embeddings', {
           description: error.message || 'An unknown error occurred'
@@ -120,7 +121,7 @@ export function useDocumentEmbeddings() {
         return false;
       }
     } catch (err) {
-      console.error('Exception generating embeddings:', err);
+      logger.error('Exception generating embeddings:', err);
       setError(err instanceof Error ? err : new Error('An unknown error occurred'));
       toast.error('Error generating embeddings', {
         description: err instanceof Error ? err.message : 'An unknown error occurred'
@@ -146,7 +147,7 @@ export function useDocumentEmbeddings() {
         .single();
         
       if (error) {
-        console.error('Error fetching embedding status:', error);
+        logger.error('Error fetching embedding status:', error);
         return null;
       }
       
@@ -159,7 +160,7 @@ export function useDocumentEmbeddings() {
       
       return null;
     } catch (err) {
-      console.error('Exception fetching embedding status:', err);
+      logger.error('Exception fetching embedding status:', err);
       return null;
     }
   };
