@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { handleSupportEscalation, WebhookData } from "../_shared/escalation-utils.ts";
+import logger from '@/utils/logger';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
@@ -58,7 +59,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
   } catch (error) {
-    console.error('Error in support escalation function:', error);
+    logger.error('Error in support escalation function:', error);
     return new Response(JSON.stringify({ success: false, error: String(error) }), { 
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
