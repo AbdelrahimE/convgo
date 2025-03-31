@@ -4,14 +4,14 @@
  * Uses a single environment variable to control all logging behavior
  */
 
-// Check for environment variable, default to true in development if not explicitly set to 'false'
-const loggingEnabled = import.meta.env.VITE_ENABLE_LOGS !== 'false' && 
-  (import.meta.env.VITE_ENABLE_LOGS === 'true' || import.meta.env.DEV === true);
+// Single control variable for all logging
+const loggingEnabled = import.meta.env.VITE_ENABLE_LOGS === 'true';
 
-// Console output will only appear if logging is enabled
+// Console output will only appear if VITE_ENABLE_LOGS=true
 const createLogger = (consoleMethod: keyof Pick<Console, 'log' | 'info' | 'warn' | 'error' | 'debug'>) => {
   return (...args: any[]): void => {
     if (loggingEnabled) {
+      // Fix: Access console methods correctly using bracket notation
       console[consoleMethod](...args);
     }
   };
