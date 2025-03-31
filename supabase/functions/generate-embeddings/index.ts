@@ -2,15 +2,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { corsHeaders } from '../_shared/cors.ts'
-
-// Create a simple logger since we can't use @/utils/logger in edge functions
-const logger = {
-  log: (...args: any[]) => console.log(...args),
-  error: (...args: any[]) => console.error(...args),
-  info: (...args: any[]) => console.info(...args),
-  warn: (...args: any[]) => console.warn(...args),
-  debug: (...args: any[]) => console.debug(...args),
-};
+import logger from '@/utils/logger';
 
 interface RequestBody {
   fileId: string;
