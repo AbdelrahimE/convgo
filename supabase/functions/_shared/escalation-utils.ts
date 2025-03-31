@@ -1,5 +1,6 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import logger from '@/utils/logger';
 
 // Enhanced fuzzy matching function with balanced cross-language support
 export function fuzzyMatch(text: string, keyword: string): boolean {
@@ -217,7 +218,7 @@ export async function handleSupportEscalation(
       return { success: true, action: 'skipped_empty_message', skip_ai_processing: false };
     }
 
-    console.log(`Processing message from ${phoneNumber} in business instance ${businessInstanceName}: "${messageContent.substring(0, 50)}..."`);
+    logger.log(`Processing message from ${phoneNumber} in business instance ${businessInstanceName}: "${messageContent.substring(0, 50)}..."`);
 
     // Use the found instance ID if provided (coming from webhook)
     let businessInstanceId = foundInstanceId;
@@ -232,7 +233,7 @@ export async function handleSupportEscalation(
         .maybeSingle(); // Changed from single() to maybeSingle()
       
       if (instanceError) {
-        console.error(`Error looking up business instance: ${businessInstanceName}`, instanceError);
+        logger.error(`Error looking up business instance: ${businessInstanceName}`, instanceError);
         // Log details for troubleshooting but continue processing
         await supabaseAdmin.from('webhook_debug_logs').insert({
           category: 'escalation_error',
@@ -241,7 +242,7 @@ export async function handleSupportEscalation(
         });
         // Continue with a null instance ID - the rest of the function will handle this gracefully
       } else if (!instanceData) {
-        console.error(`Business instance not found: ${businessInstanceName}`);
+        logger.error(`Business instance not found: ${businessInstanceName}`);
         // Log detail for troubleshooting but continue processing
         await supabaseAdmin.from('webhook_debug_logs').insert({
           category: 'escalation_warning',
@@ -274,7 +275,7 @@ export async function handleSupportEscalation(
       .maybeSingle(); // Changed from single() to maybeSingle()
     
     if (existingEscalation) {
-      console.log(`Conversation with ${phoneNumber} is already escalated, skipping keyword check`);
+      logger.log(`Conversation with ${phoneNumber} is already escalated, skipping keyword check`);
       return { 
         success: true, 
         action: 'already_escalated', 
@@ -292,12 +293,12 @@ export async function handleSupportEscalation(
       .eq('whatsapp_instance_id', businessInstanceId);
     
     if (keywordsError) {
-      console.error('Error fetching keywords:', keywordsError);
+      logger.error('Error fetching keywords:', keywordsError);
       return { success: false, error: 'Failed to fetch keywords', details: keywordsError, skip_ai_processing: false };
     }
     
     if (!keywords || keywords.length === 0) {
-      console.log('No keywords configured, skipping escalation check');
+      logger.log('No keywords configured, skipping escalation check');
       return { success: true, action: 'no_keywords_configured', skip_ai_processing: false };
     }
 
@@ -314,11 +315,11 @@ export async function handleSupportEscalation(
     }
     
     if (!matchedKeyword) {
-      console.log('No keywords matched, no escalation needed');
+      logger.log('No keywords matched, no escalation needed');
       return { success: true, action: 'no_keywords_matched', skip_ai_processing: false };
     }
     
-    console.log(`Matched keyword "${matchedKeyword}" in category "${keywordCategory || 'uncategorized'}"`);
+    logger.log(`Matched keyword "${matchedKeyword}" in category "${keywordCategory || 'uncategorized'}"`);
 
     // Step 5: Get support configuration - ALWAYS use the business instance ID
     const { data: supportConfig, error: configError } = await supabaseAdmin
@@ -328,14 +329,14 @@ export async function handleSupportEscalation(
       .single();
     
     if (configError || !supportConfig) {
-      console.error('Support config not found for business instance:', businessInstanceId, configError);
+      logger.error('Support config not found for business instance:', businessInstanceId, configError);
       return { success: false, error: 'Support config not found', details: configError, skip_ai_processing: false };
     }
     
     const { support_phone_number, escalation_message, notification_message } = supportConfig;
     
     if (!support_phone_number) {
-      console.error('Support phone number not configured for business instance:', businessInstanceId);
+      logger.error('Support phone number not configured for business instance:', businessInstanceId);
       return { success: false, error: 'Support phone number not configured', skip_ai_processing: false };
     }
 
@@ -351,7 +352,7 @@ export async function handleSupportEscalation(
       .single();
     
     if (escalationError) {
-      console.error('Failed to create escalation record:', escalationError);
+      logger.error('Failed to create escalation record:', escalationError);
       return { success: false, error: 'Failed to create escalation record', details: escalationError, skip_ai_processing: false };
     }
 
@@ -363,7 +364,7 @@ export async function handleSupportEscalation(
       try {
         // Use customer's phone number (phoneNumber) and ensure full URL with protocol
         const apiUrl = `${apiBaseUrl}/message/sendText/${businessInstanceName}`;
-        console.log(`Sending escalation message to customer via business instance ${businessInstanceName} at URL: ${apiUrl}`);
+        logger.log(`Sending escalation message to customer via business instance ${businessInstanceName} at URL: ${apiUrl}`);
         
         const customerResponse = await fetch(apiUrl, {
           method: 'POST',
@@ -378,12 +379,12 @@ export async function handleSupportEscalation(
         });
         
         if (!customerResponse.ok) {
-          console.error('Failed to send escalation message to customer:', await customerResponse.text());
+          logger.error('Failed to send escalation message to customer:', await customerResponse.text());
         } else {
-          console.log('Sent escalation message to customer');
+          logger.log('Sent escalation message to customer');
         }
       } catch (err) {
-        console.error('Error sending message to customer:', err);
+        logger.error('Error sending message to customer:', err);
       }
     }
 
@@ -395,7 +396,7 @@ export async function handleSupportEscalation(
         
         // Use the business instance to send to the support agent
         const apiUrl = `${apiBaseUrl}/message/sendText/${businessInstanceName}`;
-        console.log(`Sending notification to support agent via business instance ${businessInstanceName} at URL: ${apiUrl}`);
+        logger.log(`Sending notification to support agent via business instance ${businessInstanceName} at URL: ${apiUrl}`);
         
         const supportResponse = await fetch(apiUrl, {
           method: 'POST',
@@ -410,12 +411,12 @@ export async function handleSupportEscalation(
         });
         
         if (!supportResponse.ok) {
-          console.error('Failed to send notification to support agent:', await supportResponse.text());
+          logger.error('Failed to send notification to support agent:', await supportResponse.text());
         } else {
-          console.log('Sent notification to support agent');
+          logger.log('Sent notification to support agent');
         }
       } catch (err) {
-        console.error('Error sending message to support agent:', err);
+        logger.error('Error sending message to support agent:', err);
       }
     }
 
@@ -443,7 +444,7 @@ export async function handleSupportEscalation(
       skip_ai_processing: true
     };
   } catch (error) {
-    console.error('Error processing message for escalation:', error);
+    logger.error('Error processing message for escalation:', error);
     return { success: false, error: 'Internal error processing message', details: error, skip_ai_processing: false };
   }
 }
