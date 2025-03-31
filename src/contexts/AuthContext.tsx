@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import logger from '@/utils/logger';
 
 interface AuthContextType {
   session: Session | null;
@@ -25,10 +26,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('AuthProvider mounted');
+    logger.log('AuthProvider mounted');
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Initial session:', session);
+      logger.log('Initial session:', session);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -36,7 +37,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('Auth state changed:', session);
+      logger.log('Auth state changed:', session);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -51,7 +52,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading
   };
 
-  console.log('AuthProvider rendering with:', value);
+  logger.log('AuthProvider rendering with:', value);
 
   return (
     <AuthContext.Provider value={value}>
