@@ -2,6 +2,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { corsHeaders } from '../_shared/cors.ts'
+import logger from '@/utils/logger';
 
 interface RequestBody {
   fileId: string;
@@ -149,7 +150,7 @@ serve(async (req) => {
           processedCount++;
           return { success: true, chunkId: chunk.id };
         } catch (error) {
-          console.error(`Error processing chunk ${chunk.id}:`, error);
+          logger.error(`Error processing chunk ${chunk.id}:`, error);
           errorCount++;
           
           // Record the error in the document_embeddings table
@@ -210,7 +211,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Error in generate-embeddings function:', error);
+    logger.error('Error in generate-embeddings function:', error);
     
     return new Response(
       JSON.stringify({
