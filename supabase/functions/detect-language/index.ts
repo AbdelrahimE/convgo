@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import * as franc from "https://esm.sh/franc-min@6";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import logger from '@/utils/logger';
 
 // CORS headers
 const corsHeaders = {
@@ -56,7 +57,7 @@ serve(async (req: Request) => {
   try {
     // Parse request
     const { fileId } = await req.json();
-    console.log(`Processing language detection for file: ${fileId}`);
+    logger.log(`Processing language detection for file: ${fileId}`);
     
     if (!fileId) {
       return new Response(
@@ -86,7 +87,7 @@ serve(async (req: Request) => {
       .single();
     
     if (fileError || !fileData) {
-      console.error(`Error retrieving file: ${fileError?.message || "File not found"}`);
+      logger.error(`Error retrieving file: ${fileError?.message || "File not found"}`);
       await updateErrorStatus(supabase, fileId, `Failed to retrieve file: ${fileError?.message || "Not found"}`);
       return new Response(
         JSON.stringify({ error: "File not found or content empty" }),
@@ -96,7 +97,7 @@ serve(async (req: Request) => {
     
     const textContent = fileData.text_content;
     if (!textContent) {
-      console.error(`File ${fileId} has no text content`);
+      logger.error(`File ${fileId} has no text content`);
       await updateErrorStatus(supabase, fileId, "No text content available");
       return new Response(
         JSON.stringify({ error: "File has no text content" }),
@@ -105,9 +106,9 @@ serve(async (req: Request) => {
     }
 
     // Perform language detection
-    console.log(`Starting language detection for file ${fileId}`);
+    logger.log(`Starting language detection for file ${fileId}`);
     const detectionResult = detectLanguages(textContent);
-    console.log(`Language detection results:`, detectionResult);
+    logger.log(`Language detection results:`, detectionResult);
     
     // Update the file record with language detection results
     const { error: updateError } = await supabase
@@ -130,7 +131,7 @@ serve(async (req: Request) => {
       .eq('id', fileId);
     
     if (updateError) {
-      console.error(`Error updating file with detection results: ${updateError.message}`);
+      logger.error(`Error updating file with detection results: ${updateError.message}`);
       await updateErrorStatus(supabase, fileId, `Database update failed: ${updateError.message}`);
       return new Response(
         JSON.stringify({ error: `Failed to update detection results: ${updateError.message}` }),
@@ -149,7 +150,7 @@ serve(async (req: Request) => {
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`Unexpected error in language detection: ${errorMessage}`);
+    logger.error(`Unexpected error in language detection: ${errorMessage}`);
     
     try {
       const { fileId } = await req.json();
