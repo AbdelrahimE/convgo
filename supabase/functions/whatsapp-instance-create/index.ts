@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { corsHeaders } from "../_shared/cors.ts";
+import logger from '@/utils/logger';
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -25,7 +26,7 @@ serve(async (req) => {
       throw new Error('Evolution API key not configured');
     }
 
-    console.log('Creating instance with name:', instanceName);
+    logger.log('Creating instance with name:', instanceName);
 
     const response = await fetch('https://api.convgo.com/instance/create', {
       method: 'POST',
@@ -43,11 +44,11 @@ serve(async (req) => {
     const data = await response.json();
     
     if (!response.ok) {
-      console.error('Evolution API error response:', data);
+      logger.error('Evolution API error response:', data);
       throw new Error(`API Error: ${response.status} - ${JSON.stringify(data)}`);
     }
 
-    console.log('Evolution API success response:', data);
+    logger.log('Evolution API success response:', data);
 
     // Ensure we're returning the QR code in the expected format
     const responseData = {
@@ -62,7 +63,7 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    console.error('Error in Edge Function:', error);
+    logger.error('Error in Edge Function:', error);
     
     return new Response(JSON.stringify({
       error: error.message,
