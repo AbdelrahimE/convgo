@@ -2,7 +2,7 @@
  * CSV-specific processing utilities to improve handling of tabular data
  * This module provides specialized handling for CSV files in the text extraction process
  */
-
+import logger from '@/utils/logger';
 /**
  * Detects if extracted text appears to be in CSV format
  * @param text The extracted text content to analyze
@@ -240,7 +240,7 @@ export function chunkCSVContent(
   const headerRow = lines[0];
   const dataRows = lines.slice(1); // All rows except header
   
-  console.log(`Processing CSV with ${dataRows.length} data rows. Include headers: ${ensureHeaderInChunks}`);
+  logger.log(`Processing CSV with ${dataRows.length} data rows. Include headers: ${ensureHeaderInChunks}`);
   
   // Initialize result array
   const chunks: string[] = [];
@@ -248,11 +248,11 @@ export function chunkCSVContent(
   // Group products to keep related items together
   const productGroups = identifyProductGroups(dataRows, headerRow);
   
-  console.log(`Identified ${productGroups.length} product groups`);
+  logger.log(`Identified ${productGroups.length} product groups`);
   
   // If we couldn't identify product groups, use a more conservative approach
   if (productGroups.length === 0) {
-    console.log('No product groups identified, using fallback chunking');
+    logger.log('No product groups identified, using fallback chunking');
     return fallbackCSVChunking(csvText, headerRow, dataRows, chunkSize, ensureHeaderInChunks);
   }
   
@@ -261,7 +261,7 @@ export function chunkCSVContent(
   let currentChunkRows: string[] = ensureHeaderInChunks ? [headerRow] : [];
   let currentEstimatedSize = ensureHeaderInChunks ? headerRow.length + 1 : 0;
   
-  console.log(`Initialize chunking with ensureHeaderInChunks=${ensureHeaderInChunks}, currentChunkRows length=${currentChunkRows.length}`);
+  logger.log(`Initialize chunking with ensureHeaderInChunks=${ensureHeaderInChunks}, currentChunkRows length=${currentChunkRows.length}`);
   
   for (let groupIdx = 0; groupIdx < productGroups.length; groupIdx++) {
     const group = productGroups[groupIdx];
@@ -280,7 +280,7 @@ export function chunkCSVContent(
       currentChunkRows = ensureHeaderInChunks ? [headerRow] : [];
       currentEstimatedSize = ensureHeaderInChunks ? headerRow.length + 1 : 0;
       
-      console.log(`Added chunk ${chunks.length} with header: ${ensureHeaderInChunks}, currentChunkRows length now ${currentChunkRows.length}`);
+      logger.log(`Added chunk ${chunks.length} with header: ${ensureHeaderInChunks}, currentChunkRows length now ${currentChunkRows.length}`);
     }
     
     // Add all rows from this product group to the current chunk
@@ -300,7 +300,7 @@ export function chunkCSVContent(
       currentChunkRows = ensureHeaderInChunks ? [headerRow] : [];
       currentEstimatedSize = ensureHeaderInChunks ? headerRow.length + 1 : 0;
       
-      console.log(`Added large chunk ${chunks.length} with header: ${ensureHeaderInChunks}, currentChunkRows length now ${currentChunkRows.length}`);
+      logger.log(`Added large chunk ${chunks.length} with header: ${ensureHeaderInChunks}, currentChunkRows length now ${currentChunkRows.length}`);
     }
   }
   
@@ -308,13 +308,13 @@ export function chunkCSVContent(
   if (currentChunkRows.length > (ensureHeaderInChunks ? 1 : 0)) {
     // Finalize this chunk - Just join the rows, header is already included
     chunks.push(currentChunkRows.join('\n'));
-    console.log(`Added final chunk ${chunks.length} with header: ${ensureHeaderInChunks}`);
+    logger.log(`Added final chunk ${chunks.length} with header: ${ensureHeaderInChunks}`);
   }
   
   // Keep all the validation checks as safety nets
   validateAndFixHeaders(chunks, headerRow, ensureHeaderInChunks);
   
-  console.log(`Created ${chunks.length} chunks from ${productGroups.length} product groups`);
+  logger.log(`Created ${chunks.length} chunks from ${productGroups.length} product groups`);
   
   return chunks;
 }
@@ -328,14 +328,14 @@ function validateAndFixHeaders(chunks: string[], headerRow: string, ensureHeader
   // Verify each chunk starts with the header row
   for (let i = 0; i < chunks.length; i++) {
     if (!chunks[i].startsWith(headerRow)) {
-      console.log(`Fixing missing header in chunk ${i}`);
+      logger.log(`Fixing missing header in chunk ${i}`);
       chunks[i] = headerRow + '\n' + chunks[i];
     }
     
     // More thorough validation - check exact header match
     const chunkLines = chunks[i].split('\n');
     if (chunkLines[0] !== headerRow) {
-      console.log(`Header mismatch in chunk ${i}, fixing...`);
+      logger.log(`Header mismatch in chunk ${i}, fixing...`);
       // Remove any incorrect header and add the correct one
       const dataLinesOnly = chunkLines[0] === headerRow ? chunkLines.slice(1) : chunkLines;
       chunks[i] = headerRow + '\n' + dataLinesOnly.join('\n');
@@ -343,7 +343,7 @@ function validateAndFixHeaders(chunks: string[], headerRow: string, ensureHeader
   }
   
   // Log validation results
-  console.log(`Validated ${chunks.length} chunks, all now have headers`);
+  logger.log(`Validated ${chunks.length} chunks, all now have headers`);
 }
 
 /**
@@ -363,7 +363,7 @@ function fallbackCSVChunking(
   let currentSize = ensureHeaderInChunks ? headerRow.length + 1 : 0;
   
   // Log the start of fallback chunking for debugging
-  console.log(`Starting fallback CSV chunking with ensureHeaderInChunks=${ensureHeaderInChunks}`);
+  logger.log(`Starting fallback CSV chunking with ensureHeaderInChunks=${ensureHeaderInChunks}`);
   
   // Conservatively group rows until we approach chunk size
   for (const row of dataRows) {
@@ -379,7 +379,7 @@ function fallbackCSVChunking(
       currentChunkRows = ensureHeaderInChunks ? [headerRow] : [];
       currentSize = ensureHeaderInChunks ? headerRow.length + 1 : 0;
       
-      console.log(`Added fallback chunk ${chunks.length} with header: ${ensureHeaderInChunks}, currentChunkRows length now ${currentChunkRows.length}`);
+      logger.log(`Added fallback chunk ${chunks.length} with header: ${ensureHeaderInChunks}, currentChunkRows length now ${currentChunkRows.length}`);
     }
     
     // Add the row to current chunk
@@ -391,13 +391,13 @@ function fallbackCSVChunking(
   if (currentChunkRows.length > (ensureHeaderInChunks ? 1 : 0)) {
     // Finalize this chunk - Just join the rows, header is already included
     chunks.push(currentChunkRows.join('\n'));
-    console.log(`Added final fallback chunk ${chunks.length} with header: ${ensureHeaderInChunks}`);
+    logger.log(`Added final fallback chunk ${chunks.length} with header: ${ensureHeaderInChunks}`);
   }
   
   // Use the same validation helper function
   validateAndFixHeaders(chunks, headerRow, ensureHeaderInChunks);
   
-  console.log(`Fallback chunking created ${chunks.length} chunks with headers=${ensureHeaderInChunks}`);
+  logger.log(`Fallback chunking created ${chunks.length} chunks with headers=${ensureHeaderInChunks}`);
   
   return chunks;
 }
