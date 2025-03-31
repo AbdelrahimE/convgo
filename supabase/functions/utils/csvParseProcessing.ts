@@ -6,7 +6,15 @@
 
 // Import Papa Parse from a CDN URL that's compatible with Deno
 import Papa from 'https://esm.sh/papaparse@5.4.1';
-import logger from '@/utils/logger';
+
+// Create a simple logger since we can't use @/utils/logger in edge functions
+const logger = {
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
 
 /**
  * Extracts text from CSV using Papa Parse
