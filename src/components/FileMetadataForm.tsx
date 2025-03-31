@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import logger from '@/utils/logger';
 import {
   Select,
   SelectContent,
@@ -36,23 +37,23 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
   const { validateField } = useMetadataValidation(user?.id || '');
 
   useEffect(() => {
-    console.log("[DEBUG] FileMetadataForm mounted with fileId:", fileId);
-    console.log("[DEBUG] Current user:", user);
+    logger.log("[DEBUG] FileMetadataForm mounted with fileId:", fileId);
+    logger.log("[DEBUG] Current user:", user);
     fetchMetadata();
   }, [fileId, user]);
 
   const fetchMetadata = async () => {
     if (!user || !fileId) {
-      console.log("[DEBUG] Missing user or fileId:", { user, fileId });
+      logger.log("[DEBUG] Missing user or fileId:", { user, fileId });
       return;
     }
 
     setIsLoading(true);
     try {
-      console.log("[DEBUG] Fetching metadata fields for user:", user.id);
+      logger.log("[DEBUG] Fetching metadata fields for user:", user.id);
       
       // Debug log for the query we're about to execute
-      console.log("[DEBUG] Executing query: supabase.from('metadata_fields').select('*')");
+      logger.log("[DEBUG] Executing query: supabase.from('metadata_fields').select('*')");
       
       const { data: fieldsData, error: fieldsError } = await supabase
         .from('metadata_fields')
@@ -60,38 +61,38 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         // Filter out any date type fields to avoid issues
         .neq('field_type', 'date');
 
-      console.log("[DEBUG] Raw metadata fields data:", fieldsData);
-      console.log("[DEBUG] Fields query error:", fieldsError);
+      logger.log("[DEBUG] Raw metadata fields data:", fieldsData);
+      logger.log("[DEBUG] Fields query error:", fieldsError);
 
       if (fieldsError) {
-        console.error('[ERROR] Error fetching metadata fields:', fieldsError);
+        logger.error('[ERROR] Error fetching metadata fields:', fieldsError);
         throw fieldsError;
       }
 
       // Check if fields data is empty
       if (!fieldsData || fieldsData.length === 0) {
-        console.log("[DEBUG] No metadata fields found for user:", user.id);
+        logger.log("[DEBUG] No metadata fields found for user:", user.id);
       }
 
       // Log user profile to check if profile_id matches
-      console.log("[DEBUG] User profile data:", user.user_metadata);
+      logger.log("[DEBUG] User profile data:", user.user_metadata);
       
       const transformedFields: MetadataField[] = (fieldsData || []).map(field => {
-        console.log("[DEBUG] Transforming field:", field);
+        logger.log("[DEBUG] Transforming field:", field);
         
         let parsedOptions;
         try {
           if (field.options) {
             if (typeof field.options === 'string') {
               parsedOptions = JSON.parse(field.options);
-              console.log("[DEBUG] Parsed options from string:", parsedOptions);
+              logger.log("[DEBUG] Parsed options from string:", parsedOptions);
             } else {
               parsedOptions = field.options;
-              console.log("[DEBUG] Using options object directly:", parsedOptions);
+              logger.log("[DEBUG] Using options object directly:", parsedOptions);
             }
           }
         } catch (err) {
-          console.error("[ERROR] Failed to parse options for field:", field.name, err);
+          logger.error("[ERROR] Failed to parse options for field:", field.name, err);
           parsedOptions = undefined;
         }
         
@@ -101,7 +102,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         };
       });
 
-      console.log("[DEBUG] Transformed fields:", transformedFields);
+      logger.log("[DEBUG] Transformed fields:", transformedFields);
       setFields(transformedFields);
 
       const { data: valuesData, error: valuesError } = await supabase
@@ -110,11 +111,11 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         .eq('file_id', fileId);
 
       if (valuesError) {
-        console.error('[ERROR] Error fetching metadata values:', valuesError);
+        logger.error('[ERROR] Error fetching metadata values:', valuesError);
         throw valuesError;
       }
 
-      console.log('[DEBUG] Fetched metadata values from DB:', valuesData);
+      logger.log('[DEBUG] Fetched metadata values from DB:', valuesData);
       
       const valuesObject: Record<string, any> = {};
       valuesData?.forEach((value: FileMetadataValue) => {
@@ -130,7 +131,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       setErrors({});
 
     } catch (error: any) {
-      console.error('[ERROR] Fetch metadata error:', error);
+      logger.error('[ERROR] Fetch metadata error:', error);
       toast({
         variant: "destructive",
         title: "Error fetching metadata",
@@ -188,8 +189,8 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       }));
     }
 
-    console.log('Updated values:', newValues);
-    console.log('Current errors:', errors);
+    logger.log('Updated values:', newValues);
+    logger.log('Current errors:', errors);
   };
 
   const isFormValid = () => {
@@ -205,7 +206,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     
     const hasNoErrors = Object.values(errors).every(error => !error);
     
-    console.log('Form validation:', {
+    logger.log('Form validation:', {
       hasAllRequired,
       hasNoErrors,
       values,
@@ -246,7 +247,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
     }
 
     setIsSaving(true);
-    console.log('Starting metadata save operation...');
+    logger.log('Starting metadata save operation...');
 
     try {
       const validationErrors: Record<string, string> = {};
@@ -270,11 +271,11 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         .eq('file_id', fileId);
 
       if (deleteError) {
-        console.error('Error deleting existing metadata:', deleteError);
+        logger.error('Error deleting existing metadata:', deleteError);
         throw deleteError;
       }
 
-      console.log('Successfully deleted existing metadata');
+      logger.log('Successfully deleted existing metadata');
 
       // Create metadata values array for insertion
       const metadataValues = Object.entries(values)
@@ -283,13 +284,13 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
           const field = fields.find(f => f.id === field_id);
           
           if (!field) {
-            console.warn(`[WARN] Field not found for ID: ${field_id}`);
+            logger.warn(`[WARN] Field not found for ID: ${field_id}`);
             return null;
           }
           
           try {
             const preparedValue = prepareValueForDatabase(field, value);
-            console.log(`[DEBUG] Field: ${field.name} (${field.field_type}), Prepared value:`, preparedValue);
+            logger.log(`[DEBUG] Field: ${field.name} (${field.field_type}), Prepared value:`, preparedValue);
             
             return {
               file_id: fileId,
@@ -297,14 +298,14 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
               value: preparedValue
             };
           } catch (error) {
-            console.error(`[ERROR] Failed to prepare value for field ${field.name}:`, error);
+            logger.error(`[ERROR] Failed to prepare value for field ${field.name}:`, error);
             throw error;
           }
         })
         .filter(Boolean) as any[];
 
       if (metadataValues.length === 0) {
-        console.log('[INFO] No metadata values to save');
+        logger.log('[INFO] No metadata values to save');
         toast({
           title: "Success",
           description: "No metadata values to save"
@@ -314,7 +315,7 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         return;
       }
 
-      console.log('[DEBUG] Prepared metadata values:', metadataValues);
+      logger.log('[DEBUG] Prepared metadata values:', metadataValues);
       
       // Insert all metadata values in a single batch
       const { error: insertError } = await supabase
@@ -322,11 +323,11 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
         .insert(metadataValues);
       
       if (insertError) {
-        console.error('[ERROR] Error inserting metadata:', insertError);
+        logger.error('[ERROR] Error inserting metadata:', insertError);
         throw insertError;
       }
 
-      console.log('Successfully inserted all metadata');
+      logger.log('Successfully inserted all metadata');
 
       toast({
         title: "Success", 
@@ -337,8 +338,8 @@ export function FileMetadataForm({ fileId, onSave }: FileMetadataFormProps) {
       onSave?.();
       
     } catch (error: any) {
-      console.error('[ERROR] Save metadata error:', error);
-      console.error('[ERROR] Error message:', error.message);
+      logger.error('[ERROR] Save metadata error:', error);
+      logger.error('[ERROR] Error message:', error.message);
       
       toast({
         variant: "destructive",
