@@ -20,6 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
+import logger from '@/utils/logger';
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
@@ -78,20 +79,20 @@ const WhatsAppAIConfig = () => {
         error: messagesError
       } = await supabase.from('whatsapp_conversation_messages').delete().eq('conversation_id', conversationId);
       if (messagesError) {
-        console.error('Error deleting test conversation messages:', messagesError);
+        logger.error('Error deleting test conversation messages:', messagesError);
         return false;
       }
       const {
         error: conversationError
       } = await supabase.from('whatsapp_conversations').delete().eq('id', conversationId);
       if (conversationError) {
-        console.error('Error deleting test conversation:', conversationError);
+        logger.error('Error deleting test conversation:', conversationError);
         return false;
       }
-      console.log('Successfully cleaned up test conversation:', conversationId);
+      logger.log('Successfully cleaned up test conversation:', conversationId);
       return true;
     } catch (error) {
-      console.error('Error cleaning up test conversation:', error);
+      logger.error('Error cleaning up test conversation:', error);
       return false;
     } finally {
       setIsCleaningUp(false);
@@ -117,10 +118,10 @@ const WhatsAppAIConfig = () => {
       if (testConversationId && useRealConversation) {
         cleanupTestConversation(testConversationId).then(success => {
           if (success) {
-            console.log('Successfully cleaned up test conversation on unmount:', testConversationId);
+            logger.log('Successfully cleaned up test conversation on unmount:', testConversationId);
           }
         }).catch(err => {
-          console.error('Failed to clean up test conversation on unmount:', err);
+          logger.error('Failed to clean up test conversation on unmount:', err);
         });
       }
     };
@@ -143,7 +144,7 @@ const WhatsAppAIConfig = () => {
         setSelectedInstance(data[0].id);
       }
     } catch (error) {
-      console.error('Error loading WhatsApp instances:', error);
+      logger.error('Error loading WhatsApp instances:', error);
       toast.error('Failed to load WhatsApp instances');
     } finally {
       setIsLoading(false);
@@ -171,7 +172,7 @@ const WhatsAppAIConfig = () => {
       setVoiceMessageDefaultResponse(data.voice_message_default_response || "I'm sorry, but I cannot process voice messages at the moment. Please send your question as text, and I'll be happy to assist you.");
       setDefaultVoiceLanguage(data.default_voice_language || 'ar');
     } catch (error) {
-      console.error('Error loading AI config:', error);
+      logger.error('Error loading AI config:', error);
       toast.error('Failed to load AI configuration');
     } finally {
       setIsLoading(false);
@@ -224,7 +225,7 @@ const WhatsAppAIConfig = () => {
       }
       toast.success('AI configuration saved successfully');
     } catch (error) {
-      console.error('Error saving AI config:', error);
+      logger.error('Error saving AI config:', error);
       toast.error('Failed to save AI configuration');
     } finally {
       setIsSaving(false);
@@ -258,7 +259,7 @@ const WhatsAppAIConfig = () => {
         throw new Error('Failed to generate system prompt');
       }
     } catch (error) {
-      console.error('Error generating system prompt:', error);
+      logger.error('Error generating system prompt:', error);
       toast.error('Failed to generate system prompt. Please try again.');
     } finally {
       setIsGeneratingPrompt(false);
@@ -269,9 +270,9 @@ const WhatsAppAIConfig = () => {
     try {
       const cleanupResult = await cleanupTestConversations(selectedInstance);
       if (!cleanupResult.success) {
-        console.warn('Warning: Could not clean up stale test conversations:', cleanupResult.error);
+        logger.warn('Warning: Could not clean up stale test conversations:', cleanupResult.error);
       } else if (cleanupResult.count > 0) {
-        console.log(`Cleaned up ${cleanupResult.count} stale test conversations`);
+        logger.log(`Cleaned up ${cleanupResult.count} stale test conversations`);
       }
       const uniqueId = new Date().getTime().toString();
       const {
@@ -288,10 +289,10 @@ const WhatsAppAIConfig = () => {
       }).select().single();
       if (error) throw error;
       setTestConversationId(data.id);
-      console.log('Created test conversation:', data.id);
+      logger.log('Created test conversation:', data.id);
       setConversation([]);
     } catch (error) {
-      console.error('Error creating test conversation:', error);
+      logger.error('Error creating test conversation:', error);
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
@@ -357,7 +358,7 @@ const WhatsAppAIConfig = () => {
       if (results.length > 0) {
         context = results.map(result => result.content).join('\n\n');
       } else {
-        console.log('No relevant content found, proceeding with empty context');
+        logger.log('No relevant content found, proceeding with empty context');
       }
       const response = await generateResponse(testQuery, context, {
         systemPrompt,
@@ -382,7 +383,7 @@ const WhatsAppAIConfig = () => {
       }
       setTestQuery('');
     } catch (error) {
-      console.error('Error sending test message:', error);
+      logger.error('Error sending test message:', error);
       toast.error('Failed to send test message');
       setConversation(prev => [...prev, {
         role: 'assistant',
