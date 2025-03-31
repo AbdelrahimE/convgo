@@ -4,6 +4,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { findTableSections, processTableForChunking, isTableContent } from '../utils/tableProcessing.ts';
 import { isCSVContent, chunkCSVContent, createCSVChunkMetadata } from '../utils/csvProcessing.ts';
 import { parseCSVContent, chunkParsedCSV, createParsedCSVChunkMetadata } from '../utils/csvParseProcessing.ts';
+import logger from '@/utils/logger';
 
 // Text processing utilities
 interface ChunkingOptions {
@@ -306,7 +307,7 @@ function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   const structureAware = options.structureAware !== undefined ? options.structureAware : DEFAULT_CHUNKING_OPTIONS.structureAware;
   const preserveTables = options.preserveTables !== undefined ? options.preserveTables : DEFAULT_CHUNKING_OPTIONS.preserveTables;
 
-  console.log(`Chunking text with size: ${chunkSize}, overlap: ${chunkOverlap}, preserveTables: ${preserveTables}`);
+  logger.log(`Chunking text with size: ${chunkSize}, overlap: ${chunkOverlap}, preserveTables: ${preserveTables}`);
 
   // Handle empty text
   if (!text || text.trim() === '') {
@@ -317,7 +318,7 @@ function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   let cleanedText = text;
   if (options.cleanRedundantData) {
     cleanedText = cleanRedundantData(text);
-    console.log('Applied redundant data cleaning');
+    logger.log('Applied redundant data cleaning');
   }
 
   // If text is smaller than chunk size, return it as a single chunk
@@ -327,29 +328,29 @@ function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   
   // Check if content is CSV and use specialized handling
   if (isCSVContent(cleanedText)) {
-    console.log('Detected CSV content, using specialized CSV chunking');
+    logger.log('Detected CSV content, using specialized CSV chunking');
     try {
       // Try using Papa Parse for better CSV handling
       const parsedCSV = parseCSVContent(cleanedText);
       const csvChunks = chunkParsedCSV(parsedCSV, chunkSize);
-      console.log(`Created ${csvChunks.length} CSV chunks using Papa Parse with chunk size ${chunkSize}`);
+      logger.log(`Created ${csvChunks.length} CSV chunks using Papa Parse with chunk size ${chunkSize}`);
       return csvChunks;
     } catch (error) {
-      console.error('Error using Papa Parse for CSV:', error);
-      console.log('Falling back to regular CSV chunking');
+      logger.error('Error using Papa Parse for CSV:', error);
+      logger.log('Falling back to regular CSV chunking');
       return chunkCSVContent(cleanedText, chunkSize);
     }
   }
 
   // Special table-preserving chunking
   if (preserveTables) {
-    console.log('Using table-preserving chunking');
+    logger.log('Using table-preserving chunking');
     
     // Find all table sections in the text
     const tableSections = findTableSections(cleanedText);
     
     if (tableSections.length > 0) {
-      console.log(`Found ${tableSections.length} table sections to preserve`);
+      logger.log(`Found ${tableSections.length} table sections to preserve`);
       
       // Process the text in segments, handling tables specially
       const chunks: string[] = [];
@@ -424,7 +425,7 @@ function chunkText(text: string, options: ChunkingOptions = {}): string[] {
  * Helper function for structure-aware chunking
  */
 function chunkTextWithStructure(text: string, chunkSize: number, chunkOverlap: number): string[] {
-  console.log('Using structure-aware chunking');
+  logger.log('Using structure-aware chunking');
   const structuralBoundaries = findStructuralBoundaries(text);
   
   // If no structural boundaries found, fallback to regular chunking
@@ -584,7 +585,7 @@ function createChunkMetadata(
 ): Array<{ text: string; metadata: Record<string, any> }> {
   // Check if content is CSV first
   if (isCSVContent(text)) {
-    console.log('Creating CSV-specific metadata for chunks');
+    logger.log('Creating CSV-specific metadata for chunks');
     return createCSVChunkMetadata(text, chunks, documentId);
   }
   
@@ -611,7 +612,7 @@ function createChunkMetadata(
  * Extracts text from a file using the Tika server
  */
 async function extractTextFromFile(fileUrl: string, mimeType: string): Promise<string> {
-  console.log(`Extracting text from file using Tika: ${fileUrl}`);
+  logger.log(`Extracting text from file using Tika: ${fileUrl}`);
   
   try {
     // Download the file
@@ -632,7 +633,7 @@ async function extractTextFromFile(fileUrl: string, mimeType: string): Promise<s
     );
     
     if (isCSV) {
-      console.log('CSV file detected, returning raw content for specialized processing');
+      logger.log('CSV file detected, returning raw content for specialized processing');
       // For CSV files, return the raw content for specialized processing with Papa Parse
       const decoder = new TextDecoder('utf-8');
       return decoder.decode(fileBuffer);
@@ -640,7 +641,7 @@ async function extractTextFromFile(fileUrl: string, mimeType: string): Promise<s
     
     // For non-CSV files, use Tika as before
     const tikaUrl = 'https://tika.convgo.com/tika';
-    console.log(`Calling Tika server at ${tikaUrl}`);
+    logger.log(`Calling Tika server at ${tikaUrl}`);
     
     const tikaResponse = await fetch(tikaUrl, {
       method: 'PUT',
@@ -657,11 +658,11 @@ async function extractTextFromFile(fileUrl: string, mimeType: string): Promise<s
     
     // Get extracted text
     const extractedText = await tikaResponse.text();
-    console.log(`Successfully extracted ${extractedText.length} characters of text using Tika`);
+    logger.log(`Successfully extracted ${extractedText.length} characters of text using Tika`);
     
     return extractedText || 'No text content could be extracted from this file.';
   } catch (error) {
-    console.error('Error extracting text from file:', error);
+    logger.error('Error extracting text from file:', error);
     throw error;
   }
 }
@@ -684,11 +685,11 @@ serve(async (req) => {
     }
 
     // Log the request with chunking settings if provided
-    console.log('Text extraction request for file:', fileId);
+    logger.log('Text extraction request for file:', fileId);
     if (chunkingSettings) {
-      console.log('With custom chunking settings:', JSON.stringify(chunkingSettings));
+      logger.log('With custom chunking settings:', JSON.stringify(chunkingSettings));
     } else {
-      console.log('Using default chunking settings');
+      logger.log('Using default chunking settings');
     }
 
     // Initialize Supabase client with service role key
@@ -704,7 +705,7 @@ serve(async (req) => {
       .single();
 
     if (fileError) {
-      console.error('Error fetching file:', fileError);
+      logger.error('Error fetching file:', fileError);
       return new Response(
         JSON.stringify({ error: 'File not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -729,7 +730,7 @@ serve(async (req) => {
       .createSignedUrl(fileData.path, 60); // 60 seconds expiry
 
     if (signedUrlError || !signedUrl?.signedUrl) {
-      console.error('Error creating signed URL:', signedUrlError);
+      logger.error('Error creating signed URL:', signedUrlError);
       
       // Update file status to error
       await supabase
@@ -761,7 +762,7 @@ serve(async (req) => {
     try {
       extractedText = await extractTextFromFile(signedUrl.signedUrl, fileData.mime_type);
     } catch (error) {
-      console.error('Error in text extraction:', error);
+      logger.error('Error in text extraction:', error);
       
       // Update file status to error
       await supabase
@@ -787,13 +788,13 @@ serve(async (req) => {
       ...chunkingSettings
     };
     
-    console.log('Final chunking options:', JSON.stringify(chunkOptions));
+    logger.log('Final chunking options:', JSON.stringify(chunkOptions));
     
     let chunksWithMetadata;
     
     // Use different processing paths for CSV vs non-CSV files
     if (isCSV) {
-      console.log('Processing CSV file with Papa Parse for better header handling');
+      logger.log('Processing CSV file with Papa Parse for better header handling');
       try {
         // For CSV files, use Papa Parse to preserve structure
         const parsedCSV = parseCSVContent(extractedText);
@@ -804,9 +805,9 @@ serve(async (req) => {
         // Create metadata for chunks
         chunksWithMetadata = createParsedCSVChunkMetadata(parsedCSV, csvChunks, fileId);
         
-        console.log(`Created ${csvChunks.length} CSV chunks with Papa Parse using chunk size ${chunkOptions.chunkSize}`);
+        logger.log(`Created ${csvChunks.length} CSV chunks with Papa Parse using chunk size ${chunkOptions.chunkSize}`);
       } catch (error) {
-        console.error('Error using Papa Parse for CSV, falling back to normal processing:', error);
+        logger.error('Error using Papa Parse for CSV, falling back to normal processing:', error);
         // If Papa Parse fails, fall back to the existing CSV processing
         const processedText = preprocessText(extractedText);
         const chunks = chunkText(processedText, chunkOptions);
@@ -817,7 +818,7 @@ serve(async (req) => {
       const processedText = preprocessText(extractedText);
       const chunks = chunkText(processedText, chunkOptions);
       chunksWithMetadata = createChunkMetadata(processedText, chunks, fileId);
-      console.log(`Created ${chunks.length} chunks for non-CSV file`);
+      logger.log(`Created ${chunks.length} chunks for non-CSV file`);
     }
 
     // Store chunks in the text_chunks table with language detection for each chunk
@@ -843,7 +844,7 @@ serve(async (req) => {
         });
 
       if (chunkError) {
-        console.error('Error storing text chunk:', chunkError);
+        logger.error('Error storing text chunk:', chunkError);
       }
     }
 
@@ -860,7 +861,7 @@ serve(async (req) => {
       .eq('id', fileId);
 
     if (updateError) {
-      console.error('Error updating file with extracted text:', updateError);
+      logger.error('Error updating file with extracted text:', updateError);
       return new Response(
         JSON.stringify({ error: 'Failed to update file with extracted text' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -874,11 +875,11 @@ serve(async (req) => {
       });
 
       if (langDetectError) {
-        console.error('Error triggering language detection:', langDetectError);
+        logger.error('Error triggering language detection:', langDetectError);
         // Continue execution - language detection failure shouldn't fail the whole process
       }
     } catch (e) {
-      console.error('Exception triggering language detection:', e);
+      logger.error('Exception triggering language detection:', e);
       // Continue execution - language detection failure shouldn't fail the whole process
     }
 
@@ -891,7 +892,7 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error processing request:', error);
+    logger.error('Error processing request:', error);
     
     return new Response(
       JSON.stringify({ error: error.message }),
