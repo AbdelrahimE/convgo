@@ -74,6 +74,14 @@ interface ProcessImageResult {
   error?: string;
 }
 
+interface AIUsageLimitResult {
+  allowed: boolean;
+  limit: number;
+  used: number;
+  resetsOn: string | null;
+  errorMessage?: string;
+}
+
 export function useAIResponse() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [responseResult, setResponseResult] = useState<AIResponseResult | null>(null);
@@ -82,6 +90,7 @@ export function useAIResponse() {
   const [isCleaningConversations, setIsCleaningConversations] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [aiUsageLimit, setAiUsageLimit] = useState<AIUsageLimitResult | null>(null);
 
   const generateResponse = async (
     query: string,
@@ -100,7 +109,9 @@ export function useAIResponse() {
           temperature: options?.temperature || 0.7,
           systemPrompt: options?.systemPrompt,
           includeConversationHistory: options?.includeConversationHistory || false,
-          conversationId: options?.conversationId
+          conversationId: options?.conversationId,
+          imageUrl: options?.imageUrl,
+          userId: supabase.auth.user()?.id
         },
       });
 
@@ -109,7 +120,27 @@ export function useAIResponse() {
       }
 
       if (!data.success) {
+        if (data.error === 'Monthly AI response limit reached') {
+          setAiUsageLimit({
+            allowed: false,
+            limit: data.details?.limit || 0,
+            used: data.details?.used || 0,
+            resetsOn: data.details?.resetsOn || null,
+            errorMessage: data.error
+          });
+          throw new Error(`AI usage limit reached: ${data.details?.used}/${data.details?.limit} responses used this month. Your limit will reset on ${new Date(data.details?.resetsOn).toLocaleDateString()}.`);
+        }
+        
         throw new Error(data.error || 'Failed to generate response');
+      }
+
+      if (data.aiUsage) {
+        setAiUsageLimit({
+          allowed: true,
+          limit: data.aiUsage.limit,
+          used: data.aiUsage.used,
+          resetsOn: data.aiUsage.resetsOn
+        });
       }
 
       const result: AIResponseResult = {
@@ -129,6 +160,39 @@ export function useAIResponse() {
       return null;
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const checkAIUsageLimit = async (): Promise<AIUsageLimitResult | null> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('check-ai-usage-limit', {
+        body: {
+          userId: supabase.auth.user()?.id
+        }
+      });
+
+      if (error) {
+        throw new Error(`Error checking AI usage limit: ${error.message}`);
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to check AI usage limit');
+      }
+
+      const result = {
+        allowed: data.allowed,
+        limit: data.limit,
+        used: data.used,
+        resetsOn: data.resetsOn,
+        errorMessage: data.errorMessage
+      };
+
+      setAiUsageLimit(result);
+      return result;
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      logger.error('Error checking AI usage limit:', errMessage);
+      return null;
     }
   };
 
@@ -342,6 +406,7 @@ export function useAIResponse() {
     cleanupTestConversations,
     transcribeAudio,
     processImage,
+    checkAIUsageLimit,
     isGenerating,
     isSendingWhatsApp,
     isCleaningConversations,
@@ -349,5 +414,6 @@ export function useAIResponse() {
     isProcessingImage,
     responseResult,
     error,
+    aiUsageLimit
   };
 }

@@ -173,6 +173,71 @@ export interface WebhookData {
 const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
 
 /**
+ * Checks if a user has exceeded their monthly AI response limit
+ * @returns true if user can use AI, false if limit is exceeded
+ */
+async function checkUserAILimit(
+  userId: string,
+  businessInstanceId: string,
+  supabaseAdmin: any
+): Promise<{ allowed: boolean; limit: number; used: number; resetsOn: string | null }> {
+  try {
+    // Get the user profile associated with the business instance
+    const { data: instanceData, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('user_id')
+      .eq('id', businessInstanceId)
+      .single();
+
+    if (instanceError || !instanceData) {
+      logger.error(`Error looking up instance owner: ${businessInstanceId}`, instanceError);
+      // Default to allowing if we can't determine the user
+      return { allowed: true, limit: 0, used: 0, resetsOn: null };
+    }
+
+    const profileId = instanceData.user_id;
+
+    // Get the user's AI response limit and current usage
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('monthly_ai_response_limit, monthly_ai_responses_used, last_responses_reset_date')
+      .eq('id', profileId)
+      .single();
+
+    if (profileError || !profile) {
+      logger.error(`Error looking up profile: ${profileId}`, profileError);
+      // Default to allowing if we can't determine the limit
+      return { allowed: true, limit: 0, used: 0, resetsOn: null };
+    }
+
+    const limit = profile.monthly_ai_response_limit;
+    const used = profile.monthly_ai_responses_used;
+    const resetsOn = profile.last_responses_reset_date;
+    
+    // Check if the user has exceeded their limit
+    const allowed = used < limit;
+
+    logger.log(`User ${profileId} AI usage: ${used}/${limit}, allowed: ${allowed}`);
+
+    // Calculate reset date (first day of next month)
+    const currentDate = new Date(resetsOn || new Date());
+    const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    const nextResetDate = nextMonth.toISOString();
+
+    return {
+      allowed,
+      limit,
+      used,
+      resetsOn: nextResetDate
+    };
+  } catch (error) {
+    logger.error('Error checking AI usage limits:', error);
+    // Default to allowing if there's an error checking the limit
+    return { allowed: true, limit: 0, used: 0, resetsOn: null };
+  }
+}
+
+/**
  * Core logic for checking if a message should be escalated to human support
  */
 export async function handleSupportEscalation(
@@ -193,6 +258,12 @@ export async function handleSupportEscalation(
   error?: string;
   details?: any;
   skip_ai_processing?: boolean;
+  ai_limit_exceeded?: boolean;
+  ai_usage?: {
+    limit: number;
+    used: number;
+    resetsOn: string | null;
+  };
 }> {
   // Initialize Supabase client with service role key (renamed to supabaseAdmin for consistency)
   // This matches the approach used in the webhook function
@@ -269,6 +340,39 @@ export async function handleSupportEscalation(
         success: false, 
         error: 'Business instance not found or invalid', 
         skip_ai_processing: false 
+      };
+    }
+
+    // NEW: Check if user has exceeded their monthly AI response limit
+    const aiLimitCheck = await checkUserAILimit(phoneNumber, businessInstanceId, supabaseAdmin);
+    
+    // If AI limit is exceeded, return immediately with this information
+    if (!aiLimitCheck.allowed) {
+      logger.log(`User ${phoneNumber} has exceeded their monthly AI response limit: ${aiLimitCheck.used}/${aiLimitCheck.limit}`);
+      
+      // Log the AI limit exceeded event
+      await supabaseAdmin.from('webhook_debug_logs').insert({
+        category: 'ai_limit_exceeded',
+        message: `User ${phoneNumber} has exceeded their monthly AI response limit: ${aiLimitCheck.used}/${aiLimitCheck.limit}`,
+        data: {
+          phone: phoneNumber,
+          instance: businessInstanceName,
+          limit: aiLimitCheck.limit,
+          used: aiLimitCheck.used,
+          resetsOn: aiLimitCheck.resetsOn
+        }
+      });
+      
+      return { 
+        success: true, 
+        action: 'ai_limit_exceeded', 
+        skip_ai_processing: true,
+        ai_limit_exceeded: true,
+        ai_usage: {
+          limit: aiLimitCheck.limit,
+          used: aiLimitCheck.used,
+          resetsOn: aiLimitCheck.resetsOn
+        }
       };
     }
 

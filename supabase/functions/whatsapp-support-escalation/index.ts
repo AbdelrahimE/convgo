@@ -63,6 +63,14 @@ serve(async (req) => {
       transcribedText   // Pass the transcribed text if available
     );
 
+    // If the result indicates AI limit exceeded, return with appropriate status code
+    if (result.ai_limit_exceeded) {
+      return new Response(JSON.stringify(result), { 
+        status: 429,  // Too Many Requests
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+
     return new Response(JSON.stringify(result), { 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
