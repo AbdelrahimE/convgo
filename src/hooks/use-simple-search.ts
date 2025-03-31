@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import logger from '@/utils/logger';
 
 interface SearchResult {
   file_id: string;
@@ -38,7 +39,7 @@ export function useSimpleSearch() {
       }
       
       if (!embeddingData.success || !embeddingData.embedding) {
-        console.log('No embedding generated, returning empty results');
+        logger.log('No embedding generated, returning empty results');
         return [];
       }
       
@@ -68,7 +69,7 @@ export function useSimpleSearch() {
       setResults(searchResults);
       return searchResults;
     } catch (err) {
-      console.error('Error performing search:', err);
+      logger.error('Error performing search:', err);
       setError(err instanceof Error ? err : new Error('An unknown error occurred'));
       return [];
     } finally {
