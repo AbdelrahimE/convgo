@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import logger from '@/utils/logger';
 
 interface GenerateResponseOptions {
   model?: string;
@@ -123,7 +124,7 @@ export function useAIResponse() {
       return result;
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error generating AI response:', errMessage);
+      logger.error('Error generating AI response:', errMessage);
       setError(errMessage);
       return null;
     } finally {
@@ -157,7 +158,7 @@ export function useAIResponse() {
       return true;
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error sending WhatsApp message:', errMessage);
+      logger.error('Error sending WhatsApp message:', errMessage);
       toast.error(`Failed to send WhatsApp message: ${errMessage}`);
       return false;
     } finally {
@@ -185,7 +186,7 @@ export function useAIResponse() {
       }
       
       const conversationIds = testConversations.map(conv => conv.id);
-      console.log(`Found ${conversationIds.length} stale test conversations to clean up`);
+      logger.log(`Found ${conversationIds.length} stale test conversations to clean up`);
       
       const { error: messagesDeleteError } = await supabase
         .from('whatsapp_conversation_messages')
@@ -205,14 +206,14 @@ export function useAIResponse() {
         throw new Error(`Error deleting test conversations: ${convsDeleteError.message}`);
       }
       
-      console.log(`Successfully cleaned up ${conversationIds.length} test conversations`);
+      logger.log(`Successfully cleaned up ${conversationIds.length} test conversations`);
       return { 
         success: true, 
         count: conversationIds.length 
       };
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error cleaning up test conversations:', errMessage);
+      logger.error('Error cleaning up test conversations:', errMessage);
       return { 
         success: false, 
         count: 0,
@@ -234,7 +235,7 @@ export function useAIResponse() {
         throw new Error('Audio URL is required for transcription');
       }
       
-      console.log(`Requesting transcription for audio URL: ${audioUrl.substring(0, 30)}...`);
+      logger.log(`Requesting transcription for audio URL: ${audioUrl.substring(0, 30)}...`);
       
       const { data, error } = await supabase.functions.invoke('whatsapp-voice-transcribe', {
         body: {
@@ -246,18 +247,18 @@ export function useAIResponse() {
       });
       
       if (error) {
-        console.error('Edge function error:', error);
+        logger.error('Edge function error:', error);
         throw new Error(`Error transcribing audio: ${error.message}`);
       }
       
       if (!data || !data.success) {
         const errorMessage = data?.error || 'Failed to transcribe audio';
-        console.error('Transcription failed:', errorMessage);
+        logger.error('Transcription failed:', errorMessage);
         throw new Error(errorMessage);
       }
       
       toast.success('Audio transcription successful');
-      console.log('Transcription result:', data);
+      logger.log('Transcription result:', data);
       
       return {
         success: true,
@@ -267,7 +268,7 @@ export function useAIResponse() {
       };
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error transcribing audio:', errMessage);
+      logger.error('Error transcribing audio:', errMessage);
       setError(errMessage);
       
       return {
@@ -290,7 +291,7 @@ export function useAIResponse() {
         throw new Error('Image URL is required for processing');
       }
       
-      console.log(`Requesting image processing for URL: ${imageUrl.substring(0, 30)}...`);
+      logger.log(`Requesting image processing for URL: ${imageUrl.substring(0, 30)}...`);
       
       const { data, error } = await supabase.functions.invoke('whatsapp-image-process', {
         body: {
@@ -303,18 +304,18 @@ export function useAIResponse() {
       });
       
       if (error) {
-        console.error('Edge function error:', error);
+        logger.error('Edge function error:', error);
         throw new Error(`Error processing image: ${error.message}`);
       }
       
       if (!data || !data.success) {
         const errorMessage = data?.error || 'Failed to process image';
-        console.error('Image processing failed:', errorMessage);
+        logger.error('Image processing failed:', errorMessage);
         throw new Error(errorMessage);
       }
       
       toast.success('Image processed successfully');
-      console.log('Image processing result:', data);
+      logger.log('Image processing result:', data);
       
       return {
         success: true,
@@ -323,7 +324,7 @@ export function useAIResponse() {
       };
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error processing image:', errMessage);
+      logger.error('Error processing image:', errMessage);
       setError(errMessage);
       
       return {
