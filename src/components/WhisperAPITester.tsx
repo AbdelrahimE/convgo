@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Headphones, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import logger from '@/utils/logger';
 
 const WhisperAPITester: React.FC = () => {
   const [isTesting, setIsTesting] = useState(false);
@@ -30,7 +31,7 @@ const WhisperAPITester: React.FC = () => {
       });
 
       if (error) {
-        console.error('Error testing Whisper API:', error);
+        logger.error('Error testing Whisper API:', error);
         setTestResult('error');
         toast.error('Whisper API test failed: ' + error.message);
         return;
@@ -39,13 +40,13 @@ const WhisperAPITester: React.FC = () => {
       if (data.success) {
         setTestResult('success');
         toast.success('Successfully connected to OpenAI Whisper API');
-        console.log('Transcription result:', data.transcription);
+        logger.log('Transcription result:', data.transcription);
       } else {
         setTestResult('error');
         toast.error('Whisper API test failed: ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
-      console.error('Error testing Whisper API:', error);
+      logger.error('Error testing Whisper API:', error);
       setTestResult('error');
       toast.error('Whisper API test failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
