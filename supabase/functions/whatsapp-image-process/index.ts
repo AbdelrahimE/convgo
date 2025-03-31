@@ -1,6 +1,7 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import logger from '@/utils/logger';
 
 // CORS headers to ensure the function can be called from your frontend
 const corsHeaders = {
@@ -16,11 +17,11 @@ serve(async (req) => {
   }
 
   try {
-    console.log("$$$$$ DEPLOYMENT VERIFICATION: Starting image processing - NEW VERIFICATION $$$$$");
+    logger.log("$$$$$ DEPLOYMENT VERIFICATION: Starting image processing - NEW VERIFICATION $$$$$");
     
     // Parse the request body
     const requestData = await req.json();
-    console.log("$$$$$ DEPLOYMENT VERIFICATION: Request data received $$$$$", JSON.stringify({
+    logger.log("$$$$$ DEPLOYMENT VERIFICATION: Request data received $$$$$", JSON.stringify({
       hasImageUrl: !!requestData.imageUrl,
       hasMimeType: !!requestData.mimeType,
       hasMediaKey: !!requestData.mediaKey,
@@ -30,15 +31,15 @@ serve(async (req) => {
     const { imageUrl, mimeType, instanceName, evolutionApiKey, mediaKey } = requestData;
     
     if (!imageUrl) {
-      console.error("ERROR: Missing image URL in request");
+      logger.error("ERROR: Missing image URL in request");
       throw new Error('Missing image URL');
     }
 
-    console.log(`Processing image request from instance: ${instanceName || 'test'}`);
-    console.log(`Image URL: ${imageUrl.substring(0, 100)}... (truncated)`);
-    console.log(`MIME type: ${mimeType || 'Not provided'}`);
-    console.log(`Media Key provided: ${!!mediaKey}`);
-    console.log(`$$$$$ DEPLOYMENT VERIFICATION: Media Key value: ${mediaKey ? mediaKey.substring(0, 10) + '...' : 'None'} $$$$$`);
+    logger.log(`Processing image request from instance: ${instanceName || 'test'}`);
+    logger.log(`Image URL: ${imageUrl.substring(0, 100)}... (truncated)`);
+    logger.log(`MIME type: ${mimeType || 'Not provided'}`);
+    logger.log(`Media Key provided: ${!!mediaKey}`);
+    logger.log(`$$$$$ DEPLOYMENT VERIFICATION: Media Key value: ${mediaKey ? mediaKey.substring(0, 10) + '...' : 'None'} $$$$$`);
 
     // Set up headers for EVOLUTION API calls
     let headers = {};
@@ -47,11 +48,11 @@ serve(async (req) => {
         'apikey': evolutionApiKey,
         'Content-Type': 'application/json'
       };
-      console.log('Using provided EVOLUTION API key for image retrieval');
+      logger.log('Using provided EVOLUTION API key for image retrieval');
     }
 
     // Process the image - different handling based on URL type and if it's encrypted
-    console.log('$$$$$ DEPLOYMENT VERIFICATION: Attempting to retrieve image... $$$$$');
+    logger.log('$$$$$ DEPLOYMENT VERIFICATION: Attempting to retrieve image... $$$$$');
     
     let imageResult = {
       success: false,
@@ -64,13 +65,13 @@ serve(async (req) => {
     try {
       // Handle WhatsApp encrypted image with mediaKey
       if (imageUrl.includes('mmg.whatsapp.net') && mediaKey) {
-        console.log('$$$$$ DEPLOYMENT VERIFICATION: ENTERING DECRYPTION SERVICE PATH - This should be used for WhatsApp images $$$$$');
-        console.log('Detected WhatsApp encrypted media with mediaKey, using external decryption service');
+        logger.log('$$$$$ DEPLOYMENT VERIFICATION: ENTERING DECRYPTION SERVICE PATH - This should be used for WhatsApp images $$$$$');
+        logger.log('Detected WhatsApp encrypted media with mediaKey, using external decryption service');
         
         // Use the external decryption service endpoint
         const decryptionUrl = 'https://voice.convgo.com/decrypt-media';
-        console.log(`Calling external decryption service at: ${decryptionUrl}`);
-        console.log(`Sending URL: ${imageUrl.substring(0, 50)}... and mediaKey to decryption service`);
+        logger.log(`Calling external decryption service at: ${decryptionUrl}`);
+        logger.log(`Sending URL: ${imageUrl.substring(0, 50)}... and mediaKey to decryption service`);
         
         const decryptionResponse = await fetch(decryptionUrl, {
           method: 'POST',
@@ -84,12 +85,12 @@ serve(async (req) => {
           })
         });
         
-        console.log(`$$$$$ DEPLOYMENT VERIFICATION: Decryption service response status: ${decryptionResponse.status} ${decryptionResponse.statusText} $$$$$`);
+        logger.log(`$$$$$ DEPLOYMENT VERIFICATION: Decryption service response status: ${decryptionResponse.status} ${decryptionResponse.statusText} $$$$$`);
         
         if (!decryptionResponse.ok) {
           const errorText = await decryptionResponse.text();
-          console.error(`ERROR: External decryption service failed: ${decryptionResponse.status} ${decryptionResponse.statusText}`);
-          console.error(`Response body: ${errorText.substring(0, 200)}... (truncated)`);
+          logger.error(`ERROR: External decryption service failed: ${decryptionResponse.status} ${decryptionResponse.statusText}`);
+          logger.error(`Response body: ${errorText.substring(0, 200)}... (truncated)`);
           throw new Error(`External decryption service failed: ${decryptionResponse.status} ${decryptionResponse.statusText}`);
         }
         
@@ -97,11 +98,11 @@ serve(async (req) => {
         const decryptionResult = await decryptionResponse.json();
         
         if (!decryptionResult.success || !decryptionResult.mediaUrl) {
-          console.error(`ERROR: Invalid response from decryption service:`, decryptionResult);
+          logger.error(`ERROR: Invalid response from decryption service:`, decryptionResult);
           throw new Error('Invalid response from decryption service');
         }
         
-        console.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully decrypted image, got URL: ${decryptionResult.mediaUrl} $$$$$`);
+        logger.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully decrypted image, got URL: ${decryptionResult.mediaUrl} $$$$$`);
         
         // Set the result for returning
         imageResult = {
@@ -112,12 +113,12 @@ serve(async (req) => {
       }
       // Handle any WhatsApp URLs without mediaKey as an error case
       else if (imageUrl.includes('mmg.whatsapp.net')) {
-        console.log('$$$$$ DEPLOYMENT VERIFICATION: ERROR - WhatsApp image URL without mediaKey $$$$$');
+        logger.log('$$$$$ DEPLOYMENT VERIFICATION: ERROR - WhatsApp image URL without mediaKey $$$$$');
         throw new Error('WhatsApp images require a mediaKey for processing. Please update your client to include the mediaKey parameter.');
       } 
       else if (imageUrl.includes('api.convgo.com')) {
         // Evolution API URLs require the apikey header
-        console.log('Detected Evolution API URL, using provided API key');
+        logger.log('Detected Evolution API URL, using provided API key');
         
         // For Evolution API URLs, we just pass through the URL as it's already accessible
         imageResult = {
@@ -128,7 +129,7 @@ serve(async (req) => {
       } 
       else {
         // For other URLs, we just pass through the URL as it's already accessible
-        console.log('Using standard URL for image');
+        logger.log('Using standard URL for image');
         imageResult = {
           success: true,
           mediaUrl: imageUrl,
@@ -136,9 +137,9 @@ serve(async (req) => {
         };
       }
       
-      console.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully processed image: ${imageResult.mediaUrl.substring(0, 50)}... $$$$$`);
+      logger.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully processed image: ${imageResult.mediaUrl.substring(0, 50)}... $$$$$`);
     } catch (error) {
-      console.error('$$$$$ DEPLOYMENT VERIFICATION: ERROR during image processing $$$$$:', error);
+      logger.error('$$$$$ DEPLOYMENT VERIFICATION: ERROR during image processing $$$$$:', error);
       throw new Error(`Failed to process image: ${error.message}`);
     }
 
@@ -158,7 +159,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('$$$$$ DEPLOYMENT VERIFICATION: CRITICAL ERROR in whatsapp-image-process $$$$$:', error);
+    logger.error('$$$$$ DEPLOYMENT VERIFICATION: CRITICAL ERROR in whatsapp-image-process $$$$$:', error);
     
     return new Response(
       JSON.stringify({
