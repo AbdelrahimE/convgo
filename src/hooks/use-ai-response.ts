@@ -1,7 +1,9 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import logger from '@/utils/logger';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface GenerateResponseOptions {
   model?: string;
@@ -83,6 +85,7 @@ interface AIUsageLimitResult {
 }
 
 export function useAIResponse() {
+  const { user } = useAuth();
   const [isGenerating, setIsGenerating] = useState(false);
   const [responseResult, setResponseResult] = useState<AIResponseResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +114,7 @@ export function useAIResponse() {
           includeConversationHistory: options?.includeConversationHistory || false,
           conversationId: options?.conversationId,
           imageUrl: options?.imageUrl,
-          userId: supabase.auth.user()?.id
+          userId: user?.id
         },
       });
 
@@ -167,7 +170,7 @@ export function useAIResponse() {
     try {
       const { data, error } = await supabase.functions.invoke('check-ai-usage-limit', {
         body: {
-          userId: supabase.auth.user()?.id
+          userId: user?.id
         }
       });
 
