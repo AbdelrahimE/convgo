@@ -1,6 +1,7 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import logger from '@/utils/logger';
 
 // CORS headers to ensure the function can be called from your frontend
 const corsHeaders = {
@@ -16,19 +17,19 @@ serve(async (req) => {
   }
 
   try {
-    console.log("$$$$$ DEPLOYMENT VERIFICATION: Starting voice transcription process - NEW VERIFICATION $$$$$");
+    logger.log("$$$$$ DEPLOYMENT VERIFICATION: Starting voice transcription process - NEW VERIFICATION $$$$$");
     
     // Check for API key
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
-      console.error("ERROR: Missing OpenAI API key");
+      logger.error("ERROR: Missing OpenAI API key");
       throw new Error('Missing OpenAI API key');
     }
-    console.log("API key validation: OpenAI API key is present");
+    logger.log("API key validation: OpenAI API key is present");
 
     // Parse the request body
     const requestData = await req.json();
-    console.log("$$$$$ DEPLOYMENT VERIFICATION: Request data received $$$$$", JSON.stringify({
+    logger.log("$$$$$ DEPLOYMENT VERIFICATION: Request data received $$$$$", JSON.stringify({
       hasAudioUrl: !!requestData.audioUrl,
       hasMimeType: !!requestData.mimeType,
       hasMediaKey: !!requestData.mediaKey,
@@ -39,16 +40,16 @@ serve(async (req) => {
     const { audioUrl, mimeType, instanceName, evolutionApiKey, mediaKey, preferredLanguage } = requestData;
     
     if (!audioUrl) {
-      console.error("ERROR: Missing audio URL in request");
+      logger.error("ERROR: Missing audio URL in request");
       throw new Error('Missing audio URL');
     }
 
-    console.log(`Processing transcription request for audio from instance: ${instanceName || 'test'}`);
-    console.log(`Audio URL: ${audioUrl.substring(0, 100)}... (truncated)`);
-    console.log(`MIME type: ${mimeType || 'Not provided'}`);
-    console.log(`Media Key provided: ${!!mediaKey}`);
-    console.log(`$$$$$ DEPLOYMENT VERIFICATION: Media Key value: ${mediaKey ? mediaKey.substring(0, 10) + '...' : 'None'} $$$$$`);
-    console.log(`Preferred language: ${preferredLanguage || 'auto'}`);
+    logger.log(`Processing transcription request for audio from instance: ${instanceName || 'test'}`);
+    logger.log(`Audio URL: ${audioUrl.substring(0, 100)}... (truncated)`);
+    logger.log(`MIME type: ${mimeType || 'Not provided'}`);
+    logger.log(`Media Key provided: ${!!mediaKey}`);
+    logger.log(`$$$$$ DEPLOYMENT VERIFICATION: Media Key value: ${mediaKey ? mediaKey.substring(0, 10) + '...' : 'None'} $$$$$`);
+    logger.log(`Preferred language: ${preferredLanguage || 'auto'}`);
 
     // Set up headers for EVOLUTION API calls
     let headers = {};
@@ -57,11 +58,11 @@ serve(async (req) => {
         'apikey': evolutionApiKey,
         'Content-Type': 'application/json'
       };
-      console.log('Using provided EVOLUTION API key for audio retrieval');
+      logger.log('Using provided EVOLUTION API key for audio retrieval');
     }
 
     // Step 1: Get the audio file - different handling based on URL type and if it's encrypted
-    console.log('$$$$$ DEPLOYMENT VERIFICATION: Attempting to retrieve audio file... $$$$$');
+    logger.log('$$$$$ DEPLOYMENT VERIFICATION: Attempting to retrieve audio file... $$$$$');
     
     let audioBlob;
     let actualMimeType = mimeType || 'audio/ogg; codecs=opus';
@@ -69,13 +70,13 @@ serve(async (req) => {
     try {
       // Handle WhatsApp encrypted audio with mediaKey
       if (audioUrl.includes('mmg.whatsapp.net') && mediaKey) {
-        console.log('$$$$$ DEPLOYMENT VERIFICATION: ENTERING DECRYPTION SERVICE PATH - This should be used for WhatsApp voice messages $$$$$');
-        console.log('Detected WhatsApp encrypted media with mediaKey, using external decryption service');
+        logger.log('$$$$$ DEPLOYMENT VERIFICATION: ENTERING DECRYPTION SERVICE PATH - This should be used for WhatsApp voice messages $$$$$');
+        logger.log('Detected WhatsApp encrypted media with mediaKey, using external decryption service');
         
         // UPDATED: Use the updated external decryption service endpoint
         const decryptionUrl = 'https://voice.convgo.com/decrypt-media';
-        console.log(`Calling external decryption service at: ${decryptionUrl}`);
-        console.log(`Sending URL: ${audioUrl.substring(0, 50)}... and mediaKey to decryption service`);
+        logger.log(`Calling external decryption service at: ${decryptionUrl}`);
+        logger.log(`Sending URL: ${audioUrl.substring(0, 50)}... and mediaKey to decryption service`);
         
         const decryptionResponse = await fetch(decryptionUrl, {
           method: 'POST',
@@ -89,12 +90,12 @@ serve(async (req) => {
           })
         });
         
-        console.log(`$$$$$ DEPLOYMENT VERIFICATION: Decryption service response status: ${decryptionResponse.status} ${decryptionResponse.statusText} $$$$$`);
+        logger.log(`$$$$$ DEPLOYMENT VERIFICATION: Decryption service response status: ${decryptionResponse.status} ${decryptionResponse.statusText} $$$$$`);
         
         if (!decryptionResponse.ok) {
           const errorText = await decryptionResponse.text();
-          console.error(`ERROR: External decryption service failed: ${decryptionResponse.status} ${decryptionResponse.statusText}`);
-          console.error(`Response body: ${errorText.substring(0, 200)}... (truncated)`);
+          logger.error(`ERROR: External decryption service failed: ${decryptionResponse.status} ${decryptionResponse.statusText}`);
+          logger.error(`Response body: ${errorText.substring(0, 200)}... (truncated)`);
           throw new Error(`External decryption service failed: ${decryptionResponse.status} ${decryptionResponse.statusText}`);
         }
         
@@ -102,21 +103,21 @@ serve(async (req) => {
         const decryptionResult = await decryptionResponse.json();
         
         if (!decryptionResult.success || !decryptionResult.mediaUrl) {
-          console.error(`ERROR: Invalid response from decryption service:`, decryptionResult);
+          logger.error(`ERROR: Invalid response from decryption service:`, decryptionResult);
           throw new Error('Invalid response from decryption service');
         }
         
-        console.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully decrypted audio, got URL: ${decryptionResult.mediaUrl} $$$$$`);
+        logger.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully decrypted audio, got URL: ${decryptionResult.mediaUrl} $$$$$`);
         
         // Now fetch the decrypted audio
         const audioResponse = await fetch(decryptionResult.mediaUrl);
         
-        console.log(`Decrypted audio fetch status: ${audioResponse.status} ${audioResponse.statusText}`);
+        logger.log(`Decrypted audio fetch status: ${audioResponse.status} ${audioResponse.statusText}`);
         
         if (!audioResponse.ok) {
           const responseText = await audioResponse.text();
-          console.error(`ERROR: Failed to download decrypted audio: ${audioResponse.status} ${audioResponse.statusText}`);
-          console.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
+          logger.error(`ERROR: Failed to download decrypted audio: ${audioResponse.status} ${audioResponse.statusText}`);
+          logger.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
           throw new Error(`Failed to download decrypted audio: ${audioResponse.status} ${audioResponse.statusText}`);
         }
         
@@ -126,20 +127,20 @@ serve(async (req) => {
       }
       // Handle any WhatsApp URLs without mediaKey as an error case
       else if (audioUrl.includes('mmg.whatsapp.net')) {
-        console.log('$$$$$ DEPLOYMENT VERIFICATION: ERROR - WhatsApp audio URL without mediaKey $$$$$');
+        logger.log('$$$$$ DEPLOYMENT VERIFICATION: ERROR - WhatsApp audio URL without mediaKey $$$$$');
         throw new Error('WhatsApp voice messages require a mediaKey for processing. Please update your client to include the mediaKey parameter.');
       } 
       else if (audioUrl.includes('api.convgo.com')) {
         // Evolution API URLs require the apikey header
-        console.log('Detected Evolution API URL, using provided API key');
+        logger.log('Detected Evolution API URL, using provided API key');
         const audioResponse = await fetch(audioUrl, { headers });
         
-        console.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
+        logger.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
         
         if (!audioResponse.ok) {
           const responseText = await audioResponse.text();
-          console.error(`ERROR: Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
-          console.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
+          logger.error(`ERROR: Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
+          logger.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
           throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
         }
         
@@ -147,15 +148,15 @@ serve(async (req) => {
       } 
       else if (audioUrl.includes('audio-samples.github.io')) {
         // Test URL - make a simple fetch without any special headers
-        console.log('Detected test audio URL, making standard fetch request');
+        logger.log('Detected test audio URL, making standard fetch request');
         const audioResponse = await fetch(audioUrl);
         
-        console.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
+        logger.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
         
         if (!audioResponse.ok) {
           const responseText = await audioResponse.text();
-          console.error(`ERROR: Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
-          console.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
+          logger.error(`ERROR: Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
+          logger.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
           throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
         }
         
@@ -163,24 +164,24 @@ serve(async (req) => {
       }
       else {
         // Standard download for other URLs
-        console.log('Using standard fetch for audio URL');
+        logger.log('Using standard fetch for audio URL');
         const audioResponse = await fetch(audioUrl);
         
-        console.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
+        logger.log(`Audio download status: ${audioResponse.status} ${audioResponse.statusText}`);
         
         if (!audioResponse.ok) {
           const responseText = await audioResponse.text();
-          console.error(`ERROR: Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
-          console.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
+          logger.error(`ERROR: Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
+          logger.error(`Response body: ${responseText.substring(0, 200)}... (truncated)`);
           throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`);
         }
         
         audioBlob = await audioResponse.blob();
       }
       
-      console.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully downloaded audio: ${audioBlob.size} bytes $$$$$`);
+      logger.log(`$$$$$ DEPLOYMENT VERIFICATION: Successfully downloaded audio: ${audioBlob.size} bytes $$$$$`);
     } catch (error) {
-      console.error('$$$$$ DEPLOYMENT VERIFICATION: ERROR during audio fetch $$$$$:', error);
+      logger.error('$$$$$ DEPLOYMENT VERIFICATION: ERROR during audio fetch $$$$$:', error);
       throw new Error(`Failed to download audio: ${error.message}`);
     }
     
@@ -195,10 +196,10 @@ serve(async (req) => {
       actualMimeType = 'audio/mpeg';
     }
     
-    console.log(`Audio MIME type determined as: ${actualMimeType}`);
+    logger.log(`Audio MIME type determined as: ${actualMimeType}`);
 
     // Step 2: Prepare form data for OpenAI Whisper API
-    console.log('$$$$$ DEPLOYMENT VERIFICATION: Preparing FormData for OpenAI Whisper API... $$$$$');
+    logger.log('$$$$$ DEPLOYMENT VERIFICATION: Preparing FormData for OpenAI Whisper API... $$$$$');
     const formData = new FormData();
     
     // Add the audio file to the form data with the appropriate name and type
@@ -207,16 +208,16 @@ serve(async (req) => {
     
     // Add language parameter if provided and not set to auto
     if (preferredLanguage && preferredLanguage !== 'auto') {
-      console.log(`Setting language parameter to: ${preferredLanguage}`);
+      logger.log(`Setting language parameter to: ${preferredLanguage}`);
       formData.append('language', preferredLanguage);
     } else {
-      console.log('Using language auto-detection (no language specified)');
+      logger.log('Using language auto-detection (no language specified)');
     }
     
     // Set response format to verbose JSON to get more info including language
     formData.append('response_format', 'verbose_json');
     
-    console.log('$$$$$ DEPLOYMENT VERIFICATION: Sending request to OpenAI Whisper API... $$$$$');
+    logger.log('$$$$$ DEPLOYMENT VERIFICATION: Sending request to OpenAI Whisper API... $$$$$');
     
     // Step 3: Call the OpenAI Whisper API
     let whisperResponse;
@@ -230,15 +231,15 @@ serve(async (req) => {
         body: formData,
       });
       
-      console.log(`Whisper API response status: ${whisperResponse.status} ${whisperResponse.statusText}`);
+      logger.log(`Whisper API response status: ${whisperResponse.status} ${whisperResponse.statusText}`);
       
       if (!whisperResponse.ok) {
         const errorText = await whisperResponse.text();
-        console.error('OpenAI API error response:', errorText);
+        logger.error('OpenAI API error response:', errorText);
         throw new Error(`OpenAI API error: ${errorText}`);
       }
     } catch (error) {
-      console.error('ERROR during OpenAI API call:', error);
+      logger.error('ERROR during OpenAI API call:', error);
       throw new Error(`OpenAI API call failed: ${error.message}`);
     }
 
@@ -246,10 +247,10 @@ serve(async (req) => {
     let transcriptionResult;
     try {
       transcriptionResult = await whisperResponse.json();
-      console.log('$$$$$ DEPLOYMENT VERIFICATION: Successfully received transcription from OpenAI $$$$$');
-      console.log('Transcription result:', JSON.stringify(transcriptionResult).substring(0, 200) + '... (truncated)');
+      logger.log('$$$$$ DEPLOYMENT VERIFICATION: Successfully received transcription from OpenAI $$$$$');
+      logger.log('Transcription result:', JSON.stringify(transcriptionResult).substring(0, 200) + '... (truncated)');
     } catch (error) {
-      console.error('ERROR parsing OpenAI response:', error);
+      logger.error('ERROR parsing OpenAI response:', error);
       throw new Error(`Failed to parse OpenAI response: ${error.message}`);
     }
 
@@ -271,7 +272,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('$$$$$ DEPLOYMENT VERIFICATION: CRITICAL ERROR in whatsapp-voice-transcribe $$$$$:', error);
+    logger.error('$$$$$ DEPLOYMENT VERIFICATION: CRITICAL ERROR in whatsapp-voice-transcribe $$$$$:', error);
     
     return new Response(
       JSON.stringify({
