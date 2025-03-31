@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Loader2, Building } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
+import logger from '@/utils/logger';
 export default function AccountSettings() {
   const {
     user
@@ -43,14 +44,14 @@ export default function AccountSettings() {
         error
       } = await supabase.from('profiles').select('business_name').eq('id', user.id).single();
       if (error) {
-        console.error('Error fetching business name:', error);
+        logger.error('Error fetching business name:', error);
         return;
       }
       if (data && data.business_name) {
         setBusinessName(data.business_name);
       }
     } catch (error) {
-      console.error('Error fetching business name:', error);
+      logger.error('Error fetching business name:', error);
     }
   };
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,12 +75,12 @@ export default function AccountSettings() {
         error
       } = await supabase.storage.from('avatars').remove([fileName]);
       if (error) {
-        console.error('Error deleting old avatar:', error);
+        logger.error('Error deleting old avatar:', error);
         return false;
       }
       return true;
     } catch (error) {
-      console.error('Error in deleteOldAvatar:', error);
+      logger.error('Error in deleteOldAvatar:', error);
       return false;
     }
   };
@@ -94,7 +95,7 @@ export default function AccountSettings() {
       } = await supabase.storage.from('avatars').upload(filePath, avatarFile);
       if (uploadError) {
         toast.error('Avatar upload failed');
-        console.error('Error uploading avatar:', uploadError);
+        logger.error('Error uploading avatar:', uploadError);
         return null;
       }
       const {
@@ -102,7 +103,7 @@ export default function AccountSettings() {
       } = supabase.storage.from('avatars').getPublicUrl(filePath);
       return data.publicUrl;
     } catch (error) {
-      console.error('Error uploading avatar:', error);
+      logger.error('Error uploading avatar:', error);
       return null;
     }
   };
@@ -146,7 +147,7 @@ export default function AccountSettings() {
       toast.success('Profile updated successfully');
     } catch (error: any) {
       toast.error(`Error updating profile: ${error.message}`);
-      console.error('Error updating profile:', error);
+      logger.error('Error updating profile:', error);
     } finally {
       setIsLoading(false);
     }
