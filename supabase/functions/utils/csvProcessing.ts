@@ -2,7 +2,16 @@
  * CSV-specific processing utilities to improve handling of tabular data
  * This module provides specialized handling for CSV files in the text extraction process
  */
-import logger from '@/utils/logger';
+
+// Create a simple logger since we can't use @/utils/logger in edge functions
+const logger = {
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
+
 /**
  * Detects if extracted text appears to be in CSV format
  * @param text The extracted text content to analyze
