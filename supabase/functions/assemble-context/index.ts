@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import logger from '@/utils/logger';
 
 interface SearchResult {
   id: string;
@@ -42,7 +43,7 @@ serve(async (req) => {
 
     // MODIFIED: More lenient validation - if no results, return empty context instead of error
     if (!results || !Array.isArray(results)) {
-      console.log('No valid search results provided, returning empty context');
+      logger.log('No valid search results provided, returning empty context');
       
       return new Response(
         JSON.stringify({ 
@@ -65,7 +66,7 @@ serve(async (req) => {
 
     // If results array is empty, return empty context instead of error
     if (results.length === 0) {
-      console.log('Empty results array provided, returning empty context');
+      logger.log('Empty results array provided, returning empty context');
       
       return new Response(
         JSON.stringify({ 
@@ -86,7 +87,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Processing ${results.length} chunks for context assembly`);
+    logger.log(`Processing ${results.length} chunks for context assembly`);
 
     // Sort results by file_id and then by similarity to get the most relevant chunks per document
     const sortedResults = [...results].sort((a, b) => {
@@ -140,7 +141,7 @@ serve(async (req) => {
             assembledChunks.push(chunk);
             usedChunkIds.add(chunk.chunk_id);
             fileSource.chunk_ids.push(chunk.chunk_id);
-            console.log(`Including chunk with position ${chunk.metadata.chunk_index ?? chunk.metadata.position} and similarity ${chunk.similarity}`);
+            logger.log(`Including chunk with position ${chunk.metadata.chunk_index ?? chunk.metadata.position} and similarity ${chunk.similarity}`);
           }
         });
         
@@ -157,7 +158,7 @@ serve(async (req) => {
             usedChunkIds.add(chunk.chunk_id);
             fileSource.chunk_ids.push(chunk.chunk_id);
             lastAdded = position;
-            console.log(`Including contiguous chunk at position ${position}`);
+            logger.log(`Including contiguous chunk at position ${position}`);
           }
         });
       }
@@ -168,7 +169,7 @@ serve(async (req) => {
           assembledChunks.push(chunk);
           usedChunkIds.add(chunk.chunk_id);
           fileSource.chunk_ids.push(chunk.chunk_id);
-          console.log(`Including standalone chunk with similarity ${chunk.similarity}`);
+          logger.log(`Including standalone chunk with similarity ${chunk.similarity}`);
         }
       });
       
@@ -183,7 +184,7 @@ serve(async (req) => {
           assembledChunks.push(chunk);
           usedChunkIds.add(chunk.chunk_id);
           fileSource.chunk_ids.push(chunk.chunk_id);
-          console.log(`Including top chunk from file ${fileId} with similarity ${chunk.similarity}`);
+          logger.log(`Including top chunk from file ${fileId} with similarity ${chunk.similarity}`);
         });
       }
       
@@ -194,7 +195,7 @@ serve(async (req) => {
     
     // MODIFIED: More lenient logic - always include at least something
     if (assembledChunks.length === 0 && results.length > 0) {
-      console.log(`No chunks passed the filtering criteria. Including all results by default.`);
+      logger.log(`No chunks passed the filtering criteria. Including all results by default.`);
       // Just include all results if nothing else was selected
       results.forEach(result => {
         assembledChunks.push(result);
@@ -246,7 +247,7 @@ serve(async (req) => {
     
     // Truncate if exceeding max context length
     if (tokenEstimate > maxContextLength) {
-      console.log(`Context too large (est. ${tokenEstimate} tokens), truncating to ~${maxContextLength} tokens`);
+      logger.log(`Context too large (est. ${tokenEstimate} tokens), truncating to ~${maxContextLength} tokens`);
       assembledContext = assembledContext.substring(0, maxContextLength * 4);
     }
     
@@ -270,7 +271,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Error in context-assembly function:', error);
+    logger.error('Error in context-assembly function:', error);
     
     return new Response(
       JSON.stringify({
