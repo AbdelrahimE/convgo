@@ -1086,7 +1086,8 @@ async function generateAndSendAIResponse(
         temperature: aiConfig.temperature || 0.7,
         model: 'gpt-4o-mini',
         maxContextTokens: 3000, // Explicit token limit
-        imageUrl: imageUrl // Pass the image URL if available
+        imageUrl: imageUrl, // Pass the image URL if available
+        userId: aiConfig.user_id || null
       })
     });
 
