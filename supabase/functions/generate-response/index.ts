@@ -255,8 +255,6 @@ async function checkAndUpdateUserLimit(userId: string, increment: boolean = fals
   }
 
   try {
-    logger.log(`Checking AI usage limits for user: ${userId}, increment: ${increment}`);
-    
     const { data: profile, error } = await supabaseAdmin
       .from('profiles')
       .select('monthly_ai_response_limit, monthly_ai_responses_used, last_responses_reset_date')
@@ -279,11 +277,8 @@ async function checkAndUpdateUserLimit(userId: string, increment: boolean = fals
     const resetsOn = profile.last_responses_reset_date;
     
     const allowed = used < limit;
-    logger.log(`User ${userId} has used ${used}/${limit} AI responses`);
 
     if (increment && allowed) {
-      logger.log(`Incrementing AI usage count for user ${userId} from ${used} to ${used + 1}`);
-      
       const { error: updateError } = await supabaseAdmin
         .from('profiles')
         .update({ monthly_ai_responses_used: used + 1 })
@@ -294,10 +289,6 @@ async function checkAndUpdateUserLimit(userId: string, increment: boolean = fals
       } else {
         logger.log(`Updated AI usage count for user ${userId}: ${used + 1}/${limit}`);
       }
-    } else if (!allowed) {
-      logger.warn(`User ${userId} has reached their monthly AI response limit (${used}/${limit})`);
-    } else if (!increment) {
-      logger.log(`Not incrementing counter for user ${userId} (check only)`);
     }
 
     const currentDate = new Date(resetsOn || new Date());
@@ -342,8 +333,6 @@ serve(async (req) => {
       userId
     } = await req.json() as GenerateResponseRequest;
 
-    logger.log(`Processing request for user ID: ${userId || 'not provided'}`);
-
     if (!query && !imageUrl) {
       return new Response(
         JSON.stringify({ 
@@ -358,11 +347,9 @@ serve(async (req) => {
     }
 
     if (userId) {
-      logger.log(`Checking AI usage limit for user ${userId}`);
       const limitCheck = await checkAndUpdateUserLimit(userId, false);
       
       if (!limitCheck.allowed) {
-        logger.warn(`User ${userId} has exceeded their monthly AI response limit`);
         return new Response(
           JSON.stringify({
             success: false,
@@ -379,8 +366,16 @@ serve(async (req) => {
           }
         );
       }
-    } else {
-      logger.warn('No user ID provided for AI limit tracking');
+    }
+
+    logger.log(`Generating response for query: "${query}" with model: ${model}, temperature: ${temperature}`);
+    logger.log(`Context available: ${context ? 'Yes' : 'No'}`);
+    logger.log(`Image URL provided: ${imageUrl ? 'Yes' : 'No'}`);
+    if (conversationId) {
+      logger.log(`Using conversation ID: ${conversationId}`);
+    }
+    if (userId) {
+      logger.log(`User ID provided: ${userId}`);
     }
 
     let finalSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
@@ -470,15 +465,12 @@ serve(async (req) => {
     };
 
     if (userId) {
-      logger.log(`Incrementing AI usage count for user ${userId}`);
       const limitUpdate = await checkAndUpdateUserLimit(userId, true);
       usageDetails = {
         limit: limitUpdate.limit,
         used: limitUpdate.used,
         resetsOn: limitUpdate.resetsOn
       };
-      
-      logger.log(`[AI_COUNTING] Updated usage count for user ${userId}: ${limitUpdate.used}/${limitUpdate.limit}`);
     }
 
     return new Response(
