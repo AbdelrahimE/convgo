@@ -10,6 +10,8 @@ import logger from '@/utils/logger';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { motion } from "framer-motion";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface UsageData {
   allowed: boolean;
@@ -24,6 +26,7 @@ export default function AIUsageMonitoring() {
   const [isLoading, setIsLoading] = useState(true);
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isMobile = useIsMobile();
   
   const fetchUsageData = async () => {
     try {
@@ -76,8 +79,20 @@ export default function AIUsageMonitoring() {
   
   if (!user) {
     return (
-      <div className="container mx-auto py-6">
-        <h1 className="text-3xl font-bold tracking-tight mb-6">AI Usage Monitoring</h1>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        transition={{ duration: 0.3 }}
+        className="container mx-auto px-4 py-8 max-w-7xl"
+      >
+        <motion.h1 
+          initial={{ opacity: 0, x: -20 }} 
+          animate={{ opacity: 1, x: 0 }} 
+          transition={{ delay: 0.2 }}
+          className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl mb-8"
+        >
+          AI Usage Monitoring
+        </motion.h1>
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Authentication Required</AlertTitle>
@@ -85,175 +100,214 @@ export default function AIUsageMonitoring() {
             You must be logged in to view your AI usage data.
           </AlertDescription>
         </Alert>
-      </div>
+      </motion.div>
     );
   }
   
   return (
-    <div className="container mx-auto py-6">
-      <h1 className="text-3xl font-bold tracking-tight mb-6">AI Usage Monitoring</h1>
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }} 
+      animate={{ opacity: 1, y: 0 }} 
+      transition={{ duration: 0.3 }}
+      className="container mx-auto px-4 py-8 max-w-7xl"
+    >
+      <motion.h1 
+        initial={{ opacity: 0, x: -20 }} 
+        animate={{ opacity: 1, x: 0 }} 
+        transition={{ delay: 0.2 }}
+        className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl mb-8"
+      >
+        AI Usage Monitoring
+      </motion.h1>
       
       {isLoading ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-8">
           {/* Skeleton loading state */}
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="shadow-md transition-all">
-              <CardHeader className="pb-2">
-                <Skeleton className="h-6 w-40 mb-2" />
-                <Skeleton className="h-4 w-60" />
-              </CardHeader>
-              <CardContent className="flex flex-col items-center pt-4">
-                <Skeleton className="h-48 w-48 rounded-full" />
-              </CardContent>
-              <CardFooter className="flex flex-col items-center text-center pt-0">
-                <Skeleton className="h-4 w-48 mb-2" />
-                <Skeleton className="h-4 w-32" />
-              </CardFooter>
-            </Card>
-          ))}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ delay: 0.3 }}
+          >
+            <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="shadow-md transition-all">
+                  <CardHeader className="pb-2">
+                    <Skeleton className="h-6 w-40 mb-2" />
+                    <Skeleton className="h-4 w-60" />
+                  </CardHeader>
+                  <CardContent className="flex flex-col items-center pt-4">
+                    <Skeleton className="h-48 w-48 rounded-full" />
+                  </CardContent>
+                  <CardFooter className="flex flex-col items-center text-center pt-0">
+                    <Skeleton className="h-4 w-48 mb-2" />
+                    <Skeleton className="h-4 w-32" />
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          </motion.div>
         </div>
       ) : errorMessage ? (
-        <div className="space-y-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ delay: 0.3 }}
+          className="space-y-4"
+        >
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error Loading Usage Data</AlertTitle>
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
           <Button onClick={fetchUsageData}>Retry</Button>
-        </div>
+        </motion.div>
       ) : usageData ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* Usage Gauge Card */}
-          <Card className="shadow-md transition-all">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2">
-                <Gauge className="h-5 w-5 text-primary" />
-                AI Response Usage
-              </CardTitle>
-              <CardDescription>Current usage of your monthly allocation</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div className="flex flex-col items-center">
-                <div className="relative flex items-center justify-center w-48 h-48">
-                  <svg className="w-full h-full" viewBox="0 0 100 100">
-                    {/* Background circle */}
-                    <circle
-                      className="text-muted-foreground/20"
-                      strokeWidth="10"
-                      stroke="currentColor"
-                      fill="transparent"
-                      r="40"
-                      cx="50"
-                      cy="50"
-                    />
-                    {/* Progress circle */}
-                    <circle
-                      className={getGaugeColor()}
-                      strokeWidth="10"
-                      strokeDasharray={`${percentageUsed * 2.51} 251.2`}
-                      strokeLinecap="round"
-                      stroke="currentColor"
-                      fill="transparent"
-                      r="40"
-                      cx="50"
-                      cy="50"
-                      transform="rotate(-90 50 50)"
-                    />
-                  </svg>
-                  <div className="absolute flex flex-col items-center justify-center text-center">
-                    <span className="text-3xl font-bold">{Math.round(percentageUsed)}%</span>
-                    <span className="text-sm text-muted-foreground">used</span>
+        <div className="grid gap-8">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ delay: 0.3 }}
+          >
+            <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+              {/* Usage Gauge Card */}
+              <Card className="shadow-md transition-all">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2">
+                    <Gauge className="h-5 w-5 text-primary" />
+                    AI Response Usage
+                  </CardTitle>
+                  <CardDescription>Current usage of your monthly allocation</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="flex flex-col items-center">
+                    <div className="relative flex items-center justify-center w-48 h-48">
+                      <svg className="w-full h-full" viewBox="0 0 100 100">
+                        {/* Background circle */}
+                        <circle
+                          className="text-muted-foreground/20"
+                          strokeWidth="10"
+                          stroke="currentColor"
+                          fill="transparent"
+                          r="40"
+                          cx="50"
+                          cy="50"
+                        />
+                        {/* Progress circle */}
+                        <circle
+                          className={getGaugeColor()}
+                          strokeWidth="10"
+                          strokeDasharray={`${percentageUsed * 2.51} 251.2`}
+                          strokeLinecap="round"
+                          stroke="currentColor"
+                          fill="transparent"
+                          r="40"
+                          cx="50"
+                          cy="50"
+                          transform="rotate(-90 50 50)"
+                        />
+                      </svg>
+                      <div className="absolute flex flex-col items-center justify-center text-center">
+                        <span className="text-3xl font-bold">{Math.round(percentageUsed)}%</span>
+                        <span className="text-sm text-muted-foreground">used</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="flex flex-col items-center text-center pt-0">
-              <p className="text-lg">
-                <span className="font-bold">{usageData.used.toLocaleString()}</span> of <span className="font-bold">{usageData.limit.toLocaleString()}</span> AI responses used
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {usageData.allowed ? 
-                  "Your usage is within limits" : 
-                  "You've reached your monthly limit"}
-              </p>
-            </CardFooter>
-          </Card>
+                </CardContent>
+                <CardFooter className="flex flex-col items-center text-center pt-0">
+                  <p className="text-lg">
+                    <span className="font-bold">{usageData.used.toLocaleString()}</span> of <span className="font-bold">{usageData.limit.toLocaleString()}</span> AI responses used
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {usageData.allowed ? 
+                      "Your usage is within limits" : 
+                      "You've reached your monthly limit"}
+                  </p>
+                </CardFooter>
+              </Card>
 
-          {/* Reset Date Card */}
-          <Card className="shadow-md transition-all">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-primary" />
-                Next Reset Date
-              </CardTitle>
-              <CardDescription>When your allocation will be reset</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center pt-4">
-              <div className="bg-muted w-24 h-24 rounded-full flex items-center justify-center mb-4">
-                <div className="text-center">
-                  {resetsOnDate ? (
-                    <>
-                      <div className="text-2xl font-bold">{format(resetsOnDate, 'd')}</div>
-                      <div className="text-sm font-medium">{format(resetsOnDate, 'MMM')}</div>
-                    </>
-                  ) : (
-                    <div className="text-sm font-medium">Not set</div>
+              {/* Reset Date Card */}
+              <Card className="shadow-md transition-all">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-primary" />
+                    Next Reset Date
+                  </CardTitle>
+                  <CardDescription>When your allocation will be reset</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col items-center pt-4">
+                  <div className="bg-muted w-24 h-24 rounded-full flex items-center justify-center mb-4">
+                    <div className="text-center">
+                      {resetsOnDate ? (
+                        <>
+                          <div className="text-2xl font-bold">{format(resetsOnDate, 'd')}</div>
+                          <div className="text-sm font-medium">{format(resetsOnDate, 'MMM')}</div>
+                        </>
+                      ) : (
+                        <div className="text-sm font-medium">Not set</div>
+                      )}
+                    </div>
+                  </div>
+                  {resetsOnDate && (
+                    <p className="text-center">
+                      Your usage limit will reset on {format(resetsOnDate, 'MMMM d, yyyy')}
+                    </p>
                   )}
-                </div>
-              </div>
-              {resetsOnDate && (
-                <p className="text-center">
-                  Your usage limit will reset on {format(resetsOnDate, 'MMMM d, yyyy')}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
 
-          {/* Usage Details Card */}
-          <Card className="shadow-md transition-all">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5 text-primary" />
-                Usage Details
-              </CardTitle>
-              <CardDescription>Detailed breakdown of your usage</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Total Allocation:</span>
-                  <span className="font-medium">{usageData.limit.toLocaleString()} responses</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Used:</span>
-                  <span className="font-medium">{usageData.used.toLocaleString()} responses</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Remaining:</span>
-                  <span className="font-medium">{(usageData.limit - usageData.used).toLocaleString()} responses</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Status:</span>
-                  <span className={`font-medium ${usageData.allowed ? "text-emerald-500" : "text-red-500"}`}>
-                    {usageData.allowed ? "Active" : "Limit Reached"}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              {/* Usage Details Card */}
+              <Card className="shadow-md transition-all">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5 text-primary" />
+                    Usage Details
+                  </CardTitle>
+                  <CardDescription>Detailed breakdown of your usage</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Total Allocation:</span>
+                      <span className="font-medium">{usageData.limit.toLocaleString()} responses</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Used:</span>
+                      <span className="font-medium">{usageData.used.toLocaleString()} responses</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Remaining:</span>
+                      <span className="font-medium">{(usageData.limit - usageData.used).toLocaleString()} responses</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Status:</span>
+                      <span className={`font-medium ${usageData.allowed ? "text-emerald-500" : "text-red-500"}`}>
+                        {usageData.allowed ? "Active" : "Limit Reached"}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </motion.div>
         </div>
       ) : (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>No Data Available</AlertTitle>
-          <AlertDescription>
-            No usage data is available for your account.
-            <Button variant="link" onClick={fetchUsageData} className="p-0 h-auto ml-2">
-              Refresh
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ delay: 0.3 }}
+        >
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>No Data Available</AlertTitle>
+            <AlertDescription>
+              No usage data is available for your account.
+              <Button variant="link" onClick={fetchUsageData} className="p-0 h-auto ml-2">
+                Refresh
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }
