@@ -14,6 +14,7 @@ import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
 import WhatsAppSupportConfig from '@/pages/WhatsAppSupportConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
 import AccountSettings from '@/pages/AccountSettings';
+import AIUsageMonitoring from '@/pages/AIUsageMonitoring';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import { AlignJustify } from 'lucide-react';
@@ -107,6 +108,14 @@ function AppContent() {
                     element={
                       <ProtectedRoute>
                         <AccountSettings />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/ai-usage"
+                    element={
+                      <ProtectedRoute>
+                        <AIUsageMonitoring />
                       </ProtectedRoute>
                     }
                   />

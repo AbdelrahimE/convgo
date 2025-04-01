@@ -1,0 +1,214 @@
+
+import React, { useEffect, useState } from 'react';
+import { useAuth } from "@/contexts/AuthContext";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Gauge, Calendar, Activity } from "lucide-react";
+import { format } from 'date-fns';
+import { useAIResponse } from "@/hooks/use-ai-response";
+import { supabase } from "@/integrations/supabase/client";
+import logger from '@/utils/logger';
+
+interface UsageData {
+  allowed: boolean;
+  limit: number;
+  used: number;
+  resetsOn: string | null;
+}
+
+export default function AIUsageMonitoring() {
+  const { user } = useAuth();
+  const { checkAIUsageLimit } = useAIResponse();
+  const [isLoading, setIsLoading] = useState(true);
+  const [usageData, setUsageData] = useState<UsageData | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const fetchUsageData = async () => {
+      try {
+        setIsLoading(true);
+        setErrorMessage(null);
+        
+        const result = await checkAIUsageLimit();
+        
+        if (result) {
+          setUsageData(result);
+        } else {
+          throw new Error("Failed to fetch usage data");
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "An unexpected error occurred";
+        logger.error("Error fetching AI usage data:", errorMsg);
+        setErrorMessage(errorMsg);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    if (user) {
+      fetchUsageData();
+    }
+  }, [user, checkAIUsageLimit]);
+  
+  const calculatePercentageUsed = () => {
+    if (!usageData || usageData.limit === 0) return 0;
+    const percentage = (usageData.used / usageData.limit) * 100;
+    return Math.min(percentage, 100); // Ensure we don't exceed 100%
+  };
+  
+  const percentageUsed = calculatePercentageUsed();
+  const resetsOnDate = usageData?.resetsOn ? new Date(usageData.resetsOn) : null;
+  
+  const getGaugeColor = () => {
+    if (percentageUsed < 50) return "text-emerald-500";
+    if (percentageUsed < 80) return "text-amber-500";
+    return "text-red-500";
+  };
+  
+  return (
+    <div className="container mx-auto py-6">
+      <h1 className="text-3xl font-bold tracking-tight mb-6">AI Usage Monitoring</h1>
+      
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      ) : errorMessage ? (
+        <Card className="bg-destructive/10 border-destructive">
+          <CardHeader>
+            <CardTitle>Error Loading Usage Data</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>{errorMessage}</p>
+          </CardContent>
+        </Card>
+      ) : usageData ? (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* Usage Gauge Card */}
+          <Card className="shadow-md transition-all">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2">
+                <Gauge className="h-5 w-5 text-primary" />
+                AI Response Usage
+              </CardTitle>
+              <CardDescription>Current usage of your monthly allocation</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="flex flex-col items-center">
+                <div className="relative flex items-center justify-center w-48 h-48">
+                  <svg className="w-full h-full" viewBox="0 0 100 100">
+                    {/* Background circle */}
+                    <circle
+                      className="text-muted-foreground/20"
+                      strokeWidth="10"
+                      stroke="currentColor"
+                      fill="transparent"
+                      r="40"
+                      cx="50"
+                      cy="50"
+                    />
+                    {/* Progress circle */}
+                    <circle
+                      className={getGaugeColor()}
+                      strokeWidth="10"
+                      strokeDasharray={`${percentageUsed * 2.51} 251.2`}
+                      strokeLinecap="round"
+                      stroke="currentColor"
+                      fill="transparent"
+                      r="40"
+                      cx="50"
+                      cy="50"
+                      transform="rotate(-90 50 50)"
+                    />
+                  </svg>
+                  <div className="absolute flex flex-col items-center justify-center text-center">
+                    <span className="text-3xl font-bold">{Math.round(percentageUsed)}%</span>
+                    <span className="text-sm text-muted-foreground">used</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col items-center text-center pt-0">
+              <p className="text-lg">
+                <span className="font-bold">{usageData.used.toLocaleString()}</span> of <span className="font-bold">{usageData.limit.toLocaleString()}</span> AI responses used
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {usageData.allowed ? 
+                  "Your usage is within limits" : 
+                  "You've reached your monthly limit"}
+              </p>
+            </CardFooter>
+          </Card>
+
+          {/* Reset Date Card */}
+          <Card className="shadow-md transition-all">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                Next Reset Date
+              </CardTitle>
+              <CardDescription>When your allocation will be reset</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center pt-4">
+              <div className="bg-muted w-24 h-24 rounded-full flex items-center justify-center mb-4">
+                <div className="text-center">
+                  {resetsOnDate ? (
+                    <>
+                      <div className="text-2xl font-bold">{format(resetsOnDate, 'd')}</div>
+                      <div className="text-sm font-medium">{format(resetsOnDate, 'MMM')}</div>
+                    </>
+                  ) : (
+                    <div className="text-sm font-medium">Not set</div>
+                  )}
+                </div>
+              </div>
+              {resetsOnDate && (
+                <p className="text-center">
+                  Your usage limit will reset on {format(resetsOnDate, 'MMMM d, yyyy')}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Usage Details Card */}
+          <Card className="shadow-md transition-all">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                Usage Details
+              </CardTitle>
+              <CardDescription>Detailed breakdown of your usage</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Total Allocation:</span>
+                  <span className="font-medium">{usageData.limit.toLocaleString()} responses</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Used:</span>
+                  <span className="font-medium">{usageData.used.toLocaleString()} responses</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Remaining:</span>
+                  <span className="font-medium">{(usageData.limit - usageData.used).toLocaleString()} responses</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Status:</span>
+                  <span className={`font-medium ${usageData.allowed ? "text-emerald-500" : "text-red-500"}`}>
+                    {usageData.allowed ? "Active" : "Limit Reached"}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="py-8">
+            <p className="text-center text-muted-foreground">No usage data available</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

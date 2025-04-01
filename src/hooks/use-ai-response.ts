@@ -1,7 +1,5 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import logger from '@/utils/logger';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -131,7 +129,7 @@ export function useAIResponse() {
             resetsOn: data.details?.resetsOn || null,
             errorMessage: data.error
           });
-          throw new Error(`AI usage limit reached: ${data.details?.used}/${data.details?.limit} responses used this month. Your limit will reset on ${new Date(data.details?.resetsOn).toLocaleDateString()}.`);
+          throw new Error(`AI usage limit reached: ${data.details?.used}/${data.details?.limit} responses used this month.`);
         }
         
         throw new Error(data.error || 'Failed to generate response');

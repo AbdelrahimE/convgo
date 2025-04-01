@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "react-router-dom";
-import { Folder, LogOut, Phone, Link2, Radio, AlignJustify, Headphones, UserCog } from "lucide-react";
+import { Folder, LogOut, Phone, Link2, Radio, AlignJustify, Headphones, UserCog, Gauge } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { LogoWithText } from "./Logo";
 import { ScrollArea } from "./ui/scroll-area";
 import logger from '@/utils/logger';
+
 const FULL_NAME_MAX_LENGTH = 25;
 const navigation = [{
   name: 'WhatsApp Numbers',
@@ -32,17 +33,24 @@ const navigation = [{
   name: 'Support Config',
   href: '/whatsapp-support-config',
   icon: Headphones
+}, {
+  name: 'AI Usage',
+  href: '/ai-usage',
+  icon: Gauge
 }];
+
 function getInitials(name: string | null): string {
   if (!name) return '?';
   return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
 }
+
 export function AppSidebar() {
   const {
     user
   } = useAuth();
   const location = useLocation();
   const isMobile = useIsMobile();
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -52,11 +60,14 @@ export function AppSidebar() {
       toast.error("Failed to log out");
     }
   };
+
   const profile = user ? {
     name: user.user_metadata?.full_name || 'User',
     avatarUrl: user.user_metadata?.avatar_url
   } : null;
+
   const truncatedName = profile?.name && profile.name.length > FULL_NAME_MAX_LENGTH ? `${profile.name.slice(0, FULL_NAME_MAX_LENGTH)}...` : profile?.name;
+
   return <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "none"} className="flex flex-col h-screen">
       <div className="flex flex-col h-full">
         <SidebarHeader className="flex items-center p-4 flex-shrink-0">
