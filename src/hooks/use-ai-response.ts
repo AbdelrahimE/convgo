@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/utils/logger';
@@ -167,6 +168,8 @@ export function useAIResponse() {
 
   const checkAIUsageLimit = async (): Promise<AIUsageLimitResult | null> => {
     try {
+      logger.log('Checking AI usage limit for user:', user?.id);
+      
       const { data, error } = await supabase.functions.invoke('check-ai-usage-limit', {
         body: {
           userId: user?.id
@@ -174,11 +177,16 @@ export function useAIResponse() {
       });
 
       if (error) {
+        logger.error('Supabase function error:', error);
         throw new Error(`Error checking AI usage limit: ${error.message}`);
       }
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to check AI usage limit');
+      logger.log('AI usage limit check response:', data);
+      
+      if (!data || !data.success) {
+        const errorMsg = data?.error || 'Failed to check AI usage limit';
+        logger.error('AI usage limit check failed:', errorMsg);
+        throw new Error(errorMsg);
       }
 
       const result = {
@@ -189,11 +197,13 @@ export function useAIResponse() {
         errorMessage: data.errorMessage
       };
 
+      logger.log('AI usage limit result:', result);
       setAiUsageLimit(result);
       return result;
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       logger.error('Error checking AI usage limit:', errMessage);
+      setError(errMessage);
       return null;
     }
   };

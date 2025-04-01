@@ -27,6 +27,7 @@ serve(async (req) => {
     const { userId } = await req.json() as CheckAIUsageLimitRequest;
 
     if (!userId) {
+      logger.error('Missing user ID in request');
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -39,14 +40,16 @@ serve(async (req) => {
       );
     }
 
+    logger.log(`Checking AI usage for user: ${userId}`);
+
     const { data: profile, error } = await supabaseAdmin
       .from('profiles')
       .select('monthly_ai_response_limit, monthly_ai_responses_used, last_responses_reset_date')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
-    if (error || !profile) {
-      logger.error('Error fetching user profile:', error || 'Profile not found');
+    if (error) {
+      logger.error('Error fetching user profile:', error);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -59,8 +62,22 @@ serve(async (req) => {
       );
     }
 
-    const limit = profile.monthly_ai_response_limit;
-    const used = profile.monthly_ai_responses_used;
+    if (!profile) {
+      logger.error('Profile not found for user ID:', userId);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'User profile not found' 
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 404
+        }
+      );
+    }
+
+    const limit = profile.monthly_ai_response_limit || 0;
+    const used = profile.monthly_ai_responses_used || 0;
     const lastReset = profile.last_responses_reset_date;
     
     // Calculate next reset date - first day of next month

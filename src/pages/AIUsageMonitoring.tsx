@@ -2,11 +2,14 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Gauge, Calendar, Activity } from "lucide-react";
+import { Gauge, Calendar, Activity, AlertCircle } from "lucide-react";
 import { format } from 'date-fns';
 import { useAIResponse } from "@/hooks/use-ai-response";
 import { supabase } from "@/integrations/supabase/client";
 import logger from '@/utils/logger';
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface UsageData {
   allowed: boolean;
@@ -22,32 +25,39 @@ export default function AIUsageMonitoring() {
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  useEffect(() => {
-    const fetchUsageData = async () => {
-      try {
-        setIsLoading(true);
-        setErrorMessage(null);
-        
-        const result = await checkAIUsageLimit();
-        
-        if (result) {
-          setUsageData(result);
-        } else {
-          throw new Error("Failed to fetch usage data");
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : "An unexpected error occurred";
-        logger.error("Error fetching AI usage data:", errorMsg);
-        setErrorMessage(errorMsg);
-      } finally {
-        setIsLoading(false);
+  const fetchUsageData = async () => {
+    try {
+      setIsLoading(true);
+      setErrorMessage(null);
+      
+      logger.log("Fetching AI usage data...");
+      const result = await checkAIUsageLimit();
+      
+      logger.log("AI usage data response:", result);
+      
+      if (result) {
+        setUsageData(result);
+        logger.log("AI usage data set successfully:", result);
+      } else {
+        throw new Error("Failed to fetch usage data - empty response");
       }
-    };
-    
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "An unexpected error occurred";
+      logger.error("Error fetching AI usage data:", errorMsg);
+      setErrorMessage(errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  useEffect(() => {
     if (user) {
       fetchUsageData();
+    } else {
+      setIsLoading(false);
+      setErrorMessage("User authentication required");
     }
-  }, [user, checkAIUsageLimit]);
+  }, [user]);
   
   const calculatePercentageUsed = () => {
     if (!usageData || usageData.limit === 0) return 0;
@@ -64,23 +74,53 @@ export default function AIUsageMonitoring() {
     return "text-red-500";
   };
   
+  if (!user) {
+    return (
+      <div className="container mx-auto py-6">
+        <h1 className="text-3xl font-bold tracking-tight mb-6">AI Usage Monitoring</h1>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Authentication Required</AlertTitle>
+          <AlertDescription>
+            You must be logged in to view your AI usage data.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+  
   return (
     <div className="container mx-auto py-6">
       <h1 className="text-3xl font-bold tracking-tight mb-6">AI Usage Monitoring</h1>
       
       {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* Skeleton loading state */}
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="shadow-md transition-all">
+              <CardHeader className="pb-2">
+                <Skeleton className="h-6 w-40 mb-2" />
+                <Skeleton className="h-4 w-60" />
+              </CardHeader>
+              <CardContent className="flex flex-col items-center pt-4">
+                <Skeleton className="h-48 w-48 rounded-full" />
+              </CardContent>
+              <CardFooter className="flex flex-col items-center text-center pt-0">
+                <Skeleton className="h-4 w-48 mb-2" />
+                <Skeleton className="h-4 w-32" />
+              </CardFooter>
+            </Card>
+          ))}
         </div>
       ) : errorMessage ? (
-        <Card className="bg-destructive/10 border-destructive">
-          <CardHeader>
-            <CardTitle>Error Loading Usage Data</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p>{errorMessage}</p>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error Loading Usage Data</AlertTitle>
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+          <Button onClick={fetchUsageData}>Retry</Button>
+        </div>
       ) : usageData ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* Usage Gauge Card */}
@@ -203,11 +243,16 @@ export default function AIUsageMonitoring() {
           </Card>
         </div>
       ) : (
-        <Card>
-          <CardContent className="py-8">
-            <p className="text-center text-muted-foreground">No usage data available</p>
-          </CardContent>
-        </Card>
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>No Data Available</AlertTitle>
+          <AlertDescription>
+            No usage data is available for your account.
+            <Button variant="link" onClick={fetchUsageData} className="p-0 h-auto ml-2">
+              Refresh
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   );
