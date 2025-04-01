@@ -343,6 +343,22 @@ export async function handleSupportEscalation(
       };
     }
 
+    // Get the user ID associated with the business instance
+    // This is needed to properly track AI response usage
+    const { data: instanceData, error: instanceUserError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('user_id')
+      .eq('id', businessInstanceId)
+      .single();
+    
+    if (instanceUserError || !instanceData) {
+      logger.error(`Error looking up instance owner: ${businessInstanceId}`, instanceUserError);
+    }
+    
+    const instanceUserId = instanceData?.user_id;
+    
+    logger.log(`Instance ${businessInstanceId} belongs to user: ${instanceUserId || 'unknown'}`);
+
     // NEW: Check if user has exceeded their monthly AI response limit
     const aiLimitCheck = await checkUserAILimit(phoneNumber, businessInstanceId, supabaseAdmin);
     
@@ -428,7 +444,13 @@ export async function handleSupportEscalation(
     
     if (!matchedKeyword) {
       logger.log('No keywords matched, no escalation needed');
-      return { success: true, action: 'no_keywords_matched', skip_ai_processing: false };
+      // IMPORTANT: Return the instance user ID so it can be used in AI processing
+      return { 
+        success: true, 
+        action: 'no_keywords_matched', 
+        skip_ai_processing: false,
+        userId: instanceUserId  // Add the user ID here for AI processing
+      };
     }
     
     logger.log(`Matched keyword "${matchedKeyword}" in category "${keywordCategory || 'uncategorized'}"`);
