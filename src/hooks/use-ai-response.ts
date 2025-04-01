@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/utils/logger';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface GenerateResponseOptions {
   model?: string;
