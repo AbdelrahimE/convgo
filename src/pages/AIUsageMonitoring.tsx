@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,32 +11,30 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
-
 interface UsageData {
   allowed: boolean;
   limit: number;
   used: number;
   resetsOn: string | null;
 }
-
 export default function AIUsageMonitoring() {
-  const { user } = useAuth();
-  const { checkAIUsageLimit } = useAIResponse();
+  const {
+    user
+  } = useAuth();
+  const {
+    checkAIUsageLimit
+  } = useAIResponse();
   const [isLoading, setIsLoading] = useState(true);
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const isMobile = useIsMobile();
-  
   const fetchUsageData = async () => {
     try {
       setIsLoading(true);
       setErrorMessage(null);
-      
       logger.log("Fetching AI usage data...");
       const result = await checkAIUsageLimit();
-      
       logger.log("AI usage data response:", result);
-      
       if (result) {
         setUsageData(result);
         logger.log("AI usage data set successfully:", result);
@@ -52,7 +49,6 @@ export default function AIUsageMonitoring() {
       setIsLoading(false);
     }
   };
-  
   useEffect(() => {
     if (user) {
       fetchUsageData();
@@ -61,36 +57,37 @@ export default function AIUsageMonitoring() {
       setErrorMessage("User authentication required");
     }
   }, [user]);
-  
   const calculatePercentageUsed = () => {
     if (!usageData || usageData.limit === 0) return 0;
-    const percentage = (usageData.used / usageData.limit) * 100;
+    const percentage = usageData.used / usageData.limit * 100;
     return Math.min(percentage, 100); // Ensure we don't exceed 100%
   };
-  
   const percentageUsed = calculatePercentageUsed();
   const resetsOnDate = usageData?.resetsOn ? new Date(usageData.resetsOn) : null;
-  
   const getGaugeColor = () => {
     if (percentageUsed < 50) return "text-emerald-500";
     if (percentageUsed < 80) return "text-amber-500";
     return "text-red-500";
   };
-  
   if (!user) {
-    return (
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        transition={{ duration: 0.3 }}
-        className="container mx-auto px-4 py-8 max-w-7xl"
-      >
-        <motion.h1 
-          initial={{ opacity: 0, x: -20 }} 
-          animate={{ opacity: 1, x: 0 }} 
-          transition={{ delay: 0.2 }}
-          className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl mb-8"
-        >
+    return <motion.div initial={{
+      opacity: 0,
+      y: 20
+    }} animate={{
+      opacity: 1,
+      y: 0
+    }} transition={{
+      duration: 0.3
+    }} className="container mx-auto px-4 py-8 max-w-7xl">
+        <motion.h1 initial={{
+        opacity: 0,
+        x: -20
+      }} animate={{
+        opacity: 1,
+        x: 0
+      }} transition={{
+        delay: 0.2
+      }} className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl mb-8">
           AI Usage Monitoring
         </motion.h1>
         <Alert variant="destructive">
@@ -100,37 +97,42 @@ export default function AIUsageMonitoring() {
             You must be logged in to view your AI usage data.
           </AlertDescription>
         </Alert>
-      </motion.div>
-    );
+      </motion.div>;
   }
-  
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }} 
-      animate={{ opacity: 1, y: 0 }} 
-      transition={{ duration: 0.3 }}
-      className="container mx-auto px-4 py-8 max-w-7xl"
-    >
-      <motion.h1 
-        initial={{ opacity: 0, x: -20 }} 
-        animate={{ opacity: 1, x: 0 }} 
-        transition={{ delay: 0.2 }}
-        className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl mb-8"
-      >
+  return <motion.div initial={{
+    opacity: 0,
+    y: 20
+  }} animate={{
+    opacity: 1,
+    y: 0
+  }} transition={{
+    duration: 0.3
+  }} className="container mx-auto px-4 py-8 max-w-7xl">
+      <motion.h1 initial={{
+      opacity: 0,
+      x: -20
+    }} animate={{
+      opacity: 1,
+      x: 0
+    }} transition={{
+      delay: 0.2
+    }} className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl mb-8">
         AI Usage Monitoring
       </motion.h1>
       
-      {isLoading ? (
-        <div className="grid gap-8">
+      {isLoading ? <div className="grid gap-8">
           {/* Skeleton loading state */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ delay: 0.3 }}
-          >
+          <motion.div initial={{
+        opacity: 0,
+        y: 20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        delay: 0.3
+      }}>
             <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <Card key={i} className="shadow-md transition-all">
+              {[1, 2, 3].map(i => <Card key={i} className="shadow-md transition-all">
                   <CardHeader className="pb-2">
                     <Skeleton className="h-6 w-40 mb-2" />
                     <Skeleton className="h-4 w-60" />
@@ -142,37 +144,39 @@ export default function AIUsageMonitoring() {
                     <Skeleton className="h-4 w-48 mb-2" />
                     <Skeleton className="h-4 w-32" />
                   </CardFooter>
-                </Card>
-              ))}
+                </Card>)}
             </div>
           </motion.div>
-        </div>
-      ) : errorMessage ? (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ delay: 0.3 }}
-          className="space-y-4"
-        >
+        </div> : errorMessage ? <motion.div initial={{
+      opacity: 0,
+      y: 20
+    }} animate={{
+      opacity: 1,
+      y: 0
+    }} transition={{
+      delay: 0.3
+    }} className="space-y-4">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error Loading Usage Data</AlertTitle>
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
           <Button onClick={fetchUsageData}>Retry</Button>
-        </motion.div>
-      ) : usageData ? (
-        <div className="grid gap-8">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ delay: 0.3 }}
-          >
+        </motion.div> : usageData ? <div className="grid gap-8">
+          <motion.div initial={{
+        opacity: 0,
+        y: 20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        delay: 0.3
+      }}>
             <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
               {/* Usage Gauge Card */}
               <Card className="shadow-md transition-all">
                 <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 font-bold text-left">
                     <Gauge className="h-5 w-5 text-primary" />
                     AI Response Usage
                   </CardTitle>
@@ -183,28 +187,9 @@ export default function AIUsageMonitoring() {
                     <div className="relative flex items-center justify-center w-48 h-48">
                       <svg className="w-full h-full" viewBox="0 0 100 100">
                         {/* Background circle */}
-                        <circle
-                          className="text-muted-foreground/20"
-                          strokeWidth="10"
-                          stroke="currentColor"
-                          fill="transparent"
-                          r="40"
-                          cx="50"
-                          cy="50"
-                        />
+                        <circle className="text-muted-foreground/20" strokeWidth="10" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
                         {/* Progress circle */}
-                        <circle
-                          className={getGaugeColor()}
-                          strokeWidth="10"
-                          strokeDasharray={`${percentageUsed * 2.51} 251.2`}
-                          strokeLinecap="round"
-                          stroke="currentColor"
-                          fill="transparent"
-                          r="40"
-                          cx="50"
-                          cy="50"
-                          transform="rotate(-90 50 50)"
-                        />
+                        <circle className={getGaugeColor()} strokeWidth="10" strokeDasharray={`${percentageUsed * 2.51} 251.2`} strokeLinecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" transform="rotate(-90 50 50)" />
                       </svg>
                       <div className="absolute flex flex-col items-center justify-center text-center">
                         <span className="text-3xl font-bold">{Math.round(percentageUsed)}%</span>
@@ -214,13 +199,11 @@ export default function AIUsageMonitoring() {
                   </div>
                 </CardContent>
                 <CardFooter className="flex flex-col items-center text-center pt-0">
-                  <p className="text-lg">
+                  <p className="text-lg font-bold text-center">
                     <span className="font-bold">{usageData.used.toLocaleString()}</span> of <span className="font-bold">{usageData.limit.toLocaleString()}</span> AI responses used
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {usageData.allowed ? 
-                      "Your usage is within limits" : 
-                      "You've reached your monthly limit"}
+                    {usageData.allowed ? "Your usage is within limits" : "You've reached your monthly limit"}
                   </p>
                 </CardFooter>
               </Card>
@@ -228,7 +211,7 @@ export default function AIUsageMonitoring() {
               {/* Reset Date Card */}
               <Card className="shadow-md transition-all">
                 <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 font-bold text-left">
                     <Calendar className="h-5 w-5 text-primary" />
                     Next Reset Date
                   </CardTitle>
@@ -237,28 +220,22 @@ export default function AIUsageMonitoring() {
                 <CardContent className="flex flex-col items-center pt-4">
                   <div className="bg-muted w-24 h-24 rounded-full flex items-center justify-center mb-4">
                     <div className="text-center">
-                      {resetsOnDate ? (
-                        <>
+                      {resetsOnDate ? <>
                           <div className="text-2xl font-bold">{format(resetsOnDate, 'd')}</div>
                           <div className="text-sm font-medium">{format(resetsOnDate, 'MMM')}</div>
-                        </>
-                      ) : (
-                        <div className="text-sm font-medium">Not set</div>
-                      )}
+                        </> : <div className="text-sm font-medium">Not set</div>}
                     </div>
                   </div>
-                  {resetsOnDate && (
-                    <p className="text-center">
+                  {resetsOnDate && <p className="text-center">
                       Your usage limit will reset on {format(resetsOnDate, 'MMMM d, yyyy')}
-                    </p>
-                  )}
+                    </p>}
                 </CardContent>
               </Card>
 
               {/* Usage Details Card */}
               <Card className="shadow-md transition-all">
                 <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 font-bold text-left">
                     <Activity className="h-5 w-5 text-primary" />
                     Usage Details
                   </CardTitle>
@@ -289,13 +266,15 @@ export default function AIUsageMonitoring() {
               </Card>
             </div>
           </motion.div>
-        </div>
-      ) : (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ delay: 0.3 }}
-        >
+        </div> : <motion.div initial={{
+      opacity: 0,
+      y: 20
+    }} animate={{
+      opacity: 1,
+      y: 0
+    }} transition={{
+      delay: 0.3
+    }}>
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>No Data Available</AlertTitle>
@@ -306,8 +285,6 @@ export default function AIUsageMonitoring() {
               </Button>
             </AlertDescription>
           </Alert>
-        </motion.div>
-      )}
-    </motion.div>
-  );
+        </motion.div>}
+    </motion.div>;
 }
