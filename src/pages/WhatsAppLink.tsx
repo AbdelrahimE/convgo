@@ -559,7 +559,7 @@ const WhatsAppLink = () => {
                       </p>}
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4">
-                    <Button type="submit" disabled={isLoading || !isValidName || !instanceName} className="w-full sm:flex-1" size="lg">
+                    <Button type="submit" disabled={isLoading || !isValidName || !instanceName} size="lg" className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600">
                       {isLoading ? <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Creating...
