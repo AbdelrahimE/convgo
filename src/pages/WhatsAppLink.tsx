@@ -173,7 +173,7 @@ const EmptyState = ({
                 </div>)}
             </div>
 
-            <Button onClick={onCreateClick} className="w-full sm:w-auto" size="lg">
+            <Button onClick={onCreateClick} size="lg" className="w-full sm:w-auto bg-blue-700 hover:bg-blue-600">
               Create Your First Instance
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
