@@ -551,6 +551,82 @@ async function processAudioMessage(audioDetails: any, instanceName: string, from
   }
 }
 
+// NEW FUNCTION: Check for duplicate messages to prevent processing the same message multiple times
+async function checkForDuplicateMessage(conversationId: string, newMessageContent: string): Promise<boolean> {
+  try {
+    if (!newMessageContent) return false;
+    
+    // Get recent messages from the same conversation (last 5 minutes)
+    const { data: recentMessages, error } = await supabaseAdmin
+      .from('whatsapp_conversation_messages')
+      .select('content, timestamp')
+      .eq('conversation_id', conversationId)
+      .eq('role', 'user')  // Only compare with user messages
+      .gte('timestamp', new Date(Date.now() - 5 * 60 * 1000).toISOString())  // Last 5 minutes
+      .order('timestamp', { ascending: false });
+      
+    if (error || !recentMessages || recentMessages.length === 0) {
+      return false; // No recent messages or error, not a duplicate
+    }
+    
+    // Simple similarity check - normalize strings and compare
+    const normalizedNewContent = newMessageContent.toLowerCase().trim();
+    
+    for (const message of recentMessages) {
+      const normalizedContent = message.content?.toLowerCase().trim() || '';
+      
+      // Skip if we're comparing with the exact same message
+      if (normalizedContent === normalizedNewContent) {
+        await logDebug('DUPLICATE_MESSAGE_DETECTED', 'Exact duplicate message detected', {
+          conversationId,
+          messagePreview: newMessageContent.substring(0, 50) + '...'
+        });
+        return true;
+      }
+      
+      // Check for high similarity
+      const similarity = calculateSimilarity(normalizedContent, normalizedNewContent);
+      if (similarity > 0.9) {
+        await logDebug('SIMILAR_MESSAGE_DETECTED', 'Highly similar message detected', {
+          conversationId,
+          messagePreview: newMessageContent.substring(0, 50) + '...',
+          similarity
+        });
+        return true;
+      }
+    }
+    
+    return false; // Not a duplicate
+  } catch (error) {
+    await logDebug('DUPLICATE_CHECK_ERROR', 'Error checking for duplicate message', { 
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    return false; // On error, continue with processing (fail open)
+  }
+}
+
+// Simple similarity function (Jaccard similarity)
+function calculateSimilarity(str1: string, str2: string): number {
+  if (!str1 || !str2) return 0;
+  
+  // For small strings, use character-based comparison
+  if (str1.length < 10 || str2.length < 10) {
+    const set1 = new Set(str1.split(''));
+    const set2 = new Set(str2.split(''));
+    const intersection = new Set([...set1].filter(x => set2.has(x)));
+    const union = new Set([...set1, ...set2]);
+    return intersection.size / union.size;
+  }
+  
+  // For longer strings, use word-based comparison
+  const words1 = new Set(str1.split(/\s+/));
+  const words2 = new Set(str2.split(/\s+/));
+  const intersection = new Set([...words1].filter(x => words2.has(x)));
+  const union = new Set([...words1, ...words2]);
+  return intersection.size / union.size;
+}
+
 // Helper function to process message for AI
 async function processMessageForAI(instance: string, messageData: any) {
   try {
@@ -840,6 +916,17 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Find or create conversation
     const conversationId = await findOrCreateConversation(instanceData.id, fromNumber);
     await logDebug('CONVERSATION_MANAGED', 'Conversation found or created', { conversationId });
+
+    // NEW: Check for duplicate messages before processing
+    const isDuplicate = await checkForDuplicateMessage(conversationId, messageText);
+    if (isDuplicate) {
+      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: Duplicate or similar message detected', {
+        conversationId,
+        fromNumber,
+        messagePreview: messageText?.substring(0, 50) + '...'
+      });
+      return false;
+    }
 
     // Store user message in conversation
     await storeMessageInConversation(conversationId, 'user', messageText, messageData.key?.id);
