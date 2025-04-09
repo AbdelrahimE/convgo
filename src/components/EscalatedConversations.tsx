@@ -15,7 +15,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import logger from '@/utils/logger';
-
 interface EscalatedConversation {
   id: string;
   user_phone: string;
@@ -25,28 +24,26 @@ interface EscalatedConversation {
   resolved_at: string | null;
   instance_name?: string;
 }
-
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
-
 interface EscalatedConversationsProps {
   instanceId?: string;
 }
 
 // Form validation schema
 const formSchema = z.object({
-  phone: z
-    .string()
-    .min(6, { message: "Phone number must be at least 6 characters" })
-    .refine((val) => /^[0-9]+$/.test(val), {
-      message: "Phone number must contain only digits (no + or other characters)",
-    }),
-  instanceId: z.string().uuid({ message: "Please select a WhatsApp instance" }),
+  phone: z.string().min(6, {
+    message: "Phone number must be at least 6 characters"
+  }).refine(val => /^[0-9]+$/.test(val), {
+    message: "Phone number must contain only digits (no + or other characters)"
+  }),
+  instanceId: z.string().uuid({
+    message: "Please select a WhatsApp instance"
+  })
 });
-
 export const EscalatedConversations = ({
   instanceId
 }: EscalatedConversationsProps) => {
@@ -67,10 +64,9 @@ export const EscalatedConversations = ({
     resolver: zodResolver(formSchema),
     defaultValues: {
       phone: "",
-      instanceId: instanceId || "",
-    },
+      instanceId: instanceId || ""
+    }
   });
-
   useEffect(() => {
     if (user) {
       loadEscalatedConversations();
@@ -79,21 +75,18 @@ export const EscalatedConversations = ({
       }
     }
   }, [user, instanceId]);
-
   useEffect(() => {
     // Update form default value when instanceId prop changes
     if (instanceId) {
       form.setValue("instanceId", instanceId);
     }
   }, [instanceId, form]);
-
   const loadWhatsAppInstances = async () => {
     try {
-      const { data, error } = await supabase
-        .from('whatsapp_instances')
-        .select('id, instance_name, status')
-        .eq('user_id', user?.id);
-      
+      const {
+        data,
+        error
+      } = await supabase.from('whatsapp_instances').select('id, instance_name, status').eq('user_id', user?.id);
       if (error) throw error;
       setInstances(data || []);
     } catch (error) {
@@ -101,7 +94,6 @@ export const EscalatedConversations = ({
       toast.error('Failed to load WhatsApp instances');
     }
   };
-
   const loadEscalatedConversations = async () => {
     try {
       setIsLoading(true);
@@ -111,17 +103,14 @@ export const EscalatedConversations = ({
         `).order('escalated_at', {
         ascending: false
       });
-
       if (instanceId) {
         query = query.eq('whatsapp_instance_id', instanceId);
       }
-
       const {
         data,
         error
       } = await query;
       if (error) throw error;
-
       const formattedData = data.map(item => ({
         ...item,
         instance_name: item.whatsapp_instances?.instance_name
@@ -134,7 +123,6 @@ export const EscalatedConversations = ({
       setIsLoading(false);
     }
   };
-
   const markAsResolved = async (id: string) => {
     try {
       setIsResolving(prev => ({
@@ -149,7 +137,6 @@ export const EscalatedConversations = ({
       }).eq('id', id);
       if (error) throw error;
       toast.success('Conversation marked as resolved');
-
       setConversations(prev => prev.map(conv => conv.id === id ? {
         ...conv,
         is_resolved: true,
@@ -165,12 +152,10 @@ export const EscalatedConversations = ({
       }));
     }
   };
-
   const confirmDelete = (id: string) => {
     setConversationToDelete(id);
     setDeleteDialogOpen(true);
   };
-
   const deleteEscalation = async () => {
     if (!conversationToDelete) return;
     const id = conversationToDelete;
@@ -184,7 +169,6 @@ export const EscalatedConversations = ({
       } = await supabase.from('whatsapp_escalated_conversations').delete().eq('id', id);
       if (error) throw error;
       toast.success('Conversation deleted successfully');
-
       setConversations(prev => prev.filter(conv => conv.id !== id));
     } catch (error) {
       logger.error('Error deleting conversation:', error);
@@ -198,57 +182,51 @@ export const EscalatedConversations = ({
       setDeleteDialogOpen(false);
     }
   };
-
   const addManualEscalation = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsAddingNumber(true);
-      
+
       // Format phone number: remove any + prefix and keep only digits
       const formattedPhone = values.phone.replace(/\D/g, '');
-      
+
       // Check if this phone number is already escalated for this instance
-      const { data: existingData, error: checkError } = await supabase
-        .from('whatsapp_escalated_conversations')
-        .select('id')
-        .eq('whatsapp_instance_id', values.instanceId)
-        .eq('user_phone', formattedPhone)
-        .eq('is_resolved', false);
-      
+      const {
+        data: existingData,
+        error: checkError
+      } = await supabase.from('whatsapp_escalated_conversations').select('id').eq('whatsapp_instance_id', values.instanceId).eq('user_phone', formattedPhone).eq('is_resolved', false);
       if (checkError) throw checkError;
-      
       if (existingData && existingData.length > 0) {
         toast.error('This phone number is already escalated for the selected WhatsApp instance');
         return;
       }
-      
+
       // Insert the new escalation
-      const { data, error } = await supabase
-        .from('whatsapp_escalated_conversations')
-        .insert({
-          user_phone: formattedPhone,
-          whatsapp_instance_id: values.instanceId,
-          is_resolved: false
-        })
-        .select(`
+      const {
+        data,
+        error
+      } = await supabase.from('whatsapp_escalated_conversations').insert({
+        user_phone: formattedPhone,
+        whatsapp_instance_id: values.instanceId,
+        is_resolved: false
+      }).select(`
           *,
           whatsapp_instances!inner(instance_name)
-        `)
-        .single();
-      
+        `).single();
       if (error) throw error;
-      
       toast.success('Phone number added to escalation list');
-      
+
       // Add the new escalation to the list with the instance name
       const newEscalation: EscalatedConversation = {
         ...data,
         instance_name: data.whatsapp_instances?.instance_name
       };
-      
       setConversations(prev => [newEscalation, ...prev]);
-      
+
       // Reset the form
-      form.reset({ phone: "", instanceId: instanceId || "" });
+      form.reset({
+        phone: "",
+        instanceId: instanceId || ""
+      });
     } catch (error) {
       logger.error('Error adding manual escalation:', error);
       toast.error('Failed to add phone number to escalation list');
@@ -256,19 +234,16 @@ export const EscalatedConversations = ({
       setIsAddingNumber(false);
     }
   };
-
   const formatPhone = (phone: string) => {
     // Keep only numeric display to match internal format
     const cleaned = phone.replace(/\D/g, '');
     return cleaned;
   };
-
   if (isLoading) {
     return <div className="flex justify-center p-6">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>;
   }
-
   return <div className="space-y-6">
       {/* Add Manual Escalation Form */}
       <Card>
@@ -277,88 +252,54 @@ export const EscalatedConversations = ({
             <UserPlus className="h-4 w-4 mr-2" />
             Add Number to Escalation List
           </CardTitle>
-          <CardDescription>
-            Manually add a phone number to the escalated conversations list
-          </CardDescription>
+          <CardDescription>Manually add a phone number to the escalated conversations list. Numbers added here will be excluded from AI responses.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(addManualEscalation)} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
+                <FormField control={form.control} name="phone" render={({
+                field
+              }) => <FormItem>
                       <FormLabel>Phone Number</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="1234567890" 
-                          {...field} 
-                        />
+                        <Input placeholder="1234567890" {...field} />
                       </FormControl>
                       <FormDescription className="flex items-center text-amber-600">
                         <Info className="h-3.5 w-3.5 mr-1" />
                         Enter numbers only, without country code + prefix or spaces
                       </FormDescription>
                       <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    </FormItem>} />
                 
-                {!instanceId && (
-                  <FormField
-                    control={form.control}
-                    name="instanceId"
-                    render={({ field }) => (
-                      <FormItem>
+                {!instanceId && <FormField control={form.control} name="instanceId" render={({
+                field
+              }) => <FormItem>
                         <FormLabel>WhatsApp Instance</FormLabel>
                         <FormControl>
-                          <select
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            {...field}
-                          >
+                          <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" {...field}>
                             <option value="">Select an instance</option>
-                            {instances.map((instance) => (
-                              <option key={instance.id} value={instance.id}>
+                            {instances.map(instance => <option key={instance.id} value={instance.id}>
                                 {instance.instance_name} ({instance.status})
-                              </option>
-                            ))}
+                              </option>)}
                           </select>
                         </FormControl>
                         <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+                      </FormItem>} />}
               </div>
               
               <div className="flex flex-col space-y-2">
-                <Button 
-                  type="submit" 
-                  className="bg-blue-700 hover:bg-blue-600 w-full sm:w-auto"
-                  disabled={isAddingNumber}
-                >
-                  {isAddingNumber ? (
-                    <>
+                <Button type="submit" className="bg-blue-700 hover:bg-blue-600 w-full sm:w-auto" disabled={isAddingNumber}>
+                  {isAddingNumber ? <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Adding...
-                    </>
-                  ) : (
-                    <>
+                    </> : <>
                       <UserPlus className="mr-2 h-4 w-4" />
                       Add to Escalation List
-                    </>
-                  )}
+                    </>}
                 </Button>
                 
-                <div className="text-sm text-muted-foreground flex items-start mt-2">
-                  <AlertTriangle className="h-4 w-4 mr-2 shrink-0 text-amber-500 mt-0.5" />
-                  <span>
-                    Numbers added here will be excluded from AI responses. Enter only digits 
-                    without the "+" sign to ensure proper matching with WhatsApp numbers.
-                  </span>
-                </div>
+                
               </div>
             </form>
           </Form>
@@ -369,12 +310,9 @@ export const EscalatedConversations = ({
       <div className="space-y-4">
         <h3 className="text-base font-semibold">Escalated Conversations</h3>
         
-        {conversations.length === 0 ? (
-          <div className="text-center p-6 text-muted-foreground">
+        {conversations.length === 0 ? <div className="text-center p-6 text-muted-foreground">
             <p>No escalated conversations found.</p>
-          </div>
-        ) : (
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          </div> : <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             {conversations.map(conversation => <Card key={conversation.id} className={conversation.is_resolved ? 'border-green-200 bg-green-50/30' : 'border-red-200'}>
                 <CardHeader className="pb-2">
                   <div className="flex justify-between items-start">
@@ -421,8 +359,7 @@ export const EscalatedConversations = ({
                   </Button>
                 </CardFooter>
               </Card>)}
-          </div>
-        )}
+          </div>}
       </div>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -444,5 +381,4 @@ export const EscalatedConversations = ({
       </AlertDialog>
     </div>;
 };
-
 export default EscalatedConversations;
