@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, CheckSquare, PhoneCall, Clock, Trash2, UserPlus, AlertTriangle } from 'lucide-react';
+import { Loader2, CheckSquare, PhoneCall, Clock, Trash2, UserPlus, AlertTriangle, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -42,8 +41,8 @@ const formSchema = z.object({
   phone: z
     .string()
     .min(6, { message: "Phone number must be at least 6 characters" })
-    .refine((val) => /^\+?[0-9]+$/.test(val), {
-      message: "Phone number must contain only digits (with optional + prefix)",
+    .refine((val) => /^[0-9]+$/.test(val), {
+      message: "Phone number must contain only digits (no + or other characters)",
     }),
   instanceId: z.string().uuid({ message: "Please select a WhatsApp instance" }),
 });
@@ -204,10 +203,8 @@ export const EscalatedConversations = ({
     try {
       setIsAddingNumber(true);
       
-      // Format phone number to ensure it has a + prefix if missing
-      const formattedPhone = values.phone.startsWith('+') 
-        ? values.phone 
-        : `+${values.phone}`;
+      // Format phone number: remove any + prefix and keep only digits
+      const formattedPhone = values.phone.replace(/\D/g, '');
       
       // Check if this phone number is already escalated for this instance
       const { data: existingData, error: checkError } = await supabase
@@ -261,8 +258,9 @@ export const EscalatedConversations = ({
   };
 
   const formatPhone = (phone: string) => {
-    const cleaned = phone.replace(/[^\d+]/g, '');
-    return cleaned.startsWith('+') ? cleaned : `+${cleaned}`;
+    // Keep only numeric display to match internal format
+    const cleaned = phone.replace(/\D/g, '');
+    return cleaned;
   };
 
   if (isLoading) {
@@ -295,12 +293,13 @@ export const EscalatedConversations = ({
                       <FormLabel>Phone Number</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="+1234567890" 
+                          placeholder="1234567890" 
                           {...field} 
                         />
                       </FormControl>
-                      <FormDescription>
-                        Enter the phone number with country code
+                      <FormDescription className="flex items-center text-amber-600">
+                        <Info className="h-3.5 w-3.5 mr-1" />
+                        Enter numbers only, without country code + prefix or spaces
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -334,10 +333,10 @@ export const EscalatedConversations = ({
                 )}
               </div>
               
-              <div className="flex items-center">
+              <div className="flex flex-col space-y-2">
                 <Button 
                   type="submit" 
-                  className="bg-blue-700 hover:bg-blue-600"
+                  className="bg-blue-700 hover:bg-blue-600 w-full sm:w-auto"
                   disabled={isAddingNumber}
                 >
                   {isAddingNumber ? (
@@ -353,9 +352,12 @@ export const EscalatedConversations = ({
                   )}
                 </Button>
                 
-                <div className="ml-4 text-sm text-muted-foreground flex items-center">
-                  <AlertTriangle className="h-4 w-4 mr-1 text-amber-500" />
-                  Numbers added here will be excluded from AI responses
+                <div className="text-sm text-muted-foreground flex items-start mt-2">
+                  <AlertTriangle className="h-4 w-4 mr-2 shrink-0 text-amber-500 mt-0.5" />
+                  <span>
+                    Numbers added here will be excluded from AI responses. Enter only digits 
+                    without the "+" sign to ensure proper matching with WhatsApp numbers.
+                  </span>
                 </div>
               </div>
             </form>
