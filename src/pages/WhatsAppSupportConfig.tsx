@@ -280,25 +280,19 @@ const WhatsAppSupportConfig = () => {
                           <div className="space-y-2">
                             <Label htmlFor="support-phone">Support WhatsApp Number</Label>
                             <LanguageAwareInput id="support-phone" placeholder="e.g. +1234567890 (with country code)" value={supportPhoneNumber} onChange={e => setSupportPhoneNumber(e.target.value)} />
-                            <p className="text-xs text-muted-foreground">
-                              Enter the phone number that will receive notifications when a customer needs support
-                            </p>
+                            <p className="flex items-center text-amber-600">Enter the phone number, without prefix ( + ) or spaces, that will receive notifications when a customer needs support.</p>
                           </div>
                           
                           <div className="space-y-2">
                             <Label htmlFor="notification-message">Support Notification Message</Label>
                             <LanguageAwareTextarea id="notification-message" placeholder="Message to send to support agents" value={notificationMessage} onChange={e => setNotificationMessage(e.target.value)} rows={3} />
-                            <p className="text-xs text-muted-foreground">
-                              Customize the message that will be sent to the support number
-                            </p>
+                            <p className="flex items-center text-amber-600">Customize the message that will be sent to the support number.</p>
                           </div>
                           
                           <div className="space-y-2">
                             <Label htmlFor="escalation-message">Customer Escalation Message</Label>
                             <LanguageAwareTextarea id="escalation-message" placeholder="Message to send to customers when their request is escalated" value={escalationMessage} onChange={e => setEscalationMessage(e.target.value)} rows={3} />
-                            <p className="text-xs text-muted-foreground">
-                              Customize the message that will be sent to customers when their conversation is escalated to human support
-                            </p>
+                            <p className="flex items-center text-amber-600">Customize the message that will be sent to customers when their conversation is escalated to human support.</p>
                           </div>
                           
                           <Button onClick={saveSupportConfig} disabled={isSaving || !supportPhoneNumber} className="w-full bg-blue-700 hover:bg-blue-600">
