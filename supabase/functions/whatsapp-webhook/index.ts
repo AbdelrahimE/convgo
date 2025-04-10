@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
+import logDebug from "../_shared/webhook-logger.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -286,21 +287,6 @@ async function storeMessageInConversation(conversationId: string, role: 'user' |
 
 // Default API URL - Set to the correct Evolution API URL
 const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
-
-// Debug logging function that logs to both console and database
-async function logDebug(category: string, message: string, data?: any) {
-  logger.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
-  
-  try {
-    await supabaseAdmin.from('webhook_debug_logs').insert({
-      category,
-      message,
-      data: data || null
-    });
-  } catch (error) {
-    logger.error('Failed to log debug info to database:', error);
-  }
-}
 
 // Helper function to save webhook message
 async function saveWebhookMessage(instance: string, event: string, data: any) {
