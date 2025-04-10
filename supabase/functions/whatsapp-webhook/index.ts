@@ -245,50 +245,6 @@ async function getRecentConversationHistory(conversationId: string, maxTokens = 
   }
 }
 
-// Helper function to store message in conversation with better metadata
-async function storeMessageInConversation(conversationId: string, role: 'user' | 'assistant', content: string, messageId?: string) {
-  try {
-    const { error } = await supabaseAdmin
-      .from('whatsapp_conversation_messages')
-      .insert({
-        conversation_id: conversationId,
-        role,
-        content,
-        message_id: messageId,
-        metadata: {
-          estimated_tokens: Math.ceil(content.length * 0.25),
-          timestamp: new Date().toISOString()
-        }
-      });
-
-    if (error) throw error;
-    
-    // Update conversation data with message count
-    const { data: messageCount } = await supabaseAdmin
-      .from('whatsapp_conversation_messages')
-      .select('id', { count: 'exact' })
-      .eq('conversation_id', conversationId);
-      
-    // Update the conversation metadata
-    await supabaseAdmin
-      .from('whatsapp_conversations')
-      .update({ 
-        last_activity: new Date().toISOString(),
-        conversation_data: {
-          context: {
-            last_update: new Date().toISOString(),
-            message_count: messageCount || 0,
-            last_message_role: role
-          }
-        }
-      })
-      .eq('id', conversationId);
-  } catch (error) {
-    logger.error('Error in storeMessageInConversation:', error);
-    throw error;
-  }
-}
-
 // Default API URL - Set to the correct Evolution API URL
 const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
 
