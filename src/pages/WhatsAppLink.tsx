@@ -536,7 +536,7 @@ const WhatsAppLink = () => {
       }}>
             <Card className="mb-6 md:mb-8">
               <CardHeader className="space-y-1">
-                <CardTitle className="text-xl md:text-2xl">Create New Instance</CardTitle>
+                <CardTitle className="text-xl md:text-2xl font-bold">Create New Instance</CardTitle>
                 <CardDescription>
                   Enter a unique name using only letters and numbers
                 </CardDescription>
