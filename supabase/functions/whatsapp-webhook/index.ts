@@ -764,7 +764,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     }
 
     // Store user message in conversation
-    await storeMessageInConversation(conversationId, 'user', messageText, messageData.key?.id);
+    await storeMessageInConversation(conversationId, 'user', messageText, messageData.key?.id, supabaseAdmin);
     
     // Get recent conversation history with improved token management
     const conversationHistory = await getRecentConversationHistory(conversationId, 800);
@@ -1036,7 +1036,7 @@ async function generateAndSendAIResponse(
 
     // Store AI response in conversation history
     if (responseData.answer) {
-      await storeMessageInConversation(conversationId, 'assistant', responseData.answer);
+      await storeMessageInConversation(conversationId, 'assistant', responseData.answer, undefined, supabaseAdmin);
     }
 
     // Save interaction to database
