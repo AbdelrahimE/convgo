@@ -1,13 +1,6 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import logger from '../../src/utils/logger';
-
-// Initialize Supabase admin client (this will be available in edge functions)
-const getSupabaseAdmin = () => {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-  return createClient(supabaseUrl, supabaseServiceKey);
-};
+import { supabase } from "@/integrations/supabase/client";
+import logger from './logger';
 
 /**
  * Debug logging function that logs to both console and database
@@ -17,15 +10,16 @@ const getSupabaseAdmin = () => {
  * @returns Promise<void>
  */
 export async function logDebug(category: string, message: string, data?: any): Promise<void> {
+  // Check if logging is enabled
+  const enableLogs = import.meta.env.VITE_ENABLE_LOGS === 'true';
+  if (!enableLogs) return;
+
   // Log to console
   logger.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
   
   try {
-    // Get Supabase admin client
-    const supabaseAdmin = getSupabaseAdmin();
-    
-    // Log to database
-    await supabaseAdmin.from('webhook_debug_logs').insert({
+    // Log to database using the browser supabase client
+    await supabase.from('webhook_debug_logs').insert({
       category,
       message,
       data: data || null
