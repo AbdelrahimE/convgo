@@ -142,6 +142,7 @@ export async function processAudioMessage(
     await logDebug('AUDIO_URL_RETRIEVED', 'Successfully retrieved audio URL for transcription');
     
     // Call the transcription function with the preferred language parameter
+    // Also pass through the mediaKey and mimeType which may be needed for decryption
     const transcriptionResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-voice-transcribe`, {
       method: 'POST',
       headers: {
@@ -150,10 +151,10 @@ export async function processAudioMessage(
       },
       body: JSON.stringify({
         audioUrl: downloadResult.audioUrl,
-        mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus',
+        mimeType: audioDetails.mimeType || downloadResult.mimeType || 'audio/ogg; codecs=opus',
         instanceName: instanceName,
         evolutionApiKey: evolutionApiKey,
-        mediaKey: audioDetails.mediaKey, // Make sure to pass the mediaKey here too
+        mediaKey: audioDetails.mediaKey || downloadResult.mediaKey, // Make sure to pass the mediaKey here too
         preferredLanguage: preferredLanguage  // Pass the language preference
       })
     });

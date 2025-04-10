@@ -47,6 +47,8 @@ serve(async (req) => {
     // Make sure to pass all parameters including mediaKey which is critical for decryption
     const result = await downloadAudioFile(url, instance, evolutionApiKey, mediaKey, mimeType);
     
+    // If successful, make sure we pass along all necessary parameters for decryption
+    // The mediaKey may have been added by downloadAudioFile if it was successful
     return new Response(
       JSON.stringify(result),
       { 
