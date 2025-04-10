@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
@@ -9,6 +10,7 @@ import { storeMessageInConversation } from "../_shared/conversation-storage.ts";
 import { processConnectionStatus } from "../_shared/connection-status.ts";
 import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts";
 import { checkForDuplicateMessage } from "../_shared/duplicate-message-detector.ts";
+import { processAudioMessage } from "../_shared/audio-processor.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
