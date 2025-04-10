@@ -6,6 +6,7 @@ import { calculateSimilarity } from "../_shared/text-similarity.ts";
 import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processing.ts";
 import { downloadAudioFile } from "../_shared/audio-download.ts";
 import { storeMessageInConversation } from "../_shared/conversation-storage.ts";
+import { processConnectionStatus } from "../_shared/connection-status.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -1149,99 +1150,6 @@ async function generateAndSendAIResponse(
     }
   } catch (error) {
     await logDebug('AI_GENERATE_SEND_EXCEPTION', 'Exception in generate and send function', { error });
-    return false;
-  }
-}
-
-// NEW FUNCTION: Process connection status updates from webhook
-async function processConnectionStatus(instanceName: string, statusData: any) {
-  try {
-    // Extract the actual status data from the nested structure if needed
-    // The statusData could either be directly the state object or nested in a data property
-    const stateData = statusData.data || statusData;
-    
-    await logDebug('CONNECTION_STATUS_UPDATE', `Processing connection status update for instance ${instanceName}`, { 
-      state: stateData.state, 
-      statusReason: stateData.statusReason 
-    });
-    
-    // Map the webhook status to database status values
-    let dbStatus: string;
-    switch (stateData.state) {
-      case 'open':
-        dbStatus = 'CONNECTED';
-        break;
-      case 'connecting':
-        dbStatus = 'CONNECTING';
-        break;
-      case 'close':
-        dbStatus = 'DISCONNECTED';
-        break;
-      default:
-        dbStatus = 'UNKNOWN';
-        break;
-    }
-    
-    // Find the instance in the database
-    const { data: instanceData, error: instanceError } = await supabaseAdmin
-      .from('whatsapp_instances')
-      .select('id, status')
-      .eq('instance_name', instanceName)
-      .maybeSingle();
-      
-    if (instanceError) {
-      await logDebug('CONNECTION_STATUS_ERROR', `Instance not found: ${instanceName}`, { error: instanceError });
-      return false;
-    }
-    
-    // Prepare the update data
-    const updateData: any = {
-      status: dbStatus,
-      updated_at: new Date().toISOString()
-    };
-    
-    // If connecting to CONNECTED state, update the last_connected timestamp
-    if (dbStatus === 'CONNECTED') {
-      updateData.last_connected = new Date().toISOString();
-      
-      // If profile data is available, store it in the instance record
-      if (stateData.profileName || stateData.profilePictureUrl) {
-        // Create or update metadata object
-        const metadata = instanceData.metadata || {};
-        metadata.profile = {
-          name: stateData.profileName || metadata.profile?.name,
-          pictureUrl: stateData.profilePictureUrl || metadata.profile?.pictureUrl,
-          lastUpdated: new Date().toISOString()
-        };
-        updateData.metadata = metadata;
-      }
-    }
-    
-    // Log the status transition
-    await logDebug('CONNECTION_STATUS_TRANSITION', `Instance ${instanceName} status changing from ${instanceData.status} to ${dbStatus}`, {
-      previousStatus: instanceData.status,
-      newStatus: dbStatus,
-      statusReason: stateData.statusReason,
-      instanceId: instanceData.id
-    });
-    
-    // Update the instance record
-    const { error: updateError } = await supabaseAdmin
-      .from('whatsapp_instances')
-      .update(updateData)
-      .eq('id', instanceData.id);
-      
-    if (updateError) {
-      await logDebug('CONNECTION_STATUS_UPDATE_ERROR', `Failed to update instance status`, { error: updateError });
-      return false;
-    }
-    
-    await logDebug('CONNECTION_STATUS_UPDATED', `Successfully updated status for instance ${instanceName} to ${dbStatus}`);
-    return true;
-    
-  } catch (error) {
-    await logDebug('CONNECTION_STATUS_EXCEPTION', `Exception processing connection status`, { error, instanceName });
-    logger.error('Error in processConnectionStatus:', error);
     return false;
   }
 }
