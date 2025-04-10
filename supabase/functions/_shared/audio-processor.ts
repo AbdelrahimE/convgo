@@ -94,7 +94,15 @@ export async function processAudioMessage(
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     
+    // Log audio details for debugging
+    await logDebug('AUDIO_DETAILS', 'Audio details before download', { 
+      urlFragment: audioDetails.url.substring(0, 30) + '...',
+      hasMediaKey: !!audioDetails.mediaKey,
+      mimeType: audioDetails.mimeType
+    });
+    
     // Since downloadAudioFile is also in a shared file we need to call it
+    // The crucial fix: Be sure to pass the mediaKey and mimeType to the download endpoint
     const downloadResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-webhook/download-audio`, {
       method: 'POST',
       headers: {
@@ -104,7 +112,9 @@ export async function processAudioMessage(
       body: JSON.stringify({
         url: audioDetails.url,
         instance: instanceName,
-        evolutionApiKey: evolutionApiKey
+        evolutionApiKey: evolutionApiKey,
+        mediaKey: audioDetails.mediaKey, // Pass the media key
+        mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus' // Pass the mime type
       })
     });
     
@@ -143,7 +153,7 @@ export async function processAudioMessage(
         mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus',
         instanceName: instanceName,
         evolutionApiKey: evolutionApiKey,
-        mediaKey: audioDetails.mediaKey,
+        mediaKey: audioDetails.mediaKey, // Make sure to pass the mediaKey here too
         preferredLanguage: preferredLanguage  // Pass the language preference
       })
     });

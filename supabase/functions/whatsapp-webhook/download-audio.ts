@@ -18,7 +18,8 @@ serve(async (req) => {
   }
 
   try {
-    const { url, instance, evolutionApiKey } = await req.json();
+    // Extract all necessary parameters from the request
+    const { url, instance, evolutionApiKey, mediaKey, mimeType } = await req.json();
     
     if (!url || !instance) {
       return new Response(
@@ -36,8 +37,15 @@ serve(async (req) => {
       );
     }
     
+    await logDebug('DOWNLOAD_AUDIO_PARAMS', 'Download audio parameters received', { 
+      hasUrl: !!url, 
+      hasMediaKey: !!mediaKey,
+      instance
+    });
+    
     // Use the existing downloadAudioFile from the shared utilities
-    const result = await downloadAudioFile(url, instance, evolutionApiKey);
+    // Make sure to pass all parameters including mediaKey which is critical for decryption
+    const result = await downloadAudioFile(url, instance, evolutionApiKey, mediaKey, mimeType);
     
     return new Response(
       JSON.stringify(result),
