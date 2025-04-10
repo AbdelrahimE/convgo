@@ -5,6 +5,7 @@ import logDebug from "../_shared/webhook-logger.ts";
 import { calculateSimilarity } from "../_shared/text-similarity.ts";
 import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processing.ts";
 import { downloadAudioFile } from "../_shared/audio-download.ts";
+import { storeMessageInConversation } from "../_shared/conversation-storage.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
