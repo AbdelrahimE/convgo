@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
@@ -592,27 +591,6 @@ async function checkForDuplicateMessage(conversationId: string, newMessageConten
     });
     return false; // On error, continue with processing (fail open)
   }
-}
-
-// Simple similarity function (Jaccard similarity)
-function calculateSimilarity(str1: string, str2: string): number {
-  if (!str1 || !str2) return 0;
-  
-  // For small strings, use character-based comparison
-  if (str1.length < 10 || str2.length < 10) {
-    const set1 = new Set(str1.split(''));
-    const set2 = new Set(str2.split(''));
-    const intersection = new Set([...set1].filter(x => set2.has(x)));
-    const union = new Set([...set1, ...set2]);
-    return intersection.size / union.size;
-  }
-  
-  // For longer strings, use word-based comparison
-  const words1 = new Set(str1.split(/\s+/));
-  const words2 = new Set(str2.split(/\s+/));
-  const intersection = new Set([...words1].filter(x => words2.has(x)));
-  const union = new Set([...words1, ...words2]);
-  return intersection.size / union.size;
 }
 
 // Helper function to process message for AI
