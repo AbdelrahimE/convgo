@@ -45,3 +45,17 @@ export function extractAudioDetails(messageData: any): {
     ptt: false
   };
 }
+
+/**
+ * Determines if a WhatsApp message contains audio content
+ * 
+ * @param messageData The WhatsApp message data object
+ * @returns Boolean indicating if the message contains audio
+ */
+export function hasAudioContent(messageData: any): boolean {
+  return (
+    messageData?.message?.audioMessage || 
+    (messageData?.messageType === 'audioMessage') ||
+    (messageData?.message?.pttMessage)
+  );
+}

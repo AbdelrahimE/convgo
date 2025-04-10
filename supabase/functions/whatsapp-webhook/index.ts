@@ -1,9 +1,10 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
 import logDebug from "../_shared/webhook-logger.ts";
 import { calculateSimilarity } from "../_shared/text-similarity.ts";
-import { extractAudioDetails } from "../_shared/audio-processing.ts";
+import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processing.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
