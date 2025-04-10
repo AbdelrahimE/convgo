@@ -1,203 +1,188 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import logDebug from "./webhook-logger.ts";
 
-// Initialize Supabase admin client (this will be available in edge functions)
-const getSupabaseAdmin = () => {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-  return createClient(supabaseUrl, supabaseServiceKey);
-};
-
 /**
- * Helper function to handle audio transcription
- * @param audioDetails Audio details extracted from the message
+ * Process an audio message by sending it to the voice transcription service
+ * 
+ * @param audioDetails Details of the audio to process
  * @param instanceName The WhatsApp instance name
  * @param fromNumber The sender's phone number
- * @param evolutionApiKey The API key for EVOLUTION API
- * @returns Object with transcription results and flags
+ * @param evolutionApiKey API key for EVOLUTION API
+ * @returns Object with success flag, transcription (if successful), and error message (if failed)
  */
 export async function processAudioMessage(
-  audioDetails: any, 
-  instanceName: string, 
-  fromNumber: string, 
+  audioDetails: any,
+  instanceName: string,
+  fromNumber: string,
   evolutionApiKey: string
 ): Promise<{ 
   success: boolean; 
   transcription?: string; 
-  error?: string; 
-  bypassAiProcessing?: boolean; 
-  directResponse?: string 
+  error?: string;
+  language?: string;
+  bypassAiProcessing?: boolean;
+  directResponse?: string;
 }> {
   try {
-    await logDebug('AUDIO_PROCESSING_START', 'Starting audio processing', { instanceName, fromNumber });
+    // Check if we have required parameters
+    if (!audioDetails || !audioDetails.url || !audioDetails.mediaKey) {
+      await logDebug('AUDIO_PROCESS_MISSING_DATA', 'Missing required audio details', { 
+        hasUrl: !!audioDetails?.url, 
+        hasMediaKey: !!audioDetails?.mediaKey 
+      });
+      return { 
+        success: false, 
+        error: 'Missing required audio details for processing' 
+      };
+    }
     
-    // Get Supabase admin client
-    const supabaseAdmin = getSupabaseAdmin();
+    // First check if voice message processing is enabled for this instance
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     
-    // Check if this instance has disabled voice message processing
-    const { data: instanceData, error: instanceError } = await supabaseAdmin
+    if (!supabaseUrl || !supabaseServiceKey) {
+      await logDebug('AUDIO_PROCESS_ERROR', 'Missing required Supabase credentials');
+      return { 
+        success: false,
+
+        error: 'Configuration error: Missing required Supabase credentials' 
+      };
+    }
+    
+    // Initialize Supabase client
+    const supabase = {
+      from: (table: string) => ({
+        select: (columns: string) => ({
+          eq: (field: string, value: any) => ({
+            maybeSingle: () => fetch(`${supabaseUrl}/rest/v1/${table}?select=${columns}&${field}=eq.${value}`, {
+              headers: {
+                'apikey': supabaseServiceKey,
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+                'Content-Type': 'application/json'
+              }
+            }).then(res => res.json())
+          })
+        })
+      })
+    };
+    
+    // 1. Get instance ID from name
+    const instanceResult = await supabase
       .from('whatsapp_instances')
       .select('id')
       .eq('instance_name', instanceName)
       .maybeSingle();
-
-    if (instanceError) {
-      await logDebug('AUDIO_PROCESSING_INSTANCE_ERROR', 'Failed to get instance data', { error: instanceError });
+      
+    const instanceId = instanceResult?.id;
+    
+    if (!instanceId) {
+      await logDebug('AUDIO_PROCESS_ERROR', 'Instance not found', { instanceName });
       return { 
         success: false, 
-        error: 'Instance not found',
-        transcription: "This is a voice message that could not be processed because the instance was not found."
+        error: 'Instance not found in database' 
       };
     }
-
-    // Check if voice processing is disabled for this instance
-    const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
+    
+    // 2. Check if voice processing is enabled
+    const aiConfig = await supabase
       .from('whatsapp_ai_config')
-      .select('process_voice_messages, voice_message_default_response, default_voice_language')
-      .eq('whatsapp_instance_id', instanceData.id)
+      .select('process_voice_messages,voice_message_default_response,default_voice_language')
+      .eq('whatsapp_instance_id', instanceId)
       .maybeSingle();
-
-    // Get the preferred language from AI config if available
-    const preferredLanguage = aiConfig?.default_voice_language || 'auto';
-    await logDebug('AUDIO_LANGUAGE_PREFERENCE', 'Using voice language preference from AI config', { 
-     preferredLanguage, 
-     instanceId: instanceData.id 
-    });
-
-    if (!aiConfigError && aiConfig && aiConfig.process_voice_messages === false) {
-      await logDebug('AUDIO_PROCESSING_DISABLED', 'Voice message processing is disabled for this instance', { 
-        instanceId: instanceData.id,
-        instanceName,
-        customResponseExists: !!aiConfig.voice_message_default_response 
+    
+    // If voice processing is explicitly disabled, return early with direct response
+    if (aiConfig && aiConfig.process_voice_messages === false) {
+      await logDebug('AUDIO_PROCESS_DISABLED', 'Voice processing disabled in settings', {
+        instanceName
       });
       
-      // If voice processing is disabled, return the custom message and flag to bypass AI processing
       return {
         success: false,
-        error: 'Voice message processing is disabled',
-        transcription: aiConfig.voice_message_default_response || "Voice message processing is disabled.",
-        bypassAiProcessing: true, // Flag to indicate we should bypass AI processing
-        directResponse: aiConfig.voice_message_default_response || "Voice message processing is disabled."
+        error: 'Voice message processing is disabled for this instance',
+        bypassAiProcessing: true,
+        directResponse: aiConfig.voice_message_default_response || 
+                      "I'm sorry, but I cannot process voice messages at the moment. Please send your question as text, and I'll be happy to assist you."
       };
     }
     
-    if (!audioDetails.url) {
-      return { 
-        success: false, 
-        error: 'No audio URL available in message',
-        transcription: "This is a voice message that could not be processed because no audio URL was found."
-      };
-    }
+    // Determine preferred language for transcription
+    const preferredLanguage = aiConfig?.default_voice_language || 'auto';
     
-    // Get the audio URL that we can access with the Evolution API key
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    // 3. Process the audio for transcription
+    const supabaseAdminUrl = Deno.env.get('SUPABASE_URL') || '';
     
-    // Log audio details for debugging
-    await logDebug('AUDIO_DETAILS', 'Audio details before download', { 
-      urlFragment: audioDetails.url.substring(0, 30) + '...',
+    await logDebug('AUDIO_TRANSCRIPTION_REQUEST', 'Sending audio to transcription service', {
+      audioUrl: audioDetails.url.substring(0, 50) + '...',
       hasMediaKey: !!audioDetails.mediaKey,
-      mimeType: audioDetails.mimeType
+      mimeType: audioDetails.mimeType || 'audio/ogg',
+      preferredLanguage
     });
     
-    // Since downloadAudioFile is also in a shared file we need to call it
-    // The crucial fix: Be sure to pass the mediaKey and mimeType to the download endpoint
-    const downloadResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-webhook/download-audio`, {
+    // Call transcription service
+    const transcriptionResponse = await fetch(`${supabaseAdminUrl}/functions/v1/whatsapp-voice-transcribe`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${supabaseServiceKey}`
       },
       body: JSON.stringify({
-        url: audioDetails.url,
-        instance: instanceName,
-        evolutionApiKey: evolutionApiKey,
-        mediaKey: audioDetails.mediaKey, // Pass the media key
-        mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus' // Pass the mime type
-      })
-    });
-    
-    if (!downloadResponse.ok) {
-      const errorText = await downloadResponse.text();
-      await logDebug('AUDIO_DOWNLOAD_FAILED', 'Failed to get audio URL', { error: errorText });
-      return {
-        success: false,
-        error: `Download error: ${errorText}`,
-        transcription: "This is a voice message that could not be transcribed. Voice transcription error: Download failed"
-      };
-    }
-    
-    const downloadResult = await downloadResponse.json();
-    
-    if (!downloadResult.success || !downloadResult.audioUrl) {
-      await logDebug('AUDIO_DOWNLOAD_FAILED', 'Failed to get audio URL', { error: downloadResult.error });
-      return {
-        success: false,
-        error: downloadResult.error,
-        transcription: "This is a voice message that could not be transcribed. Voice transcription error: " + downloadResult.error
-      };
-    }
-    
-    await logDebug('AUDIO_URL_RETRIEVED', 'Successfully retrieved audio URL for transcription');
-    
-    // Call the transcription function with the preferred language parameter
-    // Also pass through the mediaKey and mimeType which may be needed for decryption
-    const transcriptionResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-voice-transcribe`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify({
-        audioUrl: downloadResult.audioUrl,
-        mimeType: audioDetails.mimeType || downloadResult.mimeType || 'audio/ogg; codecs=opus',
-        instanceName: instanceName,
-        evolutionApiKey: evolutionApiKey,
-        mediaKey: audioDetails.mediaKey || downloadResult.mediaKey, // Make sure to pass the mediaKey here too
-        preferredLanguage: preferredLanguage  // Pass the language preference
+        audioUrl: audioDetails.url,
+        mediaKey: audioDetails.mediaKey,
+        mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus',
+        instanceName,
+        evolutionApiKey,
+        preferredLanguage
       })
     });
     
     if (!transcriptionResponse.ok) {
       const errorText = await transcriptionResponse.text();
-      await logDebug('AUDIO_TRANSCRIPTION_API_ERROR', 'Error from transcription API', { status: transcriptionResponse.status, error: errorText });
+      await logDebug('AUDIO_TRANSCRIPTION_ERROR', 'Error response from transcription service', {
+        status: transcriptionResponse.status,
+        error: errorText.substring(0, 500)
+      });
       
       return {
         success: false,
-        error: `Transcription API error: ${transcriptionResponse.status}`,
-        transcription: "This is a voice message that could not be transcribed due to a service error."
+        error: `Transcription service error: ${transcriptionResponse.status} - ${errorText.substring(0, 100)}`
       };
     }
     
-    const transcriptionResult = await transcriptionResponse.json();
+    const result = await transcriptionResponse.json();
     
-    if (!transcriptionResult.success) {
-      await logDebug('AUDIO_TRANSCRIPTION_FAILED', 'Transcription process failed', { error: transcriptionResult.error });
+    if (result.success && result.transcription) {
+      await logDebug('AUDIO_TRANSCRIPTION_SUCCESS', 'Successfully transcribed audio', {
+        transcription: result.transcription,
+        language: result.language || 'unknown',
+        duration: result.duration
+      });
+      
+      return {
+        success: true,
+        transcription: result.transcription,
+        language: result.language
+      };
+    } else {
+      await logDebug('AUDIO_TRANSCRIPTION_FAILED', 'Transcription service returned failure', {
+        error: result.error
+      });
       
       return {
         success: false,
-        error: transcriptionResult.error,
-        transcription: "This is a voice message that could not be transcribed."
+        error: result.error || 'Unknown transcription error',
+        // Include a fallback transcription if available
+        transcription: result.transcription || null
       };
     }
-    
-    await logDebug('AUDIO_TRANSCRIPTION_SUCCESS', 'Successfully transcribed audio', { 
-      language: transcriptionResult.language,
-      preferredLanguage: preferredLanguage,
-      transcription: transcriptionResult.transcription?.substring(0, 100) + '...'
+  } catch (error) {
+    await logDebug('AUDIO_PROCESS_EXCEPTION', 'Exception during audio processing', {
+      error: error.message,
+      stack: error.stack
     });
     
     return {
-      success: true,
-      transcription: transcriptionResult.transcription
-    };
-  } catch (error) {
-    await logDebug('AUDIO_PROCESSING_ERROR', 'Error processing audio', { error });
-    return { 
-      success: false, 
-      error: error.message,
-      transcription: "This is a voice message that could not be processed due to a technical error."
+      success: false,
+      error: `Exception during audio processing: ${error.message}`
     };
   }
 }
