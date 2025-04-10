@@ -1,10 +1,10 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
 import logDebug from "../_shared/webhook-logger.ts";
 import { calculateSimilarity } from "../_shared/text-similarity.ts";
 import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processing.ts";
+import { downloadAudioFile } from "../_shared/audio-download.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -314,54 +314,6 @@ async function saveWebhookMessage(instance: string, event: string, data: any) {
     logger.error('Exception when saving webhook message:', error);
     return false;
   }
-}
-
-// Helper function to download audio file from WhatsApp
-async function downloadAudioFile(url: string, instance: string, evolutionApiKey: string): Promise<{ success: boolean; audioUrl?: string; error?: string }> {
-  try {
-    await logDebug('AUDIO_DOWNLOAD_START', `Starting audio download request for URL: ${url}`);
-    
-    // We cannot directly download the encrypted WhatsApp audio file
-    // Instead, we need to retrieve the decrypted media file through the EVOLUTION API
-    
-    if (!evolutionApiKey) {
-      await logDebug('AUDIO_DOWNLOAD_ERROR', 'EVOLUTION_API_KEY not available');
-      return { 
-        success: false, 
-        error: 'EVOLUTION API key not available for media download' 
-      };
-    }
-    
-    // Prepare Evolution API URL to download media
-    // Using the format explained in the Evolution API docs
-    const mediaUrl = url.split('?')[0]; // Remove query parameters
-    const mediaId = mediaUrl.split('/').pop(); // Extract media ID
-    
-    if (!mediaId) {
-      return { success: false, error: 'Could not extract media ID from URL' };
-    }
-    
-    await logDebug('AUDIO_DOWNLOAD_MEDIA_ID', `Extracted media ID: ${mediaId}`);
-    
-    // We're returning the URL that will be used with the proper headers in the transcription function
-    // This is more reliable than downloading here and passing the bytes
-    return {
-      success: true,
-      audioUrl: url
-    };
-  } catch (error) {
-    await logDebug('AUDIO_DOWNLOAD_ERROR', 'Error processing audio file URL', { error });
-    return { success: false, error: error.message };
-  }
-}
-
-// Helper function to determine if a message contains audio
-function hasAudioContent(messageData: any): boolean {
-  return (
-    messageData?.message?.audioMessage || 
-    (messageData?.messageType === 'audioMessage') ||
-    (messageData?.message?.pttMessage)
-  );
 }
 
 // Helper function to handle audio transcription
