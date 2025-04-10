@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
 import logDebug from "../_shared/webhook-logger.ts";
 import { calculateSimilarity } from "../_shared/text-similarity.ts";
+import { extractAudioDetails } from "../_shared/audio-processing.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -360,48 +361,6 @@ function hasAudioContent(messageData: any): boolean {
     (messageData?.messageType === 'audioMessage') ||
     (messageData?.message?.pttMessage)
   );
-}
-
-// Helper function to extract audio details from the message
-function extractAudioDetails(messageData: any): { 
-  url: string | null; 
-  mediaKey: string | null;
-  duration: number | null;
-  mimeType: string | null;
-  ptt: boolean;
-} {
-  // Check for audioMessage object
-  const audioMessage = messageData?.message?.audioMessage;
-  if (audioMessage) {
-    return {
-      url: audioMessage.url || null,
-      mediaKey: audioMessage.mediaKey || null,
-      duration: audioMessage.seconds || null,
-      mimeType: audioMessage.mimetype || 'audio/ogg; codecs=opus',
-      ptt: audioMessage.ptt || false
-    };
-  }
-  
-  // Check for pttMessage object (Push To Talk - voice messages)
-  const pttMessage = messageData?.message?.pttMessage;
-  if (pttMessage) {
-    return {
-      url: pttMessage.url || null,
-      mediaKey: pttMessage.mediaKey || null,
-      duration: pttMessage.seconds || null,
-      mimeType: pttMessage.mimetype || 'audio/ogg; codecs=opus',
-      ptt: true
-    };
-  }
-  
-  // No audio content found
-  return {
-    url: null,
-    mediaKey: null,
-    duration: null,
-    mimeType: null,
-    ptt: false
-  };
 }
 
 // Helper function to handle audio transcription
