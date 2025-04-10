@@ -7,6 +7,7 @@ import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processin
 import { downloadAudioFile } from "../_shared/audio-download.ts";
 import { storeMessageInConversation } from "../_shared/conversation-storage.ts";
 import { processConnectionStatus } from "../_shared/connection-status.ts";
+import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -1152,23 +1153,6 @@ async function generateAndSendAIResponse(
     await logDebug('AI_GENERATE_SEND_EXCEPTION', 'Exception in generate and send function', { error });
     return false;
   }
-}
-
-// Helper function to detect if a webhook payload is a connection status event
-function isConnectionStatusEvent(data: any): boolean {
-  // Check if this is a standard connection event
-  if (data && data.event === 'connection.update') {
-    return true;
-  }
-  
-  // Or directly check for state property in data or nested data
-  const stateData = data?.data || data;
-  return (
-    data &&
-    typeof stateData?.state === 'string' &&
-    typeof stateData?.instance === 'string' &&
-    ['open', 'connecting', 'close'].includes(stateData.state)
-  );
 }
 
 serve(async (req) => {
