@@ -239,9 +239,12 @@ export async function processBufferedMessages(
       return false;
     }
     
+    // Generate a unique batch ID for tracking this group of messages
+    const batchId = `${instanceName}:${fromNumber}:${Date.now()}`;
+    
     // Log the process start with clear batch identification
     await logDebug('BUFFER_BATCH_PROCESSING_START', 'Starting batch processing of buffered messages', {
-      batchId: `${instanceName}:${fromNumber}:${Date.now()}`,
+      batchId,
       messageCount: bufferedMessages.length,
       instanceName,
       fromNumber,
@@ -251,23 +254,28 @@ export async function processBufferedMessages(
     // Initialize Supabase admin client for database operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Log the buffered messages processing
-    await logDebug('BUFFER_PROCESSING', 'Processing buffered messages', {
+    // Detailed logging about the batch before processing
+    await logDebug('BUFFER_PROCESSING_DETAILS', 'Processing buffered message batch details', {
       messageCount: bufferedMessages.length,
       instanceName,
-      fromNumber
+      fromNumber,
+      messageTimestamps: bufferedMessages.map(m => m.timestamp),
+      messageContents: bufferedMessages.map(m => m.messageText ? (m.messageText.substring(0, 30) + '...') : '[NO_TEXT]'),
+      hasImages: bufferedMessages.some(m => !!m.imageUrl)
     });
     
-    // Sort messages by timestamp to ensure correct order
+    // Sort messages by timestamp to ensure correct chronological order
     const sortedMessages = [...bufferedMessages].sort((a, b) => a.timestamp - b.timestamp);
     
-    // Combine text from all messages
+    // Combine text from all messages with improved formatting
     let combinedText = '';
     let imageUrlToUse: string | null = null;
+    let imageCount = 0;
     
-    // Save each message in the conversation history and build combined text
+    // Save each message in the conversation history and build combined text with timestamps
     for (let i = 0; i < sortedMessages.length; i++) {
       const message = sortedMessages[i];
+      const messageTime = new Date(message.timestamp).toISOString();
       
       // Store each individual message in conversation history
       if (message.messageText) {
@@ -279,67 +287,103 @@ export async function processBufferedMessages(
           supabaseAdmin
         );
         
-        // Add to combined text with separators between messages
+        // Add to combined text with timestamps and separators
         if (combinedText) {
-          combinedText += '\n---\n'; // Add separator between messages
+          combinedText += '\n---\n'; // Clear separator between messages
         }
-        combinedText += message.messageText;
+        
+        // Add timestamp for better context
+        combinedText += `[${messageTime.substring(11, 19)}] ${message.messageText}`;
       }
       
-      // Use the last image in the sequence if multiple images
+      // Track images in the batch - we'll use the last image for vision capabilities
       if (message.imageUrl) {
+        imageCount++;
         imageUrlToUse = message.imageUrl;
         
-        // If this is an image-only message with no text, add a placeholder
-        if (!message.messageText && !combinedText.includes("[IMAGE SENT]")) {
+        // If this is an image-only message with no text, add a placeholder with timestamp
+        if (!message.messageText) {
           if (combinedText) {
             combinedText += '\n---\n';
           }
-          combinedText += "[IMAGE SENT]";
+          combinedText += `[${messageTime.substring(11, 19)}] [IMAGE SENT]`;
+        } else if (!combinedText.includes("[IMAGE SENT]")) {
+          // If there's already text for this message, append image indicator
+          combinedText += ' [WITH IMAGE]';
         }
       }
     }
     
-    // Log the combined message
-    await logDebug('BUFFER_COMBINED_MESSAGE', 'Created combined message from buffer', {
+    // Log the combined message details
+    await logDebug('BUFFER_COMBINED_MESSAGE', 'Created combined message from buffer batch', {
+      batchId,
       originalCount: sortedMessages.length,
       combinedLength: combinedText.length,
+      imageCount,
       hasImage: !!imageUrlToUse,
       preview: combinedText.substring(0, 100) + (combinedText.length > 100 ? '...' : '')
     });
     
+    // Add batch processing context to combined message if multiple messages
+    if (sortedMessages.length > 1) {
+      const batchContext = `\n\n[This is a combined batch of ${sortedMessages.length} messages sent within ${Math.ceil((sortedMessages[sortedMessages.length-1].timestamp - sortedMessages[0].timestamp)/1000)} seconds]`;
+      combinedText += batchContext;
+      
+      await logDebug('BUFFER_BATCH_CONTEXT', 'Added batch context to combined message', {
+        batchId,
+        batchContext
+      });
+    }
+    
     // Use the message data from the last message for API key info
     const lastMessageData = sortedMessages[sortedMessages.length - 1].messageData;
     
-    // Process the combined message with the AI
-    const result = await generateAndSendAIResponse(
-      combinedText,
-      context,
-      instanceName,
-      fromNumber,
-      instanceBaseUrl,
-      aiConfig,
-      lastMessageData,
-      conversationId,
-      supabaseUrl,
-      supabaseServiceKey,
-      imageUrlToUse
-    );
-    
-    // Log batch processing completion
-    await logDebug('BUFFER_BATCH_PROCESSING_COMPLETE', 'Completed batch processing of buffered messages', {
-      batchId: `${instanceName}:${fromNumber}:${Date.now()}`,
-      messageCount: bufferedMessages.length,
-      success: result,
-      messageIds: bufferedMessages.map(m => m.messageId).join(',')
-    });
-    
-    return result;
-    
+    try {
+      // Process the combined message with the AI
+      const result = await generateAndSendAIResponse(
+        combinedText,
+        context,
+        instanceName,
+        fromNumber,
+        instanceBaseUrl,
+        aiConfig,
+        lastMessageData,
+        conversationId,
+        supabaseUrl,
+        supabaseServiceKey,
+        imageUrlToUse
+      );
+      
+      // Log success or failure for the entire batch
+      await logDebug('BUFFER_BATCH_PROCESSING_COMPLETE', 'Completed batch processing of buffered messages', {
+        batchId,
+        messageCount: bufferedMessages.length,
+        success: result,
+        messageIds: bufferedMessages.map(m => m.messageId).join(','),
+        processingTimeMs: Date.now() - sortedMessages[0].timestamp
+      });
+      
+      return result;
+    } catch (error) {
+      // Enhanced error handling for batch processing
+      await logDebug('BUFFER_BATCH_PROCESSING_ERROR', 'Error during batch processing', {
+        batchId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        messageCount: bufferedMessages.length,
+        messageIds: bufferedMessages.map(m => m.messageId).join(',')
+      });
+      
+      // Return failure to allow proper buffer state cleanup
+      return false;
+    }
   } catch (error) {
-    await logDebug('BUFFER_PROCESS_EXCEPTION', 'Exception processing buffered messages', { 
+    // Catch-all error handler with detailed logging
+    await logDebug('BUFFER_PROCESS_EXCEPTION', 'Unhandled exception processing buffered messages', { 
       error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
+      stack: error instanceof Error ? error.stack : undefined,
+      messageCount: bufferedMessages?.length || 0,
+      messageIds: bufferedMessages?.map(m => m.messageId).join(',') || 'unknown'
     });
     console.error('Error processing buffered messages:', error);
     return false;
