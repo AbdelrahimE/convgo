@@ -10,7 +10,7 @@ import { processConnectionStatus } from "../_shared/connection-status.ts";
 import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts";
 import { checkForDuplicateMessage } from "../_shared/duplicate-message-detector.ts";
 import { processAudioMessage } from "../_shared/audio-processor.ts";
-import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
+import { generateAndSendAIResponse, processBufferedMessages } from "../_shared/ai-response-generator.ts";
 import messageBufferManager, { BufferedMessage } from "../_shared/message-buffer.ts";
 
 const logger = {
@@ -140,8 +140,7 @@ async function findOrCreateConversation(instanceId: string, userPhone: string) {
               last_update: new Date().toISOString(),
               message_count: 0,
               created_at: new Date().toISOString(),
-              activity_timeout_hours: 6,
-              reactivated: true
+              activity_timeout_hours: 6
             }
           }
         })
@@ -248,242 +247,6 @@ async function saveWebhookMessage(instance: string, event: string, data: any) {
   }
 }
 
-async function processBufferedMessages(messages: BufferedMessage[]): Promise<void> {
-  try {
-    if (!messages.length) return;
-    
-    messages.sort((a, b) => a.timestamp - b.timestamp);
-    
-    const firstMessage = messages[0];
-    const instanceName = firstMessage.instanceName;
-    const fromNumber = firstMessage.fromNumber;
-    
-    await logDebug('BUFFER_BATCH_PROCESSING', 'Processing buffered message batch', {
-      instanceName,
-      fromNumber,
-      messageCount: messages.length,
-      timeSpan: messages[messages.length - 1].timestamp - messages[0].timestamp,
-      firstMessageTime: new Date(messages[0].timestamp).toISOString(),
-      lastMessageTime: new Date(messages[messages.length - 1].timestamp).toISOString(),
-      timeSpanSeconds: Math.round((messages[messages.length - 1].timestamp - messages[0].timestamp) / 1000)
-    });
-    
-    let combinedText = "";
-    let latestMessageId = "";
-    let latestMessageData = null;
-    let hasImage = false;
-    let imageUrl = null;
-    
-    for (const message of messages) {
-      latestMessageId = message.messageId;
-      latestMessageData = message.messageData;
-      
-      if (message.imageUrl) {
-        hasImage = true;
-        imageUrl = message.imageUrl;
-      }
-      
-      if (message.messageText) {
-        if (combinedText) combinedText += "\n";
-        combinedText += message.messageText;
-      }
-    }
-    
-    if (!combinedText && hasImage) {
-      combinedText = "Please analyze this image.";
-    } else if (!combinedText && !hasImage) {
-      await logDebug('BUFFER_EMPTY_BATCH', 'Buffer batch has no text or image content', {
-        instanceName,
-        fromNumber,
-        messageCount: messages.length
-      });
-      return;
-    }
-    
-    await logDebug('BUFFER_COMBINED_CONTENT', 'Combined content from buffered messages', {
-      instanceName,
-      fromNumber,
-      messageCount: messages.length,
-      contentLength: combinedText.length,
-      hasImage,
-      contentPreview: combinedText.substring(0, 100) + (combinedText.length > 100 ? '...' : '')
-    });
-    
-    const { data: instanceData, error: instanceError } = await supabaseAdmin
-      .from('whatsapp_instances')
-      .select('id, status')
-      .eq('instance_name', instanceName)
-      .maybeSingle();
-
-    if (instanceError || !instanceData) {
-      await logDebug('AI_CONFIG_ERROR', 'Instance not found in database', { 
-        instanceName, 
-        error: instanceError 
-      });
-      console.error('Error getting instance data:', instanceError);
-      return;
-    }
-    
-    const conversationId = await findOrCreateConversation(instanceData.id, fromNumber);
-    await logDebug('CONVERSATION_MANAGED', 'Conversation found or created for buffered messages', { 
-      conversationId,
-      messageCount: messages.length
-    });
-
-    await storeMessageInConversation(
-      conversationId, 
-      'user', 
-      combinedText, 
-      latestMessageId, 
-      supabaseAdmin
-    );
-    
-    const conversationHistory = await getRecentConversationHistory(conversationId, 800);
-    
-    const instanceId = instanceData.id;
-    
-    const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
-      .from('whatsapp_ai_config')
-      .select('*')
-      .eq('whatsapp_instance_id', instanceId)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (aiConfigError || !aiConfig) {
-      await logDebug('AI_DISABLED', 'AI is not enabled for this instance', { 
-        instanceId, 
-        error: aiConfigError 
-      });
-      console.error('AI not enabled for this instance:', aiConfigError || 'No active config found');
-      return;
-    }
-
-    const { data: fileMappings, error: fileMappingsError } = await supabaseAdmin
-      .from('whatsapp_file_mappings')
-      .select('file_id')
-      .eq('whatsapp_instance_id', instanceId);
-
-    if (fileMappingsError) {
-      await logDebug('AI_FILE_MAPPING_ERROR', 'Error getting file mappings for buffered messages', { 
-        instanceId, 
-        error: fileMappingsError 
-      });
-      console.error('Error getting file mappings:', fileMappingsError);
-      return;
-    }
-
-    const fileIds = fileMappings?.map(mapping => mapping.file_id) || [];
-    
-    let instanceBaseUrl = '';
-    
-    try {
-      await logDebug('AI_EVOLUTION_URL_CHECK', 'Determining EVOLUTION API URL for buffered messages', { instanceId });
-      
-      if (latestMessageData && latestMessageData.server_url) {
-        instanceBaseUrl = latestMessageData.server_url;
-      } else {
-        const { data: webhookConfig, error: webhookError } = await supabaseAdmin
-          .from('whatsapp_webhook_config')
-          .select('webhook_url')
-          .eq('whatsapp_instance_id', instanceId)
-          .maybeSingle();
-          
-        if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
-          const url = new URL(webhookConfig.webhook_url);
-          instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-        } else {
-          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-        }
-      }
-    } catch (error) {
-      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-      await logDebug('AI_EVOLUTION_URL_ERROR', 'Error determining URL, using default', { 
-        instanceBaseUrl,
-        error
-      });
-    }
-
-    const searchResponse = await fetch(`${supabaseUrl}/functions/v1/semantic-search`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify({
-        query: combinedText,
-        fileIds: fileIds.length > 0 ? fileIds : undefined,
-        limit: 5,
-        threshold: 0.3
-      })
-    });
-
-    if (!searchResponse.ok) {
-      const errorText = await searchResponse.text();
-      await logDebug('AI_SEARCH_ERROR', 'Semantic search failed for buffered messages', { 
-        status: searchResponse.status,
-        error: errorText
-      });
-      console.error('Semantic search failed:', errorText);
-      
-      await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context for buffered messages');
-      return await generateAndSendAIResponse(
-        combinedText, 
-        "", 
-        instanceName, 
-        fromNumber, 
-        instanceBaseUrl, 
-        aiConfig, 
-        latestMessageData, 
-        conversationId,
-        supabaseUrl,
-        supabaseServiceKey,
-        imageUrl
-      );
-    }
-
-    const searchResults = await searchResponse.json();
-    
-    let context = '';
-    let ragContext = '';
-    
-    const conversationContext = conversationHistory
-      .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
-      .join('\n\n');
-    
-    if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
-      const topResults = searchResults.results.slice(0, 3);
-      
-      ragContext = topResults
-        .map((result, index) => `DOCUMENT ${index + 1} (similarity: ${result.similarity.toFixed(2)}):\n${result.content.trim()}`)
-        .join('\n\n---\n\n');
-      
-      context = `${conversationContext}\n\n${ragContext}`;
-    } else {
-      context = conversationContext;
-    }
-
-    await generateAndSendAIResponse(
-      combinedText,
-      context,
-      instanceName,
-      fromNumber,
-      instanceBaseUrl,
-      aiConfig,
-      latestMessageData,
-      conversationId,
-      supabaseUrl,
-      supabaseServiceKey,
-      imageUrl
-    );
-  } catch (error) {
-    await logDebug('BUFFER_PROCESSING_ERROR', 'Error processing buffered messages', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    console.error('Error processing buffered messages:', error);
-  }
-}
-
 async function processMessageForAI(instance: string, messageData: any) {
   try {
     await logDebug('AI_PROCESS_START', 'Starting AI message processing', { instance });
@@ -515,6 +278,12 @@ async function processMessageForAI(instance: string, messageData: any) {
         isGroup: remoteJid.includes('@g.us'),
         isFromMe
       });
+      return false;
+    }
+
+    const isDuplicate = await checkForDuplicateMessage(messageId, fromNumber);
+    if (isDuplicate) {
+      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping duplicate message', { messageId, fromNumber });
       return false;
     }
 
@@ -636,27 +405,68 @@ async function processMessageForAI(instance: string, messageData: any) {
       fromNumber,
       messageText,
       messageId,
-      imageUrl
+      imageUrl,
+      processed: false,
+      priority: imageUrl ? 1 : 0
     };
     
-    const added = messageBufferManager.addMessage(bufferedMessage, async (messages) => {
-      await processBufferedMessages(messages);
-    });
-    
-    if (added) {
-      await logDebug('MESSAGE_BUFFER_ADD_SUCCESS', 'Message successfully added to buffer', {
-        instanceName,
-        fromNumber,
-        timestamp: bufferedMessage.timestamp,
-        bufferStats: messageBufferManager.getStats()
+    try {
+      const addResult = await messageBufferManager.addMessage(
+        bufferedMessage, 
+        async (messages) => {
+          try {
+            await logDebug('BUFFER_PROCESSING_TRIGGERED', 'Message buffer processing triggered', {
+              messageCount: messages.length,
+              messageIds: messages.map(m => m.messageId).join(','),
+              fromNumber
+            });
+            
+            return await processBufferedMessages(messages);
+          } catch (error) {
+            await logDebug('BUFFER_CALLBACK_ERROR', 'Error in buffer processing callback', {
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined
+            });
+            return false;
+          }
+        }
+      );
+      
+      if (addResult.success) {
+        await logDebug('MESSAGE_BUFFER_ADD_SUCCESS', 'Message successfully added to buffer', {
+          instanceName,
+          fromNumber,
+          messageId: bufferedMessage.messageId,
+          timestamp: bufferedMessage.timestamp,
+          bufferKey: addResult.bufferKey,
+          messageCount: addResult.messageCount,
+          willProcessNow: addResult.willProcessNow,
+          bufferStats: messageBufferManager.getStats()
+        });
+        return true;
+      } else {
+        await logDebug('MESSAGE_BUFFER_ADD_FAILED', 'Failed to add message to buffer', {
+          instanceName,
+          fromNumber,
+          messageId: bufferedMessage.messageId,
+          error: addResult.error,
+          reason: addResult.reason
+        });
+        return false;
+      }
+    } catch (error) {
+      await logDebug('MESSAGE_BUFFER_EXCEPTION', 'Exception adding message to buffer', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        messageId: bufferedMessage.messageId
       });
-      return true;
-    } else {
-      await logDebug('MESSAGE_BUFFER_ADD_FAILED', 'Failed to add message to buffer');
       return false;
     }
   } catch (error) {
-    await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
+    await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { 
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
     console.error('Error in processMessageForAI:', error);
     return false;
   }
@@ -832,8 +642,6 @@ serve(async (req) => {
             });
           }
 
-          let needsTranscription = false;
-          
           if (hasAudioContent(normalizedData)) {
             await logDebug('VOICE_MESSAGE_ESCALATION', 'Detected voice message, will transcribe before escalation check');
             
@@ -898,6 +706,13 @@ serve(async (req) => {
               matchedKeyword: escalationResult.matched_keyword,
               category: escalationResult.category
             });
+            
+            const userBufferKey = `${instanceName}:${normalizedData.key?.remoteJid?.split('@')[0] || ''}`;
+            await messageBufferManager.cancelBuffer(userBufferKey);
+            
+            await logDebug('BUFFER_CANCELLED', 'Cancelled message buffer due to escalation', {
+              bufferKey: userBufferKey
+            });
           }
         } catch (error) {
           await logDebug('SUPPORT_ESCALATION_ERROR', 'Error checking for support escalation', { 
@@ -916,6 +731,7 @@ serve(async (req) => {
             transcription: transcribedText
           });
         }
+        
         await processMessageForAI(instanceName, normalizedData);
       }
       
