@@ -897,6 +897,10 @@ export type Database = {
           language: string
         }[]
       }
+      process_message_batch: {
+        Args: { p_conversation_id: string; p_timestamp_threshold: string }
+        Returns: Json
+      }
       reset_monthly_ai_responses: {
         Args: Record<PropertyKey, never>
         Returns: undefined

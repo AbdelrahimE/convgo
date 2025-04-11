@@ -371,14 +371,27 @@ async function processMessageForAI(instance: string, messageData: any) {
                     null;
     const remoteJid = messageData.key?.remoteJid || '';
     const isFromMe = messageData.key?.fromMe || false;
+    const messageId = messageData.key?.id || null;
     
     await logDebug('AI_MESSAGE_DETAILS', 'Extracted message details', { 
       instanceName, 
       fromNumber, 
       messageText, 
       remoteJid, 
-      isFromMe 
+      isFromMe,
+      messageId
     });
+
+    // Skip processing if:
+    // 1. Message is from a group chat (contains @g.us)
+    // 2. Message is from the bot itself (fromMe is true)
+    if (remoteJid.includes('@g.us') || isFromMe) {
+      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: Group message or sent by bot', {
+        isGroup: remoteJid.includes('@g.us'),
+        isFromMe
+      });
+      return false;
+    }
 
     // NEW: Check for and process image content
     let imageUrl = null;
@@ -464,162 +477,6 @@ async function processMessageForAI(instance: string, messageData: any) {
       }
     }
 
-    // Skip processing if:
-    // 1. Message is from a group chat (contains @g.us)
-    // 2. Message is from the bot itself (fromMe is true)
-    if (remoteJid.includes('@g.us') || isFromMe) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: Group message or sent by bot', {
-        isGroup: remoteJid.includes('@g.us'),
-        isFromMe
-      });
-      return false;
-    }
-
-    // Determine Evolution API key
-    const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey;
-    
-    if (!evolutionApiKey) {
-      await logDebug('AI_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable not set and no apikey in payload');
-    }
-
-    // Check if this is an audio message
-    const isAudioMessage = hasAudioContent(messageData);
-    
-    // Variable to track if we should bypass AI and send direct response
-    let bypassAiProcessing = false;
-    let directResponse = null;
-    
-    if (isAudioMessage) {
-      await logDebug('AUDIO_MESSAGE_DETECTED', 'Audio message detected', { 
-        messageType: messageData.messageType,
-        hasAudioMessage: !!messageData.message?.audioMessage,
-        hasPttMessage: !!messageData.message?.pttMessage
-      });
-      
-      // Extract audio details
-      const audioDetails = extractAudioDetails(messageData);
-      await logDebug('AUDIO_DETAILS', 'Extracted audio details', { audioDetails });
-      
-      // Process the audio for transcription
-      const transcriptionResult = await processAudioMessage(audioDetails, instanceName, fromNumber, evolutionApiKey);
-      
-      // Check if we should bypass AI and send direct response
-      if (transcriptionResult.bypassAiProcessing && transcriptionResult.directResponse) {
-        await logDebug('AUDIO_DIRECT_RESPONSE', 'Using direct response for disabled voice processing', {
-          directResponse: transcriptionResult.directResponse
-        });
-        
-        // Initialize instance base URL for sending responses
-        let instanceBaseUrl = '';
-
-        // Try to determine the base URL for this instance (reusing existing code logic)
-        try {
-          await logDebug('AI_EVOLUTION_URL_CHECK', 'Determining EVOLUTION API URL for direct response', { instanceName });
-          
-          // IMPORTANT: First check if the server_url is available in the current message payload
-          if (messageData.server_url) {
-            instanceBaseUrl = messageData.server_url;
-          } else {
-            // Get instance ID to look up webhook config
-            const { data: instanceData, error: instanceError } = await supabaseAdmin
-              .from('whatsapp_instances')
-              .select('id')
-              .eq('instance_name', instanceName)
-              .maybeSingle();
-
-            if (instanceError) {
-              await logDebug('DIRECT_RESPONSE_ERROR', 'Failed to get instance data', { error: instanceError });
-              return false;
-            }
-
-            // If not available in the payload, try to get it from webhook config
-            const { data: webhookConfig, error: webhookError } = await supabaseAdmin
-              .from('whatsapp_webhook_config')
-              .select('webhook_url')
-              .eq('whatsapp_instance_id', instanceData.id)
-              .maybeSingle();
-              
-            if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
-              // Extract base URL from webhook URL
-              const url = new URL(webhookConfig.webhook_url);
-              instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-            } else {
-              // If webhook URL doesn't exist, use the default Evolution API URL
-              instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-            }
-          }
-        
-          // Send direct response through WhatsApp without AI processing
-          if (instanceBaseUrl && fromNumber) {
-            await logDebug('DIRECT_RESPONSE_SENDING', 'Sending direct response to WhatsApp', {
-              instanceName,
-              toNumber: fromNumber,
-              baseUrl: instanceBaseUrl,
-              response: transcriptionResult.directResponse
-            });
-            
-            // Construct the send message URL according to EVOLUTION API format
-            const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
-            
-            const sendResponse = await fetch(sendUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'apikey': evolutionApiKey
-              },
-              body: JSON.stringify({
-                number: fromNumber,
-                text: transcriptionResult.directResponse
-              })
-            });
-
-            if (!sendResponse.ok) {
-              const errorText = await sendResponse.text();
-              await logDebug('DIRECT_RESPONSE_ERROR', 'Error sending direct response', {
-                status: sendResponse.status,
-                error: errorText
-              });
-              return false;
-            }
-
-            const sendResult = await sendResponse.json();
-            await logDebug('DIRECT_RESPONSE_SENT', 'Direct response sent successfully', { sendResult });
-            return true;
-          }
-        } catch (error) {
-          await logDebug('DIRECT_RESPONSE_EXCEPTION', 'Exception sending direct response', { error });
-          return false;
-        }
-        
-        // If we couldn't send the direct response, continue with normal processing as fallback
-      }
-      
-      if (!transcriptionResult.success) {
-        // If transcription failed but we have a fallback transcription, use it
-        if (transcriptionResult.transcription) {
-          messageText = transcriptionResult.transcription;
-          
-          await logDebug('AUDIO_FALLBACK_TRANSCRIPTION', 'Using fallback transcription for failed audio processing', {
-            transcription: messageText
-          });
-        } else {
-          // Complete failure - set generic placeholder
-          messageText = "This is a voice message that could not be processed.";
-          
-          await logDebug('AUDIO_PROCESSING_FAILED', 'Failed to process audio with no fallback', {
-            error: transcriptionResult.error
-          });
-        }
-      } else {
-        // Successful transcription
-        messageText = transcriptionResult.transcription;
-        
-        await logDebug('AUDIO_TRANSCRIPTION_USED', 'Successfully transcribed audio message', {
-          transcription: messageText?.substring(0, 100) + '...'
-        });
-      }
-    }
-
     // If no message content (text or processed audio), skip
     if (!messageText && !imageUrl) {
       await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text or image content', { messageData });
@@ -657,275 +514,159 @@ async function processMessageForAI(instance: string, messageData: any) {
       return false;
     }
 
-    // Store user message in conversation
-    await storeMessageInConversation(conversationId, 'user', messageText, messageData.key?.id, supabaseAdmin);
-    
-    // NEW INTEGRATION POINT: Check for batched messages before processing this one
-    // Only do this for text messages, not for images or audio that's been processed
-    if (!imageUrl && !messageData.transcribedText) {
-      await logDebug('BATCH_CHECK', 'Checking for batched messages before processing current message', {
-        conversationId
-      });
-      
-      // Process batched messages first - if any exist
-      const batchedMessages = await processBatchedMessages(instanceName, conversationId, supabaseAdmin);
-      
-      if (batchedMessages && batchedMessages.combinedContent) {
-        await logDebug('BATCH_FOUND', 'Found and processed batched messages', {
-          messageCount: batchedMessages.messageCount || '(unknown)',
-          contentPreview: batchedMessages.combinedContent.substring(0, 100) + '...'
-        });
-        
-        // Use the batched content instead of the single message
-        messageText = batchedMessages.combinedContent;
-        
-        // We'll still process this newest message immediately along with the batch
-        // Mark the current message as processed too since we're including it
-        try {
-          // Update the current message to processed=true
-          const { error: updateError } = await supabaseAdmin
-            .from('whatsapp_conversation_messages')
-            .update({ processed: true })
-            .eq('message_id', messageData.key?.id)
-            .eq('conversation_id', conversationId);
-            
-          if (updateError) {
-            await logDebug('BATCH_UPDATE_ERROR', 'Error marking current message as processed', {
-              error: updateError,
-              messageId: messageData.key?.id
-            });
-          }
-        } catch (error) {
-          await logDebug('BATCH_UPDATE_EXCEPTION', 'Exception marking current message as processed', {
-            error,
-            messageId: messageData.key?.id
-          });
-          // Continue with processing anyway
-        }
-      } else {
-        await logDebug('BATCH_NOT_FOUND', 'No batched messages found, processing single message', {
-          conversationId,
-          messageId: messageData.key?.id
-        });
-      }
-    }
-    
-    // Get recent conversation history with improved token management
-    const conversationHistory = await getRecentConversationHistory(conversationId, 800);
-    await logDebug('CONVERSATION_HISTORY', 'Retrieved conversation history', { 
-      messageCount: conversationHistory.length,
-      estimatedTokens: conversationHistory.reduce((sum, msg) => sum + Math.ceil(msg.content.length * 0.25), 0)
+    // Store user message in conversation but MARK AS UNPROCESSED for batch processing
+    await storeMessageInConversation(conversationId, 'user', messageText, messageId, supabaseAdmin);
+    await logDebug('MESSAGE_QUEUED', 'Message stored for batch processing', { 
+      conversationId, 
+      messageId,
+      messagePreview: messageText?.substring(0, 50) + '...'
     });
-
-    // Check if this instance has AI enabled
-    await logDebug('AI_CONFIG_CHECK', 'Checking if AI is enabled for instance', { instanceName });
     
-    const instanceId = instanceData.id;
-    await logDebug('AI_INSTANCE_FOUND', 'Found instance in database', { instanceId, status: instanceData.status });
+    // IMPORTANT CHANGE: Return here instead of processing immediately
+    // The batch processing job will handle this message
+    return true;
+  } catch (error) {
+    await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
+    console.error('Error in processMessageForAI:', error);
+    return false;
+  }
+}
 
-    // Check if AI is enabled for this instance
-    const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
-      .from('whatsapp_ai_config')
-      .select('*')
-      .eq('whatsapp_instance_id', instanceId)
-      .eq('is_active', true)
-      .maybeSingle();
+// Variable to track if we should bypass AI and send direct response
+let bypassAiProcessing = false;
+let directResponse = null;
 
-    if (aiConfigError || !aiConfig) {
-      await logDebug('AI_DISABLED', 'AI is not enabled for this instance', { 
-        instanceId, 
-        error: aiConfigError 
-      });
-      logger.error('AI not enabled for this instance:', aiConfigError || 'No active config found');
-      return false;
-    }
+// Check if this is an audio message
+const isAudioMessage = hasAudioContent(messageData);
 
-    await logDebug('AI_ENABLED', 'AI is enabled for this instance', { 
-      aiConfigId: aiConfig.id,
-      temperature: aiConfig.temperature,
-      systemPromptPreview: aiConfig.system_prompt.substring(0, 50) + '...'
+if (isAudioMessage) {
+  await logDebug('AUDIO_MESSAGE_DETECTED', 'Audio message detected', { 
+    messageType: messageData.messageType,
+    hasAudioMessage: !!messageData.message?.audioMessage,
+    hasPttMessage: !!messageData.message?.pttMessage
+  });
+  
+  // Extract audio details
+  const audioDetails = extractAudioDetails(messageData);
+  await logDebug('AUDIO_DETAILS', 'Extracted audio details', { audioDetails });
+  
+  // Process the audio for transcription
+  const transcriptionResult = await processAudioMessage(audioDetails, instanceName, fromNumber, evolutionApiKey);
+  
+  // Check if we should bypass AI and send direct response
+  if (transcriptionResult.bypassAiProcessing && transcriptionResult.directResponse) {
+    await logDebug('AUDIO_DIRECT_RESPONSE', 'Using direct response for disabled voice processing', {
+      directResponse: transcriptionResult.directResponse
     });
-
-    // Get files associated with this instance for RAG
-    const { data: fileMappings, error: fileMappingsError } = await supabaseAdmin
-      .from('whatsapp_file_mappings')
-      .select('file_id')
-      .eq('whatsapp_instance_id', instanceId);
-
-    if (fileMappingsError) {
-      await logDebug('AI_FILE_MAPPING_ERROR', 'Error getting file mappings', { 
-        instanceId, 
-        error: fileMappingsError 
-      });
-      logger.error('Error getting file mappings:', fileMappingsError);
-      return false;
-    }
-
-    // Extract file IDs
-    const fileIds = fileMappings?.map(mapping => mapping.file_id) || [];
-    await logDebug('AI_FILE_MAPPINGS', 'Retrieved file mappings for instance', { 
-      instanceId, 
-      fileCount: fileIds.length,
-      fileIds
-    });
-
-    if (fileIds.length === 0) {
-      await logDebug('AI_NO_FILES', 'No files mapped to this instance, using empty context', { instanceId });
-    }
-
+    
     // Initialize instance base URL for sending responses
     let instanceBaseUrl = '';
 
-    // Try to determine the base URL for this instance
+    // Try to determine the base URL for this instance (reusing existing code logic)
     try {
-      await logDebug('AI_EVOLUTION_URL_CHECK', 'Attempting to determine EVOLUTION API URL', { instanceId });
+      await logDebug('AI_EVOLUTION_URL_CHECK', 'Determining EVOLUTION API URL for direct response', { instanceName });
       
       // IMPORTANT: First check if the server_url is available in the current message payload
       if (messageData.server_url) {
         instanceBaseUrl = messageData.server_url;
-        await logDebug('AI_EVOLUTION_URL_FROM_PAYLOAD', 'Using server_url from payload', { 
-          instanceBaseUrl
-        });
       } else {
+        // Get instance ID to look up webhook config
+        const { data: instanceData, error: instanceError } = await supabaseAdmin
+          .from('whatsapp_instances')
+          .select('id')
+          .eq('instance_name', instanceName)
+          .maybeSingle();
+
+        if (instanceError) {
+          await logDebug('DIRECT_RESPONSE_ERROR', 'Failed to get instance data', { error: instanceError });
+          return false;
+        }
+
         // If not available in the payload, try to get it from webhook config
         const { data: webhookConfig, error: webhookError } = await supabaseAdmin
           .from('whatsapp_webhook_config')
           .select('webhook_url')
-          .eq('whatsapp_instance_id', instanceId)
+          .eq('whatsapp_instance_id', instanceData.id)
           .maybeSingle();
           
         if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
           // Extract base URL from webhook URL
           const url = new URL(webhookConfig.webhook_url);
           instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-          await logDebug('AI_EVOLUTION_URL_FOUND', 'Extracted base URL from webhook config', { 
-            instanceBaseUrl,
-            webhookUrl: webhookConfig.webhook_url
-          });
         } else {
           // If webhook URL doesn't exist, use the default Evolution API URL
           instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-          await logDebug('AI_EVOLUTION_URL_DEFAULT', 'Using default EVOLUTION API URL', { 
-            instanceBaseUrl,
-            webhookError
-          });
         }
       }
+    
+      // Send direct response through WhatsApp without AI processing
+      if (instanceBaseUrl && fromNumber) {
+        await logDebug('DIRECT_RESPONSE_SENDING', 'Sending direct response to WhatsApp', {
+          instanceName,
+          toNumber: fromNumber,
+          baseUrl: instanceBaseUrl,
+          response: transcriptionResult.directResponse
+        });
+        
+        // Construct the send message URL according to EVOLUTION API format
+        const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+        
+        const sendResponse = await fetch(sendUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': evolutionApiKey
+          },
+          body: JSON.stringify({
+            number: fromNumber,
+            text: transcriptionResult.directResponse
+          })
+        });
+
+        if (!sendResponse.ok) {
+          const errorText = await sendResponse.text();
+          await logDebug('DIRECT_RESPONSE_ERROR', 'Error sending direct response', {
+            status: sendResponse.status,
+            error: errorText
+          });
+          return false;
+        }
+
+        const sendResult = await sendResponse.json();
+        await logDebug('DIRECT_RESPONSE_SENT', 'Direct response sent successfully', { sendResult });
+        return true;
+      }
     } catch (error) {
-      // In case of any error, use the default Evolution API URL
-      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-      await logDebug('AI_EVOLUTION_URL_ERROR', 'Error determining EVOLUTION API URL, using default', { 
-        instanceBaseUrl,
-        error
-      });
+      await logDebug('DIRECT_RESPONSE_EXCEPTION', 'Exception sending direct response', { error });
+      return false;
     }
-
-    await logDebug('AI_CONTEXT_SEARCH', 'Starting semantic search for context', { 
-      userQuery: messageText,
-      fileIds 
-    });
-
-    // Perform semantic search to find relevant contexts
-    const searchResponse = await fetch(`${supabaseUrl}/functions/v1/semantic-search`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify({
-        query: messageText,
-        fileIds: fileIds.length > 0 ? fileIds : undefined,
-        limit: 5,
-        threshold: 0.3
-      })
-    });
-
-    if (!searchResponse.ok) {
-      const errorText = await searchResponse.text();
-      await logDebug('AI_SEARCH_ERROR', 'Semantic search failed', { 
-        status: searchResponse.status,
-        error: errorText
-      });
-      console.error('Semantic search failed:', errorText);
-      
-      // Continue with empty context instead of failing
-      await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
-      return await generateAndSendAIResponse(
-        messageText, 
-        context, 
-        instanceName, 
-        fromNumber, 
-        instanceBaseUrl, 
-        aiConfig, 
-        messageData, 
-        conversationId,
-        supabaseUrl,
-        supabaseServiceKey,
-        imageUrl
-      );
-    }
-
-    const searchResults = await searchResponse.json();
-    await logDebug('AI_SEARCH_RESULTS', 'Semantic search completed', { 
-      resultCount: searchResults.results?.length || 0,
-      similarity: searchResults.results?.[0]?.similarity || 0
-    });
-
-    // IMPROVED CONTEXT ASSEMBLY: Balance between conversation history and RAG content
-    let context = '';
-    let ragContext = '';
     
-    // 1. Format conversation history in a clean, token-efficient format
-    const conversationContext = conversationHistory
-      .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
-      .join('\n\n');
-    
-    // 2. Format RAG results if available - more token-efficient formatting
-    if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
-      // Only include the most relevant sections to save tokens
-      const topResults = searchResults.results.slice(0, 3);
+    // If we couldn't send the direct response, continue with normal processing as fallback
+  }
+  
+  if (!transcriptionResult.success) {
+    // If transcription failed but we have a fallback transcription, use it
+    if (transcriptionResult.transcription) {
+      messageText = transcriptionResult.transcription;
       
-      // Join RAG content with separators and add source information
-      ragContext = topResults
-        .map((result, index) => `DOCUMENT ${index + 1} (similarity: ${result.similarity.toFixed(2)}):\n${result.content.trim()}`)
-        .join('\n\n---\n\n');
-      
-      // 3. The context assembly is now handled by the balanceContextTokens function in generate-response
-      context = `${conversationContext}\n\n${ragContext}`;
-      
-      await logDebug('AI_CONTEXT_ASSEMBLED', 'Enhanced context assembled for token balancing', { 
-        conversationChars: conversationContext.length,
-        ragChars: ragContext.length,
-        totalChars: context.length,
-        estimatedTokens: Math.ceil(context.length * 0.25)
+      await logDebug('AUDIO_FALLBACK_TRANSCRIPTION', 'Using fallback transcription for failed audio processing', {
+        transcription: messageText
       });
     } else {
-      // Only conversation history is available
-      context = conversationContext;
-      await logDebug('AI_CONTEXT_ASSEMBLED', 'Context assembled with only conversation history', { 
-        conversationChars: conversationContext.length,
-        estimatedTokens: Math.ceil(conversationContext.length * 0.25)
+      // Complete failure - set generic placeholder
+      messageText = "This is a voice message that could not be processed.";
+      
+      await logDebug('AUDIO_PROCESSING_FAILED', 'Failed to process audio with no fallback', {
+        error: transcriptionResult.error
       });
     }
-
-    // Generate and send the response with improved context and token management
-    return await generateAndSendAIResponse(
-      messageText,
-      context,
-      instanceName,
-      fromNumber,
-      instanceBaseUrl,
-      aiConfig,
-      messageData,
-      conversationId,
-      supabaseUrl,
-      supabaseServiceKey,
-      imageUrl
-    );
-  } catch (error) {
-    await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
-    console.error('Error in processMessageForAI:', error);
-    return false;
+  } else {
+    // Successful transcription
+    messageText = transcriptionResult.transcription;
+    
+    await logDebug('AUDIO_TRANSCRIPTION_USED', 'Successfully transcribed audio message', {
+      transcription: messageText?.substring(0, 100) + '...'
+    });
   }
 }
 
@@ -1220,13 +961,12 @@ serve(async (req) => {
         }
       }
       
-      // Process for AI if this is a message event and not escalated
+      // Queue message for AI processing if this is a message event and not escalated
       if (event === 'messages.upsert' && !skipAiProcessing) {
-        await logDebug('AI_PROCESS_ATTEMPT', 'Attempting to process message for AI response');
+        await logDebug('AI_PROCESS_ATTEMPT', 'Queueing message for batch processing');
         if (transcribedText) {
-          // If we already transcribed the message for escalation, pass it to AI processing
           normalizedData.transcribedText = transcribedText;
-          await logDebug('AI_USING_TRANSCRIPTION', 'Using already transcribed text for AI processing', {
+          await logDebug('AI_USING_TRANSCRIPTION', 'Using already transcribed text for batch processing', {
             transcription: transcribedText
           });
         }
