@@ -248,8 +248,7 @@ async function saveWebhookMessage(instance: string, event: string, data: any) {
   }
 }
 
-// The critical function we need to fix to avoid multiple responses
-async function handleBufferedMessages(messages: BufferedMessage[]): Promise<void> {
+async function processBufferedMessages(messages: BufferedMessage[]): Promise<void> {
   try {
     if (!messages.length) return;
     
@@ -267,6 +266,47 @@ async function handleBufferedMessages(messages: BufferedMessage[]): Promise<void
       firstMessageTime: new Date(messages[0].timestamp).toISOString(),
       lastMessageTime: new Date(messages[messages.length - 1].timestamp).toISOString(),
       timeSpanSeconds: Math.round((messages[messages.length - 1].timestamp - messages[0].timestamp) / 1000)
+    });
+    
+    let combinedText = "";
+    let latestMessageId = "";
+    let latestMessageData = null;
+    let hasImage = false;
+    let imageUrl = null;
+    
+    for (const message of messages) {
+      latestMessageId = message.messageId;
+      latestMessageData = message.messageData;
+      
+      if (message.imageUrl) {
+        hasImage = true;
+        imageUrl = message.imageUrl;
+      }
+      
+      if (message.messageText) {
+        if (combinedText) combinedText += "\n";
+        combinedText += message.messageText;
+      }
+    }
+    
+    if (!combinedText && hasImage) {
+      combinedText = "Please analyze this image.";
+    } else if (!combinedText && !hasImage) {
+      await logDebug('BUFFER_EMPTY_BATCH', 'Buffer batch has no text or image content', {
+        instanceName,
+        fromNumber,
+        messageCount: messages.length
+      });
+      return;
+    }
+    
+    await logDebug('BUFFER_COMBINED_CONTENT', 'Combined content from buffered messages', {
+      instanceName,
+      fromNumber,
+      messageCount: messages.length,
+      contentLength: combinedText.length,
+      hasImage,
+      contentPreview: combinedText.substring(0, 100) + (combinedText.length > 100 ? '...' : '')
     });
     
     const { data: instanceData, error: instanceError } = await supabaseAdmin
@@ -290,6 +330,14 @@ async function handleBufferedMessages(messages: BufferedMessage[]): Promise<void
       messageCount: messages.length
     });
 
+    await storeMessageInConversation(
+      conversationId, 
+      'user', 
+      combinedText, 
+      latestMessageId, 
+      supabaseAdmin
+    );
+    
     const conversationHistory = await getRecentConversationHistory(conversationId, 800);
     
     const instanceId = instanceData.id;
@@ -331,11 +379,8 @@ async function handleBufferedMessages(messages: BufferedMessage[]): Promise<void
     try {
       await logDebug('AI_EVOLUTION_URL_CHECK', 'Determining EVOLUTION API URL for buffered messages', { instanceId });
       
-      // Get last message data for API key information
-      const lastMessageData = messages[messages.length - 1].messageData;
-      
-      if (lastMessageData && lastMessageData.server_url) {
-        instanceBaseUrl = lastMessageData.server_url;
+      if (latestMessageData && latestMessageData.server_url) {
+        instanceBaseUrl = latestMessageData.server_url;
       } else {
         const { data: webhookConfig, error: webhookError } = await supabaseAdmin
           .from('whatsapp_webhook_config')
@@ -347,11 +392,11 @@ async function handleBufferedMessages(messages: BufferedMessage[]): Promise<void
           const url = new URL(webhookConfig.webhook_url);
           instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
         } else {
-          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://api.convgo.com';
+          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
         }
       }
     } catch (error) {
-      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://api.convgo.com';
+      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
       await logDebug('AI_EVOLUTION_URL_ERROR', 'Error determining URL, using default', { 
         instanceBaseUrl,
         error
@@ -365,54 +410,70 @@ async function handleBufferedMessages(messages: BufferedMessage[]): Promise<void
         'Authorization': `Bearer ${supabaseServiceKey}`
       },
       body: JSON.stringify({
-        query: messages.map(m => m.messageText).filter(Boolean).join(' '),
+        query: combinedText,
         fileIds: fileIds.length > 0 ? fileIds : undefined,
         limit: 5,
         threshold: 0.3
       })
     });
 
+    if (!searchResponse.ok) {
+      const errorText = await searchResponse.text();
+      await logDebug('AI_SEARCH_ERROR', 'Semantic search failed for buffered messages', { 
+        status: searchResponse.status,
+        error: errorText
+      });
+      console.error('Semantic search failed:', errorText);
+      
+      await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context for buffered messages');
+      return await generateAndSendAIResponse(
+        combinedText, 
+        "", 
+        instanceName, 
+        fromNumber, 
+        instanceBaseUrl, 
+        aiConfig, 
+        latestMessageData, 
+        conversationId,
+        supabaseUrl,
+        supabaseServiceKey,
+        imageUrl
+      );
+    }
+
+    const searchResults = await searchResponse.json();
+    
     let context = '';
+    let ragContext = '';
     
     const conversationContext = conversationHistory
       .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
       .join('\n\n');
     
-    if (searchResponse.ok) {
-      const searchResults = await searchResponse.json();
+    if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
+      const topResults = searchResults.results.slice(0, 3);
       
-      if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
-        const topResults = searchResults.results.slice(0, 3);
-        
-        const ragContext = topResults
-          .map((result, index) => `DOCUMENT ${index + 1} (similarity: ${result.similarity.toFixed(2)}):\n${result.content.trim()}`)
-          .join('\n\n---\n\n');
-        
-        context = `${conversationContext}\n\n${ragContext}`;
-      } else {
-        context = conversationContext;
-      }
+      ragContext = topResults
+        .map((result, index) => `DOCUMENT ${index + 1} (similarity: ${result.similarity.toFixed(2)}):\n${result.content.trim()}`)
+        .join('\n\n---\n\n');
+      
+      context = `${conversationContext}\n\n${ragContext}`;
     } else {
-      await logDebug('AI_SEARCH_ERROR', 'Semantic search failed for buffered messages', { 
-        status: searchResponse.status,
-        error: await searchResponse.text()
-      });
-      
       context = conversationContext;
     }
 
-    // This is the critical call - use the improved processBufferedMessages function
-    // to ensure we're processing all messages as one batch
-    await processBufferedMessages(
-      messages, 
+    await generateAndSendAIResponse(
+      combinedText,
       context,
-      instanceName, 
-      fromNumber, 
-      instanceBaseUrl, 
-      aiConfig, 
+      instanceName,
+      fromNumber,
+      instanceBaseUrl,
+      aiConfig,
+      latestMessageData,
       conversationId,
       supabaseUrl,
-      supabaseServiceKey
+      supabaseServiceKey,
+      imageUrl
     );
   } catch (error) {
     await logDebug('BUFFER_PROCESSING_ERROR', 'Error processing buffered messages', {
@@ -578,10 +639,8 @@ async function processMessageForAI(instance: string, messageData: any) {
       imageUrl
     };
     
-    // This is the critical fix - we use our custom handler that processes 
-    // multiple messages as a single batch instead of individually
     const added = messageBufferManager.addMessage(bufferedMessage, async (messages) => {
-      await handleBufferedMessages(messages);
+      await processBufferedMessages(messages);
     });
     
     if (added) {
@@ -867,13 +926,37 @@ serve(async (req) => {
         }
       });
     }
+    
+    await logDebug('WEBHOOK_PATH_ERROR', 'No valid instance name could be extracted from path or payload', { 
+      fullPath: url.pathname,
+      pathParts,
+      hasPayload: !!data,
+      payloadKeys: data ? Object.keys(data) : []
+    });
+    
+    return new Response(JSON.stringify({ success: false, error: 'Invalid webhook path or missing instance name in payload' }), {
+      status: 400,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
+      }
+    });
   } catch (error) {
-    await logDebug('WEBHOOK_PROCESS_ERROR', 'Error processing webhook request', { error });
-    console.error('Error processing webhook request:', error);
+    await logDebug('WEBHOOK_ERROR', 'Error processing webhook', { 
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
+    logger.error('Error processing webhook:', error);
+    
     return new Response(
-      JSON.stringify({ success: false, error: 'Internal server error' }),
-      { 
-        status: 500, 
+      JSON.stringify({
+        success: false,
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      }),
+      {
+        status: 500,
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json'
