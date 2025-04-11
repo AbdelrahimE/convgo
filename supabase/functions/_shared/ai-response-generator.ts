@@ -2,6 +2,7 @@
 import logDebug from "./webhook-logger.ts";
 import { storeMessageInConversation } from "./conversation-storage.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { BufferedMessage } from "./message-buffer.ts";
 
 /**
  * Generates an AI response based on user query and context, then sends it via WhatsApp
@@ -201,6 +202,119 @@ export async function generateAndSendAIResponse(
     }
   } catch (error) {
     await logDebug('AI_GENERATE_SEND_EXCEPTION', 'Exception in generate and send function', { error });
+    return false;
+  }
+}
+
+/**
+ * Process multiple buffered messages and generate a single AI response
+ * This is an enhanced version that handles combined messages from the buffer
+ * 
+ * @param bufferedMessages Array of buffered messages to process together
+ * @param context Conversation context and/or RAG content
+ * @param instanceName The WhatsApp instance name
+ * @param fromNumber The user's phone number
+ * @param instanceBaseUrl Base URL for the WhatsApp API
+ * @param aiConfig AI configuration for the instance
+ * @param conversationId The conversation ID for storing the response
+ * @param supabaseUrl Supabase project URL
+ * @param supabaseServiceKey Supabase service role key
+ * @returns Promise<boolean> Success status of the operation
+ */
+export async function processBufferedMessages(
+  bufferedMessages: BufferedMessage[],
+  context: string,
+  instanceName: string,
+  fromNumber: string,
+  instanceBaseUrl: string,
+  aiConfig: any,
+  conversationId: string,
+  supabaseUrl: string,
+  supabaseServiceKey: string
+): Promise<boolean> {
+  try {
+    // If no messages in buffer, nothing to do
+    if (!bufferedMessages || bufferedMessages.length === 0) {
+      await logDebug('BUFFER_PROCESS_EMPTY', 'No messages in buffer to process');
+      return false;
+    }
+    
+    // Initialize Supabase admin client for database operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Log the buffered messages processing
+    await logDebug('BUFFER_PROCESSING', 'Processing buffered messages', {
+      messageCount: bufferedMessages.length,
+      instanceName,
+      fromNumber
+    });
+    
+    // Sort messages by timestamp to ensure correct order
+    const sortedMessages = [...bufferedMessages].sort((a, b) => a.timestamp - b.timestamp);
+    
+    // Combine text from all messages
+    let combinedText = '';
+    let imageUrlToUse: string | null = null;
+    
+    // Save each message in the conversation history and build combined text
+    for (let i = 0; i < sortedMessages.length; i++) {
+      const message = sortedMessages[i];
+      
+      // Store each individual message in conversation history
+      if (message.messageText) {
+        await storeMessageInConversation(
+          conversationId, 
+          'user', 
+          message.messageText, 
+          message.messageId, 
+          supabaseAdmin
+        );
+        
+        // Add to combined text with separators between messages
+        if (combinedText) {
+          combinedText += '\n---\n'; // Add separator between messages
+        }
+        combinedText += message.messageText;
+      }
+      
+      // Use the last image in the sequence if multiple images
+      if (message.imageUrl) {
+        imageUrlToUse = message.imageUrl;
+      }
+    }
+    
+    // Log the combined message
+    await logDebug('BUFFER_COMBINED_MESSAGE', 'Created combined message from buffer', {
+      originalCount: sortedMessages.length,
+      combinedLength: combinedText.length,
+      hasImage: !!imageUrlToUse,
+      preview: combinedText.substring(0, 100) + (combinedText.length > 100 ? '...' : '')
+    });
+    
+    // Use the message data from the last message for API key info
+    const lastMessageData = sortedMessages[sortedMessages.length - 1].messageData;
+    
+    // Process the combined message with the AI
+    return await generateAndSendAIResponse(
+      combinedText,
+      context,
+      instanceName,
+      fromNumber,
+      instanceBaseUrl,
+      aiConfig,
+      lastMessageData,
+      conversationId,
+      supabaseUrl,
+      supabaseServiceKey,
+      imageUrlToUse
+    );
+    
+  } catch (error) {
+    await logDebug('BUFFER_PROCESS_EXCEPTION', 'Exception processing buffered messages', { 
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    console.error('Error processing buffered messages:', error);
     return false;
   }
 }
