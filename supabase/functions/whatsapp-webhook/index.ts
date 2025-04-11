@@ -281,10 +281,26 @@ async function processMessageForAI(instance: string, messageData: any) {
       return false;
     }
 
-    const isDuplicate = await checkForDuplicateMessage(messageId, fromNumber);
-    if (isDuplicate) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping duplicate message', { messageId, fromNumber });
+    // Safe check for fromNumber
+    if (!fromNumber) {
+      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: Missing sender number', {
+        remoteJid
+      });
       return false;
+    }
+
+    try {
+      const isDuplicate = await checkForDuplicateMessage(messageId, fromNumber);
+      if (isDuplicate) {
+        await logDebug('AI_PROCESSING_SKIPPED', 'Skipping duplicate message', { messageId, fromNumber });
+        return false;
+      }
+    } catch (error) {
+      await logDebug('DUPLICATE_CHECK_ERROR', 'Error checking for duplicate message', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      // Continue processing even if duplicate check fails
     }
 
     let imageUrl = null;
@@ -348,7 +364,8 @@ async function processMessageForAI(instance: string, messageData: any) {
       
       const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey;
       
-      const transcriptionResult = await processAudioMessage(audioDetails, instanceName, fromNumber, evolutionApiKey);
+      const transcriptionResult = await processAudioMessage(audioDetails, instanceName, 
+        messageData.key?.remoteJid?.split('@')[0] || '', evolutionApiKey);
       
       if (transcriptionResult.bypassAiProcessing && transcriptionResult.directResponse) {
         await logDebug('AUDIO_DIRECT_RESPONSE', 'Using direct response for disabled voice processing', {
@@ -356,7 +373,9 @@ async function processMessageForAI(instance: string, messageData: any) {
         });
         
         try {
-          let instanceBaseUrl = messageData.server_url || Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+          let instanceBaseUrl = messageData.server_url || 
+                                Deno.env.get('EVOLUTION_API_URL') || 
+                                DEFAULT_EVOLUTION_API_URL;
           
           if (instanceBaseUrl && fromNumber) {
             const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
@@ -398,6 +417,72 @@ async function processMessageForAI(instance: string, messageData: any) {
       return false;
     }
     
+    // Get instance information for AI configuration
+    const { data: instanceInfo, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('id, ai_config')
+      .eq('instance_name', instanceName)
+      .maybeSingle();
+    
+    if (instanceError) {
+      await logDebug('AI_INSTANCE_ERROR', 'Error fetching instance information', {
+        error: instanceError,
+        instanceName
+      });
+    }
+    
+    const aiConfig = instanceInfo?.ai_config || {};
+    
+    // Find or create a conversation for this user
+    let conversationId;
+    try {
+      conversationId = await findOrCreateConversation(
+        instanceInfo?.id || instanceName, 
+        fromNumber
+      );
+      
+      await logDebug('AI_CONVERSATION', 'Found or created conversation', {
+        conversationId,
+        instanceName,
+        fromNumber
+      });
+    } catch (error) {
+      await logDebug('AI_CONVERSATION_ERROR', 'Error finding or creating conversation', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        instanceName,
+        fromNumber
+      });
+      // Create a fallback conversation ID if needed
+      conversationId = `fallback_${instanceName}_${fromNumber}_${Date.now()}`;
+    }
+    
+    // Get recent conversation history for context
+    let context = '';
+    try {
+      const recentMessages = await getRecentConversationHistory(conversationId);
+      if (recentMessages && recentMessages.length > 0) {
+        context = recentMessages.map(m => `${m.role}: ${m.content}`).join('\n');
+        
+        await logDebug('AI_CONTEXT', 'Retrieved conversation context', {
+          contextLength: context.length,
+          messageCount: recentMessages.length
+        });
+      }
+    } catch (error) {
+      await logDebug('AI_CONTEXT_ERROR', 'Error retrieving conversation context', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        conversationId
+      });
+    }
+    
+    // Determine Evolution API URL
+    let instanceBaseUrl = messageData.server_url || 
+                          Deno.env.get('EVOLUTION_API_URL') || 
+                          DEFAULT_EVOLUTION_API_URL;
+    
+    // Create buffered message object
     const bufferedMessage: BufferedMessage = {
       messageData: messageData,
       timestamp: Date.now(),
@@ -411,17 +496,31 @@ async function processMessageForAI(instance: string, messageData: any) {
     };
     
     try {
+      // Pass all required parameters to the buffer manager
       const addResult = await messageBufferManager.addMessage(
         bufferedMessage, 
-        async (messages) => {
+        async (messages, msgContext, msgInstanceName, msgFromNumber, msgInstanceBaseUrl, msgAiConfig, msgConversationId, msgSupabaseUrl, msgSupabaseServiceKey) => {
           try {
             await logDebug('BUFFER_PROCESSING_TRIGGERED', 'Message buffer processing triggered', {
               messageCount: messages.length,
               messageIds: messages.map(m => m.messageId).join(','),
-              fromNumber
+              fromNumber,
+              hasSupabaseUrl: !!msgSupabaseUrl,
+              hasSupabaseServiceKey: !!msgSupabaseServiceKey
             });
             
-            return await processBufferedMessages(messages);
+            // Use buffer-provided parameters or fallback to the ones from closure
+            return await processBufferedMessages(
+              messages,
+              msgContext || context,
+              msgInstanceName || instanceName,
+              msgFromNumber || fromNumber,
+              msgInstanceBaseUrl || instanceBaseUrl,
+              msgAiConfig || aiConfig,
+              msgConversationId || conversationId,
+              msgSupabaseUrl || supabaseUrl,
+              msgSupabaseServiceKey || supabaseServiceKey
+            );
           } catch (error) {
             await logDebug('BUFFER_CALLBACK_ERROR', 'Error in buffer processing callback', {
               error: error instanceof Error ? error.message : String(error),
@@ -429,6 +528,15 @@ async function processMessageForAI(instance: string, messageData: any) {
             });
             return false;
           }
+        },
+        {
+          // Pass all context parameters needed for processing
+          context,
+          instanceBaseUrl,
+          aiConfig,
+          conversationId,
+          supabaseUrl,
+          supabaseServiceKey
         }
       );
       
@@ -625,7 +733,7 @@ serve(async (req) => {
         try {
           const { data: instanceData, error: instanceError } = await supabaseAdmin
             .from('whatsapp_instances')
-            .select('id')
+            .select('id, ai_config')
             .eq('instance_name', instanceName)
             .maybeSingle();
             

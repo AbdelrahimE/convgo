@@ -34,15 +34,34 @@ export async function generateAndSendAIResponse(
   imageUrl?: string | null
 ): Promise<boolean> {
   try {
+    // Validate required parameters
+    if (!supabaseUrl || !supabaseServiceKey) {
+      await logDebug('AI_MISSING_PARAMS', 'Missing required Supabase parameters', {
+        hasSupabaseUrl: !!supabaseUrl,
+        hasSupabaseKey: !!supabaseServiceKey
+      });
+      console.error('Missing required Supabase parameters');
+      return false;
+    }
+    
+    if (!instanceName || !fromNumber) {
+      await logDebug('AI_MISSING_PARAMS', 'Missing required message parameters', {
+        hasInstanceName: !!instanceName,
+        hasFromNumber: !!fromNumber
+      });
+      console.error('Missing required message parameters');
+      return false;
+    }
+    
     // Initialize Supabase admin client for database operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
     // Generate system prompt
     await logDebug('AI_SYSTEM_PROMPT', 'Using system prompt from configuration', { 
-      userSystemPrompt: aiConfig.system_prompt
+      userSystemPrompt: aiConfig?.system_prompt
     });
     
-    const systemPrompt = aiConfig.system_prompt;
+    const systemPrompt = aiConfig?.system_prompt || "You are a helpful AI assistant that provides concise and accurate information.";
 
     // Generate AI response with improved token management and include imageUrl
     await logDebug('AI_RESPONSE_GENERATION', 'Generating AI response with token management', {
@@ -58,11 +77,11 @@ export async function generateAndSendAIResponse(
         query: query,
         context: context,
         systemPrompt: systemPrompt,
-        temperature: aiConfig.temperature || 0.7,
+        temperature: aiConfig?.temperature || 0.7,
         model: 'gpt-4o-mini',
         maxContextTokens: 3000, // Explicit token limit
         imageUrl: imageUrl, // Pass the image URL if available
-        userId: aiConfig.user_id || null
+        userId: aiConfig?.user_id || null
       })
     });
 
@@ -223,19 +242,44 @@ export async function generateAndSendAIResponse(
  */
 export async function processBufferedMessages(
   bufferedMessages: BufferedMessage[],
-  context: string,
-  instanceName: string,
-  fromNumber: string,
-  instanceBaseUrl: string,
-  aiConfig: any,
-  conversationId: string,
-  supabaseUrl: string,
-  supabaseServiceKey: string
+  context: string = "",
+  instanceName?: string,
+  fromNumber?: string,
+  instanceBaseUrl?: string,
+  aiConfig: any = {},
+  conversationId?: string,
+  supabaseUrl?: string,
+  supabaseServiceKey?: string
 ): Promise<boolean> {
   try {
+    // Validate critical parameters
+    if (!supabaseUrl || !supabaseServiceKey) {
+      await logDebug('BUFFER_PROCESS_MISSING_PARAMS', 'Missing required Supabase parameters', {
+        hasSupabaseUrl: !!supabaseUrl,
+        hasSupabaseKey: !!supabaseServiceKey
+      });
+      console.error('Missing required Supabase parameters for processing buffered messages');
+      return false;
+    }
+    
     // If no messages in buffer, nothing to do
     if (!bufferedMessages || bufferedMessages.length === 0) {
       await logDebug('BUFFER_PROCESS_EMPTY', 'No messages in buffer to process');
+      return false;
+    }
+    
+    // Extract parameters from first message if not provided
+    const firstMessage = bufferedMessages[0];
+    instanceName = instanceName || firstMessage.instanceName;
+    fromNumber = fromNumber || firstMessage.fromNumber;
+    
+    // Verify we have the essential parameters
+    if (!instanceName || !fromNumber) {
+      await logDebug('BUFFER_PROCESS_MISSING_PARAMS', 'Missing required messaging parameters', {
+        hasInstanceName: !!instanceName,
+        hasFromNumber: !!fromNumber
+      });
+      console.error('Missing required messaging parameters for processing buffered messages');
       return false;
     }
     
@@ -266,6 +310,38 @@ export async function processBufferedMessages(
     
     // Sort messages by timestamp to ensure correct chronological order
     const sortedMessages = [...bufferedMessages].sort((a, b) => a.timestamp - b.timestamp);
+    
+    // Make sure we have a conversation ID
+    if (!conversationId) {
+      try {
+        // Try to find the instance ID from the database
+        const { data: instanceData } = await supabaseAdmin
+          .from('whatsapp_instances')
+          .select('id')
+          .eq('instance_name', instanceName)
+          .maybeSingle();
+          
+        // Get or create a conversation
+        conversationId = await findOrCreateConversation(
+          instanceData?.id || instanceName,
+          fromNumber
+        );
+        
+        await logDebug('BUFFER_CREATED_CONVERSATION', 'Created conversation for buffered messages', {
+          conversationId,
+          instanceName,
+          fromNumber
+        });
+      } catch (error) {
+        // Create a fallback conversation ID
+        conversationId = `fallback_${instanceName}_${fromNumber}_${Date.now()}`;
+        
+        await logDebug('BUFFER_CONVERSATION_ERROR', 'Error creating conversation, using fallback', {
+          conversationId,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
     
     // Combine text from all messages with improved formatting
     let combinedText = '';
@@ -338,6 +414,49 @@ export async function processBufferedMessages(
     // Use the message data from the last message for API key info
     const lastMessageData = sortedMessages[sortedMessages.length - 1].messageData;
     
+    // If instance base URL is missing, try to get it from the last message
+    if (!instanceBaseUrl) {
+      instanceBaseUrl = lastMessageData.server_url || Deno.env.get('EVOLUTION_API_URL') || 'https://api.convgo.com';
+      
+      await logDebug('BUFFER_URL_FALLBACK', 'Using fallback instance base URL', {
+        instanceBaseUrl,
+        source: lastMessageData.server_url ? 'message_data' : 
+                Deno.env.get('EVOLUTION_API_URL') ? 'environment' : 'default'
+      });
+    }
+    
+    // If AI config is missing or empty, create a basic one
+    if (!aiConfig || Object.keys(aiConfig).length === 0) {
+      try {
+        // Try to get AI config from database
+        const { data: instanceData } = await supabaseAdmin
+          .from('whatsapp_instances')
+          .select('ai_config')
+          .eq('instance_name', instanceName)
+          .maybeSingle();
+          
+        aiConfig = instanceData?.ai_config || {
+          system_prompt: "You are a helpful assistant that responds to WhatsApp messages.",
+          temperature: 0.7
+        };
+        
+        await logDebug('BUFFER_CONFIG_FALLBACK', 'Using fallback AI configuration', {
+          source: instanceData?.ai_config ? 'database' : 'default',
+          hasSystemPrompt: !!aiConfig.system_prompt
+        });
+      } catch (error) {
+        // Create a default config
+        aiConfig = {
+          system_prompt: "You are a helpful assistant that responds to WhatsApp messages.",
+          temperature: 0.7
+        };
+        
+        await logDebug('BUFFER_CONFIG_ERROR', 'Error fetching AI config, using default', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+    
     try {
       // Process the combined message with the AI
       const result = await generateAndSendAIResponse(
@@ -387,5 +506,151 @@ export async function processBufferedMessages(
     });
     console.error('Error processing buffered messages:', error);
     return false;
+  }
+}
+
+// Helper function to find or create a conversation
+// This is imported directly in the module to prevent missing references
+async function findOrCreateConversation(instanceId: string, userPhone: string) {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing Supabase credentials for conversation creation');
+    }
+    
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data: existingConversation, error: findError } = await supabaseAdmin
+      .from('whatsapp_conversations')
+      .select('id, status, last_activity')
+      .eq('instance_id', instanceId)
+      .eq('user_phone', userPhone)
+      .eq('status', 'active')
+      .single();
+
+    if (!findError && existingConversation) {
+      const lastActivity = new Date(existingConversation.last_activity);
+      const currentTime = new Date();
+      const hoursDifference = (currentTime.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
+      
+      if (hoursDifference > 6) {
+        await supabaseAdmin
+          .from('whatsapp_conversations')
+          .update({ 
+            status: 'expired',
+            conversation_data: {
+              ...existingConversation.conversation_data,
+              expiration_details: {
+                expired_at: currentTime.toISOString(),
+                inactive_hours: hoursDifference.toFixed(2)
+              }
+            }
+          })
+          .eq('id', existingConversation.id);
+          
+        await logDebug('CONVERSATION_EXPIRED', `Conversation ${existingConversation.id} expired after ${hoursDifference.toFixed(2)} hours of inactivity`);
+        
+        const { data: anyConversation, error: anyError } = await supabaseAdmin
+          .from('whatsapp_conversations')
+          .select('id, status')
+          .eq('instance_id', instanceId)
+          .eq('user_phone', userPhone)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+          
+        if (!anyError && anyConversation) {
+          const { data: updatedConversation, error: updateError } = await supabaseAdmin
+            .from('whatsapp_conversations')
+            .update({
+              status: 'active',
+              last_activity: currentTime.toISOString(),
+              conversation_data: { 
+                context: {
+                  last_update: currentTime.toISOString(),
+                  reactivated: true,
+                  previously_expired: true,
+                  activity_timeout_hours: 6
+                }
+              }
+            })
+            .eq('id', anyConversation.id)
+            .select('id')
+            .single();
+            
+          if (updateError) throw updateError;
+          
+          await logDebug('CONVERSATION_REACTIVATED', `Reactivated conversation ${anyConversation.id} for instance ${instanceId} and phone ${userPhone}`);
+          
+          return updatedConversation.id;
+        }
+      } else {
+        return existingConversation.id;
+      }
+    }
+
+    const { data: inactiveConversation, error: inactiveError } = await supabaseAdmin
+      .from('whatsapp_conversations')
+      .select('id')
+      .eq('instance_id', instanceId)
+      .eq('user_phone', userPhone)
+      .limit(1)
+      .single();
+      
+    if (!inactiveError && inactiveConversation) {
+      const { data: updatedConversation, error: updateError } = await supabaseAdmin
+        .from('whatsapp_conversations')
+        .update({
+          status: 'active',
+          last_activity: new Date().toISOString(),
+          conversation_data: { 
+            context: {
+              last_update: new Date().toISOString(),
+              message_count: 0,
+              created_at: new Date().toISOString(),
+              activity_timeout_hours: 6
+            }
+          }
+        })
+        .eq('id', inactiveConversation.id)
+        .select('id')
+        .single();
+        
+      if (updateError) throw updateError;
+      
+      await logDebug('CONVERSATION_UPDATED', `Updated existing conversation ${inactiveConversation.id} to active status`);
+      
+      return updatedConversation.id;
+    }
+
+    const { data: newConversation, error: createError } = await supabaseAdmin
+      .from('whatsapp_conversations')
+      .insert({
+        instance_id: instanceId,
+        user_phone: userPhone,
+        status: 'active',
+        conversation_data: { 
+          context: {
+            last_update: new Date().toISOString(),
+            message_count: 0,
+            created_at: new Date().toISOString(),
+            activity_timeout_hours: 6
+          }
+        }
+      })
+      .select('id')
+      .single();
+
+    if (createError) throw createError;
+    
+    await logDebug('CONVERSATION_CREATED', `New conversation created for instance ${instanceId} and phone ${userPhone}`);
+    
+    return newConversation.id;
+  } catch (error) {
+    console.error('Error in findOrCreateConversation:', error);
+    await logDebug('CONVERSATION_ERROR', `Error in findOrCreateConversation`, { error });
+    throw error;
   }
 }

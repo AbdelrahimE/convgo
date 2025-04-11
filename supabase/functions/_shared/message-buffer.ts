@@ -16,7 +16,22 @@ export interface BufferedMessage {
   messageText: string | null; // The message text content
   messageId: string;         // Unique message ID
   imageUrl?: string | null;   // Optional image URL if message contains image
+  processed?: boolean;       // Whether the message has been processed
+  priority?: number;         // Message priority (higher gets processed sooner)
 }
+
+// Define the callback type with necessary parameters
+export type ProcessBufferCallback = (
+  messages: BufferedMessage[],
+  context?: string,
+  instanceName?: string,
+  fromNumber?: string,
+  instanceBaseUrl?: string,
+  aiConfig?: any,
+  conversationId?: string,
+  supabaseUrl?: string,
+  supabaseServiceKey?: string
+) => Promise<boolean>;
 
 // Define buffer states for improved lifecycle management
 export type BufferState = 'active' | 'processing' | 'cooldown' | 'expired';
@@ -34,6 +49,15 @@ export interface ConversationBuffer {
   processedMessageIds: Set<string>; // IDs of messages that have been processed
   isLocked: boolean;           // Locking mechanism to prevent race conditions
   pendingMessages: BufferedMessage[]; // Queue for messages received during processing
+  // Add metadata to store parameters needed for processing
+  metadata: {
+    context?: string;
+    instanceBaseUrl?: string;
+    aiConfig?: any;
+    conversationId?: string;
+    supabaseUrl?: string;
+    supabaseServiceKey?: string;
+  };
 }
 
 // Configuration options with safe defaults
@@ -567,130 +591,183 @@ export class MessageBufferManager {
    * Add a message to the buffer for a specific conversation
    * @param message The message data to buffer
    * @param flushCallback Function to call when buffer should be processed
-   * @returns True if message was added to buffer, false if buffer is full
+   * @param contextParams Additional context params needed for message processing
+   * @returns Object with status of the operation
    */
   public addMessage(
     message: BufferedMessage,
-    flushCallback: (messages: BufferedMessage[]) => Promise<void>
-  ): boolean {
-    const bufferKey = this.getBufferKey(message.instanceName, message.fromNumber);
-    const now = Date.now();
-    
-    // Start timing this operation for metrics
-    const operationStartTime = performance.now();
-    
-    // Get or create buffer for this conversation
-    let buffer = this.buffers.get(bufferKey);
-    
-    // If we have an existing buffer, check if we should combine with it or process it first
-    if (buffer) {
-      // Check if message was already processed (prevent duplication)
-      if (buffer.processedMessageIds.has(message.messageId)) {
-        logDebug('MESSAGE_BUFFER_DUPLICATE_MESSAGE', 'Skipping already processed message', {
-          bufferKey,
-          messageId: message.messageId
-        });
-        return true;
-      }
+    flushCallback: ProcessBufferCallback,
+    contextParams: {
+      context?: string;
+      instanceBaseUrl?: string;
+      aiConfig?: any;
+      conversationId?: string;
+      supabaseUrl?: string;
+      supabaseServiceKey?: string;
+    } = {}
+  ): { 
+    success: boolean; 
+    bufferKey?: string; 
+    messageCount?: number; 
+    willProcessNow?: boolean;
+    error?: string;
+    reason?: string;
+  } {
+    try {
+      const bufferKey = this.getBufferKey(message.instanceName, message.fromNumber);
+      const now = Date.now();
       
-      // If buffer is currently locked (being processed), queue the message for later
-      if (buffer.isLocked) {
-        logDebug('MESSAGE_BUFFER_QUEUE_DURING_PROCESSING', 'Queueing message while buffer is being processed', {
-          bufferKey,
-          messagePreview: message.messageText?.substring(0, 50) || '[no text]',
-          currentState: buffer.state
-        });
-        
-        // Add to pending messages queue
-        buffer.pendingMessages.push(message);
-        return true;
-      }
+      // Start timing this operation for metrics
+      const operationStartTime = performance.now();
       
-      // If buffer is in processing state, wait for it to finish
-      if (buffer.state === 'processing') {
-        logDebug('MESSAGE_BUFFER_PROCESSING_WAIT', 'Buffer is currently processing, will add after processing', {
-          bufferKey,
-          messagePreview: message.messageText?.substring(0, 50) || '[no text]'
-        });
-        
-        // Add to pending messages queue
-        buffer.pendingMessages.push(message);
-        return true;
-      }
+      // Get or create buffer for this conversation
+      let buffer = this.buffers.get(bufferKey);
       
-      // If buffer is in cooldown and we're within debounce window, reactivate it
-      if (buffer.state === 'cooldown' && 
-          buffer.lastProcessedAt && 
-          now - buffer.lastProcessedAt < this.config.debounceTimeMs * 2) {
-        
-        logDebug('MESSAGE_BUFFER_REACTIVATING', 'Reactivating buffer from cooldown state', {
-          bufferKey,
-          timeSinceProcessed: buffer.lastProcessedAt ? now - buffer.lastProcessedAt : null,
-          cooldownThreshold: this.config.debounceTimeMs * 2,
-          existingMessageCount: buffer.messages.length
-        });
-        
-        // Clear cooldown timeout
-        if (buffer.cooldownTimeoutId !== null) {
-          clearTimeout(buffer.cooldownTimeoutId);
-          buffer.cooldownTimeoutId = null;
+      // If we have an existing buffer, check if we should combine with it or process it first
+      if (buffer) {
+        // Check if message was already processed (prevent duplication)
+        if (buffer.processedMessageIds.has(message.messageId)) {
+          logDebug('MESSAGE_BUFFER_DUPLICATE_MESSAGE', 'Skipping already processed message', {
+            bufferKey,
+            messageId: message.messageId
+          });
+          return { 
+            success: true, 
+            bufferKey, 
+            messageCount: buffer.messages.length,
+            reason: 'duplicate_message'
+          };
         }
         
-        // Reactivate the buffer
-        buffer.state = 'active';
-      }
-      else if (buffer.state === 'cooldown') {
-        // Buffer is in cooldown but outside debounce window, create a fresh buffer
-        logDebug('MESSAGE_BUFFER_COOLDOWN_EXPIRED', 'Cooldown buffer outside debounce window, creating fresh buffer', {
-          bufferKey,
-          timeSinceProcessed: buffer.lastProcessedAt ? now - buffer.lastProcessedAt : null,
-          cooldownThreshold: this.config.debounceTimeMs * 2
-        });
-        
-        // Clear any timeouts
-        if (buffer.timeoutId !== null) {
-          clearTimeout(buffer.timeoutId);
-        }
-        if (buffer.cooldownTimeoutId !== null) {
-          clearTimeout(buffer.cooldownTimeoutId);
-        }
-        
-        // Create a fresh buffer but preserve processed message IDs
-        const processedIds = buffer.processedMessageIds;
-        buffer = {
-          messages: [],
-          timeoutId: null,
-          lastUpdated: now,
-          createdAt: now,
-          processingAttempts: 0,
-          lastProcessingTimestamp: null,
-          state: 'active',
-          cooldownTimeoutId: null,
-          lastProcessedAt: null,
-          processedMessageIds: processedIds, // Preserve processed IDs
-          isLocked: false,
-          pendingMessages: []
-        };
-        this.buffers.set(bufferKey, buffer);
-      }
-      
-      // Active buffer, check if we should combine or flush first
-      if (!this.shouldCombineWithBuffer(buffer, message)) {
-        // If messages are not related, process the current buffer first
-        logDebug('MESSAGE_BUFFER_CONTEXT_BREAK', 'Message appears to start new context, processing current buffer', {
-          bufferKey,
-          existingMessages: buffer.messages.length,
-          timeSinceLastUpdate: now - buffer.lastUpdated,
-          bufferState: buffer.state
-        });
-        
-        // Don't flush empty buffers
-        if (buffer.messages.length > 0) {
-          // Process the current buffer
-          this.flushBuffer(bufferKey, flushCallback);
+        // If buffer is currently locked (being processed), queue the message for later
+        if (buffer.isLocked) {
+          logDebug('MESSAGE_BUFFER_QUEUE_DURING_PROCESSING', 'Queueing message while buffer is being processed', {
+            bufferKey,
+            messagePreview: message.messageText?.substring(0, 50) || '[no text]',
+            currentState: buffer.state
+          });
+          
+          // Add to pending messages queue
+          buffer.pendingMessages.push(message);
+          return { 
+            success: true, 
+            bufferKey, 
+            messageCount: buffer.messages.length,
+            reason: 'queued_during_processing'
+          };
         }
         
-        // Create a new buffer for this message
+        // If buffer is in processing state, wait for it to finish
+        if (buffer.state === 'processing') {
+          logDebug('MESSAGE_BUFFER_PROCESSING_WAIT', 'Buffer is currently processing, will add after processing', {
+            bufferKey,
+            messagePreview: message.messageText?.substring(0, 50) || '[no text]'
+          });
+          
+          // Add to pending messages queue
+          buffer.pendingMessages.push(message);
+          return { 
+            success: true, 
+            bufferKey, 
+            messageCount: buffer.messages.length,
+            reason: 'queued_during_processing'
+          };
+        }
+        
+        // If buffer is in cooldown and we're within debounce window, reactivate it
+        if (buffer.state === 'cooldown' && 
+            buffer.lastProcessedAt && 
+            now - buffer.lastProcessedAt < this.config.debounceTimeMs * 2) {
+          
+          logDebug('MESSAGE_BUFFER_REACTIVATING', 'Reactivating buffer from cooldown state', {
+            bufferKey,
+            timeSinceProcessed: buffer.lastProcessedAt ? now - buffer.lastProcessedAt : null,
+            cooldownThreshold: this.config.debounceTimeMs * 2,
+            existingMessageCount: buffer.messages.length
+          });
+          
+          // Clear cooldown timeout
+          if (buffer.cooldownTimeoutId !== null) {
+            clearTimeout(buffer.cooldownTimeoutId);
+            buffer.cooldownTimeoutId = null;
+          }
+          
+          // Reactivate the buffer
+          buffer.state = 'active';
+        }
+        else if (buffer.state === 'cooldown') {
+          // Buffer is in cooldown but outside debounce window, create a fresh buffer
+          logDebug('MESSAGE_BUFFER_COOLDOWN_EXPIRED', 'Cooldown buffer outside debounce window, creating fresh buffer', {
+            bufferKey,
+            timeSinceProcessed: buffer.lastProcessedAt ? now - buffer.lastProcessedAt : null,
+            cooldownThreshold: this.config.debounceTimeMs * 2
+          });
+          
+          // Clear any timeouts
+          if (buffer.timeoutId !== null) {
+            clearTimeout(buffer.timeoutId);
+          }
+          if (buffer.cooldownTimeoutId !== null) {
+            clearTimeout(buffer.cooldownTimeoutId);
+          }
+          
+          // Create a fresh buffer but preserve processed message IDs
+          const processedIds = buffer.processedMessageIds;
+          buffer = {
+            messages: [],
+            timeoutId: null,
+            lastUpdated: now,
+            createdAt: now,
+            processingAttempts: 0,
+            lastProcessingTimestamp: null,
+            state: 'active',
+            cooldownTimeoutId: null,
+            lastProcessedAt: null,
+            processedMessageIds: processedIds, // Preserve processed IDs
+            isLocked: false,
+            pendingMessages: []
+          };
+          this.buffers.set(bufferKey, buffer);
+        }
+        
+        // Active buffer, check if we should combine or flush first
+        if (!this.shouldCombineWithBuffer(buffer, message)) {
+          // If messages are not related, process the current buffer first
+          logDebug('MESSAGE_BUFFER_CONTEXT_BREAK', 'Message appears to start new context, processing current buffer', {
+            bufferKey,
+            existingMessages: buffer.messages.length,
+            timeSinceLastUpdate: now - buffer.lastUpdated,
+            bufferState: buffer.state
+          });
+          
+          // Don't flush empty buffers
+          if (buffer.messages.length > 0) {
+            // Process the current buffer
+            this.flushBuffer(bufferKey, flushCallback);
+          }
+          
+          // Create a new buffer for this message
+          buffer = {
+            messages: [],
+            timeoutId: null,
+            lastUpdated: now,
+            createdAt: now,
+            processingAttempts: 0,
+            lastProcessingTimestamp: null,
+            state: 'active',
+            cooldownTimeoutId: null,
+            lastProcessedAt: null,
+            processedMessageIds: new Set<string>(),
+            isLocked: false,
+            pendingMessages: []
+          };
+          this.buffers.set(bufferKey, buffer);
+        } else {
+          // Update the metadata with any new values
+          buffer.metadata = { ...buffer.metadata, ...contextParams };
+        }
+      } else {
+        // Create a new buffer if none exists
         buffer = {
           messages: [],
           timeoutId: null,
@@ -703,101 +780,110 @@ export class MessageBufferManager {
           lastProcessedAt: null,
           processedMessageIds: new Set<string>(),
           isLocked: false,
-          pendingMessages: []
+          pendingMessages: [],
+          metadata: { ...contextParams } // Store the context params
         };
         this.buffers.set(bufferKey, buffer);
+        
+        logDebug('MESSAGE_BUFFER_CREATED', 'Created new conversation buffer', {
+          bufferKey,
+          fromNumber: message.fromNumber,
+          instanceName: message.instanceName
+        });
       }
-    } else {
-      // Create a new buffer if none exists
-      buffer = {
-        messages: [],
-        timeoutId: null,
-        lastUpdated: now,
-        createdAt: now,
-        processingAttempts: 0,
-        lastProcessingTimestamp: null,
-        state: 'active',
-        cooldownTimeoutId: null,
-        lastProcessedAt: null,
-        processedMessageIds: new Set<string>(),
-        isLocked: false,
-        pendingMessages: []
-      };
-      this.buffers.set(bufferKey, buffer);
       
-      logDebug('MESSAGE_BUFFER_CREATED', 'Created new conversation buffer', {
+      // Check if buffer is full (safety mechanism)
+      if (buffer.messages.length >= this.config.maxBufferSize) {
+        logDebug('MESSAGE_BUFFER_FULL', 'Buffer is full, processing immediately', {
+          bufferKey,
+          maxSize: this.config.maxBufferSize,
+          messagePreview: message.messageText?.substring(0, 50) || '[no text]',
+          operationTime: performance.now() - operationStartTime
+        });
+        
+        // Process the buffer now with current metadata
+        const currentMetadata = buffer.metadata;
+        this.flushBuffer(bufferKey, flushCallback);
+        
+        // Create a new buffer with just this message
+        buffer = {
+          messages: [message],
+          timeoutId: null,
+          lastUpdated: now,
+          createdAt: now,
+          processingAttempts: 0,
+          lastProcessingTimestamp: null,
+          state: 'active',
+          cooldownTimeoutId: null,
+          lastProcessedAt: null,
+          processedMessageIds: new Set<string>(),
+          isLocked: false,
+          pendingMessages: [],
+          metadata: { ...contextParams } // Store the context params
+        };
+        this.buffers.set(bufferKey, buffer);
+        
+        // Set a new timeout for this message
+        this.setBufferTimeout(bufferKey, flushCallback);
+        
+        return { 
+          success: true, 
+          bufferKey, 
+          messageCount: 1,
+          willProcessNow: false,
+          reason: 'buffer_full_processed'
+        };
+      }
+      
+      // Add message to buffer
+      buffer.messages.push(message);
+      buffer.lastUpdated = now;
+      
+      // Ensure buffer is in active state
+      if (buffer.state !== 'active') {
+        buffer.state = 'active';
+      }
+      
+      logDebug('MESSAGE_BUFFER_ADDED', 'Added message to buffer', {
         bufferKey,
-        fromNumber: message.fromNumber,
-        instanceName: message.instanceName
-      });
-    }
-    
-    // Check if buffer is full (safety mechanism)
-    if (buffer.messages.length >= this.config.maxBufferSize) {
-      logDebug('MESSAGE_BUFFER_FULL', 'Buffer is full, processing immediately', {
-        bufferKey,
-        maxSize: this.config.maxBufferSize,
+        currentSize: buffer.messages.length,
         messagePreview: message.messageText?.substring(0, 50) || '[no text]',
-        operationTime: performance.now() - operationStartTime
+        operationTime: performance.now() - operationStartTime,
+        bufferState: buffer.state
       });
       
-      // Process the buffer now
-      this.flushBuffer(bufferKey, flushCallback);
+      // Reset the timeout since we have a new message
+      if (buffer.timeoutId !== null) {
+        clearTimeout(buffer.timeoutId);
+      }
       
-      // Create a new buffer with just this message
-      buffer = {
-        messages: [message],
-        timeoutId: null,
-        lastUpdated: now,
-        createdAt: now,
-        processingAttempts: 0,
-        lastProcessingTimestamp: null,
-        state: 'active',
-        cooldownTimeoutId: null,
-        lastProcessedAt: null,
-        processedMessageIds: new Set<string>(),
-        isLocked: false,
-        pendingMessages: []
-      };
-      this.buffers.set(bufferKey, buffer);
-      
-      // Set a new timeout for this message
+      // Set a new timeout
       this.setBufferTimeout(bufferKey, flushCallback);
       
-      return true;
+      // Update memory usage periodically (every 10 messages)
+      if ((this.processedBuffersCount + this.failedProcessingCount) % 10 === 0) {
+        this.updateMemoryUsage();
+      }
+      
+      return { 
+        success: true, 
+        bufferKey, 
+        messageCount: buffer.messages.length,
+        willProcessNow: false
+      };
+    } catch (error) {
+      logDebug('MESSAGE_BUFFER_ADD_ERROR', 'Error adding message to buffer', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        messageId: message.messageId || 'unknown'
+      });
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        reason: 'exception'
+      };
     }
-    
-    // Add message to buffer
-    buffer.messages.push(message);
-    buffer.lastUpdated = now;
-    
-    // Ensure buffer is in active state
-    if (buffer.state !== 'active') {
-      buffer.state = 'active';
-    }
-    
-    logDebug('MESSAGE_BUFFER_ADDED', 'Added message to buffer', {
-      bufferKey,
-      currentSize: buffer.messages.length,
-      messagePreview: message.messageText?.substring(0, 50) || '[no text]',
-      operationTime: performance.now() - operationStartTime,
-      bufferState: buffer.state
-    });
-    
-    // Reset the timeout since we have a new message
-    if (buffer.timeoutId !== null) {
-      clearTimeout(buffer.timeoutId);
-    }
-    
-    // Set a new timeout
-    this.setBufferTimeout(bufferKey, flushCallback);
-    
-    // Update memory usage periodically (every 10 messages)
-    if ((this.processedBuffersCount + this.failedProcessingCount) % 10 === 0) {
-      this.updateMemoryUsage();
-    }
-    
-    return true;
   }
 
   /**
@@ -807,7 +893,7 @@ export class MessageBufferManager {
    */
   private setBufferTimeout(
     bufferKey: string,
-    flushCallback: (messages: BufferedMessage[]) => Promise<void>
+    flushCallback: ProcessBufferCallback
   ): void {
     const buffer = this.buffers.get(bufferKey);
     if (!buffer) return;
@@ -865,7 +951,7 @@ export class MessageBufferManager {
    */
   public flushBuffer(
     bufferKey: string,
-    flushCallback: (messages: BufferedMessage[]) => Promise<void>
+    flushCallback: ProcessBufferCallback
   ): void {
     const buffer = this.buffers.get(bufferKey);
     if (!buffer) return;
@@ -925,8 +1011,45 @@ export class MessageBufferManager {
     // Create a shallow copy of the messages for processing to avoid race conditions
     const messagesToProcess = [...unprocessedMessages];
     
-    // Call the flush callback with the unprocessed messages
-    flushCallback(messagesToProcess)
+    // Extract metadata from buffer
+    const { 
+      context, 
+      instanceBaseUrl, 
+      aiConfig, 
+      conversationId, 
+      supabaseUrl, 
+      supabaseServiceKey 
+    } = buffer.metadata || {};
+    
+    // Extract user data from the first message
+    const instanceName = buffer.messages[0]?.instanceName;
+    const fromNumber = buffer.messages[0]?.fromNumber;
+    
+    // Log the parameters being passed to the callback
+    logDebug('MESSAGE_BUFFER_CALLBACK_PARAMS', 'Parameters passed to flush callback', {
+      hasInstanceName: !!instanceName,
+      hasFromNumber: !!fromNumber,
+      hasContext: !!context,
+      hasInstanceBaseUrl: !!instanceBaseUrl,
+      hasAiConfig: !!aiConfig,
+      hasConversationId: !!conversationId,
+      hasSupabaseUrl: !!supabaseUrl,
+      hasSupabaseServiceKey: !!supabaseServiceKey,
+      messageCount: messagesToProcess.length
+    });
+    
+    // Call the flush callback with all the required parameters
+    flushCallback(
+      messagesToProcess, 
+      context, 
+      instanceName, 
+      fromNumber, 
+      instanceBaseUrl, 
+      aiConfig, 
+      conversationId, 
+      supabaseUrl, 
+      supabaseServiceKey
+    )
       .then(() => {
         // Success: Record metrics and transition buffer to cooldown
         const processingTime = performance.now() - startProcessingTime;
@@ -1017,11 +1140,62 @@ export class MessageBufferManager {
   }
 
   /**
+   * Cancel a specific buffer (e.g., in case of escalation)
+   * @param bufferKey The unique buffer key to cancel
+   * @returns Boolean indicating if buffer was successfully cancelled
+   */
+  public cancelBuffer(bufferKey: string): boolean {
+    const buffer = this.buffers.get(bufferKey);
+    if (!buffer) {
+      logDebug('MESSAGE_BUFFER_CANCEL_NOT_FOUND', 'Attempt to cancel non-existent buffer', {
+        bufferKey
+      });
+      return false;
+    }
+    
+    // Cancel any pending timeouts
+    if (buffer.timeoutId !== null) {
+      clearTimeout(buffer.timeoutId);
+      buffer.timeoutId = null;
+    }
+    
+    if (buffer.cooldownTimeoutId !== null) {
+      clearTimeout(buffer.cooldownTimeoutId);
+      buffer.cooldownTimeoutId = null;
+    }
+    
+    // If buffer is locked/processing, just mark for cancellation
+    if (buffer.isLocked || buffer.state === 'processing') {
+      logDebug('MESSAGE_BUFFER_CANCEL_PROCESSING', 'Buffer is being processed, marking for cancellation after completion', {
+        bufferKey,
+        state: buffer.state,
+        isLocked: buffer.isLocked,
+        messageCount: buffer.messages.length
+      });
+      
+      // Will be handled by completion handler
+      buffer.state = 'expired';
+      return true;
+    }
+    
+    // Otherwise, remove buffer entirely
+    this.buffers.delete(bufferKey);
+    
+    logDebug('MESSAGE_BUFFER_CANCELLED', 'Successfully cancelled and removed buffer', {
+      bufferKey,
+      hadMessages: buffer.messages.length > 0,
+      state: buffer.state
+    });
+    
+    return true;
+  }
+
+  /**
    * Flush all buffers immediately
    * @param flushCallback Function to call with each buffer's messages
    */
   public flushAllBuffers(
-    flushCallback: (messages: BufferedMessage[]) => Promise<void>
+    flushCallback: ProcessBufferCallback
   ): void {
     const startTime = performance.now();
     
