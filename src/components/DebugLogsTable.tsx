@@ -1,8 +1,8 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,9 @@ export function DebugLogsTable() {
   const [activeTab, setActiveTab] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [showSystemAlerts, setShowSystemAlerts] = useState(true);
+  
+  // Use number for Node.js and Browser compatibility
+  const pollingIntervalRef = useRef<number | null>(null);
   
   // Fetch debug logs from webhook_debug_logs table
   const { 
@@ -152,17 +155,22 @@ export function DebugLogsTable() {
   
   // Auto-refresh metrics when on monitoring tab
   useEffect(() => {
-    let intervalId: number | null = null;
+    if (pollingIntervalRef.current !== null) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
     
     if (activeTab === 'monitoring') {
-      intervalId = setInterval(() => {
+      // Use window.setInterval which returns a number
+      pollingIntervalRef.current = window.setInterval(() => {
         refetchMetrics();
       }, 10000); // Refresh every 10 seconds
     }
     
     return () => {
-      if (intervalId !== null) {
-        clearInterval(intervalId);
+      if (pollingIntervalRef.current !== null) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
     };
   }, [activeTab, refetchMetrics]);
@@ -476,7 +484,7 @@ export function DebugLogsTable() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">All categories</SelectItem>
-                {categories?.map((cat) => (
+                {categories?.map((cat: {category: string}) => (
                   <SelectItem key={cat.category} value={cat.category}>
                     {cat.category}
                   </SelectItem>
