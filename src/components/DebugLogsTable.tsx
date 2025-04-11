@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,8 +46,8 @@ export function DebugLogsTable() {
   const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [showSystemAlerts, setShowSystemAlerts] = useState(true);
   
-  // Use number for Node.js and Browser compatibility
-  const pollingIntervalRef = useRef<number | null>(null);
+  // Use NodeJS.Timeout for Node.js and Browser compatibility
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Fetch debug logs from webhook_debug_logs table with explicit type annotations
   const fetchDebugLogs = async (): Promise<DebugLog[]> => {
@@ -82,7 +81,7 @@ export function DebugLogsTable() {
     refetch,
     isRefetching,
     error: logsError
-  } = useQuery({
+  } = useQuery<DebugLog[], Error>({
     queryKey: ['debugLogs', category, limit, priorityFilter],
     queryFn: fetchDebugLogs
   });
@@ -107,7 +106,7 @@ export function DebugLogsTable() {
     return uniqueCategories;
   };
   
-  const { data: categories } = useQuery({
+  const { data: categories } = useQuery<CategoryItem[], Error>({
     queryKey: ['debugLogCategories'],
     queryFn: fetchCategories,
     placeholderData: []
@@ -134,7 +133,7 @@ export function DebugLogsTable() {
     data: bufferMetrics,
     refetch: refetchMetrics,
     isLoading: isLoadingMetrics
-  } = useQuery({
+  } = useQuery<DebugLog[], Error>({
     queryKey: ['bufferMetrics'],
     queryFn: fetchBufferMetrics,
     enabled: activeTab === 'monitoring'
@@ -159,7 +158,7 @@ export function DebugLogsTable() {
   
   const {
     data: systemAlerts
-  } = useQuery({
+  } = useQuery<DebugLog[], Error>({
     queryKey: ['systemAlerts'],
     queryFn: fetchSystemAlerts,
     refetchInterval: 30000 // Refresh every 30 seconds
@@ -173,8 +172,8 @@ export function DebugLogsTable() {
     }
     
     if (activeTab === 'monitoring') {
-      // Use window.setInterval which returns a number
-      pollingIntervalRef.current = window.setInterval(() => {
+      // Use setInterval which returns a NodeJS.Timeout
+      pollingIntervalRef.current = setInterval(() => {
         refetchMetrics();
       }, 10000); // Refresh every 10 seconds
     }
