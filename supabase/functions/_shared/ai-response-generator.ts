@@ -239,6 +239,15 @@ export async function processBufferedMessages(
       return false;
     }
     
+    // Log the process start with clear batch identification
+    await logDebug('BUFFER_BATCH_PROCESSING_START', 'Starting batch processing of buffered messages', {
+      batchId: `${instanceName}:${fromNumber}:${Date.now()}`,
+      messageCount: bufferedMessages.length,
+      instanceName,
+      fromNumber,
+      messageIds: bufferedMessages.map(m => m.messageId).join(',')
+    });
+    
     // Initialize Supabase admin client for database operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
@@ -280,6 +289,14 @@ export async function processBufferedMessages(
       // Use the last image in the sequence if multiple images
       if (message.imageUrl) {
         imageUrlToUse = message.imageUrl;
+        
+        // If this is an image-only message with no text, add a placeholder
+        if (!message.messageText && !combinedText.includes("[IMAGE SENT]")) {
+          if (combinedText) {
+            combinedText += '\n---\n';
+          }
+          combinedText += "[IMAGE SENT]";
+        }
       }
     }
     
@@ -295,7 +312,7 @@ export async function processBufferedMessages(
     const lastMessageData = sortedMessages[sortedMessages.length - 1].messageData;
     
     // Process the combined message with the AI
-    return await generateAndSendAIResponse(
+    const result = await generateAndSendAIResponse(
       combinedText,
       context,
       instanceName,
@@ -308,6 +325,16 @@ export async function processBufferedMessages(
       supabaseServiceKey,
       imageUrlToUse
     );
+    
+    // Log batch processing completion
+    await logDebug('BUFFER_BATCH_PROCESSING_COMPLETE', 'Completed batch processing of buffered messages', {
+      batchId: `${instanceName}:${fromNumber}:${Date.now()}`,
+      messageCount: bufferedMessages.length,
+      success: result,
+      messageIds: bufferedMessages.map(m => m.messageId).join(',')
+    });
+    
+    return result;
     
   } catch (error) {
     await logDebug('BUFFER_PROCESS_EXCEPTION', 'Exception processing buffered messages', { 
