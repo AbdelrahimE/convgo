@@ -250,6 +250,84 @@ async function getRecentConversationHistory(conversationId: string, maxTokens = 
   }
 }
 
+// Enhance the processBatchedMessages function with transaction support
+async function processBatchedMessages(instanceName: string, conversationId: string, supabaseAdmin: any) {
+  try {
+    await logDebug('BATCH_PROCESSING', `Checking for batched messages in conversation ${conversationId}`, { instanceName });
+    
+    // Get unprocessed messages older than 5 seconds
+    const fiveSecondsAgo = new Date(Date.now() - 5000);
+
+    // First check if there are any messages to process without acquiring locks
+    const { data: messageCheck, error: checkError } = await supabaseAdmin
+      .from('whatsapp_conversation_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('conversation_id', conversationId)
+      .eq('role', 'user')
+      .eq('processed', false)
+      .lt('timestamp', fiveSecondsAgo.toISOString());
+
+    if (checkError) {
+      await logDebug('BATCH_PROCESSING_ERROR', 'Error checking for messages to process', { error: checkError });
+      return null;
+    }
+
+    // If no messages are waiting, return early
+    if (!messageCheck || messageCheck.length === 0) {
+      return null;
+    }
+
+    // Begin a transaction for safe batch processing
+    // Use RPC to call a Postgres function to handle the transaction
+    const { data: batchResult, error: batchError } = await supabaseAdmin.rpc('process_message_batch', {
+      p_conversation_id: conversationId,
+      p_timestamp_threshold: fiveSecondsAgo.toISOString()
+    });
+
+    // If there was an error processing the batch, log and return
+    if (batchError) {
+      await logDebug('BATCH_PROCESSING_ERROR', 'Transaction error processing message batch', { 
+        error: batchError,
+        conversationId
+      });
+      return null;
+    }
+
+    // If no batch was processed or no messages were found
+    if (!batchResult || !batchResult.messages || batchResult.messages.length === 0) {
+      await logDebug('BATCH_PROCESSING_EMPTY', 'No messages to batch process', { conversationId });
+      return null;
+    }
+
+    // Extract the results from the transaction
+    const combinedContent = batchResult.messages.map(m => m.content).join('\n');
+    const firstMessageId = batchResult.messages[0].message_id;
+    const fromNumberRaw = firstMessageId ? firstMessageId.split('@')[0] : '';
+    const fromNumber = fromNumberRaw || batchResult.user_phone;
+
+    await logDebug('BATCH_PROCESSING_SUCCESS', `Successfully processed ${batchResult.messages.length} messages as batch`, {
+      messageCount: batchResult.messages.length,
+      conversationId,
+      combinedPreview: combinedContent.substring(0, 100) + (combinedContent.length > 100 ? '...' : '')
+    });
+
+    // Return the combined message details
+    return {
+      combinedContent,
+      firstMessageId,
+      fromNumber,
+      messageCount: batchResult.messages.length
+    };
+  } catch (error) {
+    await logDebug('BATCH_PROCESSING_EXCEPTION', 'Unexpected error in batch processing', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      conversationId
+    });
+    return null;
+  }
+}
+
 // Default API URL - Set to the correct Evolution API URL
 const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
 
@@ -582,6 +660,56 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Store user message in conversation
     await storeMessageInConversation(conversationId, 'user', messageText, messageData.key?.id, supabaseAdmin);
     
+    // NEW INTEGRATION POINT: Check for batched messages before processing this one
+    // Only do this for text messages, not for images or audio that's been processed
+    if (!imageUrl && !messageData.transcribedText) {
+      await logDebug('BATCH_CHECK', 'Checking for batched messages before processing current message', {
+        conversationId
+      });
+      
+      // Process batched messages first - if any exist
+      const batchedMessages = await processBatchedMessages(instanceName, conversationId, supabaseAdmin);
+      
+      if (batchedMessages && batchedMessages.combinedContent) {
+        await logDebug('BATCH_FOUND', 'Found and processed batched messages', {
+          messageCount: batchedMessages.messageCount || '(unknown)',
+          contentPreview: batchedMessages.combinedContent.substring(0, 100) + '...'
+        });
+        
+        // Use the batched content instead of the single message
+        messageText = batchedMessages.combinedContent;
+        
+        // We'll still process this newest message immediately along with the batch
+        // Mark the current message as processed too since we're including it
+        try {
+          // Update the current message to processed=true
+          const { error: updateError } = await supabaseAdmin
+            .from('whatsapp_conversation_messages')
+            .update({ processed: true })
+            .eq('message_id', messageData.key?.id)
+            .eq('conversation_id', conversationId);
+            
+          if (updateError) {
+            await logDebug('BATCH_UPDATE_ERROR', 'Error marking current message as processed', {
+              error: updateError,
+              messageId: messageData.key?.id
+            });
+          }
+        } catch (error) {
+          await logDebug('BATCH_UPDATE_EXCEPTION', 'Exception marking current message as processed', {
+            error,
+            messageId: messageData.key?.id
+          });
+          // Continue with processing anyway
+        }
+      } else {
+        await logDebug('BATCH_NOT_FOUND', 'No batched messages found, processing single message', {
+          conversationId,
+          messageId: messageData.key?.id
+        });
+      }
+    }
+    
     // Get recent conversation history with improved token management
     const conversationHistory = await getRecentConversationHistory(conversationId, 800);
     await logDebug('CONVERSATION_HISTORY', 'Retrieved conversation history', { 
@@ -798,56 +926,6 @@ async function processMessageForAI(instance: string, messageData: any) {
     await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
     console.error('Error in processMessageForAI:', error);
     return false;
-  }
-}
-
-async function processBatchedMessages(instanceName: string, conversationId: string, supabaseAdmin: any) {
-  try {
-    // Get unprocessed messages older than 5 seconds
-    const fiveSecondsAgo = new Date(Date.now() - 5000);
-
-    const { data: messagesToProcess, error: fetchError } = await supabaseAdmin
-      .from('whatsapp_conversation_messages')
-      .select('id, content, message_id, timestamp')
-      .eq('conversation_id', conversationId)
-      .eq('role', 'user')
-      .eq('processed', false)
-      .lt('timestamp', fiveSecondsAgo.toISOString())
-      .order('timestamp', { ascending: true });
-
-    if (fetchError) {
-      console.error('Error fetching messages to process:', fetchError);
-      return null;
-    }
-
-    // If no messages to process, return
-    if (!messagesToProcess || messagesToProcess.length === 0) {
-      return null;
-    }
-
-    // Combine message contents
-    const combinedContent = messagesToProcess.map(m => m.content).join('\n');
-
-    // Mark these messages as processed 
-    const { error: updateError } = await supabaseAdmin
-      .from('whatsapp_conversation_messages')
-      .update({ processed: true })
-      .in('id', messagesToProcess.map(m => m.id));
-
-    if (updateError) {
-      console.error('Error marking messages as processed:', updateError);
-      return null;
-    }
-
-    // Return the combined message details
-    return {
-      combinedContent,
-      firstMessageId: messagesToProcess[0].message_id,
-      fromNumber: messagesToProcess[0].message_id.split('@')[0]
-    };
-  } catch (error) {
-    console.error('Batched message processing error:', error);
-    return null;
   }
 }
 
