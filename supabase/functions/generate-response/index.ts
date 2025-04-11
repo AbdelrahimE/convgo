@@ -356,6 +356,12 @@ serve(async (req) => {
       );
     }
 
+    const isBatchedMessage = query.includes('\n') && /\(\d{1,2}:\d{2}\)/.test(query);
+    
+    if (isBatchedMessage) {
+      logger.log(`Detected batched message with multiple entries`);
+    }
+
     if (userId) {
       logger.log(`Checking AI usage limit for user ${userId}`);
       const limitCheck = await checkAndUpdateUserLimit(userId, false);
@@ -391,7 +397,14 @@ serve(async (req) => {
 - Use *text* for emphasis instead of **text**`;
     }
     
-    if (imageUrl) {
+    if (isBatchedMessage) {
+      finalSystemPrompt += `\n\nThe user has sent multiple messages in sequence. They are formatted as:
+"Message 1 (time)
+ Message 2 (time)
+ Message 3 (time)"
+Please respond to all the messages together in a coherent way.`;
+    }
+    else if (imageUrl) {
       finalSystemPrompt += IMAGE_CONTEXT_ADDITION;
     }
     else if (!context || context.trim() === '') {
@@ -492,7 +505,8 @@ serve(async (req) => {
           total: responseData.usage.total_tokens
         },
         aiUsage: usageDetails,
-        conversationId: conversationId
+        conversationId: conversationId,
+        isBatchedMessage: isBatchedMessage
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

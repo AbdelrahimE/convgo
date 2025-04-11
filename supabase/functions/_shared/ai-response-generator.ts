@@ -204,3 +204,87 @@ export async function generateAndSendAIResponse(
     return false;
   }
 }
+
+/**
+ * Generates an AI response for batched messages, combining them into a single context
+ * 
+ * @param messages Array of batched messages with their content
+ * @param context Conversation context and/or RAG content
+ * @param instanceName The WhatsApp instance name
+ * @param fromNumber The user's phone number
+ * @param instanceBaseUrl Base URL for the WhatsApp API
+ * @param aiConfig AI configuration for the instance
+ * @param messageData Original message data for metadata
+ * @param conversationId The conversation ID for storing the response
+ * @param supabaseUrl Supabase project URL
+ * @param supabaseServiceKey Supabase service role key
+ * @returns Promise<boolean> Success status of the operation
+ */
+export async function generateAndSendBatchedAIResponse(
+  messages: { content: string; timestamp: string }[],
+  context: string,
+  instanceName: string,
+  fromNumber: string,
+  instanceBaseUrl: string,
+  aiConfig: any,
+  messageData: any,
+  conversationId: string,
+  supabaseUrl: string,
+  supabaseServiceKey: string
+): Promise<boolean> {
+  try {
+    if (!messages || messages.length === 0) {
+      await logDebug('AI_BATCH_EMPTY', 'No messages in batch, skipping AI generation', {
+        conversationId,
+        fromNumber
+      });
+      return false;
+    }
+
+    await logDebug('AI_BATCH_PROCESSING', 'Processing batched messages for AI response', {
+      messageCount: messages.length,
+      conversationId,
+      fromNumber
+    });
+
+    // Combine messages into a single query
+    // Format: "Message 1 (10:30)
+    //          Message 2 (10:31)
+    //          Message 3 (10:32)"
+    const combinedQuery = messages
+      .map(msg => {
+        // Format the timestamp (convert to local time if needed)
+        const timestamp = new Date(msg.timestamp);
+        const timeStr = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `${msg.content} (${timeStr})`;
+      })
+      .join('\n');
+
+    await logDebug('AI_BATCH_COMBINED', 'Combined batched messages into single query', {
+      combinedQueryLength: combinedQuery.length,
+      messageCount: messages.length
+    });
+
+    // Use the existing function with the combined query
+    return await generateAndSendAIResponse(
+      combinedQuery,
+      context,
+      instanceName,
+      fromNumber,
+      instanceBaseUrl,
+      aiConfig,
+      messageData,
+      conversationId,
+      supabaseUrl,
+      supabaseServiceKey
+    );
+  } catch (error) {
+    await logDebug('AI_BATCH_EXCEPTION', 'Exception processing batched messages', { 
+      error,
+      messageCount: messages?.length || 0,
+      conversationId 
+    });
+    console.error('Error processing batched messages:', error);
+    return false;
+  }
+}
