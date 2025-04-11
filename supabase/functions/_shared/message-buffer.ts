@@ -1,4 +1,3 @@
-
 /**
  * Message Buffer Module
  * 
@@ -32,6 +31,7 @@ export interface ConversationBuffer {
   state: BufferState;          // Current state of the buffer
   cooldownTimeoutId: number | null; // Timeout ID for cooldown period
   lastProcessedAt: number | null; // When messages were last processed
+  processedMessageIds: Set<string>; // IDs of messages that have been processed
 }
 
 // Configuration options with safe defaults
@@ -370,6 +370,15 @@ export class MessageBufferManager {
       return true;
     }
     
+    // Check if message was already processed (avoid duplicates)
+    if (buffer.processedMessageIds.has(newMessage.messageId)) {
+      logDebug('MESSAGE_BUFFER_DUPLICATE', 'Skipping already processed message', {
+        messageId: newMessage.messageId,
+        bufferSize: buffer.messages.length
+      });
+      return false;
+    }
+    
     // If buffer is in cooldown, check timing to see if it can be reactivated
     if (buffer.state === 'cooldown') {
       const timeSinceProcessed = buffer.lastProcessedAt ? 
@@ -442,27 +451,43 @@ export class MessageBufferManager {
     // Update buffer state
     buffer.state = 'cooldown';
     buffer.lastProcessedAt = Date.now();
-    buffer.messages = []; // Clear messages
-    buffer.lastProcessingTimestamp = null;
     
-    logDebug('MESSAGE_BUFFER_COOLDOWN', 'Buffer transitioned to cooldown state', {
-      bufferKey,
-      cooldownPeriodMs: this.config.cooldownPeriodMs
+    // CRITICAL FIX: Instead of clearing messages, mark them as processed
+    // but keep them for context with future messages in the cooldown period
+    buffer.messages.forEach(msg => {
+      buffer.processedMessageIds.add(msg.messageId);
     });
+    
+    // Only keep the messages for context, don't process them again
+    // But don't clear the array - keep it for context with future messages
+    logDebug('MESSAGE_BUFFER_COOLDOWN', 'Buffer transitioned to cooldown state, keeping messages for context', {
+      bufferKey,
+      cooldownPeriodMs: this.config.cooldownPeriodMs,
+      preservedMessageCount: buffer.messages.length,
+      processedMessageIds: buffer.processedMessageIds.size
+    });
+    
+    buffer.lastProcessingTimestamp = null;
     
     // Set timeout to expire the buffer after cooldown period if it remains empty
     buffer.cooldownTimeoutId = setTimeout(() => {
       const currentBuffer = this.buffers.get(bufferKey);
       
-      // Only remove if still in cooldown and empty
-      if (currentBuffer && 
-          currentBuffer.state === 'cooldown' && 
-          currentBuffer.messages.length === 0) {
-        logDebug('MESSAGE_BUFFER_COOLDOWN_EXPIRED', 'Removing buffer after cooldown period', {
-          bufferKey
+      // Reset the buffer after cooldown period
+      if (currentBuffer && currentBuffer.state === 'cooldown') {
+        logDebug('MESSAGE_BUFFER_COOLDOWN_EXPIRED', 'Resetting buffer after cooldown period', {
+          bufferKey,
+          messageCount: currentBuffer.messages.length,
+          processedMessageIds: currentBuffer.processedMessageIds.size
         });
         
-        this.buffers.delete(bufferKey);
+        // Now we can clear the old messages as they're too old to be relevant
+        currentBuffer.messages = [];
+        
+        // If there's no new messages, we can remove the buffer
+        if (currentBuffer.messages.length === 0) {
+          this.buffers.delete(bufferKey);
+        }
       }
     }, this.config.bufferRetentionMs);
   }
@@ -512,6 +537,15 @@ export class MessageBufferManager {
         return true;
       }
       
+      // Check if this message was already processed (prevent duplication)
+      if (buffer.processedMessageIds.has(message.messageId)) {
+        logDebug('MESSAGE_BUFFER_DUPLICATE_MESSAGE', 'Skipping already processed message', {
+          bufferKey,
+          messageId: message.messageId
+        });
+        return true;
+      }
+      
       // If buffer is in cooldown and we're within debounce window, reactivate it
       if (buffer.state === 'cooldown' && 
           buffer.lastProcessedAt && 
@@ -520,7 +554,8 @@ export class MessageBufferManager {
         logDebug('MESSAGE_BUFFER_REACTIVATING', 'Reactivating buffer from cooldown state', {
           bufferKey,
           timeSinceProcessed: buffer.lastProcessedAt ? now - buffer.lastProcessedAt : null,
-          cooldownThreshold: this.config.debounceTimeMs * 2
+          cooldownThreshold: this.config.debounceTimeMs * 2,
+          existingMessageCount: buffer.messages.length
         });
         
         // Clear cooldown timeout
@@ -558,7 +593,8 @@ export class MessageBufferManager {
           lastProcessingTimestamp: null,
           state: 'active',
           cooldownTimeoutId: null,
-          lastProcessedAt: null
+          lastProcessedAt: null,
+          processedMessageIds: new Set<string>()
         };
         this.buffers.set(bufferKey, buffer);
       }
@@ -586,7 +622,8 @@ export class MessageBufferManager {
           lastProcessingTimestamp: null,
           state: 'active',
           cooldownTimeoutId: null,
-          lastProcessedAt: null
+          lastProcessedAt: null,
+          processedMessageIds: new Set<string>()
         };
         this.buffers.set(bufferKey, buffer);
       }
@@ -601,7 +638,8 @@ export class MessageBufferManager {
         lastProcessingTimestamp: null,
         state: 'active',
         cooldownTimeoutId: null,
-        lastProcessedAt: null
+        lastProcessedAt: null,
+        processedMessageIds: new Set<string>()
       };
       this.buffers.set(bufferKey, buffer);
       
@@ -634,7 +672,8 @@ export class MessageBufferManager {
         lastProcessingTimestamp: null,
         state: 'active',
         cooldownTimeoutId: null,
-        lastProcessedAt: null
+        lastProcessedAt: null,
+        processedMessageIds: new Set<string>()
       };
       this.buffers.set(bufferKey, buffer);
       
@@ -706,6 +745,29 @@ export class MessageBufferManager {
   }
 
   /**
+   * Filter out any already processed messages from a buffer
+   * @param buffer The buffer to filter
+   * @returns Array of unprocessed messages
+   */
+  private getUnprocessedMessages(buffer: ConversationBuffer): BufferedMessage[] {
+    // Filter out messages that have already been processed
+    const unprocessedMessages = buffer.messages.filter(
+      msg => !buffer.processedMessageIds.has(msg.messageId)
+    );
+    
+    // Log if we're filtering out messages
+    if (unprocessedMessages.length < buffer.messages.length) {
+      logDebug('MESSAGE_BUFFER_FILTERING', 'Filtering out already processed messages', {
+        totalMessages: buffer.messages.length,
+        unprocessedMessages: unprocessedMessages.length,
+        filteredOut: buffer.messages.length - unprocessedMessages.length
+      });
+    }
+    
+    return unprocessedMessages;
+  }
+
+  /**
    * Flush a specific buffer and process its messages
    * @param bufferKey The unique buffer key
    * @param flushCallback Function to call with the buffered messages
@@ -715,7 +777,7 @@ export class MessageBufferManager {
     flushCallback: (messages: BufferedMessage[]) => Promise<void>
   ): void {
     const buffer = this.buffers.get(bufferKey);
-    if (!buffer || buffer.messages.length === 0) return;
+    if (!buffer) return;
     
     // Skip if already in processing state
     if (buffer.state === 'processing') {
@@ -726,11 +788,25 @@ export class MessageBufferManager {
       return;
     }
     
+    // Get only unprocessed messages for processing
+    const unprocessedMessages = this.getUnprocessedMessages(buffer);
+    
+    // Skip if no unprocessed messages
+    if (unprocessedMessages.length === 0) {
+      logDebug('MESSAGE_BUFFER_EMPTY', 'No unprocessed messages to flush', {
+        bufferKey,
+        totalMessages: buffer.messages.length,
+        processedIds: buffer.processedMessageIds.size
+      });
+      return;
+    }
+    
     const startProcessingTime = performance.now();
     
     logDebug('MESSAGE_BUFFER_FLUSHING', 'Flushing message buffer', {
       bufferKey,
-      messageCount: buffer.messages.length,
+      messageCount: unprocessedMessages.length,
+      totalBufferSize: buffer.messages.length,
       bufferAge: Date.now() - buffer.createdAt,
       processingAttempts: buffer.processingAttempts,
       bufferState: buffer.state
@@ -747,11 +823,8 @@ export class MessageBufferManager {
     buffer.lastProcessingTimestamp = Date.now();
     buffer.processingAttempts += 1;
     
-    // Clone the messages before processing
-    const messages = [...buffer.messages];
-    
-    // Call the flush callback with the messages
-    flushCallback(messages)
+    // Call the flush callback with the unprocessed messages
+    flushCallback(unprocessedMessages)
       .then(() => {
         // Success: Record metrics and transition buffer to cooldown
         const processingTime = performance.now() - startProcessingTime;
@@ -766,7 +839,7 @@ export class MessageBufferManager {
         
         logDebug('MESSAGE_BUFFER_PROCESSED', 'Successfully processed buffer', {
           bufferKey,
-          messageCount: messages.length,
+          messageCount: unprocessedMessages.length,
           processingTimeMs: processingTime,
           successRate: this.getSuccessRate()
         });
@@ -793,7 +866,7 @@ export class MessageBufferManager {
           logDebug('MESSAGE_BUFFER_MAX_RETRIES', 'Giving up on buffer after maximum retries', {
             bufferKey,
             maxAttempts: this.config.maxProcessingAttempts,
-            messageCount: buffer.messages.length
+            messageCount: unprocessedMessages.length
           });
           
           // Transition to cooldown instead of removing
