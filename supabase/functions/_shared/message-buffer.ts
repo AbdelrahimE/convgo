@@ -1,3 +1,4 @@
+
 /**
  * Message Buffer Module
  * 
@@ -18,6 +19,9 @@ export interface BufferedMessage {
   imageUrl?: string | null;   // Optional image URL if message contains image
 }
 
+// Define buffer states for improved lifecycle management
+export type BufferState = 'active' | 'processing' | 'cooldown' | 'expired';
+
 export interface ConversationBuffer {
   messages: BufferedMessage[];  // Array of buffered messages
   timeoutId: number | null;     // The debounce timeout ID
@@ -25,6 +29,9 @@ export interface ConversationBuffer {
   createdAt: number;            // When the buffer was initially created
   processingAttempts: number;   // Number of times processing was attempted
   lastProcessingTimestamp: number | null; // When the buffer was last processed
+  state: BufferState;          // Current state of the buffer
+  cooldownTimeoutId: number | null; // Timeout ID for cooldown period
+  lastProcessedAt: number | null; // When messages were last processed
 }
 
 // Configuration options with safe defaults
@@ -38,6 +45,8 @@ export interface BufferConfig {
   stuckBufferThresholdMs: number; // Time threshold to consider a buffer stuck in processing
   emergencyFlushThresholdMs: number; // Time threshold for emergency buffer flush for inactive conversations
   maxProcessingAttempts: number; // Maximum number of processing attempts before reporting error
+  cooldownPeriodMs: number;   // How long to keep buffer in cooldown state after processing
+  bufferRetentionMs: number;  // Maximum time to keep an empty buffer before removing it
 }
 
 // Default configuration
@@ -51,6 +60,8 @@ const DEFAULT_CONFIG: BufferConfig = {
   stuckBufferThresholdMs: 120000, // Consider a buffer stuck if processing for more than 2 minutes
   emergencyFlushThresholdMs: 1800000, // Emergency flush for conversations inactive for 30 minutes
   maxProcessingAttempts: 3,  // Retry processing up to 3 times before reporting error
+  cooldownPeriodMs: 60000,   // Keep buffer in cooldown state for 1 minute after processing
+  bufferRetentionMs: 120000, // Keep empty buffers for 2 minutes before removing them
 };
 
 // Monitoring stats interface
@@ -65,6 +76,7 @@ export interface BufferStats {
   averageProcessingTimeMs: number | null;
   emergencyFlushes: number;
   memoryUsageBytes: number;
+  buffersByState: Record<BufferState, number>; // Count of buffers in each state
 }
 
 /**
@@ -192,7 +204,8 @@ export class MessageBufferManager {
     // Check for stuck buffers and very old inactive conversations
     for (const [key, buffer] of this.buffers.entries()) {
       // Check for stuck buffers (in processing state for too long)
-      if (buffer.lastProcessingTimestamp && 
+      if (buffer.state === 'processing' && 
+          buffer.lastProcessingTimestamp && 
           now - buffer.lastProcessingTimestamp > this.config.stuckBufferThresholdMs) {
         stuckBuffersDetected++;
         logDebug('MESSAGE_BUFFER_STUCK', 'Detected stuck buffer in processing state', {
@@ -227,7 +240,30 @@ export class MessageBufferManager {
         this.emergencyFlushCount++;
         emergencyFlushedBuffers++;
         
+        // Mark buffer as expired
+        buffer.state = 'expired';
+        
         // Remove the buffer (in a real implementation, we would call flushBuffer here)
+        this.buffers.delete(key);
+      }
+      
+      // Check for empty buffers that have exceeded retention time
+      if (buffer.state === 'cooldown' && 
+          buffer.messages.length === 0 && 
+          buffer.lastProcessedAt && 
+          now - buffer.lastProcessedAt > this.config.bufferRetentionMs) {
+        logDebug('MESSAGE_BUFFER_RETENTION_EXPIRED', 'Removing empty buffer that exceeded retention time', {
+          bufferKey: key,
+          retentionTime: now - buffer.lastProcessedAt,
+          configRetention: this.config.bufferRetentionMs
+        });
+        
+        // Clear any cooldown timeout
+        if (buffer.cooldownTimeoutId !== null) {
+          clearTimeout(buffer.cooldownTimeoutId);
+        }
+        
+        // Remove the buffer
         this.buffers.delete(key);
       }
     }
@@ -252,8 +288,19 @@ export class MessageBufferManager {
     let processedStaleBuffers = 0;
     
     for (const [key, buffer] of this.buffers.entries()) {
-      // If buffer is completely empty, remove it
-      if (buffer.messages.length === 0) {
+      // If buffer is completely empty and in cooldown state for too long, remove it
+      if (buffer.messages.length === 0 && 
+          buffer.state === 'cooldown' && 
+          buffer.lastProcessedAt && 
+          now - buffer.lastProcessedAt > this.config.bufferRetentionMs) {
+        // Clear any pending timeouts
+        if (buffer.timeoutId !== null) {
+          clearTimeout(buffer.timeoutId);
+        }
+        if (buffer.cooldownTimeoutId !== null) {
+          clearTimeout(buffer.cooldownTimeoutId);
+        }
+        
         this.buffers.delete(key);
         cleanedBuffers++;
         continue;
@@ -266,7 +313,8 @@ export class MessageBufferManager {
           bufferKey: key,
           bufferAge,
           maxLifetime: this.config.maxBufferLifetimeMs,
-          messageCount: buffer.messages.length
+          messageCount: buffer.messages.length,
+          state: buffer.state
         });
         
         // In real implementation, we would call flushBuffer with the callback
@@ -276,8 +324,10 @@ export class MessageBufferManager {
         continue;
       }
       
-      // If buffer is too old since last update, process it and remove
-      if (now - buffer.lastUpdated > this.config.maxBufferAgeMs) {
+      // If buffer has messages, is in active state, and is too old since last update, process it
+      if (buffer.state === 'active' && 
+          buffer.messages.length > 0 && 
+          now - buffer.lastUpdated > this.config.maxBufferAgeMs) {
         logDebug('MESSAGE_BUFFER_STALE', 'Processing stale buffer', {
           bufferKey: key,
           messageCount: buffer.messages.length,
@@ -287,11 +337,11 @@ export class MessageBufferManager {
         // Cancel any pending timeout
         if (buffer.timeoutId !== null) {
           clearTimeout(buffer.timeoutId);
+          buffer.timeoutId = null;
         }
         
-        // In real implementation, we would call flushBuffer with the callback
-        // For now, just remove it
-        this.buffers.delete(key);
+        // Mark buffer for processing (in a real call this would trigger flushBuffer)
+        buffer.state = 'processing';
         processedStaleBuffers++;
       }
     }
@@ -318,6 +368,23 @@ export class MessageBufferManager {
     // Empty buffer always accepts a new message
     if (buffer.messages.length === 0) {
       return true;
+    }
+    
+    // If buffer is in cooldown, check timing to see if it can be reactivated
+    if (buffer.state === 'cooldown') {
+      const timeSinceProcessed = buffer.lastProcessedAt ? 
+        Date.now() - buffer.lastProcessedAt : 
+        Number.MAX_SAFE_INTEGER;
+      
+      // If we're still within the debounce window from the last processing, allow combination
+      if (timeSinceProcessed < this.config.debounceTimeMs * 2) {
+        logDebug('MESSAGE_BUFFER_REACTIVATE', 'Reactivating cooldown buffer for new message', {
+          timeSinceProcessed,
+          cooldownState: buffer.state,
+          lastProcessedAt: buffer.lastProcessedAt
+        });
+        return true;
+      }
     }
     
     const now = Date.now();
@@ -360,6 +427,47 @@ export class MessageBufferManager {
   }
 
   /**
+   * Transition a buffer to cooldown state after processing
+   * @param bufferKey The unique buffer key
+   */
+  private transitionToCooldown(bufferKey: string): void {
+    const buffer = this.buffers.get(bufferKey);
+    if (!buffer) return;
+    
+    // Clear any existing cooldown timeout
+    if (buffer.cooldownTimeoutId !== null) {
+      clearTimeout(buffer.cooldownTimeoutId);
+    }
+    
+    // Update buffer state
+    buffer.state = 'cooldown';
+    buffer.lastProcessedAt = Date.now();
+    buffer.messages = []; // Clear messages
+    buffer.lastProcessingTimestamp = null;
+    
+    logDebug('MESSAGE_BUFFER_COOLDOWN', 'Buffer transitioned to cooldown state', {
+      bufferKey,
+      cooldownPeriodMs: this.config.cooldownPeriodMs
+    });
+    
+    // Set timeout to expire the buffer after cooldown period if it remains empty
+    buffer.cooldownTimeoutId = setTimeout(() => {
+      const currentBuffer = this.buffers.get(bufferKey);
+      
+      // Only remove if still in cooldown and empty
+      if (currentBuffer && 
+          currentBuffer.state === 'cooldown' && 
+          currentBuffer.messages.length === 0) {
+        logDebug('MESSAGE_BUFFER_COOLDOWN_EXPIRED', 'Removing buffer after cooldown period', {
+          bufferKey
+        });
+        
+        this.buffers.delete(bufferKey);
+      }
+    }, this.config.bufferRetentionMs);
+  }
+
+  /**
    * Add a message to the buffer for a specific conversation
    * @param message The message data to buffer
    * @param flushCallback Function to call when buffer should be processed
@@ -380,12 +488,89 @@ export class MessageBufferManager {
     
     // If we have an existing buffer, check if we should combine with it or process it first
     if (buffer) {
+      // If buffer is in processing state, wait for it to finish
+      if (buffer.state === 'processing') {
+        logDebug('MESSAGE_BUFFER_PROCESSING_WAIT', 'Buffer is currently processing, will add after processing', {
+          bufferKey,
+          messagePreview: message.messageText?.substring(0, 50) || '[no text]'
+        });
+        
+        // We'll create a new message in this buffer once processing is done
+        // For now, just hold on to the message and return success
+        // In a full implementation, we would queue this message to be added after processing
+        
+        // Create a safety timeout to prevent messages getting lost if processing never completes
+        setTimeout(() => {
+          const currentBuffer = this.buffers.get(bufferKey);
+          if (currentBuffer && currentBuffer.state === 'processing') {
+            // Force transition to cooldown and then add the message
+            this.transitionToCooldown(bufferKey);
+            this.addMessage(message, flushCallback);
+          }
+        }, 5000); // 5 second safety timeout
+        
+        return true;
+      }
+      
+      // If buffer is in cooldown and we're within debounce window, reactivate it
+      if (buffer.state === 'cooldown' && 
+          buffer.lastProcessedAt && 
+          now - buffer.lastProcessedAt < this.config.debounceTimeMs * 2) {
+        
+        logDebug('MESSAGE_BUFFER_REACTIVATING', 'Reactivating buffer from cooldown state', {
+          bufferKey,
+          timeSinceProcessed: buffer.lastProcessedAt ? now - buffer.lastProcessedAt : null,
+          cooldownThreshold: this.config.debounceTimeMs * 2
+        });
+        
+        // Clear cooldown timeout
+        if (buffer.cooldownTimeoutId !== null) {
+          clearTimeout(buffer.cooldownTimeoutId);
+          buffer.cooldownTimeoutId = null;
+        }
+        
+        // Reactivate the buffer
+        buffer.state = 'active';
+      }
+      else if (buffer.state === 'cooldown') {
+        // Buffer is in cooldown but outside debounce window, create a fresh buffer
+        logDebug('MESSAGE_BUFFER_COOLDOWN_EXPIRED', 'Cooldown buffer outside debounce window, creating fresh buffer', {
+          bufferKey,
+          timeSinceProcessed: buffer.lastProcessedAt ? now - buffer.lastProcessedAt : null,
+          cooldownThreshold: this.config.debounceTimeMs * 2
+        });
+        
+        // Clear any timeouts
+        if (buffer.timeoutId !== null) {
+          clearTimeout(buffer.timeoutId);
+        }
+        if (buffer.cooldownTimeoutId !== null) {
+          clearTimeout(buffer.cooldownTimeoutId);
+        }
+        
+        // Create a fresh buffer
+        buffer = {
+          messages: [],
+          timeoutId: null,
+          lastUpdated: now,
+          createdAt: now,
+          processingAttempts: 0,
+          lastProcessingTimestamp: null,
+          state: 'active',
+          cooldownTimeoutId: null,
+          lastProcessedAt: null
+        };
+        this.buffers.set(bufferKey, buffer);
+      }
+      
+      // Active buffer, check if we should combine or flush first
       if (!this.shouldCombineWithBuffer(buffer, message)) {
         // If messages are not related, process the current buffer first
         logDebug('MESSAGE_BUFFER_CONTEXT_BREAK', 'Message appears to start new context, processing current buffer', {
           bufferKey,
           existingMessages: buffer.messages.length,
-          timeSinceLastUpdate: now - buffer.lastUpdated
+          timeSinceLastUpdate: now - buffer.lastUpdated,
+          bufferState: buffer.state
         });
         
         // Process the current buffer
@@ -398,7 +583,10 @@ export class MessageBufferManager {
           lastUpdated: now,
           createdAt: now,
           processingAttempts: 0,
-          lastProcessingTimestamp: null
+          lastProcessingTimestamp: null,
+          state: 'active',
+          cooldownTimeoutId: null,
+          lastProcessedAt: null
         };
         this.buffers.set(bufferKey, buffer);
       }
@@ -410,7 +598,10 @@ export class MessageBufferManager {
         lastUpdated: now,
         createdAt: now,
         processingAttempts: 0,
-        lastProcessingTimestamp: null
+        lastProcessingTimestamp: null,
+        state: 'active',
+        cooldownTimeoutId: null,
+        lastProcessedAt: null
       };
       this.buffers.set(bufferKey, buffer);
       
@@ -440,7 +631,10 @@ export class MessageBufferManager {
         lastUpdated: now,
         createdAt: now,
         processingAttempts: 0,
-        lastProcessingTimestamp: null
+        lastProcessingTimestamp: null,
+        state: 'active',
+        cooldownTimeoutId: null,
+        lastProcessedAt: null
       };
       this.buffers.set(bufferKey, buffer);
       
@@ -454,11 +648,17 @@ export class MessageBufferManager {
     buffer.messages.push(message);
     buffer.lastUpdated = now;
     
+    // Ensure buffer is in active state
+    if (buffer.state !== 'active') {
+      buffer.state = 'active';
+    }
+    
     logDebug('MESSAGE_BUFFER_ADDED', 'Added message to buffer', {
       bufferKey,
       currentSize: buffer.messages.length,
       messagePreview: message.messageText?.substring(0, 50) || '[no text]',
-      operationTime: performance.now() - operationStartTime
+      operationTime: performance.now() - operationStartTime,
+      bufferState: buffer.state
     });
     
     // Reset the timeout since we have a new message
@@ -500,7 +700,8 @@ export class MessageBufferManager {
     logDebug('MESSAGE_BUFFER_TIMEOUT_SET', 'Set buffer processing timeout', {
       bufferKey,
       debounceTimeMs: this.config.debounceTimeMs,
-      messageCount: buffer.messages.length
+      messageCount: buffer.messages.length,
+      bufferState: buffer.state
     });
   }
 
@@ -516,13 +717,23 @@ export class MessageBufferManager {
     const buffer = this.buffers.get(bufferKey);
     if (!buffer || buffer.messages.length === 0) return;
     
+    // Skip if already in processing state
+    if (buffer.state === 'processing') {
+      logDebug('MESSAGE_BUFFER_ALREADY_PROCESSING', 'Buffer is already being processed', {
+        bufferKey,
+        messageCount: buffer.messages.length
+      });
+      return;
+    }
+    
     const startProcessingTime = performance.now();
     
     logDebug('MESSAGE_BUFFER_FLUSHING', 'Flushing message buffer', {
       bufferKey,
       messageCount: buffer.messages.length,
       bufferAge: Date.now() - buffer.createdAt,
-      processingAttempts: buffer.processingAttempts
+      processingAttempts: buffer.processingAttempts,
+      bufferState: buffer.state
     });
     
     // Cancel any pending timeout
@@ -532,6 +743,7 @@ export class MessageBufferManager {
     }
     
     // Mark buffer as being processed
+    buffer.state = 'processing';
     buffer.lastProcessingTimestamp = Date.now();
     buffer.processingAttempts += 1;
     
@@ -541,7 +753,7 @@ export class MessageBufferManager {
     // Call the flush callback with the messages
     flushCallback(messages)
       .then(() => {
-        // Success: Record metrics and remove buffer
+        // Success: Record metrics and transition buffer to cooldown
         const processingTime = performance.now() - startProcessingTime;
         this.processingTimes.push(processingTime);
         
@@ -559,9 +771,10 @@ export class MessageBufferManager {
           successRate: this.getSuccessRate()
         });
         
-        // Remove the buffer if it hasn't been replaced already
-        if (this.buffers.get(bufferKey) === buffer) {
-          this.buffers.delete(bufferKey);
+        // Transition buffer to cooldown state instead of removing it
+        const currentBuffer = this.buffers.get(bufferKey);
+        if (currentBuffer && currentBuffer === buffer) {
+          this.transitionToCooldown(bufferKey);
         }
       })
       .catch(error => {
@@ -583,10 +796,8 @@ export class MessageBufferManager {
             messageCount: buffer.messages.length
           });
           
-          // Remove the buffer if it hasn't been replaced
-          if (this.buffers.get(bufferKey) === buffer) {
-            this.buffers.delete(bufferKey);
-          }
+          // Transition to cooldown instead of removing
+          this.transitionToCooldown(bufferKey);
         } else {
           // Otherwise, retry after a short delay (exponential backoff)
           const retryDelay = Math.min(1000 * Math.pow(2, buffer.processingAttempts - 1), 10000);
@@ -597,7 +808,8 @@ export class MessageBufferManager {
             retryDelayMs: retryDelay
           });
           
-          // Clear the processing timestamp to indicate it's not currently processing
+          // Reset processing state to allow retry
+          buffer.state = 'active';
           buffer.lastProcessingTimestamp = null;
           
           // Schedule retry
@@ -638,7 +850,10 @@ export class MessageBufferManager {
     
     // Flush each buffer
     for (const bufferKey of bufferKeys) {
-      this.flushBuffer(bufferKey, flushCallback);
+      const buffer = this.buffers.get(bufferKey);
+      if (buffer && buffer.state === 'active' && buffer.messages.length > 0) {
+        this.flushBuffer(bufferKey, flushCallback);
+      }
     }
     
     logDebug('MESSAGE_BUFFER_FLUSH_ALL_COMPLETE', 'Completed flushing all buffers', {
@@ -658,8 +873,19 @@ export class MessageBufferManager {
     let stuckBuffers = 0;
     const now = Date.now();
     
+    // Count buffers by state
+    const buffersByState: Record<BufferState, number> = {
+      active: 0,
+      processing: 0,
+      cooldown: 0,
+      expired: 0
+    };
+    
     for (const buffer of this.buffers.values()) {
       totalMessages += buffer.messages.length;
+      
+      // Count by state
+      buffersByState[buffer.state]++;
       
       // Track the largest buffer
       if (buffer.messages.length > maxBufferSize) {
@@ -672,7 +898,8 @@ export class MessageBufferManager {
       }
       
       // Track stuck buffers
-      if (buffer.lastProcessingTimestamp && 
+      if (buffer.state === 'processing' && 
+          buffer.lastProcessingTimestamp && 
           now - buffer.lastProcessingTimestamp > this.config.stuckBufferThresholdMs) {
         stuckBuffers++;
       }
@@ -697,7 +924,8 @@ export class MessageBufferManager {
       processingSuccessRate: this.getSuccessRate(),
       averageProcessingTimeMs,
       emergencyFlushes: this.emergencyFlushCount,
-      memoryUsageBytes: this.lastMemoryUsage
+      memoryUsageBytes: this.lastMemoryUsage,
+      buffersByState
     };
   }
 
@@ -723,6 +951,9 @@ export class MessageBufferManager {
     for (const buffer of this.buffers.values()) {
       if (buffer.timeoutId !== null) {
         clearTimeout(buffer.timeoutId);
+      }
+      if (buffer.cooldownTimeoutId !== null) {
+        clearTimeout(buffer.cooldownTimeoutId);
       }
     }
     

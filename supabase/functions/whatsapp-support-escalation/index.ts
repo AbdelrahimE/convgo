@@ -60,9 +60,9 @@ serve(async (req) => {
         const bufferKey = `${webhookData.instance}:${fromNumber}`;
         logger.info(`Flushing message buffer for ${bufferKey} before escalation check`);
         
-        // Force immediate processing of any pending messages in this conversation
-        messageBufferManager.flushAllBuffers(async () => {
-          logger.info(`Flushed message buffers before escalation check`);
+        // Use the enhanced buffering system - force immediate processing of any pending messages
+        messageBufferManager.flushAllBuffers(async (messages) => {
+          logger.info(`Flushed ${messages.length} buffered messages before escalation check`);
           // This is a noop callback since we just want to flush, not process
         });
       }

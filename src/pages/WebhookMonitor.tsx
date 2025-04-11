@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -223,7 +224,19 @@ const WebhookMonitor = () => {
         </div>
       </div>
       
-      {showIntroAlert}
+      {showIntroAlert && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Webhook Message Monitoring</AlertTitle>
+          <AlertDescription>
+            <p className="mb-2">This page shows incoming webhook messages from your WhatsApp instances. Messages are collected in conversation buffers for 5 seconds before processing to enhance AI context awareness. Related messages sent within 5 seconds are grouped together and processed as a single conversation unit.</p>
+            <p>The buffering system includes smart cooldown periods that preserve conversation context even after processing. This allows multiple closely timed messages to be processed together, providing better context for AI responses.</p>
+            <Button variant="outline" size="sm" onClick={() => setShowIntroAlert(false)} className="mt-2">
+              Got it
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       
       <WebhookEndpointInfo />
       
