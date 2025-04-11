@@ -1,4 +1,3 @@
-
 /**
  * Message Buffer Module
  * 
@@ -23,6 +22,9 @@ export interface ConversationBuffer {
   messages: BufferedMessage[];  // Array of buffered messages
   timeoutId: number | null;     // The debounce timeout ID
   lastUpdated: number;          // Timestamp of last buffer update
+  createdAt: number;            // When the buffer was initially created
+  processingAttempts: number;   // Number of times processing was attempted
+  lastProcessingTimestamp: number | null; // When the buffer was last processed
 }
 
 // Configuration options with safe defaults
@@ -32,6 +34,10 @@ export interface BufferConfig {
   maxBufferAgeMs: number;     // Maximum age of any buffer before forced processing
   cleanupIntervalMs: number;  // How often to check for stale buffers
   maxTimeBetweenMessages: number; // Maximum time between messages to consider them part of the same context
+  maxBufferLifetimeMs: number; // Maximum total lifetime of any buffer before forced processing
+  stuckBufferThresholdMs: number; // Time threshold to consider a buffer stuck in processing
+  emergencyFlushThresholdMs: number; // Time threshold for emergency buffer flush for inactive conversations
+  maxProcessingAttempts: number; // Maximum number of processing attempts before reporting error
 }
 
 // Default configuration
@@ -41,7 +47,25 @@ const DEFAULT_CONFIG: BufferConfig = {
   maxBufferAgeMs: 30000,     // Force process after 30 seconds (failsafe)
   cleanupIntervalMs: 60000,  // Check for stale buffers every 60 seconds
   maxTimeBetweenMessages: 60000, // Messages 60 seconds apart or less are considered related
+  maxBufferLifetimeMs: 300000, // Force process any buffer older than 5 minutes (failsafe)
+  stuckBufferThresholdMs: 120000, // Consider a buffer stuck if processing for more than 2 minutes
+  emergencyFlushThresholdMs: 1800000, // Emergency flush for conversations inactive for 30 minutes
+  maxProcessingAttempts: 3,  // Retry processing up to 3 times before reporting error
 };
+
+// Monitoring stats interface
+export interface BufferStats {
+  totalBuffers: number;
+  totalMessages: number;
+  oldestBufferAge: number;
+  averageMessagesPerBuffer: number;
+  maxBufferSize: number;
+  stuckBuffers: number;
+  processingSuccessRate: number;
+  averageProcessingTimeMs: number | null;
+  emergencyFlushes: number;
+  memoryUsageBytes: number;
+}
 
 /**
  * Message Buffer Manager for WhatsApp conversations
@@ -51,6 +75,14 @@ export class MessageBufferManager {
   private buffers: Map<string, ConversationBuffer>;
   private config: BufferConfig;
   private cleanupInterval: number | null;
+  private monitoringInterval: number | null;
+  
+  // Monitoring metrics
+  private processedBuffersCount: number = 0;
+  private failedProcessingCount: number = 0;
+  private emergencyFlushCount: number = 0;
+  private processingTimes: number[] = [];
+  private lastMemoryUsage: number = 0;
 
   /**
    * Create a new MessageBufferManager
@@ -60,14 +92,42 @@ export class MessageBufferManager {
     this.buffers = new Map<string, ConversationBuffer>();
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.cleanupInterval = null;
+    this.monitoringInterval = null;
     
     // Start the cleanup interval
     this.startCleanupInterval();
+    
+    // Start the monitoring interval
+    this.startMonitoringInterval();
     
     // Log buffer creation
     logDebug('MESSAGE_BUFFER_CREATED', 'Message buffer system initialized', {
       config: this.config
     });
+    
+    // Record initial memory usage
+    this.updateMemoryUsage();
+  }
+
+  /**
+   * Update the current memory usage metric
+   */
+  private updateMemoryUsage(): void {
+    try {
+      // Deno provides a simple API for memory usage
+      if (typeof Deno !== 'undefined' && Deno.memoryUsage) {
+        const memUsage = Deno.memoryUsage();
+        this.lastMemoryUsage = memUsage.heapUsed || 0;
+      } else {
+        // Fallback for non-Deno environments
+        this.lastMemoryUsage = 0;
+      }
+    } catch (error) {
+      logDebug('MESSAGE_BUFFER_MEMORY_ERROR', 'Error getting memory usage', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      this.lastMemoryUsage = 0;
+    }
   }
 
   /**
@@ -98,44 +158,150 @@ export class MessageBufferManager {
   }
 
   /**
+   * Start the interval to monitor buffer health
+   */
+  private startMonitoringInterval(): void {
+    if (this.monitoringInterval !== null) {
+      clearInterval(this.monitoringInterval);
+    }
+    
+    this.monitoringInterval = setInterval(() => {
+      this.monitorBufferHealth();
+    }, this.config.cleanupIntervalMs / 2); // Check twice as often as cleanup
+    
+    logDebug('MESSAGE_BUFFER_MONITORING_STARTED', 'Started message buffer health monitoring', {
+      intervalMs: this.config.cleanupIntervalMs / 2
+    });
+  }
+
+  /**
+   * Monitor overall buffer system health and detect stuck buffers
+   */
+  private monitorBufferHealth(): void {
+    const now = Date.now();
+    const stats = this.getStats();
+    let stuckBuffersDetected = 0;
+    let emergencyFlushedBuffers = 0;
+    
+    // Update memory usage
+    this.updateMemoryUsage();
+    
+    // Log periodic statistics
+    logDebug('MESSAGE_BUFFER_STATS', 'Buffer system periodic statistics', stats);
+    
+    // Check for stuck buffers and very old inactive conversations
+    for (const [key, buffer] of this.buffers.entries()) {
+      // Check for stuck buffers (in processing state for too long)
+      if (buffer.lastProcessingTimestamp && 
+          now - buffer.lastProcessingTimestamp > this.config.stuckBufferThresholdMs) {
+        stuckBuffersDetected++;
+        logDebug('MESSAGE_BUFFER_STUCK', 'Detected stuck buffer in processing state', {
+          bufferKey: key,
+          processingTime: now - buffer.lastProcessingTimestamp,
+          messageCount: buffer.messages.length,
+          attempts: buffer.processingAttempts
+        });
+        
+        // If exceeded max attempts, force remove the buffer
+        if (buffer.processingAttempts >= this.config.maxProcessingAttempts) {
+          logDebug('MESSAGE_BUFFER_ABANDONED', 'Abandoning stuck buffer after max retries', {
+            bufferKey: key,
+            messageCount: buffer.messages.length,
+            attempts: buffer.processingAttempts
+          });
+          
+          this.failedProcessingCount++;
+          this.buffers.delete(key);
+        }
+      }
+      
+      // Check for very old inactive conversations to emergency flush
+      if (now - buffer.lastUpdated > this.config.emergencyFlushThresholdMs) {
+        logDebug('MESSAGE_BUFFER_EMERGENCY_FLUSH', 'Emergency flush of long-inactive conversation', {
+          bufferKey: key,
+          inactiveTime: now - buffer.lastUpdated,
+          messageCount: buffer.messages.length
+        });
+        
+        // Increment emergency flush counter
+        this.emergencyFlushCount++;
+        emergencyFlushedBuffers++;
+        
+        // Remove the buffer (in a real implementation, we would call flushBuffer here)
+        this.buffers.delete(key);
+      }
+    }
+    
+    // Log summary of monitoring action if any was taken
+    if (stuckBuffersDetected > 0 || emergencyFlushedBuffers > 0) {
+      logDebug('MESSAGE_BUFFER_MONITORING_ACTION', 'Buffer monitoring actions taken', {
+        stuckBuffersDetected,
+        emergencyFlushedBuffers,
+        totalBuffersRemaining: this.buffers.size,
+        memoryUsage: this.lastMemoryUsage
+      });
+    }
+  }
+
+  /**
    * Clean up stale buffers to prevent memory leaks
    */
   private cleanupStaleBuffers(): void {
     const now = Date.now();
     let cleanedBuffers = 0;
+    let processedStaleBuffers = 0;
     
     for (const [key, buffer] of this.buffers.entries()) {
-      // If buffer is too old, process it and remove
+      // If buffer is completely empty, remove it
+      if (buffer.messages.length === 0) {
+        this.buffers.delete(key);
+        cleanedBuffers++;
+        continue;
+      }
+      
+      // Check if buffer exceeds max lifetime (absolute failsafe)
+      const bufferAge = now - buffer.createdAt;
+      if (bufferAge > this.config.maxBufferLifetimeMs) {
+        logDebug('MESSAGE_BUFFER_MAX_LIFETIME', 'Buffer exceeded maximum lifetime', {
+          bufferKey: key,
+          bufferAge,
+          maxLifetime: this.config.maxBufferLifetimeMs,
+          messageCount: buffer.messages.length
+        });
+        
+        // In real implementation, we would call flushBuffer with the callback
+        // For now, just remove it
+        this.buffers.delete(key);
+        processedStaleBuffers++;
+        continue;
+      }
+      
+      // If buffer is too old since last update, process it and remove
       if (now - buffer.lastUpdated > this.config.maxBufferAgeMs) {
-        // Process the buffer if it has messages
-        if (buffer.messages.length > 0) {
-          logDebug('MESSAGE_BUFFER_STALE', 'Processing stale buffer', {
-            bufferKey: key,
-            messageCount: buffer.messages.length,
-            bufferAge: now - buffer.lastUpdated
-          });
-          
-          // Cancel any pending timeout
-          if (buffer.timeoutId !== null) {
-            clearTimeout(buffer.timeoutId);
-          }
-          
-          // We would call processBuffer here, but will implement in Stage 2
-          // For now, just remove it
-          this.buffers.delete(key);
-          cleanedBuffers++;
-        } else {
-          // Empty buffer, just remove it
-          this.buffers.delete(key);
-          cleanedBuffers++;
+        logDebug('MESSAGE_BUFFER_STALE', 'Processing stale buffer', {
+          bufferKey: key,
+          messageCount: buffer.messages.length,
+          bufferAge: now - buffer.lastUpdated
+        });
+        
+        // Cancel any pending timeout
+        if (buffer.timeoutId !== null) {
+          clearTimeout(buffer.timeoutId);
         }
+        
+        // In real implementation, we would call flushBuffer with the callback
+        // For now, just remove it
+        this.buffers.delete(key);
+        processedStaleBuffers++;
       }
     }
     
-    if (cleanedBuffers > 0) {
-      logDebug('MESSAGE_BUFFER_CLEANUP', 'Cleaned up stale buffers', {
-        cleanedCount: cleanedBuffers,
-        remainingBuffers: this.buffers.size
+    if (cleanedBuffers > 0 || processedStaleBuffers > 0) {
+      logDebug('MESSAGE_BUFFER_CLEANUP', 'Cleaned up buffers', {
+        emptyBuffersRemoved: cleanedBuffers,
+        staleBuffersProcessed: processedStaleBuffers,
+        remainingBuffers: this.buffers.size,
+        memoryUsage: this.lastMemoryUsage
       });
     }
   }
@@ -206,6 +372,9 @@ export class MessageBufferManager {
     const bufferKey = this.getBufferKey(message.instanceName, message.fromNumber);
     const now = Date.now();
     
+    // Start timing this operation for metrics
+    const operationStartTime = performance.now();
+    
     // Get or create buffer for this conversation
     let buffer = this.buffers.get(bufferKey);
     
@@ -226,7 +395,10 @@ export class MessageBufferManager {
         buffer = {
           messages: [],
           timeoutId: null,
-          lastUpdated: now
+          lastUpdated: now,
+          createdAt: now,
+          processingAttempts: 0,
+          lastProcessingTimestamp: null
         };
         this.buffers.set(bufferKey, buffer);
       }
@@ -235,7 +407,10 @@ export class MessageBufferManager {
       buffer = {
         messages: [],
         timeoutId: null,
-        lastUpdated: now
+        lastUpdated: now,
+        createdAt: now,
+        processingAttempts: 0,
+        lastProcessingTimestamp: null
       };
       this.buffers.set(bufferKey, buffer);
       
@@ -251,7 +426,8 @@ export class MessageBufferManager {
       logDebug('MESSAGE_BUFFER_FULL', 'Buffer is full, processing immediately', {
         bufferKey,
         maxSize: this.config.maxBufferSize,
-        messagePreview: message.messageText?.substring(0, 50) || '[no text]'
+        messagePreview: message.messageText?.substring(0, 50) || '[no text]',
+        operationTime: performance.now() - operationStartTime
       });
       
       // Process the buffer now and reset
@@ -261,7 +437,10 @@ export class MessageBufferManager {
       buffer = {
         messages: [message],
         timeoutId: null,
-        lastUpdated: now
+        lastUpdated: now,
+        createdAt: now,
+        processingAttempts: 0,
+        lastProcessingTimestamp: null
       };
       this.buffers.set(bufferKey, buffer);
       
@@ -278,7 +457,8 @@ export class MessageBufferManager {
     logDebug('MESSAGE_BUFFER_ADDED', 'Added message to buffer', {
       bufferKey,
       currentSize: buffer.messages.length,
-      messagePreview: message.messageText?.substring(0, 50) || '[no text]'
+      messagePreview: message.messageText?.substring(0, 50) || '[no text]',
+      operationTime: performance.now() - operationStartTime
     });
     
     // Reset the timeout since we have a new message
@@ -288,6 +468,11 @@ export class MessageBufferManager {
     
     // Set a new timeout
     this.setBufferTimeout(bufferKey, flushCallback);
+    
+    // Update memory usage periodically (every 10 messages)
+    if ((this.processedBuffersCount + this.failedProcessingCount) % 10 === 0) {
+      this.updateMemoryUsage();
+    }
     
     return true;
   }
@@ -331,30 +516,107 @@ export class MessageBufferManager {
     const buffer = this.buffers.get(bufferKey);
     if (!buffer || buffer.messages.length === 0) return;
     
+    const startProcessingTime = performance.now();
+    
     logDebug('MESSAGE_BUFFER_FLUSHING', 'Flushing message buffer', {
       bufferKey,
-      messageCount: buffer.messages.length
+      messageCount: buffer.messages.length,
+      bufferAge: Date.now() - buffer.createdAt,
+      processingAttempts: buffer.processingAttempts
     });
     
     // Cancel any pending timeout
     if (buffer.timeoutId !== null) {
       clearTimeout(buffer.timeoutId);
+      buffer.timeoutId = null;
     }
     
-    // Clone the messages before removing the buffer
+    // Mark buffer as being processed
+    buffer.lastProcessingTimestamp = Date.now();
+    buffer.processingAttempts += 1;
+    
+    // Clone the messages before processing
     const messages = [...buffer.messages];
     
-    // Remove the buffer
-    this.buffers.delete(bufferKey);
-    
     // Call the flush callback with the messages
-    flushCallback(messages).catch(error => {
-      logDebug('MESSAGE_BUFFER_FLUSH_ERROR', 'Error processing buffered messages', {
-        bufferKey,
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
+    flushCallback(messages)
+      .then(() => {
+        // Success: Record metrics and remove buffer
+        const processingTime = performance.now() - startProcessingTime;
+        this.processingTimes.push(processingTime);
+        
+        // Keep only the last 100 processing times for metrics
+        if (this.processingTimes.length > 100) {
+          this.processingTimes.shift();
+        }
+        
+        this.processedBuffersCount++;
+        
+        logDebug('MESSAGE_BUFFER_PROCESSED', 'Successfully processed buffer', {
+          bufferKey,
+          messageCount: messages.length,
+          processingTimeMs: processingTime,
+          successRate: this.getSuccessRate()
+        });
+        
+        // Remove the buffer if it hasn't been replaced already
+        if (this.buffers.get(bufferKey) === buffer) {
+          this.buffers.delete(bufferKey);
+        }
+      })
+      .catch(error => {
+        // Error: Log and potentially retry
+        logDebug('MESSAGE_BUFFER_FLUSH_ERROR', 'Error processing buffered messages', {
+          bufferKey,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          processingAttempts: buffer.processingAttempts
+        });
+        
+        // If we've tried too many times, give up
+        if (buffer.processingAttempts >= this.config.maxProcessingAttempts) {
+          this.failedProcessingCount++;
+          
+          logDebug('MESSAGE_BUFFER_MAX_RETRIES', 'Giving up on buffer after maximum retries', {
+            bufferKey,
+            maxAttempts: this.config.maxProcessingAttempts,
+            messageCount: buffer.messages.length
+          });
+          
+          // Remove the buffer if it hasn't been replaced
+          if (this.buffers.get(bufferKey) === buffer) {
+            this.buffers.delete(bufferKey);
+          }
+        } else {
+          // Otherwise, retry after a short delay (exponential backoff)
+          const retryDelay = Math.min(1000 * Math.pow(2, buffer.processingAttempts - 1), 10000);
+          
+          logDebug('MESSAGE_BUFFER_RETRY', 'Will retry processing buffer after delay', {
+            bufferKey,
+            retryAttempt: buffer.processingAttempts,
+            retryDelayMs: retryDelay
+          });
+          
+          // Clear the processing timestamp to indicate it's not currently processing
+          buffer.lastProcessingTimestamp = null;
+          
+          // Schedule retry
+          buffer.timeoutId = setTimeout(() => {
+            this.flushBuffer(bufferKey, flushCallback);
+          }, retryDelay);
+        }
       });
-    });
+  }
+
+  /**
+   * Calculate the success rate of buffer processing
+   * @returns The percentage of successful processing operations
+   */
+  private getSuccessRate(): number {
+    const total = this.processedBuffersCount + this.failedProcessingCount;
+    if (total === 0) return 100; // No attempts yet
+    
+    return (this.processedBuffersCount / total) * 100;
   }
 
   /**
@@ -364,8 +626,11 @@ export class MessageBufferManager {
   public flushAllBuffers(
     flushCallback: (messages: BufferedMessage[]) => Promise<void>
   ): void {
+    const startTime = performance.now();
+    
     logDebug('MESSAGE_BUFFER_FLUSH_ALL', 'Flushing all message buffers', {
-      bufferCount: this.buffers.size
+      bufferCount: this.buffers.size,
+      totalMessages: Array.from(this.buffers.values()).reduce((sum, b) => sum + b.messages.length, 0)
     });
     
     // Create a copy of the keys to avoid modification during iteration
@@ -375,31 +640,64 @@ export class MessageBufferManager {
     for (const bufferKey of bufferKeys) {
       this.flushBuffer(bufferKey, flushCallback);
     }
+    
+    logDebug('MESSAGE_BUFFER_FLUSH_ALL_COMPLETE', 'Completed flushing all buffers', {
+      bufferCount: bufferKeys.length,
+      operationTimeMs: performance.now() - startTime
+    });
   }
 
   /**
    * Get current buffer statistics for monitoring
    * @returns Object with buffer statistics
    */
-  public getStats(): {
-    totalBuffers: number;
-    totalMessages: number;
-    oldestBufferAge: number;
-  } {
+  public getStats(): BufferStats {
     let totalMessages = 0;
     let oldestBufferTimestamp = Date.now();
+    let maxBufferSize = 0;
+    let stuckBuffers = 0;
+    const now = Date.now();
     
     for (const buffer of this.buffers.values()) {
       totalMessages += buffer.messages.length;
-      if (buffer.lastUpdated < oldestBufferTimestamp) {
-        oldestBufferTimestamp = buffer.lastUpdated;
+      
+      // Track the largest buffer
+      if (buffer.messages.length > maxBufferSize) {
+        maxBufferSize = buffer.messages.length;
+      }
+      
+      // Track the oldest buffer
+      if (buffer.createdAt < oldestBufferTimestamp) {
+        oldestBufferTimestamp = buffer.createdAt;
+      }
+      
+      // Track stuck buffers
+      if (buffer.lastProcessingTimestamp && 
+          now - buffer.lastProcessingTimestamp > this.config.stuckBufferThresholdMs) {
+        stuckBuffers++;
       }
     }
+    
+    // Calculate average processing time
+    let averageProcessingTimeMs = null;
+    if (this.processingTimes.length > 0) {
+      averageProcessingTimeMs = this.processingTimes.reduce((a, b) => a + b, 0) / this.processingTimes.length;
+    }
+    
+    // Update memory usage
+    this.updateMemoryUsage();
     
     return {
       totalBuffers: this.buffers.size,
       totalMessages,
-      oldestBufferAge: Date.now() - oldestBufferTimestamp
+      oldestBufferAge: this.buffers.size > 0 ? now - oldestBufferTimestamp : 0,
+      averageMessagesPerBuffer: this.buffers.size > 0 ? totalMessages / this.buffers.size : 0,
+      maxBufferSize,
+      stuckBuffers,
+      processingSuccessRate: this.getSuccessRate(),
+      averageProcessingTimeMs,
+      emergencyFlushes: this.emergencyFlushCount,
+      memoryUsageBytes: this.lastMemoryUsage
     };
   }
 
@@ -407,9 +705,18 @@ export class MessageBufferManager {
    * Clean up resources when shutting down
    */
   public destroy(): void {
+    // Log final statistics before shutdown
+    const finalStats = this.getStats();
+    logDebug('MESSAGE_BUFFER_FINAL_STATS', 'Buffer system final statistics before shutdown', finalStats);
+    
     if (this.cleanupInterval !== null) {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
+    }
+    
+    if (this.monitoringInterval !== null) {
+      clearInterval(this.monitoringInterval);
+      this.monitoringInterval = null;
     }
     
     // Clear all timeouts
