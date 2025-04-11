@@ -294,15 +294,7 @@ export async function processBufferedMessages(
     // Use the message data from the last message for API key info
     const lastMessageData = sortedMessages[sortedMessages.length - 1].messageData;
     
-    // Generate and send a SINGLE response for ALL combined messages
-    // This is the key fix - we only process the combined message ONCE
-    // rather than sending a response for each original message
-    await logDebug('BUFFER_SENDING_SINGLE_RESPONSE', 'Sending single response for combined messages', { 
-      messageCount: sortedMessages.length,
-      combinedTextLength: combinedText.length
-    });
-    
-    // Process the combined message with the AI and send only ONE response
+    // Process the combined message with the AI
     return await generateAndSendAIResponse(
       combinedText,
       context,
@@ -326,4 +318,3 @@ export async function processBufferedMessages(
     return false;
   }
 }
-

@@ -61,7 +61,6 @@ serve(async (req) => {
         logger.info(`Flushing message buffer for ${bufferKey} before escalation check`);
         
         // Use the enhanced buffering system - force immediate processing of any pending messages
-        // This now respects the single-response behavior for batched messages
         messageBufferManager.flushAllBuffers(async (messages) => {
           logger.info(`Flushed ${messages.length} buffered messages before escalation check`);
           // This is a noop callback since we just want to flush, not process
@@ -100,4 +99,3 @@ serve(async (req) => {
     });
   }
 });
-

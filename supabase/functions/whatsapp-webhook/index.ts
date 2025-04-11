@@ -10,7 +10,7 @@ import { processConnectionStatus } from "../_shared/connection-status.ts";
 import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts";
 import { checkForDuplicateMessage } from "../_shared/duplicate-message-detector.ts";
 import { processAudioMessage } from "../_shared/audio-processor.ts";
-import { generateAndSendAIResponse, processBufferedMessages } from "../_shared/ai-response-generator.ts";
+import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
 import messageBufferManager, { BufferedMessage } from "../_shared/message-buffer.ts";
 
 const logger = {
