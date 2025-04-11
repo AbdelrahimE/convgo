@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,8 +13,8 @@ import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import WebhookEndpointInfo from '@/components/WebhookEndpointInfo';
+import { DebugLogsTable } from '@/components/DebugLogsTable';
 import logger from '@/utils/logger';
-
 interface WebhookMessage {
   id: string;
   instance: string;
@@ -23,7 +22,6 @@ interface WebhookMessage {
   data: any;
   received_at: string;
 }
-
 const WebhookMonitor = () => {
   const {
     user
@@ -39,7 +37,6 @@ const WebhookMonitor = () => {
   const [showIntroAlert, setShowIntroAlert] = useState(true);
   const navigate = useNavigate();
   const pollingRef = useRef<number | null>(null);
-  
   useEffect(() => {
     if (user) {
       fetchMessages();
@@ -51,13 +48,11 @@ const WebhookMonitor = () => {
       }
     };
   }, [user]);
-  
   const startPolling = () => {
     pollingRef.current = window.setInterval(() => {
       fetchMessages(false);
     }, 15000);
   };
-  
   const fetchMessages = async (showToast = true) => {
     try {
       setIsLoading(true);
@@ -67,17 +62,13 @@ const WebhookMonitor = () => {
       } = await supabase.from('webhook_messages').select('*').order('received_at', {
         ascending: false
       }).limit(100);
-      
       if (error) throw error;
-      
       setMessages(data || []);
-      
       const counts: Record<string, number> = {};
       data?.forEach(message => {
         counts[message.event] = (counts[message.event] || 0) + 1;
       });
       setEventCounts(counts);
-      
       if (data && data.length > 0) {
         const mostRecentDate = new Date(data[0].received_at);
         setLastMessageTime(mostRecentDate);
@@ -87,7 +78,6 @@ const WebhookMonitor = () => {
       } else {
         setReceivingStatus('inactive');
       }
-      
       if (showToast) {
         toast.success('Webhook messages refreshed');
       }
@@ -100,16 +90,13 @@ const WebhookMonitor = () => {
       setIsLoading(false);
     }
   };
-  
   const clearMessages = async () => {
     try {
       setIsDeleting(true);
       const {
         error
       } = await supabase.from('webhook_messages').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      
       if (error) throw error;
-      
       setMessages([]);
       toast.success('Webhook message history cleared');
       setReceivingStatus('inactive');
@@ -121,11 +108,9 @@ const WebhookMonitor = () => {
       setIsDeleting(false);
     }
   };
-  
   const handleRefresh = () => {
     fetchMessages();
   };
-  
   const getEventColor = (event: string) => {
     switch (event) {
       case 'messages.upsert':
@@ -144,7 +129,6 @@ const WebhookMonitor = () => {
         return 'bg-gray-500';
     }
   };
-  
   const getEventIcon = (event: string) => {
     switch (event) {
       case 'messages.upsert':
@@ -163,7 +147,6 @@ const WebhookMonitor = () => {
         return <span className="mr-1">📋</span>;
     }
   };
-  
   const downloadJson = () => {
     const jsonStr = JSON.stringify(messages, null, 2);
     const blob = new Blob([jsonStr], {
@@ -179,20 +162,15 @@ const WebhookMonitor = () => {
     URL.revokeObjectURL(href);
     toast.success('Webhook messages downloaded');
   };
-  
   const filteredMessages = messages.filter(message => {
     if (activeTab !== 'all' && message.event !== activeTab) return false;
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      return message.instance.toLowerCase().includes(searchLower) || 
-             message.event.toLowerCase().includes(searchLower) || 
-             JSON.stringify(message.data).toLowerCase().includes(searchLower);
+      return message.instance.toLowerCase().includes(searchLower) || message.event.toLowerCase().includes(searchLower) || JSON.stringify(message.data).toLowerCase().includes(searchLower);
     }
     return true;
   });
-  
-  return (
-    <div className="container mx-auto py-6 space-y-6">
+  return <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Webhook Monitor</h1>
@@ -201,11 +179,9 @@ const WebhookMonitor = () => {
             <span className="text-sm text-muted-foreground">
               {receivingStatus === 'active' ? 'Receiving webhook messages' : receivingStatus === 'inactive' ? 'No recent messages received' : 'Status unknown'}
             </span>
-            {lastMessageTime && 
-              <span className="text-sm text-muted-foreground ml-2">
+            {lastMessageTime && <span className="text-sm text-muted-foreground ml-2">
                 Last message: {lastMessageTime.toLocaleString()}
-              </span>
-            }
+              </span>}
           </div>
         </div>
         <div className="flex space-x-2">
@@ -224,165 +200,123 @@ const WebhookMonitor = () => {
         </div>
       </div>
       
-      {showIntroAlert && (
-        <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Webhook Message Monitoring</AlertTitle>
-          <AlertDescription>
-            <p className="mb-2">This page shows incoming webhook messages from your WhatsApp instances. Messages are collected in conversation buffers for 5 seconds before processing to enhance AI context awareness. Related messages sent within 5 seconds are grouped together and processed as a single conversation unit.</p>
-            <p>The buffering system includes smart cooldown periods that preserve conversation context even after processing. This allows multiple closely timed messages to be processed together, providing better context for AI responses.</p>
-            <Button variant="outline" size="sm" onClick={() => setShowIntroAlert(false)} className="mt-2">
-              Got it
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
+      {showIntroAlert}
       
       <WebhookEndpointInfo />
       
-      <Card>
-        <CardHeader>
-          <CardTitle>Webhook Messages</CardTitle>
-          <CardDescription>
-            View incoming messages from the EVOLUTION API server
-          </CardDescription>
-          <div className="mt-4">
-            <div className="flex items-center space-x-2">
-              <Input
-                placeholder="Search messages..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid grid-cols-7">
-              <TabsTrigger value="all">
-                All Events
-                {messages.length > 0 && <Badge variant="secondary" className="ml-2">{messages.length}</Badge>}
-              </TabsTrigger>
-              <TabsTrigger value="messages.upsert">
-                Messages
-                {eventCounts['messages.upsert'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['messages.upsert']}</Badge>}
-              </TabsTrigger>
-              <TabsTrigger value="connection.update">
-                Connection
-                {eventCounts['connection.update'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['connection.update']}</Badge>}
-              </TabsTrigger>
-              <TabsTrigger value="qrcode.updated">
-                QR Code
-                {eventCounts['qrcode.updated'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['qrcode.updated']}</Badge>}
-              </TabsTrigger>
-              <TabsTrigger value="send.message">
-                Send Message
-                {eventCounts['send.message'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['send.message']}</Badge>}
-              </TabsTrigger>
-              <TabsTrigger value="call">
-                Call
-                {eventCounts['call'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['call']}</Badge>}
-              </TabsTrigger>
-              <TabsTrigger value="errors">
-                Errors
-                {eventCounts['errors'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['errors']}</Badge>}
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value={activeTab} className="mt-0">
-              {isLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : filteredMessages.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {messages.length === 0 ? (
-                    <div className="space-y-4">
-                      <AlertTriangle className="h-12 w-12 mx-auto text-yellow-500" />
-                      <div>No webhook messages found</div>
-                      <div className="text-sm max-w-lg mx-auto">
-                        If you haven't received any webhook messages, make sure your webhook URL is properly configured in your WhatsApp instance settings.
-                      </div>
-                      <Button variant="outline" onClick={() => navigate('/whatsapp-link')}>
-                        Go to WhatsApp Setup
-                      </Button>
-                    </div>
-                  ) : (
-                    <div>No messages matching your filters</div>
-                  )}
-                </div>
-              ) : (
-                <ScrollArea className="h-[600px] pr-4">
-                  <div className="space-y-4">
-                    {filteredMessages.map(message => (
-                      <Card 
-                        key={message.id} 
-                        className="border-l-4" 
-                        style={{
-                          borderLeftColor: getEventColor(message.event).replace('bg-', '')
-                        }}
-                      >
-                        <CardHeader className="pb-2">
-                          <div className="flex justify-between items-start">
-                            <div className="space-y-1">
-                              <div className="flex items-center space-x-2">
-                                <Badge className={getEventColor(message.event)}>
-                                  {getEventIcon(message.event)} {message.event}
-                                </Badge>
-                                <span className="text-sm font-medium">
-                                  Instance: {message.instance}
-                                </span>
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                {new Date(message.received_at).toLocaleString()}
-                              </p>
-                            </div>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <Info className="h-4 w-4" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-80">
-                                <div className="space-y-2">
-                                  <h4 className="font-medium text-sm">Message Details</h4>
-                                  <div className="grid grid-cols-2 gap-1 text-xs">
-                                    <div className="font-medium">ID:</div>
-                                    <div className="truncate">{message.id}</div>
-                                    <div className="font-medium">Instance:</div>
-                                    <div>{message.instance}</div>
-                                    <div className="font-medium">Event Type:</div>
-                                    <div>{message.event}</div>
-                                    <div className="font-medium">Received:</div>
-                                    <div>{new Date(message.received_at).toLocaleString()}</div>
+      <Tabs defaultValue="messages" className="space-y-6">
+        
+        
+        <TabsContent value="messages">
+          <Card>
+            <CardHeader>
+              <CardTitle>Webhook Messages</CardTitle>
+              <CardDescription>
+                View incoming messages from the EVOLUTION API server
+              </CardDescription>
+              <div className="mt-4">
+                
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+                <TabsList className="grid grid-cols-7">
+                  <TabsTrigger value="all">
+                    All Events
+                    {messages.length > 0 && <Badge variant="secondary" className="ml-2">{messages.length}</Badge>}
+                  </TabsTrigger>
+                  <TabsTrigger value="messages.upsert">
+                    Messages
+                    {eventCounts['messages.upsert'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['messages.upsert']}</Badge>}
+                  </TabsTrigger>
+                  
+                  
+                  
+                  
+                  
+                </TabsList>
+                
+                <TabsContent value={activeTab} className="mt-0">
+                  {isLoading ? <div className="flex justify-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div> : filteredMessages.length === 0 ? <div className="text-center py-8 text-muted-foreground">
+                      {messages.length === 0 ? <div className="space-y-4">
+                          <AlertTriangle className="h-12 w-12 mx-auto text-yellow-500" />
+                          <div>No webhook messages found</div>
+                          <div className="text-sm max-w-lg mx-auto">
+                            If you haven't received any webhook messages, make sure your webhook URL is properly configured in your WhatsApp instance settings.
+                          </div>
+                          <Button variant="outline" onClick={() => navigate('/whatsapp-link')}>
+                            Go to WhatsApp Setup
+                          </Button>
+                        </div> : <div>No messages matching your filters</div>}
+                    </div> : <ScrollArea className="h-[600px] pr-4">
+                      <div className="space-y-4">
+                        {filteredMessages.map(message => <Card key={message.id} className="border-l-4" style={{
+                      borderLeftColor: getEventColor(message.event).replace('bg-', '')
+                    }}>
+                            <CardHeader className="pb-2">
+                              <div className="flex justify-between items-start">
+                                <div className="space-y-1">
+                                  <div className="flex items-center space-x-2">
+                                    <Badge className={getEventColor(message.event)}>
+                                      {getEventIcon(message.event)} {message.event}
+                                    </Badge>
+                                    <span className="text-sm font-medium">
+                                      Instance: {message.instance}
+                                    </span>
                                   </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(message.received_at).toLocaleString()}
+                                  </p>
                                 </div>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="bg-muted p-2 rounded overflow-x-auto">
-                            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(message.data, null, 2)}</pre>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-        <CardFooter>
-          <div className="text-xs text-muted-foreground">
-            Showing {filteredMessages.length} of {messages.length} messages
-          </div>
-        </CardFooter>
-      </Card>
-    </div>
-  );
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button variant="ghost" size="sm">
+                                      <Info className="h-4 w-4" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-80">
+                                    <div className="space-y-2">
+                                      <h4 className="font-medium text-sm">Message Details</h4>
+                                      <div className="grid grid-cols-2 gap-1 text-xs">
+                                        <div className="font-medium">ID:</div>
+                                        <div className="truncate">{message.id}</div>
+                                        <div className="font-medium">Instance:</div>
+                                        <div>{message.instance}</div>
+                                        <div className="font-medium">Event Type:</div>
+                                        <div>{message.event}</div>
+                                        <div className="font-medium">Received:</div>
+                                        <div>{new Date(message.received_at).toLocaleString()}</div>
+                                      </div>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="bg-muted p-2 rounded overflow-x-auto">
+                                <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(message.data, null, 2)}</pre>
+                              </div>
+                            </CardContent>
+                          </Card>)}
+                      </div>
+                    </ScrollArea>}
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+            <CardFooter>
+              <div className="text-xs text-muted-foreground">
+                Showing {filteredMessages.length} of {messages.length} messages
+              </div>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="debug">
+          <DebugLogsTable />
+        </TabsContent>
+      </Tabs>
+    </div>;
 };
-
 export default WebhookMonitor;

@@ -2,7 +2,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { handleSupportEscalation, WebhookData } from "../_shared/escalation-utils.ts";
-import messageBufferManager from "../_shared/message-buffer.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -51,22 +50,6 @@ serve(async (req) => {
     const url = new URL(req.url);
     const foundInstanceId = url.searchParams.get('foundInstanceId');
     const transcribedText = url.searchParams.get('transcribedText');
-
-    // Before processing, flush all buffered messages to ensure we don't miss any context
-    // This is important for escalation because we want to check with complete context
-    if (webhookData.instance) {
-      const fromNumber = webhookData.data?.key?.remoteJid?.replace('@s.whatsapp.net', '') || '';
-      if (fromNumber) {
-        const bufferKey = `${webhookData.instance}:${fromNumber}`;
-        logger.info(`Flushing message buffer for ${bufferKey} before escalation check`);
-        
-        // Use the enhanced buffering system - force immediate processing of any pending messages
-        messageBufferManager.flushAllBuffers(async (messages) => {
-          logger.info(`Flushed ${messages.length} buffered messages before escalation check`);
-          // This is a noop callback since we just want to flush, not process
-        });
-      }
-    }
 
     // Process the message using the extracted core logic
     const result = await handleSupportEscalation(
