@@ -862,4 +862,23 @@ serve(async (req) => {
       
       return new Response(JSON.stringify({ success: true }), {
         headers: {
-          ...cors
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+  } catch (error) {
+    await logDebug('WEBHOOK_PROCESS_ERROR', 'Error processing webhook request', { error });
+    console.error('Error processing webhook request:', error);
+    return new Response(
+      JSON.stringify({ success: false, error: 'Internal server error' }),
+      { 
+        status: 500, 
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+  }
+});
