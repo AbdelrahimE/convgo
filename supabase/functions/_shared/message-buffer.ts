@@ -58,6 +58,8 @@ export interface ConversationBuffer {
     supabaseUrl?: string;
     supabaseServiceKey?: string;
   };
+  batchStartTime?: number;     // When the current message batch started (for debounce window)
+  messagesSinceLastProcess: number; // Count of messages received since last processing
 }
 
 // Configuration options with safe defaults
@@ -73,6 +75,8 @@ export interface BufferConfig {
   maxProcessingAttempts: number; // Maximum number of processing attempts before reporting error
   cooldownPeriodMs: number;   // How long to keep buffer in cooldown state after processing
   bufferRetentionMs: number;  // Maximum time to keep an empty buffer before removing it
+  minMessagesToProcess: number; // Minimum number of messages to process together (unless timeout occurs)
+  cooldownDebounceWindowMs: number; // Time window after processing during which new messages are still batched
 }
 
 // Default configuration
@@ -88,6 +92,8 @@ const DEFAULT_CONFIG: BufferConfig = {
   maxProcessingAttempts: 3,  // Retry processing up to 3 times before reporting error
   cooldownPeriodMs: 60000,   // Keep buffer in cooldown state for 1 minute after processing
   bufferRetentionMs: 120000, // Keep empty buffers for 2 minutes before removing them
+  minMessagesToProcess: 1,   // Minimum 1 message to process (default - process even single messages)
+  cooldownDebounceWindowMs: 5000, // 5 second window after processing to collect more messages
 };
 
 // Monitoring stats interface
@@ -427,24 +433,30 @@ export class MessageBufferManager {
       return false;
     }
     
-    // If buffer is in cooldown, check timing to see if it can be reactivated
+    const now = Date.now();
+    
+    // If buffer is in cooldown, check if it's within the debounce window for combining
     if (buffer.state === 'cooldown') {
       const timeSinceProcessed = buffer.lastProcessedAt ? 
-        Date.now() - buffer.lastProcessedAt : 
+        now - buffer.lastProcessedAt : 
         Number.MAX_SAFE_INTEGER;
       
-      // If we're still within the debounce window from the last processing, allow combination
-      if (timeSinceProcessed < this.config.debounceTimeMs * 2) {
-        logDebug('MESSAGE_BUFFER_REACTIVATE', 'Reactivating cooldown buffer for new message', {
+      // If we're still within the cooldown debounce window, allow combination
+      if (timeSinceProcessed < this.config.cooldownDebounceWindowMs) {
+        logDebug('MESSAGE_BUFFER_REACTIVATE_IN_DEBOUNCE', 'Reactivating cooldown buffer within debounce window', {
           timeSinceProcessed,
-          cooldownState: buffer.state,
+          cooldownDebounceWindow: this.config.cooldownDebounceWindowMs,
           lastProcessedAt: buffer.lastProcessedAt
         });
         return true;
+      } else {
+        logDebug('MESSAGE_BUFFER_OUTSIDE_DEBOUNCE', 'Message arrived outside debounce window', {
+          timeSinceProcessed,
+          cooldownDebounceWindow: this.config.cooldownDebounceWindowMs
+        });
+        return false;
       }
     }
-    
-    const now = Date.now();
     
     // Check time elapsed since last message
     const timeSinceLastUpdate = now - buffer.lastUpdated;
@@ -526,8 +538,9 @@ export class MessageBufferManager {
   /**
    * Transition a buffer to cooldown state after processing
    * @param bufferKey The unique buffer key
+   * @param forceNewBuffer Whether to forcibly create a new buffer instead of reusing existing
    */
-  private transitionToCooldown(bufferKey: string): void {
+  private transitionToCooldown(bufferKey: string, forceNewBuffer: boolean = false): void {
     const buffer = this.buffers.get(bufferKey);
     if (!buffer) return;
     
@@ -539,6 +552,9 @@ export class MessageBufferManager {
     // Update buffer state
     buffer.state = 'cooldown';
     buffer.lastProcessedAt = Date.now();
+    
+    // Reset message count since last process
+    buffer.messagesSinceLastProcess = 0;
     
     // Mark all current messages as processed
     buffer.messages.forEach(msg => {
@@ -555,8 +571,10 @@ export class MessageBufferManager {
     logDebug('MESSAGE_BUFFER_COOLDOWN', 'Buffer transitioned to cooldown state', {
       bufferKey,
       cooldownPeriodMs: this.config.cooldownPeriodMs,
+      cooldownDebounceWindowMs: this.config.cooldownDebounceWindowMs,
       processedMessageCount: processedCount,
-      processedMessageIds: buffer.processedMessageIds.size
+      processedMessageIds: buffer.processedMessageIds.size,
+      forceNewBuffer
     });
     
     buffer.lastProcessingTimestamp = null;
@@ -677,12 +695,12 @@ export class MessageBufferManager {
         // If buffer is in cooldown and we're within debounce window, reactivate it
         if (buffer.state === 'cooldown' && 
             buffer.lastProcessedAt && 
-            now - buffer.lastProcessedAt < this.config.debounceTimeMs * 2) {
+            now - buffer.lastProcessedAt < this.config.cooldownDebounceWindowMs) {
           
-          logDebug('MESSAGE_BUFFER_REACTIVATING', 'Reactivating buffer from cooldown state', {
+          logDebug('MESSAGE_BUFFER_REACTIVATING', 'Reactivating buffer from cooldown state within debounce window', {
             bufferKey,
             timeSinceProcessed: buffer.lastProcessedAt ? now - buffer.lastProcessedAt : null,
-            cooldownThreshold: this.config.debounceTimeMs * 2,
+            cooldownDebounceWindow: this.config.cooldownDebounceWindowMs,
             existingMessageCount: buffer.messages.length
           });
           
@@ -694,13 +712,21 @@ export class MessageBufferManager {
           
           // Reactivate the buffer
           buffer.state = 'active';
+          
+          // Initialize or update the batch start time for this conversation
+          if (!buffer.batchStartTime) {
+            buffer.batchStartTime = now;
+          }
+          
+          // Initialize or increment message count since last process
+          buffer.messagesSinceLastProcess = (buffer.messagesSinceLastProcess || 0) + 1;
         }
         else if (buffer.state === 'cooldown') {
           // Buffer is in cooldown but outside debounce window, create a fresh buffer
           logDebug('MESSAGE_BUFFER_COOLDOWN_EXPIRED', 'Cooldown buffer outside debounce window, creating fresh buffer', {
             bufferKey,
             timeSinceProcessed: buffer.lastProcessedAt ? now - buffer.lastProcessedAt : null,
-            cooldownThreshold: this.config.debounceTimeMs * 2
+            cooldownDebounceWindow: this.config.cooldownDebounceWindowMs
           });
           
           // Clear any timeouts
@@ -725,7 +751,10 @@ export class MessageBufferManager {
             lastProcessedAt: null,
             processedMessageIds: processedIds, // Preserve processed IDs
             isLocked: false,
-            pendingMessages: []
+            pendingMessages: [],
+            metadata: { ...contextParams },
+            batchStartTime: now,
+            messagesSinceLastProcess: 1 // Starting a new batch
           };
           this.buffers.set(bufferKey, buffer);
         }
@@ -759,12 +788,23 @@ export class MessageBufferManager {
             lastProcessedAt: null,
             processedMessageIds: new Set<string>(),
             isLocked: false,
-            pendingMessages: []
+            pendingMessages: [],
+            metadata: { ...contextParams },
+            batchStartTime: now,
+            messagesSinceLastProcess: 1 // Starting fresh
           };
           this.buffers.set(bufferKey, buffer);
         } else {
           // Update the metadata with any new values
           buffer.metadata = { ...buffer.metadata, ...contextParams };
+          
+          // Initialize batch start time if not set
+          if (!buffer.batchStartTime) {
+            buffer.batchStartTime = now;
+          }
+          
+          // Increment message count since last process
+          buffer.messagesSinceLastProcess = (buffer.messagesSinceLastProcess || 0) + 1;
         }
       } else {
         // Create a new buffer if none exists
@@ -781,7 +821,9 @@ export class MessageBufferManager {
           processedMessageIds: new Set<string>(),
           isLocked: false,
           pendingMessages: [],
-          metadata: { ...contextParams } // Store the context params
+          metadata: { ...contextParams }, // Store the context params
+          batchStartTime: now,
+          messagesSinceLastProcess: 1 // Starting a new batch
         };
         this.buffers.set(bufferKey, buffer);
         
@@ -802,7 +844,6 @@ export class MessageBufferManager {
         });
         
         // Process the buffer now with current metadata
-        const currentMetadata = buffer.metadata;
         this.flushBuffer(bufferKey, flushCallback);
         
         // Create a new buffer with just this message
@@ -819,7 +860,9 @@ export class MessageBufferManager {
           processedMessageIds: new Set<string>(),
           isLocked: false,
           pendingMessages: [],
-          metadata: { ...contextParams } // Store the context params
+          metadata: { ...contextParams }, // Store the context params
+          batchStartTime: now,
+          messagesSinceLastProcess: 1 // Starting fresh
         };
         this.buffers.set(bufferKey, buffer);
         
@@ -849,8 +892,40 @@ export class MessageBufferManager {
         currentSize: buffer.messages.length,
         messagePreview: message.messageText?.substring(0, 50) || '[no text]',
         operationTime: performance.now() - operationStartTime,
-        bufferState: buffer.state
+        bufferState: buffer.state,
+        messagesSinceLastProcess: buffer.messagesSinceLastProcess || 1,
+        batchStartTime: buffer.batchStartTime
       });
+      
+      // Determine if we should process now based on number of messages and time
+      const shouldProcessNow = 
+        buffer.messagesSinceLastProcess >= this.config.minMessagesToProcess && 
+        now - (buffer.batchStartTime || now) >= this.config.debounceTimeMs;
+      
+      if (shouldProcessNow) {
+        logDebug('MESSAGE_BUFFER_BATCH_READY', 'Message batch ready for processing', {
+          bufferKey,
+          messageCount: buffer.messages.length,
+          timeSinceBatchStart: now - (buffer.batchStartTime || now),
+          messagesSinceLastProcess: buffer.messagesSinceLastProcess
+        });
+        
+        // Cancel the existing timeout since we're processing now
+        if (buffer.timeoutId !== null) {
+          clearTimeout(buffer.timeoutId);
+          buffer.timeoutId = null;
+        }
+        
+        // Process the buffer now
+        this.flushBuffer(bufferKey, flushCallback);
+        
+        return {
+          success: true,
+          bufferKey,
+          messageCount: buffer.messages.length,
+          willProcessNow: true
+        };
+      }
       
       // Reset the timeout since we have a new message
       if (buffer.timeoutId !== null) {
@@ -898,6 +973,12 @@ export class MessageBufferManager {
     const buffer = this.buffers.get(bufferKey);
     if (!buffer) return;
     
+    // Calculate remaining time in the debounce window
+    const now = Date.now();
+    const batchStartTime = buffer.batchStartTime || now;
+    const elapsedTime = now - batchStartTime;
+    const remainingTime = Math.max(this.config.debounceTimeMs - elapsedTime, 0);
+    
     // Create a new timeout
     const timeoutId = setTimeout(() => {
       // Capture the flush callback for reuse
@@ -906,18 +987,25 @@ export class MessageBufferManager {
       // Only flush if the buffer still exists and has messages
       const currentBuffer = this.buffers.get(bufferKey);
       if (currentBuffer && currentBuffer.messages.length > 0 && !currentBuffer.isLocked) {
+        logDebug('MESSAGE_BUFFER_TIMEOUT_TRIGGERED', 'Debounce timeout triggered, processing buffer', {
+          bufferKey,
+          messageCount: currentBuffer.messages.length,
+          batchAge: Date.now() - (currentBuffer.batchStartTime || Date.now())
+        });
+        
         this.flushBuffer(bufferKey, savedCallback);
       }
-    }, this.config.debounceTimeMs);
+    }, remainingTime);
     
     // Store the timeout ID
     buffer.timeoutId = timeoutId;
     
     logDebug('MESSAGE_BUFFER_TIMEOUT_SET', 'Set buffer processing timeout', {
       bufferKey,
-      debounceTimeMs: this.config.debounceTimeMs,
+      remainingTimeMs: remainingTime,
       messageCount: buffer.messages.length,
-      bufferState: buffer.state
+      bufferState: buffer.state,
+      messagesSinceLastProcess: buffer.messagesSinceLastProcess || 1
     });
   }
 
@@ -994,7 +1082,9 @@ export class MessageBufferManager {
       totalBufferSize: buffer.messages.length,
       bufferAge: Date.now() - buffer.createdAt,
       processingAttempts: buffer.processingAttempts,
-      bufferState: buffer.state
+      bufferState: buffer.state,
+      messagesSinceLastProcess: buffer.messagesSinceLastProcess || 1,
+      batchStartTime: buffer.batchStartTime
     });
     
     // Cancel any pending timeout
@@ -1069,10 +1159,13 @@ export class MessageBufferManager {
           successRate: this.getSuccessRate()
         });
         
-        // Transition buffer to cooldown state
+        // Reset the batch start time after processing
+        buffer.batchStartTime = null;
+        
+        // Transition buffer to cooldown state, but keep it for reuse within the debounce window
         const currentBuffer = this.buffers.get(bufferKey);
         if (currentBuffer && currentBuffer === buffer) {
-          this.transitionToCooldown(bufferKey);
+          this.transitionToCooldown(bufferKey, false);  // False means don't force a new buffer
         }
       })
       .catch(error => {
