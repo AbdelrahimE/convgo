@@ -1,3 +1,4 @@
+
 /**
  * Message Buffer Module
  * 
@@ -448,6 +449,8 @@ export class MessageBufferManager {
           cooldownDebounceWindow: this.config.cooldownDebounceWindowMs,
           lastProcessedAt: buffer.lastProcessedAt
         });
+        
+        // We should reactivate this buffer
         return true;
       } else {
         logDebug('MESSAGE_BUFFER_OUTSIDE_DEBOUNCE', 'Message arrived outside debounce window', {
@@ -582,27 +585,37 @@ export class MessageBufferManager {
     // Process any pending messages that arrived during processing
     this.processPendingMessages(bufferKey);
     
-    // Set timeout to expire the buffer after cooldown period if it remains empty
+    // Set timeout to transition from cooldown debounce window to full cooldown
     buffer.cooldownTimeoutId = setTimeout(() => {
       const currentBuffer = this.buffers.get(bufferKey);
       
-      // Reset the buffer after cooldown period
-      if (currentBuffer && currentBuffer.state === 'cooldown') {
-        logDebug('MESSAGE_BUFFER_COOLDOWN_EXPIRED', 'Resetting buffer after cooldown period', {
+      // If buffer is still in cooldown and no new messages have been received during debounce window
+      if (currentBuffer && currentBuffer.state === 'cooldown' && currentBuffer.messagesSinceLastProcess === 0) {
+        logDebug('MESSAGE_BUFFER_COOLDOWN_DEBOUNCE_EXPIRED', 'No messages arrived during debounce window', {
           bufferKey,
-          messageCount: currentBuffer.messages.length,
-          processedMessageIds: currentBuffer.processedMessageIds.size
+          cooldownDebounceWindow: this.config.cooldownDebounceWindowMs
         });
         
-        // Now we can clear the old messages as they're too old to be relevant
-        currentBuffer.messages = [];
-        
-        // If there's no new messages, we can remove the buffer
-        if (currentBuffer.messages.length === 0) {
-          this.buffers.delete(bufferKey);
-        }
+        // Set timeout for the longer retention period
+        buffer.cooldownTimeoutId = setTimeout(() => {
+          const bufferAfterCooldown = this.buffers.get(bufferKey);
+          
+          // Reset the buffer after cooldown period if still in cooldown
+          if (bufferAfterCooldown && bufferAfterCooldown.state === 'cooldown') {
+            logDebug('MESSAGE_BUFFER_COOLDOWN_EXPIRED', 'Removing buffer after retention period', {
+              bufferKey,
+              messageCount: bufferAfterCooldown.messages.length,
+              processedMessageIds: bufferAfterCooldown.processedMessageIds.size
+            });
+            
+            // If there's no new messages, we can remove the buffer
+            if (bufferAfterCooldown.messages.length === 0) {
+              this.buffers.delete(bufferKey);
+            }
+          }
+        }, this.config.bufferRetentionMs - this.config.cooldownDebounceWindowMs);
       }
-    }, this.config.bufferRetentionMs);
+    }, this.config.cooldownDebounceWindowMs);
   }
 
   /**
@@ -897,7 +910,7 @@ export class MessageBufferManager {
         batchStartTime: buffer.batchStartTime
       });
       
-      // Determine if we should process now based on number of messages and time
+      // Determine if we should process now based on number of messages and time elapsed
       const shouldProcessNow = 
         buffer.messagesSinceLastProcess >= this.config.minMessagesToProcess && 
         now - (buffer.batchStartTime || now) >= this.config.debounceTimeMs;
@@ -993,6 +1006,7 @@ export class MessageBufferManager {
           batchAge: Date.now() - (currentBuffer.batchStartTime || Date.now())
         });
         
+        // Even if messagesSinceLastProcess is low, we should process after timeout
         this.flushBuffer(bufferKey, savedCallback);
       }
     }, remainingTime);
