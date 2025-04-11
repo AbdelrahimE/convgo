@@ -2,7 +2,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 /**
- * Helper function to store message in conversation with better metadata
+ * Helper function to store message in conversation with processing flag
  * 
  * @param conversationId The ID of the conversation to store the message in
  * @param role The role of the message sender ('user' or 'assistant')
@@ -26,6 +26,7 @@ export async function storeMessageInConversation(
         role,
         content,
         message_id: messageId,
+        processed: role === 'user' ? false : true,  // New flag, default false for user messages
         metadata: {
           estimated_tokens: Math.ceil(content.length * 0.25),
           timestamp: new Date().toISOString()
@@ -40,7 +41,6 @@ export async function storeMessageInConversation(
       .select('id', { count: 'exact' })
       .eq('conversation_id', conversationId);
       
-    // Update the conversation metadata
     await supabaseAdmin
       .from('whatsapp_conversations')
       .update({ 

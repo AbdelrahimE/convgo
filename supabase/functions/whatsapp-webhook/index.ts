@@ -801,6 +801,56 @@ async function processMessageForAI(instance: string, messageData: any) {
   }
 }
 
+async function processBatchedMessages(instanceName: string, conversationId: string, supabaseAdmin: any) {
+  try {
+    // Get unprocessed messages older than 5 seconds
+    const fiveSecondsAgo = new Date(Date.now() - 5000);
+
+    const { data: messagesToProcess, error: fetchError } = await supabaseAdmin
+      .from('whatsapp_conversation_messages')
+      .select('id, content, message_id, timestamp')
+      .eq('conversation_id', conversationId)
+      .eq('role', 'user')
+      .eq('processed', false)
+      .lt('timestamp', fiveSecondsAgo.toISOString())
+      .order('timestamp', { ascending: true });
+
+    if (fetchError) {
+      console.error('Error fetching messages to process:', fetchError);
+      return null;
+    }
+
+    // If no messages to process, return
+    if (!messagesToProcess || messagesToProcess.length === 0) {
+      return null;
+    }
+
+    // Combine message contents
+    const combinedContent = messagesToProcess.map(m => m.content).join('\n');
+
+    // Mark these messages as processed 
+    const { error: updateError } = await supabaseAdmin
+      .from('whatsapp_conversation_messages')
+      .update({ processed: true })
+      .in('id', messagesToProcess.map(m => m.id));
+
+    if (updateError) {
+      console.error('Error marking messages as processed:', updateError);
+      return null;
+    }
+
+    // Return the combined message details
+    return {
+      combinedContent,
+      firstMessageId: messagesToProcess[0].message_id,
+      fromNumber: messagesToProcess[0].message_id.split('@')[0]
+    };
+  } catch (error) {
+    console.error('Batched message processing error:', error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
