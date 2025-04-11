@@ -11,6 +11,7 @@ import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts
 import { checkForDuplicateMessage } from "../_shared/duplicate-message-detector.ts";
 import { processAudioMessage } from "../_shared/audio-processor.ts";
 import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
+import messageBufferManager, { BufferedMessage } from "../_shared/message-buffer.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -278,7 +279,269 @@ async function saveWebhookMessage(instance: string, event: string, data: any) {
   }
 }
 
-// Helper function to process message for AI
+/**
+ * Process buffered messages batch for AI
+ * This function is called when a buffer is flushed with one or more messages
+ * @param messages Array of buffered messages to process together
+ */
+async function processBufferedMessages(messages: BufferedMessage[]): Promise<void> {
+  try {
+    if (!messages.length) return;
+    
+    // Sort messages by timestamp to ensure correct processing order
+    messages.sort((a, b) => a.timestamp - b.timestamp);
+    
+    // Extract key information from the first message for context
+    const firstMessage = messages[0];
+    const instanceName = firstMessage.instanceName;
+    const fromNumber = firstMessage.fromNumber;
+    
+    await logDebug('BUFFER_BATCH_PROCESSING', 'Processing buffered message batch', {
+      instanceName,
+      fromNumber,
+      messageCount: messages.length,
+      timeSpan: messages[messages.length - 1].timestamp - messages[0].timestamp
+    });
+    
+    // Combine all message texts with proper formatting
+    let combinedText = "";
+    let latestMessageId = "";
+    let latestMessageData = null;
+    let hasImage = false;
+    let imageUrl = null;
+    
+    // Process and combine all messages
+    for (const message of messages) {
+      // Track the latest message ID and data for processing
+      latestMessageId = message.messageId;
+      latestMessageData = message.messageData;
+      
+      // Check for image content
+      if (message.imageUrl) {
+        hasImage = true;
+        imageUrl = message.imageUrl;
+      }
+      
+      // Add text content with proper spacing
+      if (message.messageText) {
+        if (combinedText) combinedText += "\n";
+        combinedText += message.messageText;
+      }
+    }
+    
+    // Ensure we have at least some text content
+    if (!combinedText && hasImage) {
+      combinedText = "Please analyze this image.";
+    } else if (!combinedText && !hasImage) {
+      await logDebug('BUFFER_EMPTY_BATCH', 'Buffer batch has no text or image content', {
+        instanceName,
+        fromNumber,
+        messageCount: messages.length
+      });
+      return;
+    }
+    
+    // Now proceed with existing processing logic but with the combined message
+    // Get instance ID from instance name
+    const { data: instanceData, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('id, status')
+      .eq('instance_name', instanceName)
+      .maybeSingle();
+
+    if (instanceError || !instanceData) {
+      await logDebug('AI_CONFIG_ERROR', 'Instance not found in database', { 
+        instanceName, 
+        error: instanceError 
+      });
+      console.error('Error getting instance data:', instanceError);
+      return;
+    }
+    
+    // Find or create conversation
+    const conversationId = await findOrCreateConversation(instanceData.id, fromNumber);
+    await logDebug('CONVERSATION_MANAGED', 'Conversation found or created for buffered messages', { 
+      conversationId,
+      messageCount: messages.length
+    });
+
+    // Store the combined message in conversation
+    await storeMessageInConversation(
+      conversationId, 
+      'user', 
+      combinedText, 
+      latestMessageId, 
+      supabaseAdmin
+    );
+    
+    // Get conversation history
+    const conversationHistory = await getRecentConversationHistory(conversationId, 800);
+    
+    // Check if this instance has AI enabled
+    await logDebug('AI_CONFIG_CHECK', 'Checking if AI is enabled for buffered messages', { instanceName });
+    
+    const instanceId = instanceData.id;
+    
+    // Check if AI is enabled for this instance
+    const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
+      .from('whatsapp_ai_config')
+      .select('*')
+      .eq('whatsapp_instance_id', instanceId)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (aiConfigError || !aiConfig) {
+      await logDebug('AI_DISABLED', 'AI is not enabled for this instance', { 
+        instanceId, 
+        error: aiConfigError 
+      });
+      console.error('AI not enabled for this instance:', aiConfigError || 'No active config found');
+      return;
+    }
+
+    // Get files for RAG
+    const { data: fileMappings, error: fileMappingsError } = await supabaseAdmin
+      .from('whatsapp_file_mappings')
+      .select('file_id')
+      .eq('whatsapp_instance_id', instanceId);
+
+    if (fileMappingsError) {
+      await logDebug('AI_FILE_MAPPING_ERROR', 'Error getting file mappings for buffered messages', { 
+        instanceId, 
+        error: fileMappingsError 
+      });
+      console.error('Error getting file mappings:', fileMappingsError);
+      return;
+    }
+
+    // Extract file IDs
+    const fileIds = fileMappings?.map(mapping => mapping.file_id) || [];
+    
+    // Initialize instance base URL from last message data
+    let instanceBaseUrl = '';
+    
+    // Try to determine the base URL for this instance
+    try {
+      await logDebug('AI_EVOLUTION_URL_CHECK', 'Determining EVOLUTION API URL for buffered messages', { instanceId });
+      
+      // First check if server_url is in the latest message
+      if (latestMessageData && latestMessageData.server_url) {
+        instanceBaseUrl = latestMessageData.server_url;
+      } else {
+        // If not in the message, try to get from webhook config
+        const { data: webhookConfig, error: webhookError } = await supabaseAdmin
+          .from('whatsapp_webhook_config')
+          .select('webhook_url')
+          .eq('whatsapp_instance_id', instanceId)
+          .maybeSingle();
+          
+        if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
+          // Extract base URL from webhook URL
+          const url = new URL(webhookConfig.webhook_url);
+          instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+        } else {
+          // Default fallback
+          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+        }
+      }
+    } catch (error) {
+      // Fallback to default URL on error
+      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+      await logDebug('AI_EVOLUTION_URL_ERROR', 'Error determining URL, using default', { 
+        instanceBaseUrl,
+        error
+      });
+    }
+
+    // Perform semantic search for context
+    const searchResponse = await fetch(`${supabaseUrl}/functions/v1/semantic-search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify({
+        query: combinedText,
+        fileIds: fileIds.length > 0 ? fileIds : undefined,
+        limit: 5,
+        threshold: 0.3
+      })
+    });
+
+    if (!searchResponse.ok) {
+      const errorText = await searchResponse.text();
+      await logDebug('AI_SEARCH_ERROR', 'Semantic search failed for buffered messages', { 
+        status: searchResponse.status,
+        error: errorText
+      });
+      console.error('Semantic search failed:', errorText);
+      
+      // Continue with empty context
+      await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context for buffered messages');
+      return await generateAndSendAIResponse(
+        combinedText, 
+        "", 
+        instanceName, 
+        fromNumber, 
+        instanceBaseUrl, 
+        aiConfig, 
+        latestMessageData, 
+        conversationId,
+        supabaseUrl,
+        supabaseServiceKey,
+        imageUrl
+      );
+    }
+
+    const searchResults = await searchResponse.json();
+    
+    // Assemble context with both conversation history and RAG
+    let context = '';
+    let ragContext = '';
+    
+    // Format conversation history
+    const conversationContext = conversationHistory
+      .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+      .join('\n\n');
+    
+    // Format RAG results if available
+    if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
+      const topResults = searchResults.results.slice(0, 3);
+      
+      ragContext = topResults
+        .map((result, index) => `DOCUMENT ${index + 1} (similarity: ${result.similarity.toFixed(2)}):\n${result.content.trim()}`)
+        .join('\n\n---\n\n');
+      
+      context = `${conversationContext}\n\n${ragContext}`;
+    } else {
+      // Only conversation history is available
+      context = conversationContext;
+    }
+
+    // Generate and send the AI response for the combined message
+    await generateAndSendAIResponse(
+      combinedText,
+      context,
+      instanceName,
+      fromNumber,
+      instanceBaseUrl,
+      aiConfig,
+      latestMessageData,
+      conversationId,
+      supabaseUrl,
+      supabaseServiceKey,
+      imageUrl
+    );
+  } catch (error) {
+    await logDebug('BUFFER_PROCESSING_ERROR', 'Error processing buffered messages', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    console.error('Error processing buffered messages:', error);
+  }
+}
+
+// Helper function to process message for AI - Modified to use buffer
 async function processMessageForAI(instance: string, messageData: any) {
   try {
     await logDebug('AI_PROCESS_START', 'Starting AI message processing', { instance });
@@ -293,16 +556,29 @@ async function processMessageForAI(instance: string, messageData: any) {
                     null;
     const remoteJid = messageData.key?.remoteJid || '';
     const isFromMe = messageData.key?.fromMe || false;
+    const messageId = messageData.key?.id || `msg_${Date.now()}`;
     
     await logDebug('AI_MESSAGE_DETAILS', 'Extracted message details', { 
       instanceName, 
       fromNumber, 
       messageText, 
       remoteJid, 
-      isFromMe 
+      isFromMe,
+      messageId
     });
 
-    // NEW: Check for and process image content
+    // Skip processing if:
+    // 1. Message is from a group chat (contains @g.us)
+    // 2. Message is from the bot itself (fromMe is true)
+    if (remoteJid.includes('@g.us') || isFromMe) {
+      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: Group message or sent by bot', {
+        isGroup: remoteJid.includes('@g.us'),
+        isFromMe
+      });
+      return false;
+    }
+
+    // Process image content if present
     let imageUrl = null;
     if (messageData.message?.imageMessage) {
       await logDebug('IMAGE_MESSAGE_DETECTED', 'Detected image message', {
@@ -322,11 +598,6 @@ async function processMessageForAI(instance: string, messageData: any) {
       // Process the image to get a viewable URL
       if (rawImageUrl && mediaKey) {
         try {
-          await logDebug('IMAGE_PROCESSING', 'Processing image for AI analysis', {
-            urlFragment: rawImageUrl.substring(0, 30) + '...',
-            hasMediaKey: !!mediaKey
-          });
-          
           const imageProcessResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-image-process`, {
             method: 'POST',
             headers: {
@@ -347,29 +618,11 @@ async function processMessageForAI(instance: string, messageData: any) {
             if (result.success && result.mediaUrl) {
               imageUrl = result.mediaUrl; // Set the processed URL
               
-              // FIX: If this is an image-only message (no caption/text), set a default message text
-              // This ensures image-only messages will be processed
+              // If this is an image-only message (no caption/text), set a default message text
               if (!messageText && imageUrl) {
                 messageText = "Please analyze this image.";
-                await logDebug('IMAGE_ONLY_MESSAGE', 'Added default text for image-only message', {
-                  defaultText: messageText
-                });
               }
-              
-              await logDebug('IMAGE_PROCESSED', 'Successfully processed image for AI analysis', {
-                originalUrlFragment: rawImageUrl.substring(0, 30) + '...',
-                processedUrlFragment: result.mediaUrl.substring(0, 30) + '...',
-                mediaType: result.mediaType
-              });
-            } else {
-              await logDebug('IMAGE_PROCESS_FAILED', 'Image processing returned failure', result);
             }
-          } else {
-            const errorText = await imageProcessResponse.text();
-            await logDebug('IMAGE_PROCESS_ERROR', 'Error response from image processing endpoint', {
-              status: imageProcessResponse.status,
-              error: errorText
-            });
           }
         } catch (error) {
           await logDebug('IMAGE_PROCESS_EXCEPTION', 'Exception during image processing', {
@@ -378,40 +631,11 @@ async function processMessageForAI(instance: string, messageData: any) {
           });
           // Continue with just the text if image processing fails
         }
-      } else {
-        await logDebug('IMAGE_MISSING_DATA', 'Image message missing required data', {
-          hasUrl: !!rawImageUrl,
-          hasMediaKey: !!mediaKey
-        });
       }
     }
 
-    // Skip processing if:
-    // 1. Message is from a group chat (contains @g.us)
-    // 2. Message is from the bot itself (fromMe is true)
-    if (remoteJid.includes('@g.us') || isFromMe) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: Group message or sent by bot', {
-        isGroup: remoteJid.includes('@g.us'),
-        isFromMe
-      });
-      return false;
-    }
-
-    // Determine Evolution API key
-    const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey;
-    
-    if (!evolutionApiKey) {
-      await logDebug('AI_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable not set and no apikey in payload');
-    }
-
-    // Check if this is an audio message
-    const isAudioMessage = hasAudioContent(messageData);
-    
-    // Variable to track if we should bypass AI and send direct response
-    let bypassAiProcessing = false;
-    let directResponse = null;
-    
-    if (isAudioMessage) {
+    // Process audio message if needed
+    if (hasAudioContent(messageData)) {
       await logDebug('AUDIO_MESSAGE_DETECTED', 'Audio message detected', { 
         messageType: messageData.messageType,
         hasAudioMessage: !!messageData.message?.audioMessage,
@@ -420,67 +644,26 @@ async function processMessageForAI(instance: string, messageData: any) {
       
       // Extract audio details
       const audioDetails = extractAudioDetails(messageData);
-      await logDebug('AUDIO_DETAILS', 'Extracted audio details', { audioDetails });
+      
+      // Get API keys for transcription
+      const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey;
       
       // Process the audio for transcription
       const transcriptionResult = await processAudioMessage(audioDetails, instanceName, fromNumber, evolutionApiKey);
       
-      // Check if we should bypass AI and send direct response
+      // If direct response was provided, skip the buffer and respond immediately
       if (transcriptionResult.bypassAiProcessing && transcriptionResult.directResponse) {
         await logDebug('AUDIO_DIRECT_RESPONSE', 'Using direct response for disabled voice processing', {
           directResponse: transcriptionResult.directResponse
         });
         
-        // Initialize instance base URL for sending responses
-        let instanceBaseUrl = '';
-
-        // Try to determine the base URL for this instance (reusing existing code logic)
+        // Try to send direct response without AI processing
         try {
-          await logDebug('AI_EVOLUTION_URL_CHECK', 'Determining EVOLUTION API URL for direct response', { instanceName });
+          // Determine the base URL
+          let instanceBaseUrl = messageData.server_url || Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
           
-          // IMPORTANT: First check if the server_url is available in the current message payload
-          if (messageData.server_url) {
-            instanceBaseUrl = messageData.server_url;
-          } else {
-            // Get instance ID to look up webhook config
-            const { data: instanceData, error: instanceError } = await supabaseAdmin
-              .from('whatsapp_instances')
-              .select('id')
-              .eq('instance_name', instanceName)
-              .maybeSingle();
-
-            if (instanceError) {
-              await logDebug('DIRECT_RESPONSE_ERROR', 'Failed to get instance data', { error: instanceError });
-              return false;
-            }
-
-            // If not available in the payload, try to get it from webhook config
-            const { data: webhookConfig, error: webhookError } = await supabaseAdmin
-              .from('whatsapp_webhook_config')
-              .select('webhook_url')
-              .eq('whatsapp_instance_id', instanceData.id)
-              .maybeSingle();
-              
-            if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
-              // Extract base URL from webhook URL
-              const url = new URL(webhookConfig.webhook_url);
-              instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-            } else {
-              // If webhook URL doesn't exist, use the default Evolution API URL
-              instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-            }
-          }
-        
-          // Send direct response through WhatsApp without AI processing
+          // Send direct response through WhatsApp
           if (instanceBaseUrl && fromNumber) {
-            await logDebug('DIRECT_RESPONSE_SENDING', 'Sending direct response to WhatsApp', {
-              instanceName,
-              toNumber: fromNumber,
-              baseUrl: instanceBaseUrl,
-              response: transcriptionResult.directResponse
-            });
-            
-            // Construct the send message URL according to EVOLUTION API format
             const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
             
             const sendResponse = await fetch(sendUrl, {
@@ -495,305 +678,70 @@ async function processMessageForAI(instance: string, messageData: any) {
               })
             });
 
-            if (!sendResponse.ok) {
-              const errorText = await sendResponse.text();
-              await logDebug('DIRECT_RESPONSE_ERROR', 'Error sending direct response', {
-                status: sendResponse.status,
-                error: errorText
-              });
-              return false;
+            if (sendResponse.ok) {
+              const sendResult = await sendResponse.json();
+              await logDebug('DIRECT_RESPONSE_SENT', 'Direct response sent successfully', { sendResult });
+              return true;
             }
-
-            const sendResult = await sendResponse.json();
-            await logDebug('DIRECT_RESPONSE_SENT', 'Direct response sent successfully', { sendResult });
-            return true;
           }
         } catch (error) {
           await logDebug('DIRECT_RESPONSE_EXCEPTION', 'Exception sending direct response', { error });
-          return false;
+          // Continue with normal processing as fallback
         }
-        
-        // If we couldn't send the direct response, continue with normal processing as fallback
       }
       
-      if (!transcriptionResult.success) {
-        // If transcription failed but we have a fallback transcription, use it
-        if (transcriptionResult.transcription) {
-          messageText = transcriptionResult.transcription;
-          
-          await logDebug('AUDIO_FALLBACK_TRANSCRIPTION', 'Using fallback transcription for failed audio processing', {
-            transcription: messageText
-          });
-        } else {
-          // Complete failure - set generic placeholder
-          messageText = "This is a voice message that could not be processed.";
-          
-          await logDebug('AUDIO_PROCESSING_FAILED', 'Failed to process audio with no fallback', {
-            error: transcriptionResult.error
-          });
-        }
-      } else {
-        // Successful transcription
+      // Use transcription if successful
+      if (transcriptionResult.success) {
         messageText = transcriptionResult.transcription;
-        
-        await logDebug('AUDIO_TRANSCRIPTION_USED', 'Successfully transcribed audio message', {
-          transcription: messageText?.substring(0, 100) + '...'
-        });
+      } else if (transcriptionResult.transcription) {
+        // Fallback transcription if available
+        messageText = transcriptionResult.transcription;
+      } else {
+        // Complete failure - set generic placeholder
+        messageText = "This is a voice message that could not be processed.";
       }
     }
 
     // If no message content (text or processed audio), skip
     if (!messageText && !imageUrl) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text or image content', { messageData });
+      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text or image content');
       return false;
     }
-
-    // Get instance ID from instance name
-    const { data: instanceData, error: instanceError } = await supabaseAdmin
-      .from('whatsapp_instances')
-      .select('id, status')
-      .eq('instance_name', instanceName)
-      .maybeSingle();
-
-    if (instanceError || !instanceData) {
-      await logDebug('AI_CONFIG_ERROR', 'Instance not found in database', { 
-        instanceName, 
-        error: instanceError 
-      });
-      logger.error('Error getting instance data:', instanceError);
-      return false;
-    }
-
-    // Find or create conversation
-    const conversationId = await findOrCreateConversation(instanceData.id, fromNumber);
-    await logDebug('CONVERSATION_MANAGED', 'Conversation found or created', { conversationId });
-
-    // NEW: Check for duplicate messages before processing
-    const isDuplicate = await checkForDuplicateMessage(conversationId, messageText, supabaseAdmin);
-    if (isDuplicate) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: Duplicate or similar message detected', {
-        conversationId,
-        fromNumber,
-        messagePreview: messageText?.substring(0, 50) + '...'
-      });
-      return false;
-    }
-
-    // Store user message in conversation
-    await storeMessageInConversation(conversationId, 'user', messageText, messageData.key?.id, supabaseAdmin);
     
-    // Get recent conversation history with improved token management
-    const conversationHistory = await getRecentConversationHistory(conversationId, 800);
-    await logDebug('CONVERSATION_HISTORY', 'Retrieved conversation history', { 
-      messageCount: conversationHistory.length,
-      estimatedTokens: conversationHistory.reduce((sum, msg) => sum + Math.ceil(msg.content.length * 0.25), 0)
-    });
-
-    // Check if this instance has AI enabled
-    await logDebug('AI_CONFIG_CHECK', 'Checking if AI is enabled for instance', { instanceName });
-    
-    const instanceId = instanceData.id;
-    await logDebug('AI_INSTANCE_FOUND', 'Found instance in database', { instanceId, status: instanceData.status });
-
-    // Check if AI is enabled for this instance
-    const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
-      .from('whatsapp_ai_config')
-      .select('*')
-      .eq('whatsapp_instance_id', instanceId)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (aiConfigError || !aiConfig) {
-      await logDebug('AI_DISABLED', 'AI is not enabled for this instance', { 
-        instanceId, 
-        error: aiConfigError 
-      });
-      logger.error('AI not enabled for this instance:', aiConfigError || 'No active config found');
-      return false;
-    }
-
-    await logDebug('AI_ENABLED', 'AI is enabled for this instance', { 
-      aiConfigId: aiConfig.id,
-      temperature: aiConfig.temperature,
-      systemPromptPreview: aiConfig.system_prompt.substring(0, 50) + '...'
-    });
-
-    // Get files associated with this instance for RAG
-    const { data: fileMappings, error: fileMappingsError } = await supabaseAdmin
-      .from('whatsapp_file_mappings')
-      .select('file_id')
-      .eq('whatsapp_instance_id', instanceId);
-
-    if (fileMappingsError) {
-      await logDebug('AI_FILE_MAPPING_ERROR', 'Error getting file mappings', { 
-        instanceId, 
-        error: fileMappingsError 
-      });
-      logger.error('Error getting file mappings:', fileMappingsError);
-      return false;
-    }
-
-    // Extract file IDs
-    const fileIds = fileMappings?.map(mapping => mapping.file_id) || [];
-    await logDebug('AI_FILE_MAPPINGS', 'Retrieved file mappings for instance', { 
-      instanceId, 
-      fileCount: fileIds.length,
-      fileIds
-    });
-
-    if (fileIds.length === 0) {
-      await logDebug('AI_NO_FILES', 'No files mapped to this instance, using empty context', { instanceId });
-    }
-
-    // Initialize instance base URL for sending responses
-    let instanceBaseUrl = '';
-
-    // Try to determine the base URL for this instance
-    try {
-      await logDebug('AI_EVOLUTION_URL_CHECK', 'Attempting to determine EVOLUTION API URL', { instanceId });
-      
-      // IMPORTANT: First check if the server_url is available in the current message payload
-      if (messageData.server_url) {
-        instanceBaseUrl = messageData.server_url;
-        await logDebug('AI_EVOLUTION_URL_FROM_PAYLOAD', 'Using server_url from payload', { 
-          instanceBaseUrl
-        });
-      } else {
-        // If not available in the payload, try to get it from webhook config
-        const { data: webhookConfig, error: webhookError } = await supabaseAdmin
-          .from('whatsapp_webhook_config')
-          .select('webhook_url')
-          .eq('whatsapp_instance_id', instanceId)
-          .maybeSingle();
-          
-        if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
-          // Extract base URL from webhook URL
-          const url = new URL(webhookConfig.webhook_url);
-          instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-          await logDebug('AI_EVOLUTION_URL_FOUND', 'Extracted base URL from webhook config', { 
-            instanceBaseUrl,
-            webhookUrl: webhookConfig.webhook_url
-          });
-        } else {
-          // If webhook URL doesn't exist, use the default Evolution API URL
-          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-          await logDebug('AI_EVOLUTION_URL_DEFAULT', 'Using default EVOLUTION API URL', { 
-            instanceBaseUrl,
-            webhookError
-          });
-        }
-      }
-    } catch (error) {
-      // In case of any error, use the default Evolution API URL
-      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-      await logDebug('AI_EVOLUTION_URL_ERROR', 'Error determining EVOLUTION API URL, using default', { 
-        instanceBaseUrl,
-        error
-      });
-    }
-
-    await logDebug('AI_CONTEXT_SEARCH', 'Starting semantic search for context', { 
-      userQuery: messageText,
-      fileIds 
-    });
-
-    // Perform semantic search to find relevant contexts
-    const searchResponse = await fetch(`${supabaseUrl}/functions/v1/semantic-search`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify({
-        query: messageText,
-        fileIds: fileIds.length > 0 ? fileIds : undefined,
-        limit: 5,
-        threshold: 0.3
-      })
-    });
-
-    if (!searchResponse.ok) {
-      const errorText = await searchResponse.text();
-      await logDebug('AI_SEARCH_ERROR', 'Semantic search failed', { 
-        status: searchResponse.status,
-        error: errorText
-      });
-      console.error('Semantic search failed:', errorText);
-      
-      // Continue with empty context instead of failing
-      await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
-      return await generateAndSendAIResponse(
-        messageText, 
-        context, 
-        instanceName, 
-        fromNumber, 
-        instanceBaseUrl, 
-        aiConfig, 
-        messageData, 
-        conversationId,
-        supabaseUrl,
-        supabaseServiceKey,
-        imageUrl
-      );
-    }
-
-    const searchResults = await searchResponse.json();
-    await logDebug('AI_SEARCH_RESULTS', 'Semantic search completed', { 
-      resultCount: searchResults.results?.length || 0,
-      similarity: searchResults.results?.[0]?.similarity || 0
-    });
-
-    // IMPROVED CONTEXT ASSEMBLY: Balance between conversation history and RAG content
-    let context = '';
-    let ragContext = '';
-    
-    // 1. Format conversation history in a clean, token-efficient format
-    const conversationContext = conversationHistory
-      .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
-      .join('\n\n');
-    
-    // 2. Format RAG results if available - more token-efficient formatting
-    if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
-      // Only include the most relevant sections to save tokens
-      const topResults = searchResults.results.slice(0, 3);
-      
-      // Join RAG content with separators and add source information
-      ragContext = topResults
-        .map((result, index) => `DOCUMENT ${index + 1} (similarity: ${result.similarity.toFixed(2)}):\n${result.content.trim()}`)
-        .join('\n\n---\n\n');
-      
-      // 3. The context assembly is now handled by the balanceContextTokens function in generate-response
-      context = `${conversationContext}\n\n${ragContext}`;
-      
-      await logDebug('AI_CONTEXT_ASSEMBLED', 'Enhanced context assembled for token balancing', { 
-        conversationChars: conversationContext.length,
-        ragChars: ragContext.length,
-        totalChars: context.length,
-        estimatedTokens: Math.ceil(context.length * 0.25)
-      });
-    } else {
-      // Only conversation history is available
-      context = conversationContext;
-      await logDebug('AI_CONTEXT_ASSEMBLED', 'Context assembled with only conversation history', { 
-        conversationChars: conversationContext.length,
-        estimatedTokens: Math.ceil(conversationContext.length * 0.25)
-      });
-    }
-
-    // Generate and send the response with improved context and token management
-    return await generateAndSendAIResponse(
-      messageText,
-      context,
+    // Create a buffered message object
+    const bufferedMessage: BufferedMessage = {
+      messageData: messageData,
+      timestamp: Date.now(),
       instanceName,
       fromNumber,
-      instanceBaseUrl,
-      aiConfig,
-      messageData,
-      conversationId,
-      supabaseUrl,
-      supabaseServiceKey,
+      messageText,
+      messageId,
       imageUrl
-    );
+    };
+    
+    // Add the message to the buffer for the conversation
+    await logDebug('MESSAGE_BUFFER_ADD_ATTEMPT', 'Adding message to buffer', {
+      instanceName,
+      fromNumber,
+      messageId
+    });
+    
+    const added = messageBufferManager.addMessage(bufferedMessage, async (messages) => {
+      // This callback is executed when the buffer is flushed (timeout or max size)
+      await processBufferedMessages(messages);
+    });
+    
+    if (added) {
+      await logDebug('MESSAGE_BUFFER_ADD_SUCCESS', 'Message successfully added to buffer', {
+        instanceName,
+        fromNumber,
+        bufferStats: messageBufferManager.getStats()
+      });
+      return true;
+    } else {
+      await logDebug('MESSAGE_BUFFER_ADD_FAILED', 'Failed to add message to buffer');
+      return false;
+    }
   } catch (error) {
     await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
     console.error('Error in processMessageForAI:', error);
