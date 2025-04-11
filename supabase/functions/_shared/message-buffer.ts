@@ -31,6 +31,7 @@ export interface BufferConfig {
   maxBufferSize: number;      // Maximum messages per conversation (safety limit)
   maxBufferAgeMs: number;     // Maximum age of any buffer before forced processing
   cleanupIntervalMs: number;  // How often to check for stale buffers
+  maxTimeBetweenMessages: number; // Maximum time between messages to consider them part of the same context
 }
 
 // Default configuration
@@ -39,6 +40,7 @@ const DEFAULT_CONFIG: BufferConfig = {
   maxBufferSize: 10,         // Maximum 10 messages per conversation buffer
   maxBufferAgeMs: 30000,     // Force process after 30 seconds (failsafe)
   cleanupIntervalMs: 60000,  // Check for stale buffers every 60 seconds
+  maxTimeBetweenMessages: 60000, // Messages 60 seconds apart or less are considered related
 };
 
 /**
@@ -139,6 +141,59 @@ export class MessageBufferManager {
   }
 
   /**
+   * Determines if a new message should be combined with existing buffered messages
+   * based on time proximity and content type compatibility
+   * 
+   * @param buffer The existing conversation buffer
+   * @param newMessage The new message to potentially add to buffer
+   * @returns Boolean indicating if messages should be combined
+   */
+  private shouldCombineWithBuffer(buffer: ConversationBuffer, newMessage: BufferedMessage): boolean {
+    // Empty buffer always accepts a new message
+    if (buffer.messages.length === 0) {
+      return true;
+    }
+    
+    const now = Date.now();
+    
+    // Check time elapsed since last message
+    const timeSinceLastUpdate = now - buffer.lastUpdated;
+    if (timeSinceLastUpdate > this.config.maxTimeBetweenMessages) {
+      logDebug('MESSAGE_BUFFER_TOO_OLD', 'Buffer too old for combining, will flush first', {
+        timeSinceLastUpdate,
+        maxTimeBetweenMessages: this.config.maxTimeBetweenMessages
+      });
+      return false;
+    }
+    
+    // Always combine if we have an image and text - they complement each other
+    const hasExistingImage = buffer.messages.some(msg => !!msg.imageUrl);
+    if (hasExistingImage && newMessage.messageText && !newMessage.imageUrl) {
+      logDebug('MESSAGE_BUFFER_IMAGE_CONTEXT', 'Combining text with previous image message', {
+        bufferedMessages: buffer.messages.length
+      });
+      return true;
+    }
+    
+    // If this is an image and we already have text, they likely go together
+    const hasExistingText = buffer.messages.some(msg => !!msg.messageText);
+    if (hasExistingText && newMessage.imageUrl && !newMessage.messageText) {
+      logDebug('MESSAGE_BUFFER_TEXT_CONTEXT', 'Combining image with previous text message', {
+        bufferedMessages: buffer.messages.length
+      });
+      return true;
+    }
+    
+    // If message types are compatible (both text, or continued conversation)
+    const areMessageTypesCompatible = (
+      (!!newMessage.messageText && buffer.messages.some(m => !!m.messageText)) ||
+      (!!newMessage.imageUrl && buffer.messages.some(m => !!m.imageUrl))
+    );
+    
+    return areMessageTypesCompatible;
+  }
+
+  /**
    * Add a message to the buffer for a specific conversation
    * @param message The message data to buffer
    * @param flushCallback Function to call when buffer should be processed
@@ -153,7 +208,30 @@ export class MessageBufferManager {
     
     // Get or create buffer for this conversation
     let buffer = this.buffers.get(bufferKey);
-    if (!buffer) {
+    
+    // If we have an existing buffer, check if we should combine with it or process it first
+    if (buffer) {
+      if (!this.shouldCombineWithBuffer(buffer, message)) {
+        // If messages are not related, process the current buffer first
+        logDebug('MESSAGE_BUFFER_CONTEXT_BREAK', 'Message appears to start new context, processing current buffer', {
+          bufferKey,
+          existingMessages: buffer.messages.length,
+          timeSinceLastUpdate: now - buffer.lastUpdated
+        });
+        
+        // Process the current buffer
+        this.flushBuffer(bufferKey, flushCallback);
+        
+        // Create a new buffer for this message
+        buffer = {
+          messages: [],
+          timeoutId: null,
+          lastUpdated: now
+        };
+        this.buffers.set(bufferKey, buffer);
+      }
+    } else {
+      // Create a new buffer if none exists
       buffer = {
         messages: [],
         timeoutId: null,
