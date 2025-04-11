@@ -36,7 +36,6 @@ export async function processAudioMessage(
       };
     }
     
-    // First check if voice message processing is enabled for this instance
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     
@@ -44,82 +43,21 @@ export async function processAudioMessage(
       await logDebug('AUDIO_PROCESS_ERROR', 'Missing required Supabase credentials');
       return { 
         success: false,
-
         error: 'Configuration error: Missing required Supabase credentials' 
       };
     }
     
-    // Initialize Supabase client
-    const supabase = {
-      from: (table: string) => ({
-        select: (columns: string) => ({
-          eq: (field: string, value: any) => ({
-            maybeSingle: () => fetch(`${supabaseUrl}/rest/v1/${table}?select=${columns}&${field}=eq.${value}`, {
-              headers: {
-                'apikey': supabaseServiceKey,
-                'Authorization': `Bearer ${supabaseServiceKey}`,
-                'Content-Type': 'application/json'
-              }
-            }).then(res => res.json())
-          })
-        })
-      })
-    };
+    // MODIFIED APPROACH: Skip database lookups and directly call the voice transcription service
+    // that contains the proper decryption logic
     
-    // 1. Get instance ID from name
-    const instanceResult = await supabase
-      .from('whatsapp_instances')
-      .select('id')
-      .eq('instance_name', instanceName)
-      .maybeSingle();
-      
-    const instanceId = instanceResult?.id;
-    
-    if (!instanceId) {
-      await logDebug('AUDIO_PROCESS_ERROR', 'Instance not found', { instanceName });
-      return { 
-        success: false, 
-        error: 'Instance not found in database' 
-      };
-    }
-    
-    // 2. Check if voice processing is enabled
-    const aiConfig = await supabase
-      .from('whatsapp_ai_config')
-      .select('process_voice_messages,voice_message_default_response,default_voice_language')
-      .eq('whatsapp_instance_id', instanceId)
-      .maybeSingle();
-    
-    // If voice processing is explicitly disabled, return early with direct response
-    if (aiConfig && aiConfig.process_voice_messages === false) {
-      await logDebug('AUDIO_PROCESS_DISABLED', 'Voice processing disabled in settings', {
-        instanceName
-      });
-      
-      return {
-        success: false,
-        error: 'Voice message processing is disabled for this instance',
-        bypassAiProcessing: true,
-        directResponse: aiConfig.voice_message_default_response || 
-                      "I'm sorry, but I cannot process voice messages at the moment. Please send your question as text, and I'll be happy to assist you."
-      };
-    }
-    
-    // Determine preferred language for transcription
-    const preferredLanguage = aiConfig?.default_voice_language || 'auto';
-    
-    // 3. Process the audio for transcription
-    const supabaseAdminUrl = Deno.env.get('SUPABASE_URL') || '';
-    
-    await logDebug('AUDIO_TRANSCRIPTION_REQUEST', 'Sending audio to transcription service', {
+    await logDebug('AUDIO_TRANSCRIPTION_DIRECT', 'Directly calling transcription service', {
       audioUrl: audioDetails.url.substring(0, 50) + '...',
       hasMediaKey: !!audioDetails.mediaKey,
-      mimeType: audioDetails.mimeType || 'audio/ogg',
-      preferredLanguage
+      mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus'
     });
     
-    // Call transcription service
-    const transcriptionResponse = await fetch(`${supabaseAdminUrl}/functions/v1/whatsapp-voice-transcribe`, {
+    // Call transcription service directly with all necessary information
+    const transcriptionResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-voice-transcribe`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -131,7 +69,7 @@ export async function processAudioMessage(
         mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus',
         instanceName,
         evolutionApiKey,
-        preferredLanguage
+        preferredLanguage: 'auto' // Default to auto-detection
       })
     });
     
