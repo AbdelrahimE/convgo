@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -35,6 +34,10 @@ interface DebugLog {
   priority?: string;
 }
 
+interface CategoryItem {
+  category: string;
+}
+
 export function DebugLogsTable() {
   const [category, setCategory] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -46,14 +49,14 @@ export function DebugLogsTable() {
   // Use number for Node.js and Browser compatibility
   const pollingIntervalRef = useRef<number | null>(null);
   
-  // Fetch debug logs from webhook_debug_logs table
+  // Fetch debug logs from webhook_debug_logs table with explicit type annotations
   const { 
     data: logs, 
     isLoading, 
     refetch,
     isRefetching,
     error: logsError
-  } = useQuery({
+  } = useQuery<DebugLog[], Error>({
     queryKey: ['debugLogs', category, limit, priorityFilter],
     queryFn: async () => {
       let query = supabase
@@ -82,7 +85,7 @@ export function DebugLogsTable() {
   });
   
   // Fetch unique categories directly from the webhook_debug_logs table
-  const { data: categories } = useQuery({
+  const { data: categories } = useQuery<CategoryItem[], Error>({
     queryKey: ['debugLogCategories'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -110,7 +113,7 @@ export function DebugLogsTable() {
     data: bufferMetrics,
     refetch: refetchMetrics,
     isLoading: isLoadingMetrics
-  } = useQuery({
+  } = useQuery<DebugLog[], Error>({
     queryKey: ['bufferMetrics'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -133,7 +136,7 @@ export function DebugLogsTable() {
   // Check for system alerts and warnings
   const {
     data: systemAlerts
-  } = useQuery({
+  } = useQuery<DebugLog[], Error>({
     queryKey: ['systemAlerts'],
     queryFn: async () => {
       const { data, error } = await supabase
