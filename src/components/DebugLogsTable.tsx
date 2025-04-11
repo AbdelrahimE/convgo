@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,109 +51,117 @@ export function DebugLogsTable() {
   const pollingIntervalRef = useRef<number | null>(null);
   
   // Fetch debug logs from webhook_debug_logs table with explicit type annotations
+  const fetchDebugLogs = async (): Promise<DebugLog[]> => {
+    let query = supabase
+      .from('webhook_debug_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    
+    if (category) {
+      query = query.eq('category', category);
+    }
+    
+    if (priorityFilter) {
+      query = query.eq('priority', priorityFilter);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) {
+      logger.error('Error fetching debug logs:', error);
+      throw error;
+    }
+    
+    return data as DebugLog[];
+  };
+  
   const { 
     data: logs, 
     isLoading, 
     refetch,
     isRefetching,
     error: logsError
-  } = useQuery<DebugLog[], Error>({
+  } = useQuery({
     queryKey: ['debugLogs', category, limit, priorityFilter],
-    queryFn: async () => {
-      let query = supabase
-        .from('webhook_debug_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-      
-      if (category) {
-        query = query.eq('category', category);
-      }
-      
-      if (priorityFilter) {
-        query = query.eq('priority', priorityFilter);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) {
-        logger.error('Error fetching debug logs:', error);
-        throw error;
-      }
-      
-      return data as DebugLog[];
-    }
+    queryFn: fetchDebugLogs
   });
   
   // Fetch unique categories directly from the webhook_debug_logs table
-  const { data: categories } = useQuery<CategoryItem[], Error>({
+  const fetchCategories = async (): Promise<CategoryItem[]> => {
+    const { data, error } = await supabase
+      .from('webhook_debug_logs')
+      .select('category')
+      .order('category');
+    
+    if (error) {
+      logger.error('Error fetching categories:', error);
+      return [];
+    }
+    
+    // Process the data to get unique categories
+    const uniqueCategories = Array.from(
+      new Set(data.map(item => item.category))
+    ).map(category => ({ category }));
+    
+    return uniqueCategories;
+  };
+  
+  const { data: categories } = useQuery({
     queryKey: ['debugLogCategories'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('webhook_debug_logs')
-        .select('category')
-        .order('category');
-      
-      if (error) {
-        logger.error('Error fetching categories:', error);
-        return [];
-      }
-      
-      // Process the data to get unique categories
-      const uniqueCategories = Array.from(
-        new Set(data.map(item => item.category))
-      ).map(category => ({ category }));
-      
-      return uniqueCategories;
-    },
+    queryFn: fetchCategories,
     placeholderData: []
   });
   
   // Fetch buffer system metrics for monitoring tab
+  const fetchBufferMetrics = async (): Promise<DebugLog[]> => {
+    const { data, error } = await supabase
+      .from('webhook_debug_logs')
+      .select('*')
+      .eq('category', 'MESSAGE_BUFFER_STATS')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    
+    if (error) {
+      logger.error('Error fetching buffer metrics:', error);
+      throw error;
+    }
+    
+    return data as DebugLog[];
+  };
+  
   const { 
     data: bufferMetrics,
     refetch: refetchMetrics,
     isLoading: isLoadingMetrics
-  } = useQuery<DebugLog[], Error>({
+  } = useQuery({
     queryKey: ['bufferMetrics'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('webhook_debug_logs')
-        .select('*')
-        .eq('category', 'MESSAGE_BUFFER_STATS')
-        .order('created_at', { ascending: false })
-        .limit(20);
-      
-      if (error) {
-        logger.error('Error fetching buffer metrics:', error);
-        throw error;
-      }
-      
-      return data as DebugLog[];
-    },
+    queryFn: fetchBufferMetrics,
     enabled: activeTab === 'monitoring'
   });
   
   // Check for system alerts and warnings
+  const fetchSystemAlerts = async (): Promise<DebugLog[]> => {
+    const { data, error } = await supabase
+      .from('webhook_debug_logs')
+      .select('*')
+      .in('category', ['SYSTEM_WARNING', 'SYSTEM_ERROR', 'SYSTEM_ALERT'])
+      .order('created_at', { ascending: false })
+      .limit(5);
+    
+    if (error) {
+      logger.error('Error fetching system alerts:', error);
+      return [];
+    }
+    
+    return data as DebugLog[];
+  };
+  
   const {
     data: systemAlerts
-  } = useQuery<DebugLog[], Error>({
+  } = useQuery({
     queryKey: ['systemAlerts'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('webhook_debug_logs')
-        .select('*')
-        .in('category', ['SYSTEM_WARNING', 'SYSTEM_ERROR', 'SYSTEM_ALERT'])
-        .order('created_at', { ascending: false })
-        .limit(5);
-      
-      if (error) {
-        logger.error('Error fetching system alerts:', error);
-        return [];
-      }
-      
-      return data as DebugLog[];
-    },
+    queryFn: fetchSystemAlerts,
     refetchInterval: 30000 // Refresh every 30 seconds
   });
   
