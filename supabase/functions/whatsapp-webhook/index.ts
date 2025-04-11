@@ -1,4 +1,5 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
 import logDebug from "../_shared/webhook-logger.ts";
@@ -289,20 +290,6 @@ async function processMessageForAI(instance: string, messageData: any) {
       return false;
     }
 
-    try {
-      const isDuplicate = await checkForDuplicateMessage(messageId, fromNumber);
-      if (isDuplicate) {
-        await logDebug('AI_PROCESSING_SKIPPED', 'Skipping duplicate message', { messageId, fromNumber });
-        return false;
-      }
-    } catch (error) {
-      await logDebug('DUPLICATE_CHECK_ERROR', 'Error checking for duplicate message', { 
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      // Continue processing even if duplicate check fails
-    }
-
     let imageUrl = null;
     if (messageData.message?.imageMessage) {
       await logDebug('IMAGE_MESSAGE_DETECTED', 'Detected image message', {
@@ -420,7 +407,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Get instance information for AI configuration
     const { data: instanceInfo, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
-      .select('id, ai_config')
+      .select('id')
       .eq('instance_name', instanceName)
       .maybeSingle();
     
@@ -431,7 +418,34 @@ async function processMessageForAI(instance: string, messageData: any) {
       });
     }
     
-    const aiConfig = instanceInfo?.ai_config || {};
+    let aiConfig = {};
+    
+    // If instance exists, check if it has AI config
+    if (instanceInfo && instanceInfo.id) {
+      const { data: aiConfigData, error: aiConfigError } = await supabaseAdmin
+        .from('whatsapp_ai_config')
+        .select('*')
+        .eq('whatsapp_instance_id', instanceInfo.id)
+        .eq('is_active', true)
+        .maybeSingle();
+        
+      if (aiConfigError) {
+        await logDebug('AI_CONFIG_ERROR', 'Error fetching AI configuration', {
+          error: aiConfigError,
+          instanceId: instanceInfo.id
+        });
+      } else if (aiConfigData) {
+        aiConfig = aiConfigData;
+        await logDebug('AI_CONFIG_FOUND', 'Found AI configuration', {
+          configId: aiConfigData.id,
+          instanceId: instanceInfo.id
+        });
+      } else {
+        await logDebug('AI_CONFIG_NOT_FOUND', 'No active AI configuration found for instance', {
+          instanceId: instanceInfo.id
+        });
+      }
+    }
     
     // Find or create a conversation for this user
     let conversationId;
@@ -455,6 +469,24 @@ async function processMessageForAI(instance: string, messageData: any) {
       });
       // Create a fallback conversation ID if needed
       conversationId = `fallback_${instanceName}_${fromNumber}_${Date.now()}`;
+    }
+    
+    // Check for duplicate message
+    try {
+      const isDuplicate = await checkForDuplicateMessage(conversationId, messageText, supabaseAdmin);
+      if (isDuplicate) {
+        await logDebug('AI_PROCESSING_SKIPPED', 'Skipping duplicate message', { 
+          messageId, 
+          conversationId 
+        });
+        return false;
+      }
+    } catch (error) {
+      await logDebug('DUPLICATE_CHECK_ERROR', 'Error checking for duplicate message', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      // Continue processing even if duplicate check fails
     }
     
     // Get recent conversation history for context
@@ -733,7 +765,7 @@ serve(async (req) => {
         try {
           const { data: instanceData, error: instanceError } = await supabaseAdmin
             .from('whatsapp_instances')
-            .select('id, ai_config')
+            .select('id')
             .eq('instance_name', instanceName)
             .maybeSingle();
             
