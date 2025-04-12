@@ -13,6 +13,8 @@ import { Loader2, Plus, Check, X, MoreVertical, RefreshCw, LogOut, Trash2, Messa
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import logger from '@/utils/logger';
+import { logWebhook } from '@/utils/webhook-logger';
+
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
@@ -20,6 +22,7 @@ interface WhatsAppInstance {
   last_connected: string | null;
   qr_code?: string;
 }
+
 const statusConfig = {
   CONNECTED: {
     color: "text-green-500 bg-green-50 dark:bg-green-950/50",
@@ -46,6 +49,7 @@ const statusConfig = {
     label: "Connecting"
   }
 };
+
 const StatusBadge = ({
   status
 }: {
@@ -58,6 +62,7 @@ const StatusBadge = ({
       {config.label}
     </div>;
 };
+
 const InstanceActions = ({
   instance,
   isLoading,
@@ -120,6 +125,7 @@ const InstanceActions = ({
       </div>
     </TooltipProvider>;
 };
+
 const EmptyState = ({
   onCreateClick
 }: {
@@ -182,6 +188,7 @@ const EmptyState = ({
       </CardContent>
     </Card>;
 };
+
 const WhatsAppLink = () => {
   const {
     user,
@@ -194,6 +201,7 @@ const WhatsAppLink = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [instanceLimit, setInstanceLimit] = useState(0);
   const [isValidName, setIsValidName] = useState(true);
+
   useEffect(() => {
     if (!authLoading && user) {
       fetchInstances();
@@ -202,6 +210,51 @@ const WhatsAppLink = () => {
       setInitialLoading(false);
     }
   }, [user, authLoading]);
+
+  useEffect(() => {
+    if (!user) return;
+    
+    logWebhook('Setting up realtime subscription for WhatsApp instances', { userId: user.id });
+    
+    const channel = supabase
+      .channel('whatsapp-instances-changes')
+      .on('postgres_changes', 
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'whatsapp_instances',
+          filter: `user_id=eq.${user.id}`
+        }, 
+        (payload) => {
+          logger.log('Received real-time update for WhatsApp instance:', payload);
+          
+          const updatedInstance = payload.new as WhatsAppInstance;
+          
+          setInstances(prevInstances => 
+            prevInstances.map(instance => 
+              instance.id === updatedInstance.id ? {...instance, ...updatedInstance} : instance
+            )
+          );
+          
+          if (updatedInstance.status === 'CONNECTED') {
+            const instanceName = updatedInstance.instance_name;
+            toast.success(`WhatsApp instance ${instanceName} connected successfully`);
+          }
+        }
+      )
+      .subscribe((status) => {
+        logger.log(`Supabase channel status: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          logger.log('Successfully subscribed to WhatsApp instances changes');
+        }
+      });
+    
+    return () => {
+      logger.log('Cleaning up realtime subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   const fetchUserProfile = async () => {
     try {
       const {
@@ -215,6 +268,7 @@ const WhatsAppLink = () => {
       toast.error('Failed to fetch user profile');
     }
   };
+
   const fetchInstances = async () => {
     try {
       setInitialLoading(true);
@@ -224,6 +278,7 @@ const WhatsAppLink = () => {
       } = await supabase.from('whatsapp_instances').select('*').eq('user_id', user?.id);
       if (error) throw error;
       setInstances(data || []);
+      
       await Promise.all(data?.map(instance => checkInstanceStatus(instance.instance_name)) || []);
     } catch (error) {
       logger.error('Error fetching WhatsApp instances:', error);
@@ -232,6 +287,7 @@ const WhatsAppLink = () => {
       setInitialLoading(false);
     }
   };
+
   const checkInstanceStatus = async (name: string) => {
     try {
       const {
@@ -246,21 +302,26 @@ const WhatsAppLink = () => {
       if (data) {
         const state = data.state;
         const statusReason = data.statusReason;
-        const updatedStatus = state === 'open' || state === 'CONNECTED' ? 'CONNECTED' : state === 'connecting' || state === 'STARTING' ? 'CONNECTING' : state === 'qrcode' ? 'CONNECTING' :
-        // Keep as CONNECTING when showing QR
-        'DISCONNECTED';
+        const updatedStatus = state === 'open' || state === 'CONNECTED' ? 'CONNECTED' : 
+                            state === 'connecting' || state === 'STARTING' ? 'CONNECTING' : 
+                            state === 'qrcode' ? 'CONNECTING' : 'DISCONNECTED';
+        
         if (updatedStatus === 'CONNECTED') {
           await supabase.from('whatsapp_instances').update({
             status: updatedStatus,
             last_connected: new Date().toISOString()
           }).eq('instance_name', name);
         }
-        setInstances(prev => prev.map(instance => instance.instance_name === name ? {
-          ...instance,
-          status: updatedStatus,
-          qr_code: updatedStatus === 'CONNECTED' ? undefined : instance.qr_code,
-          last_connected: updatedStatus === 'CONNECTED' ? new Date().toISOString() : instance.last_connected
-        } : instance));
+        
+        setInstances(prev => prev.map(instance => 
+          instance.instance_name === name ? {
+            ...instance,
+            status: updatedStatus,
+            qr_code: updatedStatus === 'CONNECTED' ? undefined : instance.qr_code,
+            last_connected: updatedStatus === 'CONNECTED' ? new Date().toISOString() : instance.last_connected
+          } : instance
+        ));
+        
         return updatedStatus === 'CONNECTED';
       }
       return false;
@@ -269,6 +330,7 @@ const WhatsAppLink = () => {
       return false;
     }
   };
+
   const createInstance = async (instanceName: string) => {
     try {
       if (instances.length >= instanceLimit) {
@@ -312,6 +374,7 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
+
   const handleDelete = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -333,6 +396,7 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
+
   const handleLogout = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -361,6 +425,7 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
+
   const handleReconnect = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -408,11 +473,13 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
+
   const validateInstanceName = (name: string) => {
     const isValid = /^[a-zA-Z0-9]+$/.test(name);
     setIsValidName(isValid);
     return isValid;
   };
+
   const extractQRCode = (data: any): string | null => {
     logger.log('Extracting QR code from response:', data);
     if (data.base64 && data.base64.startsWith('data:image/')) {
@@ -433,6 +500,7 @@ const WhatsAppLink = () => {
     logger.log('No QR code found in response');
     return null;
   };
+
   const formatQrCodeDataUrl = (qrCodeData: string) => {
     if (!qrCodeData) return '';
     try {
@@ -446,28 +514,7 @@ const WhatsAppLink = () => {
       return '';
     }
   };
-  useEffect(() => {
-    const instancePolling = instances.map(instance => {
-      let intervalId: ReturnType<typeof setInterval>;
-      if (instance.status === 'CONNECTING' && !instance.qr_code || instance.status === 'CONNECTING' && instance.last_connected) {
-        intervalId = setInterval(async () => {
-          const isConnected = await checkInstanceStatus(instance.instance_name);
-          if (isConnected) {
-            clearInterval(intervalId);
-            toast.success(`WhatsApp instance ${instance.instance_name} connected successfully`);
-          }
-        }, 3000);
-      }
-      return () => {
-        if (intervalId) {
-          clearInterval(intervalId);
-        }
-      };
-    });
-    return () => {
-      instancePolling.forEach(cleanup => cleanup());
-    };
-  }, [instances]);
+
   if (authLoading || initialLoading) {
     return <div className="container mx-auto max-w-5xl py-8">
         <Card>
@@ -480,6 +527,7 @@ const WhatsAppLink = () => {
         </Card>
       </div>;
   }
+
   if (!user) {
     return <div className="container mx-auto max-w-5xl py-8">
         <Card>
@@ -491,6 +539,7 @@ const WhatsAppLink = () => {
         </Card>
       </div>;
   }
+
   return <motion.div initial={{
     opacity: 0,
     y: 20
@@ -618,4 +667,5 @@ const WhatsAppLink = () => {
       </div>
     </motion.div>;
 };
+
 export default WhatsAppLink;
