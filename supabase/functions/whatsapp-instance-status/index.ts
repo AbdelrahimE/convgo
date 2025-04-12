@@ -21,7 +21,7 @@ serve(async (req) => {
       throw new Error('Instance name is required');
     }
 
-    await logDebug('INSTANCE_STATUS', `Checking connection state for instance: ${instanceName}`);
+    logger.log(`Checking connection state for instance: ${instanceName}`);
 
     const response = await fetch(`https://api.convgo.com/instance/connectionState/${instanceName.trim()}`, {
       method: 'GET',
@@ -33,7 +33,7 @@ serve(async (req) => {
 
     logger.log('API response status:', response.status);
     const data = await response.json();
-    await logDebug('INSTANCE_STATUS', 'API response data', data);
+    logger.log('API response data:', JSON.stringify(data, null, 2));
 
     // Map Evolution API connection state to our expected states
     let state = 'close';
@@ -55,7 +55,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    await logDebug('INSTANCE_STATUS_ERROR', 'Error in status check', { error: error.message });
+    logger.error('Error in status check:', error);
     return new Response(JSON.stringify({
       error: error.message,
       timestamp: new Date().toISOString()
