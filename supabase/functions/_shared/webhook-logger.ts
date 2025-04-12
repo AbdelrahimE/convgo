@@ -25,6 +25,10 @@ const getSupabaseAdmin = () => {
  * @returns Promise<void>
  */
 export async function logDebug(category: string, message: string, data?: any): Promise<void> {
+  // Check if logging is enabled - only proceed if explicitly set to 'true'
+  const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+  if (!enableLogs) return;
+  
   // Log to console
   logger.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
   
