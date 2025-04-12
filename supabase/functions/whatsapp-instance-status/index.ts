@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { corsHeaders } from "../_shared/cors.ts";
+import logDebug from "../_shared/webhook-logger.ts";
 
 // Create a logger for edge functions that respects configuration
 const logger = {
@@ -9,8 +10,8 @@ const logger = {
     if (enableLogs) console.log(...args);
   },
   error: (...args: any[]) => {
-    // Always log errors regardless of setting
-    console.error(...args);
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.error(...args);
   },
   info: (...args: any[]) => {
     const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
@@ -46,6 +47,7 @@ serve(async (req) => {
     }
 
     logger.log(`Checking connection state for instance: ${instanceName}`);
+    await logDebug('INSTANCE_STATUS_CHECK', `Checking connection state for instance: ${instanceName}`);
 
     const response = await fetch(`https://api.convgo.com/instance/connectionState/${instanceName.trim()}`, {
       method: 'GET',
@@ -58,6 +60,11 @@ serve(async (req) => {
     logger.log('API response status:', response.status);
     const data = await response.json();
     logger.log('API response data:', JSON.stringify(data, null, 2));
+    
+    await logDebug('INSTANCE_STATUS_RESPONSE', `Received response for instance ${instanceName}`, {
+      statusCode: response.status,
+      responseData: data
+    });
 
     // Map Evolution API connection state to our expected states
     let state = 'close';
@@ -68,6 +75,11 @@ serve(async (req) => {
     } else if (data.instance?.state === 'connecting') {
       state = 'connecting';
     }
+
+    await logDebug('INSTANCE_STATUS_MAPPED', `Mapped status for instance ${instanceName}`, {
+      originalState: data.instance?.state,
+      mappedState: state
+    });
 
     return new Response(JSON.stringify({
       state,
@@ -80,6 +92,11 @@ serve(async (req) => {
 
   } catch (error) {
     logger.error('Error in status check:', error);
+    await logDebug('INSTANCE_STATUS_ERROR', 'Error checking WhatsApp instance status', {
+      error: error.message,
+      stack: error.stack
+    });
+    
     return new Response(JSON.stringify({
       error: error.message,
       timestamp: new Date().toISOString()
