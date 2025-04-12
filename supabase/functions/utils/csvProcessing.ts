@@ -1,3 +1,4 @@
+
 /**
  * CSV-specific processing utilities to improve handling of tabular data
  * This module provides specialized handling for CSV files in the text extraction process
@@ -6,7 +7,7 @@
 // Create a logger for edge functions that respects configuration
 const logger = {
   log: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    const enableLogs = typeof Deno !== 'undefined' ? Deno.env.get('ENABLE_LOGS') === 'true' : false;
     if (enableLogs) console.log(...args);
   },
   error: (...args: any[]) => {
@@ -14,15 +15,15 @@ const logger = {
     console.error(...args);
   },
   info: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    const enableLogs = typeof Deno !== 'undefined' ? Deno.env.get('ENABLE_LOGS') === 'true' : false;
     if (enableLogs) console.info(...args);
   },
   warn: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    const enableLogs = typeof Deno !== 'undefined' ? Deno.env.get('ENABLE_LOGS') === 'true' : false;
     if (enableLogs) console.warn(...args);
   },
   debug: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    const enableLogs = typeof Deno !== 'undefined' ? Deno.env.get('ENABLE_LOGS') === 'true' : false;
     if (enableLogs) console.debug(...args);
   },
 };
