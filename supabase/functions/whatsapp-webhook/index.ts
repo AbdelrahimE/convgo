@@ -1,7 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
-import logDebug from "../_shared/webhook-logger.ts";
 import { calculateSimilarity } from "../_shared/text-similarity.ts";
 import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processing.ts";
 import { downloadAudioFile } from "../_shared/audio-download.ts";
@@ -11,7 +10,7 @@ import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts
 import { checkForDuplicateMessage } from "../_shared/duplicate-message-detector.ts";
 import { processAudioMessage } from "../_shared/audio-processor.ts";
 import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
-import { logger } from "../_shared/logger.ts";
+import { logger, logDebug } from "../_shared/logger.ts";
 
 // Define standard CORS headers
 const corsHeaders = {
