@@ -3,11 +3,27 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // Create a simple logger for edge functions
 const logger = {
-  log: (...args: any[]) => console.log(...args),
-  error: (...args: any[]) => console.error(...args),
-  info: (...args: any[]) => console.info(...args),
-  warn: (...args: any[]) => console.warn(...args),
-  debug: (...args: any[]) => console.debug(...args),
+  log: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.log(...args);
+  },
+  error: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    // Only log errors if explicitly enabled - this is different from before
+    if (enableLogs) console.error(...args);
+  },
+  info: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.info(...args);
+  },
+  warn: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.warn(...args);
+  },
+  debug: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.debug(...args);
+  },
 };
 
 // Initialize Supabase admin client (this will be available in edge functions)
@@ -29,22 +45,27 @@ export async function logDebug(category: string, message: string, data?: any): P
   const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
   if (!enableLogs) return;
   
-  // Log to console
+  // Log to console - we already checked enableLogs above
   logger.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
   
   try {
-    // Get Supabase admin client
-    const supabaseAdmin = getSupabaseAdmin();
-    
-    // Log to database
-    await supabaseAdmin.from('webhook_debug_logs').insert({
-      category,
-      message,
-      data: data || null
-    });
+    // ONLY log to database if logging is enabled
+    if (enableLogs) {
+      // Get Supabase admin client
+      const supabaseAdmin = getSupabaseAdmin();
+      
+      // Log to database
+      await supabaseAdmin.from('webhook_debug_logs').insert({
+        category,
+        message,
+        data: data || null
+      });
+    }
   } catch (error) {
-    // If we can't log to the database, at least log the error to the console
-    logger.error('Failed to log debug info to database:', error);
+    // If we can't log to the database, log the error to console if enabled
+    if (enableLogs) {
+      logger.error('Failed to log debug info to database:', error);
+    }
   }
 }
 

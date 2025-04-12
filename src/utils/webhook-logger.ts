@@ -18,12 +18,14 @@ export async function logDebug(category: string, message: string, data?: any): P
   logger.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
   
   try {
-    // Log to database using the browser supabase client
-    await supabase.from('webhook_debug_logs').insert({
-      category,
-      message,
-      data: data || null
-    });
+    // Log to database using the browser supabase client - also respect the enableLogs flag
+    if (enableLogs) {
+      await supabase.from('webhook_debug_logs').insert({
+        category,
+        message,
+        data: data || null
+      });
+    }
   } catch (error) {
     // If we can't log to the database, at least log the error to the console
     logger.error('Failed to log debug info to database:', error);
