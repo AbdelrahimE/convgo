@@ -1,31 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { corsHeaders } from "../_shared/cors.ts";
-
-// Create a logger for edge functions that respects configuration
-const logger = {
-  log: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.log(...args);
-  },
-  error: (...args: any[]) => {
-    // Always log errors regardless of setting
-    console.error(...args);
-  },
-  info: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.info(...args);
-  },
-  warn: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.warn(...args);
-  },
-  debug: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.debug(...args);
-  },
-};
-
+import { logger, logDebug } from "../_shared/logger.ts";
 
 serve(async (req) => {
   // Handle CORS
@@ -45,7 +21,7 @@ serve(async (req) => {
       throw new Error('Instance name is required');
     }
 
-    logger.log(`Checking connection state for instance: ${instanceName}`);
+    await logDebug('INSTANCE_STATUS', `Checking connection state for instance: ${instanceName}`);
 
     const response = await fetch(`https://api.convgo.com/instance/connectionState/${instanceName.trim()}`, {
       method: 'GET',
@@ -57,7 +33,7 @@ serve(async (req) => {
 
     logger.log('API response status:', response.status);
     const data = await response.json();
-    logger.log('API response data:', JSON.stringify(data, null, 2));
+    await logDebug('INSTANCE_STATUS', 'API response data', data);
 
     // Map Evolution API connection state to our expected states
     let state = 'close';
@@ -79,7 +55,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    logger.error('Error in status check:', error);
+    await logDebug('INSTANCE_STATUS_ERROR', 'Error in status check', { error: error.message });
     return new Response(JSON.stringify({
       error: error.message,
       timestamp: new Date().toISOString()
