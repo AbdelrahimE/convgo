@@ -3,6 +3,30 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { setupBatchProcessing } from '../_shared/db-setup.ts';
 
+// Create a logger for edge functions that respects configuration
+const logger = {
+  log: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.log(...args);
+  },
+  error: (...args: any[]) => {
+    // Always log errors regardless of setting
+    console.error(...args);
+  },
+  info: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.info(...args);
+  },
+  warn: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.warn(...args);
+  },
+  debug: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.debug(...args);
+  },
+};
+
 // Define standard CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -59,7 +83,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Error in batch setup function:', error);
+    logger.error('Error in batch setup function:', error);
     
     return new Response(
       JSON.stringify({
