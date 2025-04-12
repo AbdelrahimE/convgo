@@ -1,13 +1,27 @@
-
 /**
  * CSV-specific processing utilities to improve handling of tabular data
  * This module provides specialized handling for CSV files in the text extraction process
  */
 
+// Helper function to safely check environment variables across environments
+const getEnvVariable = (key: string): string | undefined => {
+  try {
+    // Check if running in Deno environment
+    if (typeof globalThis.Deno !== 'undefined') {
+      return globalThis.Deno.env.get(key);
+    }
+    // Otherwise return undefined
+    return undefined;
+  } catch (error) {
+    console.error(`Error accessing env variable ${key}:`, error);
+    return undefined;
+  }
+};
+
 // Create a logger for edge functions that respects configuration
 const logger = {
   log: (...args: any[]) => {
-    const enableLogs = typeof Deno !== 'undefined' ? Deno.env.get('ENABLE_LOGS') === 'true' : false;
+    const enableLogs = getEnvVariable('ENABLE_LOGS') === 'true';
     if (enableLogs) console.log(...args);
   },
   error: (...args: any[]) => {
@@ -15,15 +29,15 @@ const logger = {
     console.error(...args);
   },
   info: (...args: any[]) => {
-    const enableLogs = typeof Deno !== 'undefined' ? Deno.env.get('ENABLE_LOGS') === 'true' : false;
+    const enableLogs = getEnvVariable('ENABLE_LOGS') === 'true';
     if (enableLogs) console.info(...args);
   },
   warn: (...args: any[]) => {
-    const enableLogs = typeof Deno !== 'undefined' ? Deno.env.get('ENABLE_LOGS') === 'true' : false;
+    const enableLogs = getEnvVariable('ENABLE_LOGS') === 'true';
     if (enableLogs) console.warn(...args);
   },
   debug: (...args: any[]) => {
-    const enableLogs = typeof Deno !== 'undefined' ? Deno.env.get('ENABLE_LOGS') === 'true' : false;
+    const enableLogs = getEnvVariable('ENABLE_LOGS') === 'true';
     if (enableLogs) console.debug(...args);
   },
 };
