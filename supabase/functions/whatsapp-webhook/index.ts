@@ -1220,19 +1220,65 @@ serve(async (req) => {
         }
       }
       
-      // Process for AI if this is a message event and not escalated
+      // For message events that aren't escalated, we store them for batch processing
       if (event === 'messages.upsert' && !skipAiProcessing) {
-        await logDebug('AI_PROCESS_ATTEMPT', 'Attempting to process message for AI response');
-        if (transcribedText) {
-          // If we already transcribed the message for escalation, pass it to AI processing
-          normalizedData.transcribedText = transcribedText;
-          await logDebug('AI_USING_TRANSCRIPTION', 'Using already transcribed text for AI processing', {
-            transcription: transcribedText
+        await logDebug('MESSAGE_QUEUED', 'Queueing message for batch processing');
+        
+        try {
+          // Get instance ID from instance name
+          const { data: instanceData, error: instanceError } = await supabaseAdmin
+            .from('whatsapp_instances')
+            .select('id, status')
+            .eq('instance_name', instanceName)
+            .maybeSingle();
+      
+          if (instanceError || !instanceData) {
+            await logDebug('MESSAGE_QUEUE_ERROR', 'Instance not found in database', { 
+              instanceName, 
+              error: instanceError 
+            });
+            return true; // Continue with webhook processing
+          }
+      
+          // Extract message details
+          const fromNumber = normalizedData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
+          let messageText = transcribedText || // Use already transcribed text if available
+                        normalizedData.message?.conversation || 
+                        normalizedData.message?.extendedTextMessage?.text ||
+                        normalizedData.message?.imageMessage?.caption ||
+                        null;
+                        
+          if (!messageText && !hasAudioContent(normalizedData) && !normalizedData.message?.imageMessage) {
+            await logDebug('MESSAGE_QUEUE_SKIP', 'Skipping message with no content', { normalizedData });
+            return true; // Continue with webhook processing
+          }
+      
+          // Find or create conversation
+          const conversationId = await findOrCreateConversation(instanceData.id, fromNumber);
+          
+          // Store the message with processed=false for batch processing
+          await storeMessageInConversation(
+            conversationId, 
+            'user', 
+            messageText, 
+            normalizedData.key?.id,
+            supabaseAdmin
+          );
+          
+          await logDebug('MESSAGE_QUEUED_SUCCESS', 'Message queued for batch processing', { 
+            instanceName,
+            fromNumber,
+            conversationId,
+            messageId: normalizedData.key?.id
+          });
+        } catch (error) {
+          await logDebug('MESSAGE_QUEUE_EXCEPTION', 'Error queueing message for batch processing', { 
+            error,
+            instanceName
           });
         }
-        await processMessageForAI(instanceName, normalizedData);
       }
-      
+     
       return new Response(JSON.stringify({ success: true }), {
         headers: {
           ...corsHeaders,
