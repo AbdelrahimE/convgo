@@ -1,32 +1,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import logDebug from "../_shared/webhook-logger.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-// Create a logger for edge functions that respects configuration
-const logger = {
-  log: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.log(...args);
-  },
-  error: (...args: any[]) => {
-    // Always log errors regardless of setting
-    console.error(...args);
-  },
-  info: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.info(...args);
-  },
-  warn: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.warn(...args);
-  },
-  debug: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.debug(...args);
-  },
-};
+import { logger, logDebug } from "../_shared/logger.ts";
 
 // This is a testing function to verify the integrity of the batched message processing
 // It simulates various scenarios without affecting production data
