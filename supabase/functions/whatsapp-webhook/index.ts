@@ -11,30 +11,7 @@ import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts
 import { checkForDuplicateMessage } from "../_shared/duplicate-message-detector.ts";
 import { processAudioMessage } from "../_shared/audio-processor.ts";
 import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
-
-// Create a logger for edge functions that respects configuration
-const logger = {
-  log: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.log(...args);
-  },
-  error: (...args: any[]) => {
-    // Always log errors regardless of setting
-    console.error(...args);
-  },
-  info: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.info(...args);
-  },
-  warn: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.warn(...args);
-  },
-  debug: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.debug(...args);
-  },
-};
+import { logger } from "../_shared/logger.ts";
 
 // Define standard CORS headers
 const corsHeaders = {
