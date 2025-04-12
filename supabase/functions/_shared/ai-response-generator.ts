@@ -3,30 +3,6 @@ import logDebug from "./webhook-logger.ts";
 import { storeMessageInConversation } from "./conversation-storage.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Create a logger for edge functions that respects configuration
-const logger = {
-  log: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.log(...args);
-  },
-  error: (...args: any[]) => {
-    // Always log errors regardless of setting
-    console.error(...args);
-  },
-  info: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.info(...args);
-  },
-  warn: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.warn(...args);
-  },
-  debug: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.debug(...args);
-  },
-};
-
 /**
  * Generates an AI response based on user query and context, then sends it via WhatsApp
  * 
@@ -95,7 +71,7 @@ export async function generateAndSendAIResponse(
         status: responseGenResponse.status,
         error: errorText
       });
-      logger.error('AI response generation failed:', errorText);
+      console.error('AI response generation failed:', errorText);
       return false;
     }
 
@@ -138,7 +114,7 @@ export async function generateAndSendAIResponse(
         await logDebug('AI_INTERACTION_SAVE_ERROR', 'Error saving AI interaction', {
           error: interactionError
         });
-        logger.error('Error saving AI interaction:', interactionError);
+        console.error('Error saving AI interaction:', interactionError);
       } else {
         await logDebug('AI_INTERACTION_SAVED', 'AI interaction saved successfully');
       }
@@ -146,7 +122,7 @@ export async function generateAndSendAIResponse(
       await logDebug('AI_INTERACTION_SAVE_EXCEPTION', 'Exception saving AI interaction', {
         error
       });
-      logger.error('Exception saving AI interaction:', error);
+      console.error('Exception saving AI interaction:', error);
     }
 
     // Send response back through WhatsApp
@@ -162,7 +138,7 @@ export async function generateAndSendAIResponse(
       
       if (!evolutionApiKey) {
         await logDebug('AI_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable not set and no apikey in payload');
-        logger.error('EVOLUTION_API_KEY environment variable not set and no apikey in payload');
+        console.error('EVOLUTION_API_KEY environment variable not set and no apikey in payload');
         return false;
       }
 
@@ -198,7 +174,7 @@ export async function generateAndSendAIResponse(
               text: responseData.answer.substring(0, 50) + '...'
             }
           });
-          logger.error('Error sending WhatsApp message:', errorText);
+          console.error('Error sending WhatsApp message:', errorText);
           return false;
         }
 
@@ -212,7 +188,7 @@ export async function generateAndSendAIResponse(
           instanceBaseUrl,
           fromNumber
         });
-        logger.error('Exception sending WhatsApp message:', error);
+        console.error('Exception sending WhatsApp message:', error);
         return false;
       }
     } else {
@@ -308,7 +284,7 @@ export async function generateAndSendBatchedAIResponse(
       messageCount: messages?.length || 0,
       conversationId 
     });
-    logger.error('Error processing batched messages:', error);
+    console.error('Error processing batched messages:', error);
     return false;
   }
 }

@@ -3,28 +3,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
 
-// Create a logger for edge functions that respects configuration
+// Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
-  log: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.log(...args);
-  },
-  error: (...args: any[]) => {
-    // Always log errors regardless of setting
-    console.error(...args);
-  },
-  info: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.info(...args);
-  },
-  warn: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.warn(...args);
-  },
-  debug: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.debug(...args);
-  },
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
 };
 
 // Define standard CORS headers
@@ -38,11 +23,11 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
 try {
-  if (!supabaseUrl) logger.error("SUPABASE_URL environment variable is not set");
-  if (!supabaseServiceKey) logger.error("SUPABASE_SERVICE_ROLE_KEY environment variable is not set");
+  if (!supabaseUrl) console.error("SUPABASE_URL environment variable is not set");
+  if (!supabaseServiceKey) console.error("SUPABASE_SERVICE_ROLE_KEY environment variable is not set");
   
   // Log info about environment
-  logger.log(`Starting process-message-batches function with URL: ${supabaseUrl}`);
+  console.log(`Starting process-message-batches function with URL: ${supabaseUrl}`);
   
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -113,7 +98,7 @@ try {
   // Process batched messages - Enhanced version that properly handles the batch
   async function processBatchedConversations() {
     try {
-      logger.log("Starting processBatchedConversations function");
+      console.log("Starting processBatchedConversations function");
       
       // Find active conversations with unprocessed messages
       const { data: activeConversations, error: conversationsError } = await supabaseAdmin
@@ -143,7 +128,7 @@ try {
           const fiveSecondsAgo = new Date(Date.now() - 5000);
           
           // Call the SQL function to process the batch with a transaction
-          logger.log(`Processing batch for conversation: ${conversation.id}`);
+          console.log(`Processing batch for conversation: ${conversation.id}`);
           const { data: batchResult, error: batchError } = await supabaseAdmin.rpc('process_message_batch', {
             p_conversation_id: conversation.id,
             p_timestamp_threshold: fiveSecondsAgo.toISOString()
@@ -192,7 +177,7 @@ try {
   // Process a specific batch of messages
   async function processBatchedMessages(conversation: any, batchResult: any) {
     try {
-      logger.log(`Processing batched messages for conversation: ${conversation.id}`);
+      console.log(`Processing batched messages for conversation: ${conversation.id}`);
       
       // Get the WhatsApp instance details
       const { data: instanceData, error: instanceError } = await supabaseAdmin
@@ -302,7 +287,7 @@ try {
       let context = '';
       
       try {
-        logger.log(`Calling semantic search endpoint with ${fileIds.length} file IDs`);
+        console.log(`Calling semantic search endpoint with ${fileIds.length} file IDs`);
         const searchResponse = await fetch(`${supabaseUrl}/functions/v1/semantic-search`, {
           method: 'POST',
           headers: {
@@ -376,7 +361,7 @@ try {
       await logDebug('BATCH_GENERATING_RESPONSE', 'Generating AI response for batched messages');
       
       try {
-        logger.log(`Calling generateAndSendAIResponse for ${conversation.user_phone}`);
+        console.log(`Calling generateAndSendAIResponse for ${conversation.user_phone}`);
         const result = await generateAndSendAIResponse(
           combinedContent,
           context,
@@ -418,7 +403,7 @@ try {
 
   // Main handler
   serve(async (req) => {
-    logger.log(`Received request: ${req.method} ${req.url}`);
+    console.log(`Received request: ${req.method} ${req.url}`);
     
     // Handle CORS preflight requests
     if (req.method === 'OPTIONS') {
@@ -448,7 +433,7 @@ try {
         }
       );
     } catch (error) {
-      logger.error('CRITICAL ERROR in batch processing:', error);
+      console.error('CRITICAL ERROR in batch processing:', error);
       await logDebug('BATCH_PROCESS_FAILED', 'Message batch processing failed', { 
         error: error.toString(),
         stack: error.stack 
@@ -470,7 +455,7 @@ try {
     }
   });
 } catch (initError) {
-  logger.error('CRITICAL ERROR during initialization:', initError);
+  console.error('CRITICAL ERROR during initialization:', initError);
   
   // Set up a basic handler that will return the error information
   serve(async (req) => {
