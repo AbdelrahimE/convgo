@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
+import logDebug from "../_shared/webhook-logger.ts";
 import { calculateSimilarity } from "../_shared/text-similarity.ts";
 import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processing.ts";
 import { downloadAudioFile } from "../_shared/audio-download.ts";
@@ -10,7 +11,15 @@ import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts
 import { checkForDuplicateMessage } from "../_shared/duplicate-message-detector.ts";
 import { processAudioMessage } from "../_shared/audio-processor.ts";
 import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
-import { logger, logDebug } from "../_shared/logger.ts";
+
+// Create a simple logger since we can't use @/utils/logger in edge functions
+const logger = {
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
 
 // Define standard CORS headers
 const corsHeaders = {
@@ -241,84 +250,6 @@ async function getRecentConversationHistory(conversationId: string, maxTokens = 
   }
 }
 
-// Enhance the processBatchedMessages function with transaction support
-async function processBatchedMessages(instanceName: string, conversationId: string, supabaseAdmin: any) {
-  try {
-    await logDebug('BATCH_PROCESSING', `Checking for batched messages in conversation ${conversationId}`, { instanceName });
-    
-    // Get unprocessed messages older than 5 seconds
-    const fiveSecondsAgo = new Date(Date.now() - 5000);
-
-    // First check if there are any messages to process without acquiring locks
-    const { data: messageCheck, error: checkError } = await supabaseAdmin
-      .from('whatsapp_conversation_messages')
-      .select('id', { count: 'exact', head: true })
-      .eq('conversation_id', conversationId)
-      .eq('role', 'user')
-      .eq('processed', false)
-      .lt('timestamp', fiveSecondsAgo.toISOString());
-
-    if (checkError) {
-      await logDebug('BATCH_PROCESSING_ERROR', 'Error checking for messages to process', { error: checkError });
-      return null;
-    }
-
-    // If no messages are waiting, return early
-    if (!messageCheck || messageCheck.length === 0) {
-      return null;
-    }
-
-    // Begin a transaction for safe batch processing
-    // Use RPC to call a Postgres function to handle the transaction
-    const { data: batchResult, error: batchError } = await supabaseAdmin.rpc('process_message_batch', {
-      p_conversation_id: conversationId,
-      p_timestamp_threshold: fiveSecondsAgo.toISOString()
-    });
-
-    // If there was an error processing the batch, log and return
-    if (batchError) {
-      await logDebug('BATCH_PROCESSING_ERROR', 'Transaction error processing message batch', { 
-        error: batchError,
-        conversationId
-      });
-      return null;
-    }
-
-    // If no batch was processed or no messages were found
-    if (!batchResult || !batchResult.messages || batchResult.messages.length === 0) {
-      await logDebug('BATCH_PROCESSING_EMPTY', 'No messages to batch process', { conversationId });
-      return null;
-    }
-
-    // Extract the results from the transaction
-    const combinedContent = batchResult.messages.map(m => m.content).join('\n');
-    const firstMessageId = batchResult.messages[0].message_id;
-    const fromNumberRaw = firstMessageId ? firstMessageId.split('@')[0] : '';
-    const fromNumber = fromNumberRaw || batchResult.user_phone;
-
-    await logDebug('BATCH_PROCESSING_SUCCESS', `Successfully processed ${batchResult.messages.length} messages as batch`, {
-      messageCount: batchResult.messages.length,
-      conversationId,
-      combinedPreview: combinedContent.substring(0, 100) + (combinedContent.length > 100 ? '...' : '')
-    });
-
-    // Return the combined message details
-    return {
-      combinedContent,
-      firstMessageId,
-      fromNumber,
-      messageCount: batchResult.messages.length
-    };
-  } catch (error) {
-    await logDebug('BATCH_PROCESSING_EXCEPTION', 'Unexpected error in batch processing', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      conversationId
-    });
-    return null;
-  }
-}
-
 // Default API URL - Set to the correct Evolution API URL
 const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
 
@@ -347,10 +278,10 @@ async function saveWebhookMessage(instance: string, event: string, data: any) {
   }
 }
 
-// MODIFIED: Modified to only store messages without immediate processing
+// Helper function to process message for AI
 async function processMessageForAI(instance: string, messageData: any) {
   try {
-    await logDebug('AI_PROCESS_START', 'Starting message queueing for batch processing', { instance });
+    await logDebug('AI_PROCESS_START', 'Starting AI message processing', { instance });
     
     // Extract key information from the message
     const instanceName = instance;
@@ -363,19 +294,18 @@ async function processMessageForAI(instance: string, messageData: any) {
     const remoteJid = messageData.key?.remoteJid || '';
     const isFromMe = messageData.key?.fromMe || false;
     
-    await logDebug('AI_MESSAGE_DETAILS', 'Extracted message details for batch queueing', { 
+    await logDebug('AI_MESSAGE_DETAILS', 'Extracted message details', { 
       instanceName, 
       fromNumber, 
       messageText, 
       remoteJid, 
-      isFromMe,
-      isBatchMode: true
+      isFromMe 
     });
 
     // NEW: Check for and process image content
     let imageUrl = null;
     if (messageData.message?.imageMessage) {
-      await logDebug('IMAGE_MESSAGE_DETECTED', 'Detected image message for batch processing', {
+      await logDebug('IMAGE_MESSAGE_DETECTED', 'Detected image message', {
         hasCaption: !!messageData.message.imageMessage.caption,
         mimeType: messageData.message.imageMessage.mimetype || 'Unknown'
       });
@@ -392,7 +322,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       // Process the image to get a viewable URL
       if (rawImageUrl && mediaKey) {
         try {
-          await logDebug('IMAGE_PROCESSING', 'Processing image for batch AI analysis', {
+          await logDebug('IMAGE_PROCESSING', 'Processing image for AI analysis', {
             urlFragment: rawImageUrl.substring(0, 30) + '...',
             hasMediaKey: !!mediaKey
           });
@@ -421,12 +351,12 @@ async function processMessageForAI(instance: string, messageData: any) {
               // This ensures image-only messages will be processed
               if (!messageText && imageUrl) {
                 messageText = "Please analyze this image.";
-                await logDebug('IMAGE_ONLY_MESSAGE', 'Added default text for image-only message in batch mode', {
+                await logDebug('IMAGE_ONLY_MESSAGE', 'Added default text for image-only message', {
                   defaultText: messageText
                 });
               }
               
-              await logDebug('IMAGE_PROCESSED', 'Successfully processed image for batch AI analysis', {
+              await logDebug('IMAGE_PROCESSED', 'Successfully processed image for AI analysis', {
                 originalUrlFragment: rawImageUrl.substring(0, 30) + '...',
                 processedUrlFragment: result.mediaUrl.substring(0, 30) + '...',
                 mediaType: result.mediaType
@@ -482,7 +412,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     let directResponse = null;
     
     if (isAudioMessage) {
-      await logDebug('AUDIO_MESSAGE_DETECTED', 'Audio message detected for batch processing', { 
+      await logDebug('AUDIO_MESSAGE_DETECTED', 'Audio message detected', { 
         messageType: messageData.messageType,
         hasAudioMessage: !!messageData.message?.audioMessage,
         hasPttMessage: !!messageData.message?.pttMessage
@@ -490,7 +420,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       
       // Extract audio details
       const audioDetails = extractAudioDetails(messageData);
-      await logDebug('AUDIO_DETAILS', 'Extracted audio details for batch processing', { audioDetails });
+      await logDebug('AUDIO_DETAILS', 'Extracted audio details', { audioDetails });
       
       // Process the audio for transcription
       const transcriptionResult = await processAudioMessage(audioDetails, instanceName, fromNumber, evolutionApiKey);
@@ -636,7 +566,7 @@ async function processMessageForAI(instance: string, messageData: any) {
 
     // Find or create conversation
     const conversationId = await findOrCreateConversation(instanceData.id, fromNumber);
-    await logDebug('CONVERSATION_MANAGED', 'Conversation found or created for batch processing', { conversationId });
+    await logDebug('CONVERSATION_MANAGED', 'Conversation found or created', { conversationId });
 
     // NEW: Check for duplicate messages before processing
     const isDuplicate = await checkForDuplicateMessage(conversationId, messageText, supabaseAdmin);
@@ -649,55 +579,223 @@ async function processMessageForAI(instance: string, messageData: any) {
       return false;
     }
 
-    // Store user message in conversation with processed=false for batch processing
+    // Store user message in conversation
     await storeMessageInConversation(conversationId, 'user', messageText, messageData.key?.id, supabaseAdmin);
     
-    if (imageUrl) {
-      // If there's an image, store that metadata with the message
-      try {
-        // Update the message to include the image URL in metadata
-        const { error: updateError } = await supabaseAdmin
-          .from('whatsapp_conversation_messages')
-          .update({ 
-            metadata: { 
-              has_image: true,
-              image_url: imageUrl
-            }
-          })
-          .eq('message_id', messageData.key?.id)
-          .eq('conversation_id', conversationId);
+    // Get recent conversation history with improved token management
+    const conversationHistory = await getRecentConversationHistory(conversationId, 800);
+    await logDebug('CONVERSATION_HISTORY', 'Retrieved conversation history', { 
+      messageCount: conversationHistory.length,
+      estimatedTokens: conversationHistory.reduce((sum, msg) => sum + Math.ceil(msg.content.length * 0.25), 0)
+    });
+
+    // Check if this instance has AI enabled
+    await logDebug('AI_CONFIG_CHECK', 'Checking if AI is enabled for instance', { instanceName });
+    
+    const instanceId = instanceData.id;
+    await logDebug('AI_INSTANCE_FOUND', 'Found instance in database', { instanceId, status: instanceData.status });
+
+    // Check if AI is enabled for this instance
+    const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
+      .from('whatsapp_ai_config')
+      .select('*')
+      .eq('whatsapp_instance_id', instanceId)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (aiConfigError || !aiConfig) {
+      await logDebug('AI_DISABLED', 'AI is not enabled for this instance', { 
+        instanceId, 
+        error: aiConfigError 
+      });
+      logger.error('AI not enabled for this instance:', aiConfigError || 'No active config found');
+      return false;
+    }
+
+    await logDebug('AI_ENABLED', 'AI is enabled for this instance', { 
+      aiConfigId: aiConfig.id,
+      temperature: aiConfig.temperature,
+      systemPromptPreview: aiConfig.system_prompt.substring(0, 50) + '...'
+    });
+
+    // Get files associated with this instance for RAG
+    const { data: fileMappings, error: fileMappingsError } = await supabaseAdmin
+      .from('whatsapp_file_mappings')
+      .select('file_id')
+      .eq('whatsapp_instance_id', instanceId);
+
+    if (fileMappingsError) {
+      await logDebug('AI_FILE_MAPPING_ERROR', 'Error getting file mappings', { 
+        instanceId, 
+        error: fileMappingsError 
+      });
+      logger.error('Error getting file mappings:', fileMappingsError);
+      return false;
+    }
+
+    // Extract file IDs
+    const fileIds = fileMappings?.map(mapping => mapping.file_id) || [];
+    await logDebug('AI_FILE_MAPPINGS', 'Retrieved file mappings for instance', { 
+      instanceId, 
+      fileCount: fileIds.length,
+      fileIds
+    });
+
+    if (fileIds.length === 0) {
+      await logDebug('AI_NO_FILES', 'No files mapped to this instance, using empty context', { instanceId });
+    }
+
+    // Initialize instance base URL for sending responses
+    let instanceBaseUrl = '';
+
+    // Try to determine the base URL for this instance
+    try {
+      await logDebug('AI_EVOLUTION_URL_CHECK', 'Attempting to determine EVOLUTION API URL', { instanceId });
+      
+      // IMPORTANT: First check if the server_url is available in the current message payload
+      if (messageData.server_url) {
+        instanceBaseUrl = messageData.server_url;
+        await logDebug('AI_EVOLUTION_URL_FROM_PAYLOAD', 'Using server_url from payload', { 
+          instanceBaseUrl
+        });
+      } else {
+        // If not available in the payload, try to get it from webhook config
+        const { data: webhookConfig, error: webhookError } = await supabaseAdmin
+          .from('whatsapp_webhook_config')
+          .select('webhook_url')
+          .eq('whatsapp_instance_id', instanceId)
+          .maybeSingle();
           
-        if (updateError) {
-          await logDebug('IMAGE_METADATA_ERROR', 'Error storing image metadata with message', {
-            error: updateError,
-            messageId: messageData.key?.id
+        if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
+          // Extract base URL from webhook URL
+          const url = new URL(webhookConfig.webhook_url);
+          instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+          await logDebug('AI_EVOLUTION_URL_FOUND', 'Extracted base URL from webhook config', { 
+            instanceBaseUrl,
+            webhookUrl: webhookConfig.webhook_url
           });
         } else {
-          await logDebug('IMAGE_METADATA_STORED', 'Successfully stored image metadata with message', {
-            messageId: messageData.key?.id,
-            imageUrl: imageUrl.substring(0, 30) + '...'
+          // If webhook URL doesn't exist, use the default Evolution API URL
+          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+          await logDebug('AI_EVOLUTION_URL_DEFAULT', 'Using default EVOLUTION API URL', { 
+            instanceBaseUrl,
+            webhookError
           });
         }
-      } catch (error) {
-        await logDebug('IMAGE_METADATA_EXCEPTION', 'Exception storing image metadata', {
-          error,
-          messageId: messageData.key?.id
-        });
       }
+    } catch (error) {
+      // In case of any error, use the default Evolution API URL
+      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+      await logDebug('AI_EVOLUTION_URL_ERROR', 'Error determining EVOLUTION API URL, using default', { 
+        instanceBaseUrl,
+        error
+      });
     }
-    
-    // Log that the message has been successfully queued for batch processing
-    await logDebug('MESSAGE_QUEUED_FOR_BATCH', 'Message successfully queued for batch processing', {
-      conversationId,
-      messageId: messageData.key?.id,
-      fromNumber,
-      processingMode: 'batch-only'
-    });
-    
-    return true;
 
+    await logDebug('AI_CONTEXT_SEARCH', 'Starting semantic search for context', { 
+      userQuery: messageText,
+      fileIds 
+    });
+
+    // Perform semantic search to find relevant contexts
+    const searchResponse = await fetch(`${supabaseUrl}/functions/v1/semantic-search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify({
+        query: messageText,
+        fileIds: fileIds.length > 0 ? fileIds : undefined,
+        limit: 5,
+        threshold: 0.3
+      })
+    });
+
+    if (!searchResponse.ok) {
+      const errorText = await searchResponse.text();
+      await logDebug('AI_SEARCH_ERROR', 'Semantic search failed', { 
+        status: searchResponse.status,
+        error: errorText
+      });
+      console.error('Semantic search failed:', errorText);
+      
+      // Continue with empty context instead of failing
+      await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
+      return await generateAndSendAIResponse(
+        messageText, 
+        context, 
+        instanceName, 
+        fromNumber, 
+        instanceBaseUrl, 
+        aiConfig, 
+        messageData, 
+        conversationId,
+        supabaseUrl,
+        supabaseServiceKey,
+        imageUrl
+      );
+    }
+
+    const searchResults = await searchResponse.json();
+    await logDebug('AI_SEARCH_RESULTS', 'Semantic search completed', { 
+      resultCount: searchResults.results?.length || 0,
+      similarity: searchResults.results?.[0]?.similarity || 0
+    });
+
+    // IMPROVED CONTEXT ASSEMBLY: Balance between conversation history and RAG content
+    let context = '';
+    let ragContext = '';
+    
+    // 1. Format conversation history in a clean, token-efficient format
+    const conversationContext = conversationHistory
+      .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+      .join('\n\n');
+    
+    // 2. Format RAG results if available - more token-efficient formatting
+    if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
+      // Only include the most relevant sections to save tokens
+      const topResults = searchResults.results.slice(0, 3);
+      
+      // Join RAG content with separators and add source information
+      ragContext = topResults
+        .map((result, index) => `DOCUMENT ${index + 1} (similarity: ${result.similarity.toFixed(2)}):\n${result.content.trim()}`)
+        .join('\n\n---\n\n');
+      
+      // 3. The context assembly is now handled by the balanceContextTokens function in generate-response
+      context = `${conversationContext}\n\n${ragContext}`;
+      
+      await logDebug('AI_CONTEXT_ASSEMBLED', 'Enhanced context assembled for token balancing', { 
+        conversationChars: conversationContext.length,
+        ragChars: ragContext.length,
+        totalChars: context.length,
+        estimatedTokens: Math.ceil(context.length * 0.25)
+      });
+    } else {
+      // Only conversation history is available
+      context = conversationContext;
+      await logDebug('AI_CONTEXT_ASSEMBLED', 'Context assembled with only conversation history', { 
+        conversationChars: conversationContext.length,
+        estimatedTokens: Math.ceil(conversationContext.length * 0.25)
+      });
+    }
+
+    // Generate and send the response with improved context and token management
+    return await generateAndSendAIResponse(
+      messageText,
+      context,
+      instanceName,
+      fromNumber,
+      instanceBaseUrl,
+      aiConfig,
+      messageData,
+      conversationId,
+      supabaseUrl,
+      supabaseServiceKey,
+      imageUrl
+    );
   } catch (error) {
-    await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in message queuing', { error });
+    await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
     console.error('Error in processMessageForAI:', error);
     return false;
   }
@@ -994,65 +1092,19 @@ serve(async (req) => {
         }
       }
       
-      // For message events that aren't escalated, we store them for batch processing
+      // Process for AI if this is a message event and not escalated
       if (event === 'messages.upsert' && !skipAiProcessing) {
-        await logDebug('MESSAGE_QUEUED', 'Queueing message for batch processing');
-        
-        try {
-          // Get instance ID from instance name
-          const { data: instanceData, error: instanceError } = await supabaseAdmin
-            .from('whatsapp_instances')
-            .select('id, status')
-            .eq('instance_name', instanceName)
-            .maybeSingle();
-      
-          if (instanceError || !instanceData) {
-            await logDebug('MESSAGE_QUEUE_ERROR', 'Instance not found in database', { 
-              instanceName, 
-              error: instanceError 
-            });
-            return true; // Continue with webhook processing
-          }
-      
-          // Extract message details
-          const fromNumber = normalizedData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
-          let messageText = transcribedText || // Use already transcribed text if available
-                        normalizedData.message?.conversation || 
-                        normalizedData.message?.extendedTextMessage?.text ||
-                        normalizedData.message?.imageMessage?.caption ||
-                        null;
-                        
-          if (!messageText && !hasAudioContent(normalizedData) && !normalizedData.message?.imageMessage) {
-            await logDebug('MESSAGE_QUEUE_SKIP', 'Skipping message with no content', { normalizedData });
-            return true; // Continue with webhook processing
-          }
-      
-          // Find or create conversation
-          const conversationId = await findOrCreateConversation(instanceData.id, fromNumber);
-          
-          // Store the message with processed=false for batch processing
-          await storeMessageInConversation(
-            conversationId, 
-            'user', 
-            messageText, 
-            normalizedData.key?.id,
-            supabaseAdmin
-          );
-          
-          await logDebug('MESSAGE_QUEUED_SUCCESS', 'Message queued for batch processing', { 
-            instanceName,
-            fromNumber,
-            conversationId,
-            messageId: normalizedData.key?.id
-          });
-        } catch (error) {
-          await logDebug('MESSAGE_QUEUE_EXCEPTION', 'Error queueing message for batch processing', { 
-            error,
-            instanceName
+        await logDebug('AI_PROCESS_ATTEMPT', 'Attempting to process message for AI response');
+        if (transcribedText) {
+          // If we already transcribed the message for escalation, pass it to AI processing
+          normalizedData.transcribedText = transcribedText;
+          await logDebug('AI_USING_TRANSCRIPTION', 'Using already transcribed text for AI processing', {
+            transcription: transcribedText
           });
         }
+        await processMessageForAI(instanceName, normalizedData);
       }
-     
+      
       return new Response(JSON.stringify({ success: true }), {
         headers: {
           ...corsHeaders,

@@ -2,7 +2,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 /**
- * Helper function to store message in conversation with processing flag
+ * Helper function to store message in conversation with better metadata
  * 
  * @param conversationId The ID of the conversation to store the message in
  * @param role The role of the message sender ('user' or 'assistant')
@@ -26,7 +26,6 @@ export async function storeMessageInConversation(
         role,
         content,
         message_id: messageId,
-        processed: role === 'user' ? false : true,  // User messages start as unprocessed
         metadata: {
           estimated_tokens: Math.ceil(content.length * 0.25),
           timestamp: new Date().toISOString()
@@ -41,6 +40,7 @@ export async function storeMessageInConversation(
       .select('id', { count: 'exact' })
       .eq('conversation_id', conversationId);
       
+    // Update the conversation metadata
     await supabaseAdmin
       .from('whatsapp_conversations')
       .update({ 
@@ -55,11 +55,7 @@ export async function storeMessageInConversation(
       })
       .eq('id', conversationId);
   } catch (error) {
-    // Check if logging is enabled - only proceed if explicitly set to 'true'
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) {
-      console.error('Error in storeMessageInConversation:', error);
-    }
+    console.error('Error in storeMessageInConversation:', error);
     throw error;
   }
 }

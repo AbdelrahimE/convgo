@@ -2,30 +2,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { calculateSimilarity } from "./text-similarity.ts";
 
-// Create a logger for edge functions that respects configuration
+// Create a simple logger for edge functions
 const logger = {
-  log: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.log(...args);
-  },
-  error: (...args: any[]) => {
-    // Always log errors regardless of setting
-    console.error(...args);
-  },
-  info: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.info(...args);
-  },
-  warn: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.warn(...args);
-  },
-  debug: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.debug(...args);
-  },
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
 };
-
 
 /**
  * Debug logging function that logs to both console and database

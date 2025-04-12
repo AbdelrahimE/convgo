@@ -4,7 +4,15 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { findTableSections, processTableForChunking, isTableContent } from '../utils/tableProcessing.ts';
 import { isCSVContent, chunkCSVContent, createCSVChunkMetadata } from '../utils/csvProcessing.ts';
 import { parseCSVContent, chunkParsedCSV, createParsedCSVChunkMetadata } from '../utils/csvParseProcessing.ts';
-import { logger, logDebug } from "../_shared/logger.ts";
+
+// Create a simple logger since we can't use @/utils/logger in edge functions
+const logger = {
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
 
 // Text processing utilities
 interface ChunkingOptions {

@@ -496,7 +496,6 @@ export type Database = {
           id: string
           message_id: string | null
           metadata: Json | null
-          processed: boolean | null
           role: string
           timestamp: string
         }
@@ -506,7 +505,6 @@ export type Database = {
           id?: string
           message_id?: string | null
           metadata?: Json | null
-          processed?: boolean | null
           role: string
           timestamp?: string
         }
@@ -516,7 +514,6 @@ export type Database = {
           id?: string
           message_id?: string | null
           metadata?: Json | null
-          processed?: boolean | null
           role?: string
           timestamp?: string
         }
@@ -896,10 +893,6 @@ export type Database = {
           similarity: number
           language: string
         }[]
-      }
-      process_message_batch: {
-        Args: { p_conversation_id: string; p_timestamp_threshold: string }
-        Returns: Json
       }
       reset_monthly_ai_responses: {
         Args: Record<PropertyKey, never>

@@ -1,8 +1,15 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { logger, logDebug } from "../_shared/logger.ts";
 
+// Create a simple logger since we can't use @/utils/logger in edge functions
+const logger = {
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
 
 // CORS headers to ensure the function can be called from your frontend
 const corsHeaders = {

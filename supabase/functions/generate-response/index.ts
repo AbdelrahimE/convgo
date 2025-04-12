@@ -1,7 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { logger, logDebug } from "../_shared/logger.ts";
+
+const logger = {
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
 
 interface GenerateResponseRequest {
   query: string;
@@ -349,12 +356,6 @@ serve(async (req) => {
       );
     }
 
-    const isBatchedMessage = query.includes('\n') && /\(\d{1,2}:\d{2}\)/.test(query);
-    
-    if (isBatchedMessage) {
-      logger.log(`Detected batched message with multiple entries`);
-    }
-
     if (userId) {
       logger.log(`Checking AI usage limit for user ${userId}`);
       const limitCheck = await checkAndUpdateUserLimit(userId, false);
@@ -390,14 +391,7 @@ serve(async (req) => {
 - Use *text* for emphasis instead of **text**`;
     }
     
-    if (isBatchedMessage) {
-      finalSystemPrompt += `\n\nThe user has sent multiple messages in sequence. They are formatted as:
-"Message 1 (time)
- Message 2 (time)
- Message 3 (time)"
-Please respond to all the messages together in a coherent way.`;
-    }
-    else if (imageUrl) {
+    if (imageUrl) {
       finalSystemPrompt += IMAGE_CONTEXT_ADDITION;
     }
     else if (!context || context.trim() === '') {
@@ -498,8 +492,7 @@ Please respond to all the messages together in a coherent way.`;
           total: responseData.usage.total_tokens
         },
         aiUsage: usageDetails,
-        conversationId: conversationId,
-        isBatchedMessage: isBatchedMessage
+        conversationId: conversationId
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
