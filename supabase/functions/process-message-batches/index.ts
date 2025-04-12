@@ -2,31 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
-import logDebug from "../_shared/webhook-logger.ts";
-
-// Create a logger for edge functions that respects configuration
-const logger = {
-  log: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.log(...args);
-  },
-  error: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.error(...args);
-  },
-  info: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.info(...args);
-  },
-  warn: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.warn(...args);
-  },
-  debug: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.debug(...args);
-  },
-};
+import { logger, logDebug } from "../_shared/logger.ts";
 
 // Define standard CORS headers
 const corsHeaders = {
@@ -39,11 +15,6 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
 try {
-  // Respecting ENABLE_LOGS for these error logs
-  const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-  if (!supabaseUrl && enableLogs) logger.error("SUPABASE_URL environment variable is not set");
-  if (!supabaseServiceKey && enableLogs) logger.error("SUPABASE_SERVICE_ROLE_KEY environment variable is not set");
-  
   // Log info about environment only if logging is enabled
   logger.log(`Starting process-message-batches function with URL: ${supabaseUrl}`);
   
@@ -86,11 +57,7 @@ try {
       
       return data.reverse();
     } catch (error) {
-      // Only log errors if logging is enabled
-      const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-      if (enableLogs) {
-        logger.error('Error in getRecentConversationHistory:', error);
-      }
+      logger.error('Error in getRecentConversationHistory:', error);
       
       await logDebug('BATCH_CONVERSATION_HISTORY_ERROR', `Error retrieving conversation history: ${error.message}`, {
         error: error.toString(),
@@ -255,12 +222,6 @@ try {
 
       // Determine Evolution API URL
       const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || '';
-      
-      // Only log if logging is enabled
-      const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-      if (!evolutionApiKey && enableLogs) {
-        await logDebug('BATCH_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable is not set');
-      }
       
       let instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://api.convgo.com';
 
@@ -442,11 +403,7 @@ try {
         }
       );
     } catch (error) {
-      // Only log errors if logging is enabled
-      const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-      if (enableLogs) {
-        logger.error('CRITICAL ERROR in batch processing:', error);
-      }
+      logger.error('CRITICAL ERROR in batch processing:', error);
       
       await logDebug('BATCH_PROCESS_FAILED', 'Message batch processing failed', { 
         error: error.toString(),
@@ -469,11 +426,7 @@ try {
     }
   });
 } catch (initError) {
-  // Only log errors if logging is enabled
-  const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-  if (enableLogs) {
-    logger.error('CRITICAL ERROR during initialization:', initError);
-  }
+  logger.error('CRITICAL ERROR during initialization:', initError);
   
   // Set up a basic handler that will return the error information
   serve(async (req) => {
