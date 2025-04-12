@@ -496,6 +496,7 @@ export type Database = {
           id: string
           message_id: string | null
           metadata: Json | null
+          processed: boolean | null
           role: string
           timestamp: string
         }
@@ -505,6 +506,7 @@ export type Database = {
           id?: string
           message_id?: string | null
           metadata?: Json | null
+          processed?: boolean | null
           role: string
           timestamp?: string
         }
@@ -514,6 +516,7 @@ export type Database = {
           id?: string
           message_id?: string | null
           metadata?: Json | null
+          processed?: boolean | null
           role?: string
           timestamp?: string
         }
@@ -789,6 +792,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      cleanup_webhook_debug_logs: {
+        Args: { retention_days?: number }
+        Returns: undefined
+      }
       detect_language_simple: {
         Args: { text_input: string }
         Returns: string
@@ -893,6 +900,10 @@ export type Database = {
           similarity: number
           language: string
         }[]
+      }
+      process_message_batch: {
+        Args: { p_conversation_id: string; p_timestamp_threshold: string }
+        Returns: Json
       }
       reset_monthly_ai_responses: {
         Args: Record<PropertyKey, never>

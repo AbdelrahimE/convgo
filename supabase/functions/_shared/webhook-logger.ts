@@ -25,6 +25,10 @@ const getSupabaseAdmin = () => {
  * @returns Promise<void>
  */
 export async function logDebug(category: string, message: string, data?: any): Promise<void> {
+  // Check if logging is enabled via environment variable
+  const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+  if (!enableLogs) return;
+  
   // Log to console
   logger.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
   
@@ -42,6 +46,24 @@ export async function logDebug(category: string, message: string, data?: any): P
     // If we can't log to the database, at least log the error to the console
     logger.error('Failed to log debug info to database:', error);
   }
+}
+
+/**
+ * Log a message related to webhook processing
+ * @param message The log message
+ * @param data Optional data to include with the log
+ */
+export function logWebhook(message: string, data?: any): Promise<void> {
+  return logDebug('WEBHOOK_REQUEST', message, data);
+}
+
+/**
+ * Log an error related to webhook processing
+ * @param message The error message
+ * @param error The error object
+ */
+export function logWebhookError(message: string, error: any): Promise<void> {
+  return logDebug('WEBHOOK_ERROR', message, { error: error?.message || String(error), stack: error?.stack });
 }
 
 export default logDebug;

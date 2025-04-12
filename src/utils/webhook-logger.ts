@@ -30,4 +30,22 @@ export async function logDebug(category: string, message: string, data?: any): P
   }
 }
 
+/**
+ * Log a message related to webhook processing
+ * @param message The log message
+ * @param data Optional data to include with the log
+ */
+export function logWebhook(message: string, data?: any): Promise<void> {
+  return logDebug('WEBHOOK_REQUEST', message, data);
+}
+
+/**
+ * Log an error related to webhook processing
+ * @param message The error message
+ * @param error The error object
+ */
+export function logWebhookError(message: string, error: any): Promise<void> {
+  return logDebug('WEBHOOK_ERROR', message, { error: error?.message || String(error), stack: error?.stack });
+}
+
 export default logDebug;
