@@ -26,7 +26,7 @@ export async function storeMessageInConversation(
         role,
         content,
         message_id: messageId,
-        processed: role === 'user' ? false : true,  // New flag, default false for user messages
+        processed: role === 'user' ? false : true,  // User messages start as unprocessed
         metadata: {
           estimated_tokens: Math.ceil(content.length * 0.25),
           timestamp: new Date().toISOString()
