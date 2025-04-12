@@ -2,6 +2,31 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import logDebug from "./webhook-logger.ts";
 
+// Create a logger for edge functions that respects configuration
+const logger = {
+  log: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.log(...args);
+  },
+  error: (...args: any[]) => {
+    // Always log errors regardless of setting
+    console.error(...args);
+  },
+  info: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.info(...args);
+  },
+  warn: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.warn(...args);
+  },
+  debug: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.debug(...args);
+  },
+};
+
+
 // Initialize Supabase admin client (this will be available in edge functions)
 const getSupabaseAdmin = () => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -103,7 +128,7 @@ export async function processConnectionStatus(instanceName: string, statusData: 
     
   } catch (error) {
     await logDebug('CONNECTION_STATUS_EXCEPTION', `Exception processing connection status`, { error, instanceName });
-    console.error('Error in processConnectionStatus:', error);
+    logger.error('Error in processConnectionStatus:', error);
     return false;
   }
 }
