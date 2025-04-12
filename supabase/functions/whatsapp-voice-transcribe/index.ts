@@ -1,30 +1,7 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-// Create a logger for edge functions that respects configuration
-const logger = {
-  log: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.log(...args);
-  },
-  error: (...args: any[]) => {
-    // Always log errors regardless of setting
-    console.error(...args);
-  },
-  info: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.info(...args);
-  },
-  warn: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.warn(...args);
-  },
-  debug: (...args: any[]) => {
-    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-    if (enableLogs) console.debug(...args);
-  },
-};
+import { logger, logDebug } from "../_shared/logger.ts";
 
 
 // CORS headers to ensure the function can be called from your frontend
