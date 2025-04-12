@@ -10,7 +10,7 @@ import logger from './logger';
  * @returns Promise<void>
  */
 export async function logDebug(category: string, message: string, data?: any): Promise<void> {
-  // Check if logging is enabled
+  // Check if logging is enabled - only proceed if explicitly set to 'true'
   const enableLogs = import.meta.env.VITE_ENABLE_LOGS === 'true';
   if (!enableLogs) return;
 

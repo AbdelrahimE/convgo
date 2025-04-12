@@ -55,7 +55,11 @@ export async function storeMessageInConversation(
       })
       .eq('id', conversationId);
   } catch (error) {
-    logger.error('Error in storeMessageInConversation:', error);
+    // Check if logging is enabled - only proceed if explicitly set to 'true'
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) {
+      console.error('Error in storeMessageInConversation:', error);
+    }
     throw error;
   }
 }
