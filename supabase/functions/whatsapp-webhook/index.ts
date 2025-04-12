@@ -19,7 +19,6 @@ const logger = {
     if (enableLogs) console.log(...args);
   },
   error: (...args: any[]) => {
-    // Always log errors regardless of setting
     console.error(...args);
   },
   info: (...args: any[]) => {
