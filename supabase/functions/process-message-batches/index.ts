@@ -82,7 +82,7 @@ async function getRecentConversationHistory(conversationId: string, maxTokens = 
   }
 }
 
-// Process batched messages
+// Process batched messages - Enhanced version that properly handles the batch
 async function processBatchedConversations() {
   try {
     // Find active conversations with unprocessed messages
