@@ -55,7 +55,7 @@ export async function storeMessageInConversation(
       })
       .eq('id', conversationId);
   } catch (error) {
-    console.error('Error in storeMessageInConversation:', error);
+    logger.error('Error in storeMessageInConversation:', error);
     throw error;
   }
 }

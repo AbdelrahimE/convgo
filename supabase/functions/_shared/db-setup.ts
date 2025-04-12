@@ -1,9 +1,33 @@
 
+// Create a logger for edge functions that respects configuration
+const logger = {
+  log: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.log(...args);
+  },
+  error: (...args: any[]) => {
+    // Always log errors regardless of setting
+    console.error(...args);
+  },
+  info: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.info(...args);
+  },
+  warn: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.warn(...args);
+  },
+  debug: (...args: any[]) => {
+    const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
+    if (enableLogs) console.debug(...args);
+  },
+};
+
 // Helper function to set up database functionality for whatsapp-webhook
 
 export async function setupBatchProcessing(supabaseAdmin: any) {
   try {
-    console.log('Setting up batch processing function...');
+    logger.log('Setting up batch processing function...');
     
     // Read the SQL file
     const sqlFunction = `
@@ -88,18 +112,18 @@ export async function setupBatchProcessing(supabaseAdmin: any) {
       const { error: createError } = await supabaseAdmin.sql(sqlFunction);
       
       if (createError) {
-        console.error('Error creating batch processing function:', createError);
+        logger.error('Error creating batch processing function:', createError);
         return false;
       }
       
-      console.log('Batch processing function created successfully');
+      logger.log('Batch processing function created successfully');
       return true;
     }
     
-    console.log('Batch processing function already exists');
+    logger.log('Batch processing function already exists');
     return true;
   } catch (error) {
-    console.error('Error setting up batch processing:', error);
+    logger.error('Error setting up batch processing:', error);
     return false;
   }
 }
