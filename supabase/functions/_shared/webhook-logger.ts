@@ -14,6 +14,11 @@ const logger = {
 const getSupabaseAdmin = () => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  
+  // Basic validation to help debugging
+  if (!supabaseUrl) console.error('[CRITICAL] SUPABASE_URL environment variable is not set');
+  if (!supabaseServiceKey) console.error('[CRITICAL] SUPABASE_SERVICE_ROLE_KEY environment variable is not set');
+  
   return createClient(supabaseUrl, supabaseServiceKey);
 };
 
@@ -27,24 +32,38 @@ const getSupabaseAdmin = () => {
 export async function logDebug(category: string, message: string, data?: any): Promise<void> {
   // Check if logging is enabled via environment variable
   const enableLogs = Deno.env.get('ENABLE_LOGS') === 'true';
-  if (!enableLogs) return;
+  if (!enableLogs) {
+    // Even if logging is disabled, still log critical errors and connection status issues
+    if (category.includes('ERROR') || category.includes('EXCEPTION') || category.includes('CONNECTION_STATUS')) {
+      console.warn(`[${category}] ${message} (logging disabled but showing critical error)`);
+    }
+    return;
+  }
   
-  // Log to console
-  logger.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
+  // Generate a timestamp to help with debugging timing issues
+  const timestamp = new Date().toISOString();
+  
+  // Log to console with timestamp
+  logger.log(`[${timestamp}] [${category}] ${message}`, data ? JSON.stringify(data, null, 2) : '');
   
   try {
     // Get Supabase admin client
     const supabaseAdmin = getSupabaseAdmin();
     
     // Log to database
-    await supabaseAdmin.from('webhook_debug_logs').insert({
+    const { error } = await supabaseAdmin.from('webhook_debug_logs').insert({
       category,
       message,
       data: data || null
     });
+    
+    if (error) {
+      // Log database insertion error to console
+      logger.error(`[${timestamp}] Failed to log debug info to database:`, error);
+    }
   } catch (error) {
     // If we can't log to the database, at least log the error to the console
-    logger.error('Failed to log debug info to database:', error);
+    logger.error(`[${timestamp}] Exception logging to database:`, error);
   }
 }
 
