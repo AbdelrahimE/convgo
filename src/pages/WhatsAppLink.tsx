@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -218,15 +219,20 @@ const CallRejectionForm = ({
   isLoading: boolean;
 }) => {
   const [message, setMessage] = useState(instance.reject_calls_message || 'Sorry, I cannot take your call right now. Please leave a message and I will get back to you.');
-  return <motion.div initial={{
-    opacity: 0,
-    y: 20
-  }} animate={{
-    opacity: 1,
-    y: 0
-  }} transition={{
-    delay: 0.3
-  }}>
+  return (
+    <motion.div 
+      initial={{
+        opacity: 0,
+        y: 20
+      }} 
+      animate={{
+        opacity: 1,
+        y: 0
+      }} 
+      transition={{
+        delay: 0.3
+      }}
+    >
       <Card className="mb-6 md:mb-8">
         <CardHeader className="space-y-1">
           <CardTitle className="text-xl md:text-2xl font-bold">Call Rejection Settings</CardTitle>
@@ -236,11 +242,11 @@ const CallRejectionForm = ({
         </CardHeader>
         <CardContent>
           <form onSubmit={e => {
-          e.preventDefault();
-          if (message.trim()) {
-            onSave(message);
-          }
-        }} className="space-y-4 md:space-y-6">
+            e.preventDefault();
+            if (message.trim()) {
+              onSave(message);
+            }
+          }} className="space-y-4 md:space-y-6">
             <div className="space-y-2">
               <Label htmlFor="rejection-message">Rejection Message</Label>
               <LanguageAwareTextarea 
@@ -259,13 +265,17 @@ const CallRejectionForm = ({
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
               <Button type="submit" disabled={isLoading || !message.trim()} size="lg" className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600">
-                {isLoading ? <>
+                {isLoading ? (
+                  <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Saving...
-                  </> : <>
+                  </>
+                ) : (
+                  <>
                     <Send className="mr-2 h-4 w-4" />
                     Enable Call Rejection
-                  </>}
+                  </>
+                )}
               </Button>
               <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:flex-1" size="lg">
                 Cancel
@@ -274,7 +284,8 @@ const CallRejectionForm = ({
           </form>
         </CardContent>
       </Card>
-    </motion.div>;
+    </motion.div>
+  );
 };
 
 const CallRejectionToggle = ({
@@ -688,25 +699,36 @@ const WhatsAppLink = () => {
         </Card>
       </div>;
   }
-  return <motion.div initial={{
-    opacity: 0,
-    y: 20
-  }} animate={{
-    opacity: 1,
-    y: 0
-  }} transition={{
-    duration: 0.3
-  }} className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="space-y-8">
-        <motion.h1 initial={{
+  return (
+    <motion.div 
+      initial={{
         opacity: 0,
-        x: -20
-      }} animate={{
+        y: 20
+      }} 
+      animate={{
         opacity: 1,
-        x: 0
-      }} transition={{
-        delay: 0.2
-      }} className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl">
+        y: 0
+      }} 
+      transition={{
+        duration: 0.3
+      }} 
+      className="container mx-auto px-4 py-8 max-w-7xl"
+    >
+      <div className="space-y-8">
+        <motion.h1 
+          initial={{
+            opacity: 0,
+            x: -20
+          }} 
+          animate={{
+            opacity: 1,
+            x: 0
+          }} 
+          transition={{
+            delay: 0.2
+          }} 
+          className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl"
+        >
           WhatsApp Instances
         </motion.h1>
         
@@ -716,21 +738,31 @@ const WhatsAppLink = () => {
               {instances.length} of {instanceLimit} instances used
             </p>
           </div>
-          <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-auto bg-blue-700 hover:bg-blue-600 font-semibold">
+          <Button 
+            onClick={() => setShowCreateForm(true)} 
+            disabled={instances.length >= instanceLimit || showCreateForm} 
+            size="lg" 
+            className="w-auto bg-blue-700 hover:bg-blue-600 font-semibold"
+          >
             <Plus className="mr-2 h-4 w-4" />
             New Instance
           </Button>
         </div>
 
-        {showCreateForm && <motion.div initial={{
-        opacity: 0,
-        y: 20
-      }} animate={{
-        opacity: 1,
-        y: 0
-      }} transition={{
-        delay: 0.3
-      }}>
+        {showCreateForm && (
+          <motion.div 
+            initial={{
+              opacity: 0,
+              y: 20
+            }} 
+            animate={{
+              opacity: 1,
+              y: 0
+            }} 
+            transition={{
+              delay: 0.3
+            }}
+          >
             <Card className="mb-6 md:mb-8">
               <CardHeader className="space-y-1">
                 <CardTitle className="text-xl md:text-2xl font-bold">Create New Instance</CardTitle>
@@ -739,55 +771,97 @@ const WhatsAppLink = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={e => {
-              e.preventDefault();
-              if (validateInstanceName(instanceName)) {
-                createInstance(instanceName);
-              }
-            }} className="space-y-4 md:space-y-6">
+                <form 
+                  onSubmit={e => {
+                    e.preventDefault();
+                    if (validateInstanceName(instanceName)) {
+                      createInstance(instanceName);
+                    }
+                  }} 
+                  className="space-y-4 md:space-y-6"
+                >
                   <div className="space-y-2">
                     <Label htmlFor="instanceName">Instance Name</Label>
-                    <Input id="instanceName" value={instanceName} onChange={e => {
-                  setInstanceName(e.target.value);
-                  validateInstanceName(e.target.value);
-                }} placeholder="Enter instance name" className={!isValidName ? 'border-red-500' : ''} required />
-                    {!isValidName && <p className="text-sm text-red-500">
+                    <Input 
+                      id="instanceName" 
+                      value={instanceName} 
+                      onChange={e => {
+                        setInstanceName(e.target.value);
+                        validateInstanceName(e.target.value);
+                      }} 
+                      placeholder="Enter instance name" 
+                      className={!isValidName ? 'border-red-500' : ''} 
+                      required 
+                    />
+                    {!isValidName && (
+                      <p className="text-sm text-red-500">
                         Instance name can only contain letters and numbers
-                      </p>}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4">
-                    <Button type="submit" disabled={isLoading || !isValidName || !instanceName} size="lg" className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600">
-                      {isLoading ? <>
+                    <Button 
+                      type="submit" 
+                      disabled={isLoading || !isValidName || !instanceName} 
+                      size="lg" 
+                      className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600"
+                    >
+                      {isLoading ? (
+                        <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Creating...
-                        </> : 'Create Instance'}
+                        </>
+                      ) : 'Create Instance'}
                     </Button>
-                    <Button type="button" variant="outline" onClick={() => {
-                  setShowCreateForm(false);
-                  setInstanceName('');
-                  setIsValidName(true);
-                }} className="w-full sm:flex-1" size="lg">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => {
+                        setShowCreateForm(false);
+                        setInstanceName('');
+                        setIsValidName(true);
+                      }} 
+                      className="w-full sm:flex-1" 
+                      size="lg"
+                    >
                       Cancel
                     </Button>
                   </div>
                 </form>
               </CardContent>
             </Card>
-          </motion.div>}
+          </motion.div>
+        )}
 
-        {showCallRejectionForm && selectedInstanceForCallSettings && <CallRejectionForm instance={selectedInstanceForCallSettings} onCancel={handleCallRejectionCancel} onSave={handleCallRejectionSave} isLoading={isLoading} />}
+        {showCallRejectionForm && selectedInstanceForCallSettings && (
+          <CallRejectionForm 
+            instance={selectedInstanceForCallSettings} 
+            onCancel={handleCallRejectionCancel} 
+            onSave={handleCallRejectionSave} 
+            isLoading={isLoading} 
+          />
+        )}
 
-        {instances.length > 0 ? <motion.div initial={{
-        opacity: 0,
-        y: 20
-      }} animate={{
-        opacity: 1,
-        y: 0
-      }} transition={{
-        delay: 0.4
-      }}>
+        {instances.length > 0 ? (
+          <motion.div 
+            initial={{
+              opacity: 0,
+              y: 20
+            }} 
+            animate={{
+              opacity: 1,
+              y: 0
+            }} 
+            transition={{
+              delay: 0.4
+            }}
+          >
             <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              {instances.map(instance => <Card key={instance.id} className="flex flex-col transition-all duration-200 hover:shadow-lg">
+              {instances.map(instance => (
+                <Card 
+                  key={instance.id} 
+                  className="flex flex-col transition-all duration-200 hover:shadow-lg"
+                >
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base md:text-lg font-bold">{instance.instance_name}</CardTitle>
@@ -795,13 +869,51 @@ const WhatsAppLink = () => {
                     </div>
                   </CardHeader>
                   <CardContent className="flex-grow">
-                    {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && <div className="flex flex-col items-center space-y-2 mb-4">
+                    {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && (
+                      <div className="flex flex-col items-center space-y-2 mb-4">
                         <p className="text-sm font-medium">Scan QR Code</p>
                         <div className="relative bg-white p-2 rounded-lg">
-                          <img src={formatQrCodeDataUrl(instance.qr_code)} alt="WhatsApp QR Code" className="w-full h-auto max-w-[200px]" />
+                          <img 
+                            src={formatQrCodeDataUrl(instance.qr_code)} 
+                            alt="WhatsApp QR Code" 
+                            className="w-full h-auto max-w-[200px]" 
+                          />
                         </div>
-                      </div>}
+                      </div>
+                    )}
                     
-                    <InstanceActions instance={instance} isLoading={isLoading} onLogout={() => handleLogout(instance.id, instance.instance_name)} onReconnect={() => handleReconnect(instance.id, instance.instance_name)} onDelete={() => handleDelete(instance.id, instance.instance_name)} onToggleCallRejection={() => handleCallRejectionToggle(instance)} />
+                    <InstanceActions 
+                      instance={instance} 
+                      isLoading={isLoading} 
+                      onLogout={() => handleLogout(instance.id, instance.instance_name)} 
+                      onReconnect={() => handleReconnect(instance.id, instance.instance_name)} 
+                      onDelete={() => handleDelete(instance.id, instance.instance_name)} 
+                      onToggleCallRejection={() => handleCallRejectionToggle(instance)} 
+                    />
                     
-                    <WhatsAppAIToggle instanceId={instance.id} instanceName={instance.
+                    <WhatsAppAIToggle 
+                      instanceId={instance.id} 
+                      instanceName={instance.instance_name} 
+                      instanceStatus={instance.status} 
+                    />
+                    
+                    <CallRejectionToggle 
+                      instance={instance} 
+                      onSettings={() => handleCallRejectionToggle(instance)} 
+                      onToggle={(enabled) => updateCallRejectionSettings(instance.id, instance.instance_name, enabled)} 
+                      isLoading={isLoading} 
+                    />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </motion.div>
+        ) : (
+          <EmptyState onCreateClick={() => setShowCreateForm(true)} />
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
+export default WhatsAppLink;
