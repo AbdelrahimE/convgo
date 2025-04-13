@@ -20,11 +20,7 @@ import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import { AlignJustify } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { LogoWithText } from '@/components/Logo';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './App.css';
-
-// Create a client
-const queryClient = new QueryClient();
 
 function AppContent() {
   const location = useLocation();
@@ -137,14 +133,12 @@ function App() {
   return (
     <ErrorBoundary>
       <NetworkErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <Router>
-              <AppContent />
-              <Toaster />
-            </Router>
-          </AuthProvider>
-        </QueryClientProvider>
+        <AuthProvider>
+          <Router>
+            <AppContent />
+            <Toaster />
+          </Router>
+        </AuthProvider>
       </NetworkErrorBoundary>
     </ErrorBoundary>
   );

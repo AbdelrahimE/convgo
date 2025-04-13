@@ -15,22 +15,11 @@ export async function logDebug(category: string, message: string, data?: any): P
   const enableLogs = isLoggingEnabled();
   if (!enableLogs) return;
 
-  // Log to console
+  // Log to console only
   logger.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
   
-  try {
-    // Also log to database if we're not in the browser
-    if (typeof window === 'undefined') {
-      await supabase.from('webhook_debug_logs').insert({
-        category,
-        message,
-        data: data || null
-      });
-    }
-  } catch (error) {
-    // Silently fail if database logging fails
-    logger.error('Failed to log to database:', error);
-  }
+  // Database logging is disabled on frontend to prevent 403 errors
+  // Original implementation attempted to insert into webhook_debug_logs table
 }
 
 /**

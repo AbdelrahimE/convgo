@@ -6,14 +6,6 @@ import logDebug from "./webhook-logger.ts";
 const getSupabaseAdmin = () => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-  
-  // Log the environment variables (without revealing full key)
-  const maskedKey = supabaseServiceKey ? 
-    `${supabaseServiceKey.substring(0, 5)}...${supabaseServiceKey.substring(supabaseServiceKey.length - 5)}` : 
-    'NOT SET';
-  
-  console.log(`[DEBUG] Supabase URL: ${supabaseUrl}, Service Key: ${maskedKey ? 'Available' : 'Missing'}`);
-  
   return createClient(supabaseUrl, supabaseServiceKey);
 };
 
@@ -25,22 +17,16 @@ const getSupabaseAdmin = () => {
  */
 export async function processConnectionStatus(instanceName: string, statusData: any) {
   try {
-    await logDebug('CONNECTION_STATUS_START', `Starting connection status processing for ${instanceName}`, { 
-      instanceName,
-      statusDataKeys: Object.keys(statusData),
-      hasData: !!statusData.data
-    });
-
     // Extract the actual status data from the nested structure if needed
+    // The statusData could either be directly the state object or nested in a data property
     const stateData = statusData.data || statusData;
     
-    await logDebug('CONNECTION_STATUS_DATA', `Extracted state data`, { 
+    await logDebug('CONNECTION_STATUS_UPDATE', `Processing connection status update for instance ${instanceName}`, { 
       state: stateData.state, 
-      statusReason: stateData.statusReason,
-      raw: JSON.stringify(stateData).substring(0, 500)
+      statusReason: stateData.statusReason 
     });
     
-    // Map the webhook status to database status values using the exact values from EVOLUTION API
+    // Map the webhook status to database status values
     let dbStatus: string;
     switch (stateData.state) {
       case 'open':
@@ -57,11 +43,7 @@ export async function processConnectionStatus(instanceName: string, statusData: 
         break;
     }
     
-    await logDebug('CONNECTION_STATUS_MAPPING', `Mapped webhook state '${stateData.state}' to database status '${dbStatus}'`);
-    
     // Find the instance in the database
-    await logDebug('CONNECTION_STATUS_DB_FIND', `Finding instance in database with name: ${instanceName}`);
-    
     const supabaseAdmin = getSupabaseAdmin();
     const { data: instanceData, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
@@ -70,24 +52,9 @@ export async function processConnectionStatus(instanceName: string, statusData: 
       .maybeSingle();
       
     if (instanceError) {
-      await logDebug('CONNECTION_STATUS_ERROR', `Instance not found: ${instanceName}`, { 
-        error: instanceError,
-        errorMessage: instanceError.message,
-        errorDetails: JSON.stringify(instanceError)
-      });
+      await logDebug('CONNECTION_STATUS_ERROR', `Instance not found: ${instanceName}`, { error: instanceError });
       return false;
     }
-    
-    if (!instanceData) {
-      await logDebug('CONNECTION_STATUS_NOT_FOUND', `No instance found with name: ${instanceName}`);
-      return false;
-    }
-    
-    await logDebug('CONNECTION_STATUS_INSTANCE_FOUND', `Found instance in database`, { 
-      instanceId: instanceData.id, 
-      currentStatus: instanceData.status,
-      newStatus: dbStatus
-    });
     
     // Prepare the update data
     const updateData: any = {
@@ -109,18 +76,8 @@ export async function processConnectionStatus(instanceName: string, statusData: 
           lastUpdated: new Date().toISOString()
         };
         updateData.metadata = metadata;
-        
-        await logDebug('CONNECTION_STATUS_PROFILE', `Updating profile information`, {
-          profileName: stateData.profileName,
-          hasProfilePicture: !!stateData.profilePictureUrl
-        });
       }
     }
-    
-    await logDebug('CONNECTION_STATUS_UPDATE_PREP', `Preparing to update instance status`, { 
-      instanceId: instanceData.id,
-      updateData: JSON.stringify(updateData)
-    });
     
     // Log the status transition
     await logDebug('CONNECTION_STATUS_TRANSITION', `Instance ${instanceName} status changing from ${instanceData.status} to ${dbStatus}`, {
@@ -131,41 +88,21 @@ export async function processConnectionStatus(instanceName: string, statusData: 
     });
     
     // Update the instance record
-    try {
-      const { error: updateError } = await supabaseAdmin
-        .from('whatsapp_instances')
-        .update(updateData)
-        .eq('id', instanceData.id);
-        
-      if (updateError) {
-        await logDebug('CONNECTION_STATUS_UPDATE_ERROR', `Failed to update instance status`, { 
-          error: updateError,
-          errorMessage: updateError.message,
-          errorDetails: JSON.stringify(updateError),
-          updateData: JSON.stringify(updateData)
-        });
-        return false;
-      }
+    const { error: updateError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .update(updateData)
+      .eq('id', instanceData.id);
       
-      await logDebug('CONNECTION_STATUS_UPDATED', `Successfully updated status for instance ${instanceName} to ${dbStatus}`);
-      return true;
-    } catch (updateError) {
-      await logDebug('CONNECTION_STATUS_UPDATE_EXCEPTION', `Exception during update operation`, { 
-        error: updateError,
-        errorMessage: updateError instanceof Error ? updateError.message : String(updateError),
-        errorStack: updateError instanceof Error ? updateError.stack : 'No stack trace',
-        instanceId: instanceData.id
-      });
+    if (updateError) {
+      await logDebug('CONNECTION_STATUS_UPDATE_ERROR', `Failed to update instance status`, { error: updateError });
       return false;
     }
     
+    await logDebug('CONNECTION_STATUS_UPDATED', `Successfully updated status for instance ${instanceName} to ${dbStatus}`);
+    return true;
+    
   } catch (error) {
-    await logDebug('CONNECTION_STATUS_EXCEPTION', `Exception processing connection status`, { 
-      error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : 'No stack trace',
-      instanceName
-    });
+    await logDebug('CONNECTION_STATUS_EXCEPTION', `Exception processing connection status`, { error, instanceName });
     console.error('Error in processConnectionStatus:', error);
     return false;
   }

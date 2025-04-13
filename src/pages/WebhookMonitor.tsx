@@ -1,6 +1,4 @@
-
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -17,7 +15,6 @@ import { Input } from '@/components/ui/input';
 import WebhookEndpointInfo from '@/components/WebhookEndpointInfo';
 import { DebugLogsTable } from '@/components/DebugLogsTable';
 import logger from '@/utils/logger';
-
 interface WebhookMessage {
   id: string;
   instance: string;
@@ -25,74 +22,85 @@ interface WebhookMessage {
   data: any;
   received_at: string;
 }
-
 const WebhookMonitor = () => {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showIntroAlert, setShowIntroAlert] = useState(true);
+  const {
+    user
+  } = useAuth();
+  const [messages, setMessages] = useState<WebhookMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
+  const [lastMessageTime, setLastMessageTime] = useState<Date | null>(null);
+  const [receivingStatus, setReceivingStatus] = useState<'active' | 'inactive' | 'unknown'>('unknown');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [eventCounts, setEventCounts] = useState<Record<string, number>>({});
+  const [showIntroAlert, setShowIntroAlert] = useState(true);
   const navigate = useNavigate();
-
-  const { 
-    data: messages = [], 
-    isLoading, 
-    refetch,
-    error 
-  } = useQuery<WebhookMessage[]>({
-    queryKey: ['webhookMessages'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('webhook_messages')
-        .select('*')
-        .order('received_at', { ascending: false })
-        .limit(100);
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!user,
-    refetchInterval: 15000,
-  });
-
-  const eventCounts = messages.reduce((counts, message) => {
-    counts[message.event] = (counts[message.event] || 0) + 1;
-    return counts;
-  }, {} as Record<string, number>);
-
-  const lastMessageTime = messages.length > 0 
-    ? new Date(messages[0].received_at) 
-    : null;
-  
-  const receivingStatus = lastMessageTime 
-    ? (new Date().getTime() - lastMessageTime.getTime() < 5 * 60 * 1000 
-      ? 'active' 
-      : 'inactive') 
-    : 'unknown';
-
-  const filteredMessages = messages.filter(message => {
-    if (activeTab !== 'all' && message.event !== activeTab) return false;
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      return message.instance.toLowerCase().includes(searchLower) || 
-             message.event.toLowerCase().includes(searchLower) || 
-             JSON.stringify(message.data).toLowerCase().includes(searchLower);
+  const pollingRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (user) {
+      fetchMessages();
+      startPolling();
     }
-    return true;
-  });
-
+    return () => {
+      if (pollingRef.current) {
+        window.clearInterval(pollingRef.current);
+      }
+    };
+  }, [user]);
+  const startPolling = () => {
+    pollingRef.current = window.setInterval(() => {
+      fetchMessages(false);
+    }, 15000);
+  };
+  const fetchMessages = async (showToast = true) => {
+    try {
+      setIsLoading(true);
+      const {
+        data,
+        error
+      } = await supabase.from('webhook_messages').select('*').order('received_at', {
+        ascending: false
+      }).limit(100);
+      if (error) throw error;
+      setMessages(data || []);
+      const counts: Record<string, number> = {};
+      data?.forEach(message => {
+        counts[message.event] = (counts[message.event] || 0) + 1;
+      });
+      setEventCounts(counts);
+      if (data && data.length > 0) {
+        const mostRecentDate = new Date(data[0].received_at);
+        setLastMessageTime(mostRecentDate);
+        const fiveMinutesAgo = new Date();
+        fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
+        setReceivingStatus(mostRecentDate > fiveMinutesAgo ? 'active' : 'inactive');
+      } else {
+        setReceivingStatus('inactive');
+      }
+      if (showToast) {
+        toast.success('Webhook messages refreshed');
+      }
+    } catch (error) {
+      logger.error('Error fetching webhook messages:', error);
+      if (showToast) {
+        toast.error('Failed to load webhook messages');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const clearMessages = async () => {
     try {
       setIsDeleting(true);
-      const { error } = await supabase
-        .from('webhook_messages')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      
+      const {
+        error
+      } = await supabase.from('webhook_messages').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       if (error) throw error;
-      
-      refetch();
+      setMessages([]);
       toast.success('Webhook message history cleared');
+      setReceivingStatus('inactive');
+      setLastMessageTime(null);
     } catch (error) {
       logger.error('Error clearing webhook messages:', error);
       toast.error('Failed to clear webhook messages');
@@ -100,10 +108,50 @@ const WebhookMonitor = () => {
       setIsDeleting(false);
     }
   };
-
+  const handleRefresh = () => {
+    fetchMessages();
+  };
+  const getEventColor = (event: string) => {
+    switch (event) {
+      case 'messages.upsert':
+        return 'bg-green-500';
+      case 'connection.update':
+        return 'bg-blue-500';
+      case 'qrcode.updated':
+        return 'bg-purple-500';
+      case 'send.message':
+        return 'bg-orange-500';
+      case 'call':
+        return 'bg-yellow-500';
+      case 'errors':
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+  const getEventIcon = (event: string) => {
+    switch (event) {
+      case 'messages.upsert':
+        return <span className="mr-1">💬</span>;
+      case 'connection.update':
+        return <span className="mr-1">🔌</span>;
+      case 'qrcode.updated':
+        return <span className="mr-1">📱</span>;
+      case 'send.message':
+        return <span className="mr-1">📤</span>;
+      case 'call':
+        return <span className="mr-1">📞</span>;
+      case 'errors':
+        return <span className="mr-1">⚠️</span>;
+      default:
+        return <span className="mr-1">📋</span>;
+    }
+  };
   const downloadJson = () => {
     const jsonStr = JSON.stringify(messages, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const blob = new Blob([jsonStr], {
+      type: 'application/json'
+    });
     const href = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = href;
@@ -114,33 +162,15 @@ const WebhookMonitor = () => {
     URL.revokeObjectURL(href);
     toast.success('Webhook messages downloaded');
   };
-
-  const getEventColor = (event: string) => {
-    const colors: Record<string, string> = {
-      'messages.upsert': 'bg-green-500',
-      'connection.update': 'bg-blue-500',
-      'qrcode.updated': 'bg-purple-500',
-      'send.message': 'bg-orange-500',
-      'call': 'bg-yellow-500',
-      'errors': 'bg-red-500'
-    };
-    return colors[event] || 'bg-gray-500';
-  };
-
-  const getEventIcon = (event: string) => {
-    const icons: Record<string, JSX.Element> = {
-      'messages.upsert': <span className="mr-1">💬</span>,
-      'connection.update': <span className="mr-1">🔌</span>,
-      'qrcode.updated': <span className="mr-1">📱</span>,
-      'send.message': <span className="mr-1">📤</span>,
-      'call': <span className="mr-1">📞</span>,
-      'errors': <span className="mr-1">⚠️</span>
-    };
-    return icons[event] || <span className="mr-1">📋</span>;
-  };
-
-  return (
-    <div className="container mx-auto py-6 space-y-6">
+  const filteredMessages = messages.filter(message => {
+    if (activeTab !== 'all' && message.event !== activeTab) return false;
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      return message.instance.toLowerCase().includes(searchLower) || message.event.toLowerCase().includes(searchLower) || JSON.stringify(message.data).toLowerCase().includes(searchLower);
+    }
+    return true;
+  });
+  return <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Webhook Monitor</h1>
@@ -149,15 +179,13 @@ const WebhookMonitor = () => {
             <span className="text-sm text-muted-foreground">
               {receivingStatus === 'active' ? 'Receiving webhook messages' : receivingStatus === 'inactive' ? 'No recent messages received' : 'Status unknown'}
             </span>
-            {lastMessageTime && (
-              <span className="text-sm text-muted-foreground ml-2">
+            {lastMessageTime && <span className="text-sm text-muted-foreground ml-2">
                 Last message: {lastMessageTime.toLocaleString()}
-              </span>
-            )}
+              </span>}
           </div>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             <span className="ml-2">Refresh</span>
           </Button>
@@ -172,32 +200,12 @@ const WebhookMonitor = () => {
         </div>
       </div>
       
-      {showIntroAlert && (
-        <Alert className="bg-muted">
-          <Info className="h-4 w-4" />
-          <AlertTitle>Monitor Webhook Activity</AlertTitle>
-          <AlertDescription>
-            This page shows all webhook events received from your WhatsApp instances. 
-            Use the Debug Logs tab to troubleshoot connection issues and integration problems.
-          </AlertDescription>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="mt-2" 
-            onClick={() => setShowIntroAlert(false)}
-          >
-            Dismiss
-          </Button>
-        </Alert>
-      )}
+      {showIntroAlert}
       
       <WebhookEndpointInfo />
       
       <Tabs defaultValue="messages" className="space-y-6">
-        <TabsList className="mb-4">
-          <TabsTrigger value="messages">Webhook Messages</TabsTrigger>
-          <TabsTrigger value="debug">Debug Logs</TabsTrigger>
-        </TabsList>
+        
         
         <TabsContent value="messages">
           <Card>
@@ -207,12 +215,7 @@ const WebhookMonitor = () => {
                 View incoming messages from the EVOLUTION API server
               </CardDescription>
               <div className="mt-4">
-                <Input
-                  placeholder="Search messages..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="max-w-sm"
-                />
+                
               </div>
             </CardHeader>
             <CardContent>
@@ -226,26 +229,11 @@ const WebhookMonitor = () => {
                     Messages
                     {eventCounts['messages.upsert'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['messages.upsert']}</Badge>}
                   </TabsTrigger>
-                  <TabsTrigger value="connection.update">
-                    Connection
-                    {eventCounts['connection.update'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['connection.update']}</Badge>}
-                  </TabsTrigger>
-                  <TabsTrigger value="qrcode.updated">
-                    QR Code
-                    {eventCounts['qrcode.updated'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['qrcode.updated']}</Badge>}
-                  </TabsTrigger>
-                  <TabsTrigger value="send.message">
-                    Sent
-                    {eventCounts['send.message'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['send.message']}</Badge>}
-                  </TabsTrigger>
-                  <TabsTrigger value="call">
-                    Calls
-                    {eventCounts['call'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['call']}</Badge>}
-                  </TabsTrigger>
-                  <TabsTrigger value="errors">
-                    Errors
-                    {eventCounts['errors'] > 0 && <Badge variant="secondary" className="ml-2">{eventCounts['errors']}</Badge>}
-                  </TabsTrigger>
+                  
+                  
+                  
+                  
+                  
                 </TabsList>
                 
                 <TabsContent value={activeTab} className="mt-0">
@@ -329,8 +317,6 @@ const WebhookMonitor = () => {
           <DebugLogsTable />
         </TabsContent>
       </Tabs>
-    </div>
-  );
+    </div>;
 };
-
 export default WebhookMonitor;
