@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Loader2, Mic, RefreshCw } from 'lucide-react';
+import { Loader2, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import logger from '@/utils/logger';
@@ -22,7 +22,6 @@ const WhatsAppWebhookManager: React.FC<{
     last_status?: string;
     last_checked_at?: string;
   } | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<string>('Unknown');
   const [showVoiceCapabilities, setShowVoiceCapabilities] = useState(false);
   const {
     transcribeAudio,
@@ -33,37 +32,8 @@ const WhatsAppWebhookManager: React.FC<{
   useEffect(() => {
     if (instanceName) {
       checkWebhookStatus();
-      checkInstanceStatus();
     }
   }, [instanceName]);
-
-  const checkInstanceStatus = async () => {
-    try {
-      if (!instanceName) return;
-      
-      logger.log('Checking instance status for:', instanceName);
-      
-      const { data, error } = await supabase
-        .from('whatsapp_instances')
-        .select('status, last_connected')
-        .eq('instance_name', instanceName)
-        .maybeSingle();
-        
-      if (error) {
-        logger.error('Error fetching instance status:', error);
-        return;
-      }
-      
-      if (data) {
-        logger.log('Instance status from DB:', data.status);
-        setConnectionStatus(data.status);
-      } else {
-        logger.warn('No instance found with name:', instanceName);
-      }
-    } catch (error) {
-      logger.error('Exception checking instance status:', error);
-    }
-  };
 
   const checkWebhookStatus = async () => {
     try {
@@ -102,9 +72,6 @@ const WhatsAppWebhookManager: React.FC<{
           last_status: 'Active'
         });
       }
-      
-      // Check instance status after webhook status
-      await checkInstanceStatus();
     } catch (error) {
       logger.error('Error checking webhook status:', error);
       setStatus('error');
@@ -138,19 +105,6 @@ const WhatsAppWebhookManager: React.FC<{
     }
   };
 
-  const getStatusColor = () => {
-    switch (connectionStatus) {
-      case 'CONNECTED':
-        return 'bg-green-500';
-      case 'CONNECTING':
-        return 'bg-yellow-500';
-      case 'DISCONNECTED':
-        return 'bg-red-500';
-      default:
-        return 'bg-gray-500';
-    }
-  };
-
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -163,58 +117,38 @@ const WhatsAppWebhookManager: React.FC<{
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 mr-2 animate-spin text-muted-foreground" />
-              ) : status === 'connected' ? (
-                <div className="h-3 w-3 rounded-full bg-green-500 mr-2" />
-              ) : (
-                <div className="h-3 w-3 rounded-full bg-red-500 mr-2" />
-              )}
-              <span className="text-sm">
-                {isLoading 
-                  ? 'Checking connection...' 
-                  : status === 'connected' 
-                    ? 'Webhook connected' 
-                    : 'Connection error'}
-              </span>
-            </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={testAudioTranscription}
-              disabled={isLoading || status !== 'connected' || isTranscribing}
-            >
-              {isTranscribing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Testing...
-                </>
-              ) : (
-                'Test Voice Processing'
-              )}
-            </Button>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center">
+            {isLoading ? (
+              <Loader2 className="h-5 w-5 mr-2 animate-spin text-muted-foreground" />
+            ) : status === 'connected' ? (
+              <div className="h-3 w-3 rounded-full bg-green-500 mr-2" />
+            ) : (
+              <div className="h-3 w-3 rounded-full bg-red-500 mr-2" />
+            )}
+            <span className="text-sm">
+              {isLoading 
+                ? 'Checking connection...' 
+                : status === 'connected' 
+                  ? 'Webhook connected' 
+                  : 'Connection error'}
+            </span>
           </div>
-          
-          <div className="flex justify-between items-center border-t pt-3">
-            <div className="flex items-center">
-              <div className={`h-3 w-3 rounded-full ${getStatusColor()} mr-2`} />
-              <span className="text-sm">
-                WhatsApp Status: <strong>{connectionStatus}</strong>
-              </span>
-            </div>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={checkInstanceStatus}
-              className="p-1 h-8 w-8"
-              title="Refresh Status"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={testAudioTranscription}
+            disabled={isLoading || status !== 'connected' || isTranscribing}
+          >
+            {isTranscribing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Testing...
+              </>
+            ) : (
+              'Test Voice Processing'
+            )}
+          </Button>
         </div>
       </CardContent>
     </Card>

@@ -9,7 +9,6 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
-import WhatsAppInstanceManager from '@/pages/WhatsAppInstanceManager';
 import WhatsAppFileConfig from '@/pages/WhatsAppFileConfig';
 import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
 import WhatsAppSupportConfig from '@/pages/WhatsAppSupportConfig';
@@ -69,14 +68,6 @@ function AppContent() {
                     element={
                       <ProtectedRoute>
                         <WhatsAppLink />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/whatsapp-manager"
-                    element={
-                      <ProtectedRoute>
-                        <WhatsAppInstanceManager />
                       </ProtectedRoute>
                     }
                   />
