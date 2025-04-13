@@ -85,31 +85,6 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       setIsUpdating(false);
     }
   };
-  return <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="flex items-center font-bold">
-          <Zap className="mr-2 h-6 w-6 text-yellow-500" />
-          AI Auto-Response Status
-        </CardTitle>
-        <CardDescription>
-          Enable or disable AI responses for incoming WhatsApp messages
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div> : <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label htmlFor="ai-toggle" className="text-base">
-                {isEnabled ? 'AI responses are enabled' : 'AI responses are disabled'}
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                {isEnabled ? 'This WhatsApp number will automatically respond to incoming messages using AI' : 'This WhatsApp number will not send automated AI responses'}
-              </p>
-            </div>
-            <Switch id="ai-toggle" checked={isEnabled} onCheckedChange={toggleAI} disabled={isUpdating} className="data-[state=checked]:bg-green-500 data-[state=checked]:hover:bg-green-400" />
-          </div>}
-      </CardContent>
-    </Card>;
+  return;
 };
 export default WhatsAppAIToggle;
