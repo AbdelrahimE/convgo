@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,6 +31,7 @@ const WebhookMonitor = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showIntroAlert, setShowIntroAlert] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
   const navigate = useNavigate();
 
   const { 
@@ -81,6 +83,7 @@ const WebhookMonitor = () => {
 
   const clearMessages = async () => {
     try {
+      setIsDeleting(true);
       const { error } = await supabase
         .from('webhook_messages')
         .delete()
@@ -93,6 +96,8 @@ const WebhookMonitor = () => {
     } catch (error) {
       logger.error('Error clearing webhook messages:', error);
       toast.error('Failed to clear webhook messages');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
