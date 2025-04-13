@@ -277,8 +277,6 @@ const WhatsAppLink = () => {
       } = await supabase.from('whatsapp_instances').select('*').eq('user_id', user?.id);
       if (error) throw error;
       setInstances(data || []);
-      
-      await Promise.all(data?.map(instance => checkInstanceStatus(instance.instance_name)) || []);
     } catch (error) {
       logger.error('Error fetching WhatsApp instances:', error);
       toast.error('Failed to fetch WhatsApp instances');
