@@ -370,6 +370,7 @@ const WhatsAppLink = () => {
   const [selectedInstanceForCallSettings, setSelectedInstanceForCallSettings] = useState<WhatsAppInstance | null>(null);
   const [instanceLimit, setInstanceLimit] = useState(0);
   const [isValidName, setIsValidName] = useState(true);
+
   useEffect(() => {
     if (!authLoading && user) {
       fetchInstances();
@@ -378,6 +379,7 @@ const WhatsAppLink = () => {
       setInitialLoading(false);
     }
   }, [user, authLoading]);
+
   useEffect(() => {
     if (!user) return;
     logWebhook('Setting up realtime subscription for WhatsApp instances', {
@@ -390,12 +392,18 @@ const WhatsAppLink = () => {
       filter: `user_id=eq.${user.id}`
     }, payload => {
       logger.log('Received real-time update for WhatsApp instance:', payload);
+      
+      const previousInstance = payload.old as WhatsAppInstance;
       const updatedInstance = payload.new as WhatsAppInstance;
-      setInstances(prevInstances => prevInstances.map(instance => instance.id === updatedInstance.id ? {
-        ...instance,
-        ...updatedInstance
-      } : instance));
-      if (updatedInstance.status === 'CONNECTED') {
+      
+      setInstances(prevInstances => prevInstances.map(instance => 
+        instance.id === updatedInstance.id ? {
+          ...instance,
+          ...updatedInstance
+        } : instance
+      ));
+      
+      if (previousInstance && updatedInstance.status === 'CONNECTED' && previousInstance.status !== 'CONNECTED') {
         const instanceName = updatedInstance.instance_name;
         toast.success(`WhatsApp instance ${instanceName} connected successfully`);
       }
@@ -405,11 +413,13 @@ const WhatsAppLink = () => {
         logger.log('Successfully subscribed to WhatsApp instances changes');
       }
     });
+    
     return () => {
       logger.log('Cleaning up realtime subscription');
       supabase.removeChannel(channel);
     };
   }, [user]);
+
   const fetchUserProfile = async () => {
     try {
       const {
@@ -423,6 +433,7 @@ const WhatsAppLink = () => {
       toast.error('Failed to fetch user profile');
     }
   };
+
   const fetchInstances = async () => {
     try {
       setInitialLoading(true);
@@ -439,6 +450,7 @@ const WhatsAppLink = () => {
       setInitialLoading(false);
     }
   };
+
   const checkInstanceStatus = async (name: string) => {
     try {
       const {
@@ -475,6 +487,7 @@ const WhatsAppLink = () => {
       return false;
     }
   };
+
   const createInstance = async (instanceName: string) => {
     try {
       if (instances.length >= instanceLimit) {
@@ -519,6 +532,7 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
+
   const handleDelete = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -541,6 +555,7 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
+
   const handleLogout = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -570,6 +585,7 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
+
   const handleReconnect = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -618,10 +634,12 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
+
   const handleCallRejectionToggle = (instance: WhatsAppInstance) => {
     setSelectedInstanceForCallSettings(instance);
     setShowCallRejectionForm(true);
   };
+
   const updateCallRejectionSettings = async (instanceId: string, instanceName: string, enable: boolean, message?: string) => {
     try {
       setIsLoading(true);
@@ -658,22 +676,27 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
+
   const handleCallRejectionSave = async (message: string) => {
     if (!selectedInstanceForCallSettings) return;
     await updateCallRejectionSettings(selectedInstanceForCallSettings.id, selectedInstanceForCallSettings.instance_name, true, message);
   };
+
   const handleCallRejectionCancel = () => {
     setShowCallRejectionForm(false);
     setSelectedInstanceForCallSettings(null);
   };
+
   const disableCallRejection = async (instanceId: string, instanceName: string) => {
     await updateCallRejectionSettings(instanceId, instanceName, false);
   };
+
   const validateInstanceName = (name: string) => {
     const isValid = /^[a-zA-Z0-9]+$/.test(name);
     setIsValidName(isValid);
     return isValid;
   };
+
   const extractQRCode = (data: any): string | null => {
     logger.log('Extracting QR code from response:', data);
     if (data.base64 && data.base64.startsWith('data:image/')) {
@@ -694,6 +717,7 @@ const WhatsAppLink = () => {
     logger.log('No QR code found in response');
     return null;
   };
+
   const formatQrCodeDataUrl = (qrCodeData: string) => {
     if (!qrCodeData) return '';
     try {
@@ -707,6 +731,7 @@ const WhatsAppLink = () => {
       return '';
     }
   };
+
   if (authLoading || initialLoading) {
     return <div className="container mx-auto max-w-5xl py-8">
         <Card>
@@ -719,6 +744,7 @@ const WhatsAppLink = () => {
         </Card>
       </div>;
   }
+
   if (!user) {
     return <div className="container mx-auto max-w-5xl py-8">
         <Card>
@@ -730,6 +756,7 @@ const WhatsAppLink = () => {
         </Card>
       </div>;
   }
+
   return (
     <motion.div 
       initial={{
