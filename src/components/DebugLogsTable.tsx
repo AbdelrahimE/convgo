@@ -152,7 +152,7 @@ export function DebugLogsTable() {
                 <SelectValue placeholder="All categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All categories</SelectItem>
+                <SelectItem value="all-categories">All categories</SelectItem>
                 {categories?.map((cat) => (
                   <SelectItem key={cat.category} value={cat.category}>
                     {cat.category}
