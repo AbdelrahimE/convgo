@@ -46,7 +46,7 @@ import {
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import logger from '@/utils/logger';
-import { isConnectionStatusEvent } from '@supabase/functions/_shared/connection-event-detector';
+import { isConnectionStatusEvent } from '@/utils/connection-event-detector'; // Updated import
 import { logWebhook } from '@/utils/webhook-logger';
 
 // Types
