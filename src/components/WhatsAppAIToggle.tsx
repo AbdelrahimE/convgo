@@ -11,11 +11,13 @@ import logger from '@/utils/logger';
 interface WhatsAppAIToggleProps {
   instanceId: string;
   instanceName: string;
+  instanceStatus?: string; // Make this optional to maintain backward compatibility
 }
 
 const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
   instanceId,
-  instanceName
+  instanceName,
+  instanceStatus
 }) => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,6 +94,9 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
     }
   };
 
+  // Check if the instance is connected before allowing toggle
+  const isInstanceConnected = instanceStatus === 'CONNECTED';
+
   return (
     <div className="space-y-2 mt-4 border-t pt-4">
       <div className="flex items-center justify-between">
@@ -102,7 +107,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
           id="ai-toggle"
           checked={isEnabled}
           onCheckedChange={toggleAI}
-          disabled={isLoading || isUpdating}
+          disabled={isLoading || isUpdating || (instanceStatus && !isInstanceConnected)}
           className="data-[state=checked]:bg-green-500"
         />
       </div>
@@ -110,6 +115,11 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
         <Loader2 className="h-4 w-4 animate-spin mr-2" />
         <span className="text-sm text-muted-foreground">Loading...</span>
       </div>}
+      {instanceStatus && !isInstanceConnected && (
+        <p className="text-sm text-amber-500">
+          Connect your WhatsApp instance to enable AI responses
+        </p>
+      )}
     </div>
   );
 };
