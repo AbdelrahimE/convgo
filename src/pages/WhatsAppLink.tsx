@@ -229,6 +229,10 @@ const WhatsAppLink = () => {
           logger.log('Received real-time update for WhatsApp instance:', payload);
           
           const updatedInstance = payload.new as WhatsAppInstance;
+          const oldInstance = payload.old as WhatsAppInstance;
+          
+          const statusChanged = updatedInstance.status !== oldInstance.status;
+          const timestampChanged = updatedInstance.last_connected !== oldInstance.last_connected;
           
           setInstances(prevInstances => 
             prevInstances.map(instance => 
@@ -236,9 +240,16 @@ const WhatsAppLink = () => {
             )
           );
           
-          if (updatedInstance.status === 'CONNECTED') {
-            const instanceName = updatedInstance.instance_name;
-            toast.success(`WhatsApp instance ${instanceName} connected successfully`);
+          if (statusChanged) {
+            if (updatedInstance.status === 'CONNECTED') {
+              toast.success(`WhatsApp instance ${updatedInstance.instance_name} connected successfully`);
+            } else if (updatedInstance.status === 'DISCONNECTED') {
+              toast.error(`WhatsApp instance ${updatedInstance.instance_name} disconnected`);
+            } else if (updatedInstance.status === 'CONNECTING') {
+              toast.info(`WhatsApp instance ${updatedInstance.instance_name} is connecting...`);
+            }
+          } else if (timestampChanged && updatedInstance.status === 'CONNECTED') {
+            toast.info(`WhatsApp connection refreshed for ${updatedInstance.instance_name}`);
           }
         }
       )
