@@ -17,13 +17,25 @@ const getSupabaseAdmin = () => {
  */
 export async function processConnectionStatus(instanceName: string, statusData: any) {
   try {
+    // Log the raw incoming data
+    console.log('PROCESS_CONNECTION_RAW_INPUT', {
+      instanceName,
+      statusData: JSON.stringify(statusData, null, 2)
+    });
+    
     // Extract the actual status data from the nested structure if needed
     // The statusData could either be directly the state object or nested in a data property
     const stateData = statusData.data || statusData;
     
+    console.log('PROCESS_CONNECTION_EXTRACTED_STATE', {
+      instanceName,
+      stateData: JSON.stringify(stateData, null, 2)
+    });
+    
     await logDebug('CONNECTION_STATUS_UPDATE', `Processing connection status update for instance ${instanceName}`, { 
       state: stateData.state, 
-      statusReason: stateData.statusReason 
+      statusReason: stateData.statusReason,
+      rawData: JSON.stringify(statusData, null, 2)
     });
     
     // Map the webhook status to database status values
@@ -43,6 +55,12 @@ export async function processConnectionStatus(instanceName: string, statusData: 
         break;
     }
     
+    console.log('PROCESS_CONNECTION_STATUS_MAPPING', {
+      instanceName,
+      originalState: stateData.state,
+      mappedDbStatus: dbStatus
+    });
+    
     // Find the instance in the database
     const supabaseAdmin = getSupabaseAdmin();
     const { data: instanceData, error: instanceError } = await supabaseAdmin
@@ -52,9 +70,16 @@ export async function processConnectionStatus(instanceName: string, statusData: 
       .maybeSingle();
       
     if (instanceError) {
+      console.error('PROCESS_CONNECTION_INSTANCE_LOOKUP_ERROR', instanceError);
       await logDebug('CONNECTION_STATUS_ERROR', `Instance not found: ${instanceName}`, { error: instanceError });
       return false;
     }
+    
+    console.log('PROCESS_CONNECTION_INSTANCE_FOUND', {
+      instanceName,
+      instanceId: instanceData?.id,
+      currentStatus: instanceData?.status
+    });
     
     // Prepare the update data
     const updateData: any = {
@@ -79,6 +104,12 @@ export async function processConnectionStatus(instanceName: string, statusData: 
       }
     }
     
+    console.log('PROCESS_CONNECTION_UPDATE_DATA', {
+      instanceName,
+      instanceId: instanceData?.id,
+      updateData: JSON.stringify(updateData, null, 2)
+    });
+    
     // Log the status transition
     await logDebug('CONNECTION_STATUS_TRANSITION', `Instance ${instanceName} status changing from ${instanceData.status} to ${dbStatus}`, {
       previousStatus: instanceData.status,
@@ -94,14 +125,22 @@ export async function processConnectionStatus(instanceName: string, statusData: 
       .eq('id', instanceData.id);
       
     if (updateError) {
+      console.error('PROCESS_CONNECTION_DB_UPDATE_ERROR', updateError);
       await logDebug('CONNECTION_STATUS_UPDATE_ERROR', `Failed to update instance status`, { error: updateError });
       return false;
     }
+    
+    console.log('PROCESS_CONNECTION_DB_UPDATE_SUCCESS', {
+      instanceName,
+      instanceId: instanceData?.id,
+      newStatus: dbStatus
+    });
     
     await logDebug('CONNECTION_STATUS_UPDATED', `Successfully updated status for instance ${instanceName} to ${dbStatus}`);
     return true;
     
   } catch (error) {
+    console.error('PROCESS_CONNECTION_EXCEPTION', error);
     await logDebug('CONNECTION_STATUS_EXCEPTION', `Exception processing connection status`, { error, instanceName });
     console.error('Error in processConnectionStatus:', error);
     return false;
