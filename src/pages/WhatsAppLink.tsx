@@ -208,14 +208,14 @@ const CallRejectionSettings = ({
   const [rejectCall, setRejectCall] = useState(initialRejectCalls);
   const [rejectCallsMessage, setRejectCallsMessage] = useState(initialRejectCallsMessage);
   const [isLoading, setIsLoading] = useState(false);
-  const [showMessageDialog, setShowMessageDialog] = useState(false);
+  const [showMessageForm, setShowMessageForm] = useState(false);
   const [tempMessage, setTempMessage] = useState(initialRejectCallsMessage);
 
   const handleCallRejectionToggle = async () => {
     if (!rejectCall) {
-      // When enabling, show the dialog to enter message
+      // When enabling, show the message form
       setTempMessage(rejectCallsMessage);
-      setShowMessageDialog(true);
+      setShowMessageForm(true);
     } else {
       // When disabling, just update the setting
       await updateCallRejectionSettings(false, rejectCallsMessage);
@@ -258,7 +258,7 @@ const CallRejectionSettings = ({
 
   const handleMessageConfirm = async () => {
     await updateCallRejectionSettings(true, tempMessage);
-    setShowMessageDialog(false);
+    setShowMessageForm(false);
   };
 
   return (
@@ -276,57 +276,75 @@ const CallRejectionSettings = ({
         />
       </div>
       
-      <Dialog open={showMessageDialog} onOpenChange={setShowMessageDialog}>
-        <DialogContent className="max-w-md mx-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Call Rejection Message</DialogTitle>
-            <DialogDescription>
-              Enter the message that will be sent when rejecting calls automatically.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="rejection-message">Message</Label>
-              <Input
-                id="rejection-message"
-                value={tempMessage}
-                onChange={(e) => setTempMessage(e.target.value)}
-                placeholder="Enter message to send when rejecting calls"
-                className="w-full"
-              />
-            </div>
-          </div>
-          <DialogFooter className="flex flex-col sm:flex-row gap-3">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowMessageDialog(false)}
-              disabled={isLoading}
-              className="w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleMessageConfirm} 
-              disabled={isLoading || !tempMessage.trim()}
-              className="bg-blue-700 hover:bg-blue-600 w-full sm:w-auto"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Save Message
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {showMessageForm && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Card className="mb-6 md:mb-8">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-xl md:text-2xl font-bold">Call Rejection Message</CardTitle>
+              <CardDescription>
+                Enter the message that will be sent when rejecting calls automatically.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (tempMessage.trim()) {
+                  handleMessageConfirm();
+                }
+              }} className="space-y-4 md:space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="rejection-message">Message</Label>
+                  <Input
+                    id="rejection-message"
+                    value={tempMessage}
+                    onChange={(e) => setTempMessage(e.target.value)}
+                    placeholder="Enter message to send when rejecting calls"
+                    className="w-full"
+                  />
+                </div>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <Button 
+                    type="submit" 
+                    disabled={isLoading || !tempMessage.trim()} 
+                    size="lg" 
+                    className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="mr-2 h-4 w-4" />
+                        Save Message
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => {
+                      setShowMessageForm(false);
+                      setRejectCall(false);
+                    }} 
+                    className="w-full sm:flex-1" 
+                    size="lg"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
       
-      {rejectCall && (
+      {rejectCall && !showMessageForm && (
         <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
           <p className="text-sm text-muted-foreground mb-1">Current rejection message:</p>
           <p className="text-sm font-medium">{rejectCallsMessage}</p>
@@ -336,7 +354,7 @@ const CallRejectionSettings = ({
             className="mt-2"
             onClick={() => {
               setTempMessage(rejectCallsMessage);
-              setShowMessageDialog(true);
+              setShowMessageForm(true);
             }}
           >
             Edit Message
