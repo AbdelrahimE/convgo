@@ -47,13 +47,61 @@ export async function processAudioMessage(
       };
     }
     
+    // NEW: Fetch the user's preferred language from the database
+    let preferredLanguage = 'auto'; // Default to auto if we can't fetch the preference
+    
+    try {
+      await logDebug('AUDIO_FETCH_LANGUAGE_PREF', 'Fetching language preference from database', {
+        instanceName
+      });
+      
+      // Create a Supabase client to fetch the language preference
+      const fetchLanguageResponse = await fetch(`${supabaseUrl}/rest/v1/whatsapp_ai_config?whatsapp_instance_id.eq.${instanceName}&select=default_voice_language`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+          'apikey': supabaseServiceKey,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (fetchLanguageResponse.ok) {
+        const configs = await fetchLanguageResponse.json();
+        
+        // If we found a configuration for this instance, use its language preference
+        if (configs && configs.length > 0 && configs[0].default_voice_language) {
+          preferredLanguage = configs[0].default_voice_language;
+          await logDebug('AUDIO_LANGUAGE_PREF_FOUND', 'Found user language preference', {
+            language: preferredLanguage,
+            instanceName
+          });
+        } else {
+          await logDebug('AUDIO_LANGUAGE_PREF_NOT_FOUND', 'No language preference found, using auto detection', {
+            instanceName
+          });
+        }
+      } else {
+        await logDebug('AUDIO_LANGUAGE_FETCH_ERROR', 'Error fetching language preference', {
+          status: fetchLanguageResponse.status,
+          error: await fetchLanguageResponse.text()
+        });
+      }
+    } catch (error) {
+      await logDebug('AUDIO_LANGUAGE_FETCH_EXCEPTION', 'Exception when fetching language preference', {
+        error: error.message,
+        instanceName
+      });
+      // Continue with auto detection if there's an error
+    }
+    
     // MODIFIED APPROACH: Skip database lookups and directly call the voice transcription service
     // that contains the proper decryption logic
     
     await logDebug('AUDIO_TRANSCRIPTION_DIRECT', 'Directly calling transcription service', {
       audioUrl: audioDetails.url.substring(0, 50) + '...',
       hasMediaKey: !!audioDetails.mediaKey,
-      mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus'
+      mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus',
+      preferredLanguage: preferredLanguage // Using the fetched language preference
     });
     
     // Call transcription service directly with all necessary information
@@ -69,7 +117,7 @@ export async function processAudioMessage(
         mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus',
         instanceName,
         evolutionApiKey,
-        preferredLanguage: 'auto' // Default to auto-detection
+        preferredLanguage: preferredLanguage // Using the fetched preference instead of hardcoding 'auto'
       })
     });
     
