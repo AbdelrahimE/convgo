@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -219,6 +218,17 @@ const CallRejectionForm = ({
   isLoading: boolean;
 }) => {
   const [message, setMessage] = useState(instance.reject_calls_message || 'Sorry, I cannot take your call right now. Please leave a message and I will get back to you.');
+  const MAX_CHAR_LIMIT = 95;
+  const isOverLimit = message.length > MAX_CHAR_LIMIT;
+  const charCount = message.length;
+  const remainingChars = MAX_CHAR_LIMIT - charCount;
+  
+  const getCountColor = () => {
+    if (remainingChars <= 0) return "text-red-500";
+    if (remainingChars <= 10) return "text-amber-500";
+    return "text-muted-foreground";
+  };
+  
   return (
     <motion.div 
       initial={{
@@ -243,28 +253,49 @@ const CallRejectionForm = ({
         <CardContent>
           <form onSubmit={e => {
             e.preventDefault();
-            if (message.trim()) {
+            if (message.trim() && !isOverLimit) {
               onSave(message);
+            } else if (isOverLimit) {
+              toast.error(`Message exceeds the ${MAX_CHAR_LIMIT} character limit`);
             }
           }} className="space-y-4 md:space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="rejection-message">Rejection Message</Label>
+              <div className="flex justify-between items-center">
+                <Label htmlFor="rejection-message">Rejection Message</Label>
+                <span className={cn("text-xs font-medium", getCountColor())}>
+                  {charCount}/{MAX_CHAR_LIMIT}
+                </span>
+              </div>
               <LanguageAwareTextarea 
                 id="rejection-message" 
                 value={message} 
-                onChange={e => setMessage(e.target.value)} 
+                onChange={e => {
+                  setMessage(e.target.value);
+                }} 
                 placeholder="Enter message to send when rejecting calls" 
-                className="w-full"
+                className={cn("w-full", isOverLimit && "border-red-500 focus-visible:ring-red-500")}
                 autoExpand={true}
                 minRows={3}
                 maxRows={6}
               />
-              <p className="text-sm text-muted-foreground">
-                This message will be automatically sent when rejecting incoming calls.
-              </p>
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-muted-foreground">
+                  This message will be automatically sent when rejecting incoming calls.
+                </p>
+                {isOverLimit && (
+                  <p className="text-sm text-red-500 font-medium">
+                    Exceeds limit by {Math.abs(remainingChars)} characters
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button type="submit" disabled={isLoading || !message.trim()} size="lg" className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600">
+              <Button 
+                type="submit" 
+                disabled={isLoading || !message.trim() || isOverLimit} 
+                size="lg" 
+                className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600"
+              >
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
