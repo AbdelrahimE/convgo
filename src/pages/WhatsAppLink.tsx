@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -775,25 +776,36 @@ const WhatsAppLink = () => {
       </div>;
   }
 
-  return <motion.div initial={{
-    opacity: 0,
-    y: 20
-  }} animate={{
-    opacity: 1,
-    y: 0
-  }} transition={{
-    duration: 0.3
-  }} className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="space-y-8">
-        <motion.h1 initial={{
+  return (
+    <motion.div 
+      initial={{
         opacity: 0,
-        x: -20
-      }} animate={{
+        y: 20
+      }} 
+      animate={{
         opacity: 1,
-        x: 0
-      }} transition={{
-        delay: 0.2
-      }} className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl">
+        y: 0
+      }} 
+      transition={{
+        duration: 0.3
+      }} 
+      className="container mx-auto px-4 py-8 max-w-7xl"
+    >
+      <div className="space-y-8">
+        <motion.h1 
+          initial={{
+            opacity: 0,
+            x: -20
+          }} 
+          animate={{
+            opacity: 1,
+            x: 0
+          }} 
+          transition={{
+            delay: 0.2
+          }} 
+          className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl"
+        >
           WhatsApp Instances
         </motion.h1>
         
@@ -809,15 +821,20 @@ const WhatsAppLink = () => {
           </Button>
         </div>
 
-        {showCreateForm && <motion.div initial={{
-        opacity: 0,
-        y: 20
-      }} animate={{
-        opacity: 1,
-        y: 0
-      }} transition={{
-        delay: 0.3
-      }}>
+        {showCreateForm && (
+          <motion.div 
+            initial={{
+              opacity: 0,
+              y: 20
+            }} 
+            animate={{
+              opacity: 1,
+              y: 0
+            }} 
+            transition={{
+              delay: 0.3
+            }}
+          >
             <Card className="mb-6 md:mb-8">
               <CardHeader className="space-y-1">
                 <CardTitle className="text-xl md:text-2xl font-bold">Create New Instance</CardTitle>
@@ -827,40 +844,45 @@ const WhatsAppLink = () => {
               </CardHeader>
               <CardContent>
                 <form onSubmit={e => {
-              e.preventDefault();
-              if (validateInstanceName(instanceName)) {
-                createInstance(instanceName);
-              }
-            }} className="space-y-4 md:space-y-6">
+                  e.preventDefault();
+                  if (validateInstanceName(instanceName)) {
+                    createInstance(instanceName);
+                  }
+                }} className="space-y-4 md:space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="instanceName">Instance Name</Label>
                     <Input id="instanceName" value={instanceName} onChange={e => {
-                  setInstanceName(e.target.value);
-                  validateInstanceName(e.target.value);
-                }} placeholder="Enter instance name" className={!isValidName ? 'border-red-500' : ''} required />
-                    {!isValidName && <p className="text-sm text-red-500">
+                      setInstanceName(e.target.value);
+                      validateInstanceName(e.target.value);
+                    }} placeholder="Enter instance name" className={!isValidName ? 'border-red-500' : ''} required />
+                    {!isValidName && (
+                      <p className="text-sm text-red-500">
                         Instance name can only contain letters and numbers
-                      </p>}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4">
                     <Button type="submit" disabled={isLoading || !isValidName || !instanceName} size="lg" className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600">
-                      {isLoading ? <>
+                      {isLoading ? (
+                        <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Creating...
-                        </> : 'Create Instance'}
+                        </>
+                      ) : 'Create Instance'}
                     </Button>
                     <Button type="button" variant="outline" onClick={() => {
-                  setShowCreateForm(false);
-                  setInstanceName('');
-                  setIsValidName(true);
-                }} className="w-full sm:flex-1" size="lg">
+                      setShowCreateForm(false);
+                      setInstanceName('');
+                      setIsValidName(true);
+                    }} className="w-full sm:flex-1" size="lg">
                       Cancel
                     </Button>
                   </div>
                 </form>
               </CardContent>
             </Card>
-          </motion.div>}
+          </motion.div>
+        )}
 
         {showCallRejectionForm && selectedInstanceForCallSettings && (
           <CallRejectionForm 
@@ -871,17 +893,23 @@ const WhatsAppLink = () => {
           />
         )}
 
-        {instances.length > 0 ? <motion.div initial={{
-        opacity: 0,
-        y: 20
-      }} animate={{
-        opacity: 1,
-        y: 0
-      }} transition={{
-        delay: 0.4
-      }}>
+        {instances.length > 0 ? (
+          <motion.div 
+            initial={{
+              opacity: 0,
+              y: 20
+            }} 
+            animate={{
+              opacity: 1,
+              y: 0
+            }} 
+            transition={{
+              delay: 0.4
+            }}
+          >
             <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              {instances.map(instance => <Card key={instance.id} className="flex flex-col transition-all duration-200 hover:shadow-lg">
+              {instances.map(instance => (
+                <Card key={instance.id} className="flex flex-col transition-all duration-200 hover:shadow-lg">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base md:text-lg font-bold">{instance.instance_name}</CardTitle>
@@ -889,5 +917,47 @@ const WhatsAppLink = () => {
                     </div>
                   </CardHeader>
                   <CardContent className="flex-grow">
-                    {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && <div className="flex flex-col items-center space-y-2 mb-4">
-                        <p className="text-sm font-medium">Scan QR Code
+                    {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && (
+                      <div className="flex flex-col items-center space-y-2 mb-4">
+                        <p className="text-sm font-medium">Scan QR Code</p>
+                        <div className="relative bg-white p-2 rounded-lg">
+                          <img 
+                            src={formatQrCodeDataUrl(instance.qr_code)} 
+                            alt="WhatsApp QR Code" 
+                            className="w-full h-auto max-w-[200px]" 
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+                    <InstanceActions 
+                      instance={instance}
+                      isLoading={isLoading}
+                      onLogout={() => handleLogout(instance.id, instance.instance_name)}
+                      onReconnect={() => handleReconnect(instance.id, instance.instance_name)}
+                      onDelete={() => handleDelete(instance.id, instance.instance_name)}
+                      onToggleCallRejection={() => handleCallRejectionToggle(instance)}
+                    />
+                    
+                    <WhatsAppAIToggle instanceId={instance.id} instanceName={instance.instance_name} />
+                    
+                    <CallRejectionToggle 
+                      instance={instance}
+                      onSettings={() => handleCallRejectionToggle(instance)}
+                      onToggle={(enabled) => updateCallRejectionSettings(instance.id, instance.instance_name, enabled)}
+                      isLoading={isLoading}
+                    />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </motion.div>
+        ) : (
+          <EmptyState onCreateClick={() => setShowCreateForm(true)} />
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
+export default WhatsAppLink;
