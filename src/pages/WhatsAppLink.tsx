@@ -211,11 +211,9 @@ const CallRejectionSettings = ({
 
   const handleCallRejectionToggle = async () => {
     if (!rejectCall) {
-      // When enabling, show the message form
       setTempMessage(rejectCallsMessage);
       setShowMessageForm(true);
     } else {
-      // When disabling, just update the setting
       await updateCallRejectionSettings(false, rejectCallsMessage);
     }
   };
@@ -279,6 +277,7 @@ const CallRejectionSettings = ({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
+          className="my-6"
         >
           <Card className="mb-6 md:mb-8">
             <CardHeader className="space-y-1">
