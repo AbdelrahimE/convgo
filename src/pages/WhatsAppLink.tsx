@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import logger from '@/utils/logger';
 import { logWebhook } from '@/utils/webhook-logger';
+import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
 
 interface WhatsAppInstance {
   id: string;
@@ -20,6 +21,8 @@ interface WhatsAppInstance {
   status: string;
   last_connected: string | null;
   qr_code?: string;
+  reject_calls: boolean;
+  reject_calls_message: string;
 }
 
 const statusConfig = {
@@ -186,6 +189,87 @@ const EmptyState = ({
         </div>
       </CardContent>
     </Card>;
+};
+
+// Add a new component for Call Rejection Settings
+const CallRejectionSettings = ({ 
+  instanceId, 
+  instanceName, 
+  initialRejectCalls, 
+  initialRejectCallsMessage 
+}: {
+  instanceId: string, 
+  instanceName: string, 
+  initialRejectCalls: boolean, 
+  initialRejectCallsMessage: string
+}) => {
+  const [rejectCalls, setRejectCalls] = useState(initialRejectCalls);
+  const [rejectCallsMessage, setRejectCallsMessage] = useState(initialRejectCallsMessage);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleCallRejectionToggle = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Call Evolution API to update call rejection settings
+      const { data, error } = await supabase.functions.invoke('evolution-api', {
+        body: {
+          operation: 'CALL_SETTINGS',
+          instanceName: instanceName,
+          rejectCalls: !rejectCalls,
+          rejectCallsMessage
+        }
+      });
+
+      if (error) throw error;
+
+      // Update local state and database
+      const newRejectCallsState = !rejectCalls;
+      await supabase
+        .from('whatsapp_instances')
+        .update({ 
+          reject_calls: newRejectCallsState, 
+          reject_calls_message: rejectCallsMessage 
+        })
+        .eq('id', instanceId);
+
+      setRejectCalls(newRejectCallsState);
+      toast.success(`Call rejection ${newRejectCallsState ? 'enabled' : 'disabled'} for ${instanceName}`);
+    } catch (error) {
+      logger.error('Error updating call rejection settings:', error);
+      toast.error('Failed to update call rejection settings');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 mt-4 border-t pt-4">
+      <div className="flex items-center justify-between">
+        <Label htmlFor="call-rejection-toggle" className="text-base">
+          Automatically Reject Calls
+        </Label>
+        <Switch
+          id="call-rejection-toggle"
+          checked={rejectCalls}
+          onCheckedChange={handleCallRejectionToggle}
+          disabled={isLoading}
+          className="data-[state=checked]:bg-green-500"
+        />
+      </div>
+      {rejectCalls && (
+        <div className="space-y-2">
+          <Label>Rejection Message</Label>
+          <Input
+            value={rejectCallsMessage}
+            onChange={(e) => setRejectCallsMessage(e.target.value)}
+            placeholder="Enter message to send when rejecting calls"
+            disabled={isLoading}
+          />
+        </div>
+      )}
+    </div>
+  );
 };
 
 const WhatsAppLink = () => {
@@ -657,6 +741,13 @@ const WhatsAppLink = () => {
                         <img src={instance.qr_code} alt="WhatsApp QR Code" className="w-full max-w-[200px] h-auto mx-auto" />
                       </div>}
                     <InstanceActions instance={instance} isLoading={isLoading} onLogout={() => handleLogout(instance.id, instance.instance_name)} onReconnect={() => handleReconnect(instance.id, instance.instance_name)} onDelete={() => handleDelete(instance.id, instance.instance_name)} />
+                    <WhatsAppAIToggle instanceId={instance.id} instanceName={instance.instance_name} />
+                    <CallRejectionSettings
+                      instanceId={instance.id}
+                      instanceName={instance.instance_name}
+                      initialRejectCalls={instance.reject_calls || false}
+                      initialRejectCallsMessage={instance.reject_calls_message || 'Sorry, I cannot take your call right now. Please leave a message and I will get back to you.'}
+                    />
                   </CardContent>
                 </Card>)}
             </div>

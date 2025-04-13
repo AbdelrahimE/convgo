@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -64,6 +63,20 @@ serve(async (req) => {
         url = `${baseUrl}/instance/delete/${params.instanceName}`;
         method = 'DELETE';
         body = null;
+        break;
+
+      case 'CALL_SETTINGS':
+        url = `${baseUrl}/settings/set/${params.instanceName}`;
+        method = 'POST';
+        body = JSON.stringify({
+          rejectCall: params.rejectCalls,
+          msgCall: params.rejectCallsMessage,
+          groupsIgnore: false,
+          alwaysOnline: false,
+          readMessages: false,
+          syncFullHistory: false,
+          readStatus: false
+        });
         break;
 
       default:

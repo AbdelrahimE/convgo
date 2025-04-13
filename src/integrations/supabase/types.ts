@@ -648,6 +648,8 @@ export type Database = {
           id: string
           instance_name: string
           last_connected: string | null
+          reject_calls: boolean
+          reject_calls_message: string | null
           status: string
           updated_at: string
           user_id: string
@@ -657,6 +659,8 @@ export type Database = {
           id?: string
           instance_name: string
           last_connected?: string | null
+          reject_calls?: boolean
+          reject_calls_message?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -666,6 +670,8 @@ export type Database = {
           id?: string
           instance_name?: string
           last_connected?: string | null
+          reject_calls?: boolean
+          reject_calls_message?: string | null
           status?: string
           updated_at?: string
           user_id?: string
