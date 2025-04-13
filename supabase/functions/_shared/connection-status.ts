@@ -90,18 +90,6 @@ export async function processConnectionStatus(instanceName: string, statusData: 
     // If connecting to CONNECTED state, update the last_connected timestamp
     if (dbStatus === 'CONNECTED') {
       updateData.last_connected = new Date().toISOString();
-      
-      // If profile data is available, store it in the instance record
-      if (stateData.profileName || stateData.profilePictureUrl) {
-        // Create or update metadata object
-        const metadata = instanceData.metadata || {};
-        metadata.profile = {
-          name: stateData.profileName || metadata.profile?.name,
-          pictureUrl: stateData.profilePictureUrl || metadata.profile?.pictureUrl,
-          lastUpdated: new Date().toISOString()
-        };
-        updateData.metadata = metadata;
-      }
     }
     
     console.log('PROCESS_CONNECTION_UPDATE_DATA', {
