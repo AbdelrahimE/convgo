@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -26,140 +27,78 @@ interface WebhookMessage {
 
 const WebhookMonitor = () => {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<WebhookMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
-  const [lastMessageTime, setLastMessageTime] = useState<Date | null>(null);
-  const [receivingStatus, setReceivingStatus] = useState<'active' | 'inactive' | 'unknown'>('unknown');
   const [searchTerm, setSearchTerm] = useState('');
-  const [eventCounts, setEventCounts] = useState<Record<string, number>>({});
   const [showIntroAlert, setShowIntroAlert] = useState(true);
   const navigate = useNavigate();
-  const pollingRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (user) {
-      fetchMessages();
-      startPolling();
-    }
-    return () => {
-      if (pollingRef.current) {
-        window.clearInterval(pollingRef.current);
-      }
-    };
-  }, [user]);
-
-  const startPolling = () => {
-    pollingRef.current = window.setInterval(() => {
-      fetchMessages(false);
-    }, 15000);
-  };
-
-  const fetchMessages = async (showToast = true) => {
-    try {
-      setIsLoading(true);
-      const {
-        data,
-        error
-      } = await supabase.from('webhook_messages').select('*').order('received_at', {
-        ascending: false
-      }).limit(100);
+  const { 
+    data: messages = [], 
+    isLoading, 
+    refetch,
+    error 
+  } = useQuery<WebhookMessage[]>({
+    queryKey: ['webhookMessages'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('webhook_messages')
+        .select('*')
+        .order('received_at', { ascending: false })
+        .limit(100);
+      
       if (error) throw error;
-      setMessages(data || []);
-      const counts: Record<string, number> = {};
-      data?.forEach(message => {
-        counts[message.event] = (counts[message.event] || 0) + 1;
-      });
-      setEventCounts(counts);
-      if (data && data.length > 0) {
-        const mostRecentDate = new Date(data[0].received_at);
-        setLastMessageTime(mostRecentDate);
-        const fiveMinutesAgo = new Date();
-        fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
-        setReceivingStatus(mostRecentDate > fiveMinutesAgo ? 'active' : 'inactive');
-      } else {
-        setReceivingStatus('inactive');
-      }
-      if (showToast) {
-        toast.success('Webhook messages refreshed');
-      }
-    } catch (error) {
-      logger.error('Error fetching webhook messages:', error);
-      if (showToast) {
-        toast.error('Failed to load webhook messages');
-      }
-    } finally {
-      setIsLoading(false);
+      return data || [];
+    },
+    enabled: !!user,
+    refetchInterval: 15000,
+  });
+
+  const eventCounts = messages.reduce((counts, message) => {
+    counts[message.event] = (counts[message.event] || 0) + 1;
+    return counts;
+  }, {} as Record<string, number>);
+
+  const lastMessageTime = messages.length > 0 
+    ? new Date(messages[0].received_at) 
+    : null;
+  
+  const receivingStatus = lastMessageTime 
+    ? (new Date().getTime() - lastMessageTime.getTime() < 5 * 60 * 1000 
+      ? 'active' 
+      : 'inactive') 
+    : 'unknown';
+
+  const filteredMessages = messages.filter(message => {
+    if (activeTab !== 'all' && message.event !== activeTab) return false;
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      return message.instance.toLowerCase().includes(searchLower) || 
+             message.event.toLowerCase().includes(searchLower) || 
+             JSON.stringify(message.data).toLowerCase().includes(searchLower);
     }
-  };
+    return true;
+  });
 
   const clearMessages = async () => {
     try {
-      setIsDeleting(true);
-      const {
-        error
-      } = await supabase.from('webhook_messages').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      const { error } = await supabase
+        .from('webhook_messages')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      
       if (error) throw error;
-      setMessages([]);
+      
+      refetch();
       toast.success('Webhook message history cleared');
-      setReceivingStatus('inactive');
-      setLastMessageTime(null);
     } catch (error) {
       logger.error('Error clearing webhook messages:', error);
       toast.error('Failed to clear webhook messages');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleRefresh = () => {
-    fetchMessages();
-  };
-
-  const getEventColor = (event: string) => {
-    switch (event) {
-      case 'messages.upsert':
-        return 'bg-green-500';
-      case 'connection.update':
-        return 'bg-blue-500';
-      case 'qrcode.updated':
-        return 'bg-purple-500';
-      case 'send.message':
-        return 'bg-orange-500';
-      case 'call':
-        return 'bg-yellow-500';
-      case 'errors':
-        return 'bg-red-500';
-      default:
-        return 'bg-gray-500';
-    }
-  };
-
-  const getEventIcon = (event: string) => {
-    switch (event) {
-      case 'messages.upsert':
-        return <span className="mr-1">💬</span>;
-      case 'connection.update':
-        return <span className="mr-1">🔌</span>;
-      case 'qrcode.updated':
-        return <span className="mr-1">📱</span>;
-      case 'send.message':
-        return <span className="mr-1">📤</span>;
-      case 'call':
-        return <span className="mr-1">📞</span>;
-      case 'errors':
-        return <span className="mr-1">⚠️</span>;
-      default:
-        return <span className="mr-1">📋</span>;
     }
   };
 
   const downloadJson = () => {
     const jsonStr = JSON.stringify(messages, null, 2);
-    const blob = new Blob([jsonStr], {
-      type: 'application/json'
-    });
+    const blob = new Blob([jsonStr], { type: 'application/json' });
     const href = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = href;
@@ -171,14 +110,29 @@ const WebhookMonitor = () => {
     toast.success('Webhook messages downloaded');
   };
 
-  const filteredMessages = messages.filter(message => {
-    if (activeTab !== 'all' && message.event !== activeTab) return false;
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      return message.instance.toLowerCase().includes(searchLower) || message.event.toLowerCase().includes(searchLower) || JSON.stringify(message.data).toLowerCase().includes(searchLower);
-    }
-    return true;
-  });
+  const getEventColor = (event: string) => {
+    const colors: Record<string, string> = {
+      'messages.upsert': 'bg-green-500',
+      'connection.update': 'bg-blue-500',
+      'qrcode.updated': 'bg-purple-500',
+      'send.message': 'bg-orange-500',
+      'call': 'bg-yellow-500',
+      'errors': 'bg-red-500'
+    };
+    return colors[event] || 'bg-gray-500';
+  };
+
+  const getEventIcon = (event: string) => {
+    const icons: Record<string, JSX.Element> = {
+      'messages.upsert': <span className="mr-1">💬</span>,
+      'connection.update': <span className="mr-1">🔌</span>,
+      'qrcode.updated': <span className="mr-1">📱</span>,
+      'send.message': <span className="mr-1">📤</span>,
+      'call': <span className="mr-1">📞</span>,
+      'errors': <span className="mr-1">⚠️</span>
+    };
+    return icons[event] || <span className="mr-1">📋</span>;
+  };
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -198,7 +152,7 @@ const WebhookMonitor = () => {
           </div>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             <span className="ml-2">Refresh</span>
           </Button>
