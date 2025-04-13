@@ -13,6 +13,7 @@ import { EscalatedConversations } from '@/components/EscalatedConversations';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { motion } from 'framer-motion';
 import logger from '@/utils/logger';
+
 const WhatsAppSupportConfig = () => {
   const {
     user
@@ -36,11 +37,13 @@ const WhatsAppSupportConfig = () => {
   const [newKeyword, setNewKeyword] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [isAddingKeyword, setIsAddingKeyword] = useState(false);
+
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
+
   useEffect(() => {
     if (selectedInstance) {
       loadSupportConfig();
@@ -52,6 +55,7 @@ const WhatsAppSupportConfig = () => {
       setKeywords([]);
     }
   }, [selectedInstance]);
+
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -59,7 +63,9 @@ const WhatsAppSupportConfig = () => {
         data,
         error
       } = await supabase.from('whatsapp_instances').select('id, instance_name, status').eq('user_id', user?.id);
+      
       if (error) throw error;
+      
       setInstances(data || []);
       if (data && data.length > 0) {
         setSelectedInstance(data[0].id);
@@ -71,23 +77,58 @@ const WhatsAppSupportConfig = () => {
       setIsLoading(false);
     }
   };
+
   const loadSupportConfig = async () => {
+    if (!selectedInstance || !user?.id) {
+      logger.warn('Cannot load support config: Missing instance ID or user ID');
+      return;
+    }
+
     try {
       setIsLoading(true);
+      
+      // Log the request parameters for debugging
+      logger.log('Loading support config with params:', { 
+        instanceId: selectedInstance, 
+        userId: user.id 
+      });
+      
       const {
         data,
-        error
-      } = await supabase.from('whatsapp_support_config').select('*').eq('whatsapp_instance_id', selectedInstance).eq('user_id', user?.id).single();
+        error,
+        status
+      } = await supabase
+        .from('whatsapp_support_config')
+        .select('*')
+        .eq('whatsapp_instance_id', selectedInstance)
+        .eq('user_id', user.id)
+        .single();
+      
+      // Log the response status for debugging
+      logger.log('Support config response status:', status);
+      
       if (error) {
         if (error.code === 'PGRST116') {
           // No config found, use defaults
+          logger.log('No existing support config found, using defaults');
           setSupportPhoneNumber('');
           setNotificationMessage('A customer needs support. Please check your WhatsApp Support dashboard.');
           setEscalationMessage('Thank you for your message. A support representative will get back to you as soon as possible.');
           return;
         }
+        
+        // Log the detailed error for debugging
+        logger.error('Error fetching support config:', { 
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        
         throw error;
       }
+      
+      logger.log('Support config loaded successfully');
       setSupportPhoneNumber(data.support_phone_number || '');
       setNotificationMessage(data.notification_message || 'A customer needs support. Please check your WhatsApp Support dashboard.');
       setEscalationMessage(data.escalation_message || 'Thank you for your message. A support representative will get back to you as soon as possible.');
@@ -98,16 +139,50 @@ const WhatsAppSupportConfig = () => {
       setIsLoading(false);
     }
   };
+
   const loadKeywords = async () => {
+    if (!selectedInstance || !user?.id) {
+      logger.warn('Cannot load keywords: Missing instance ID or user ID');
+      return;
+    }
+
     try {
       setIsLoading(true);
+      
+      // Log the request parameters for debugging
+      logger.log('Loading support keywords with params:', { 
+        instanceId: selectedInstance, 
+        userId: user.id 
+      });
+      
       const {
         data,
-        error
-      } = await supabase.from('whatsapp_support_keywords').select('id, keyword, category').eq('user_id', user?.id).eq('whatsapp_instance_id', selectedInstance).order('created_at', {
-        ascending: false
-      });
-      if (error) throw error;
+        error,
+        status
+      } = await supabase
+        .from('whatsapp_support_keywords')
+        .select('id, keyword, category')
+        .eq('user_id', user.id)
+        .eq('whatsapp_instance_id', selectedInstance)
+        .order('created_at', {
+          ascending: false
+        });
+      
+      // Log the response status for debugging
+      logger.log('Support keywords response status:', status);
+      
+      if (error) {
+        // Log the detailed error for debugging
+        logger.error('Error fetching support keywords:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        throw error;
+      }
+      
+      logger.log('Support keywords loaded successfully');
       setKeywords(data || []);
     } catch (error) {
       logger.error('Error loading keywords:', error);
@@ -116,6 +191,7 @@ const WhatsAppSupportConfig = () => {
       setIsLoading(false);
     }
   };
+
   const saveSupportConfig = async () => {
     if (!selectedInstance) {
       toast.error('Please select a WhatsApp instance');
@@ -164,6 +240,7 @@ const WhatsAppSupportConfig = () => {
       setIsSaving(false);
     }
   };
+
   const addKeyword = async () => {
     if (!newKeyword.trim()) {
       toast.error('Please enter a keyword');
@@ -196,6 +273,7 @@ const WhatsAppSupportConfig = () => {
       setIsAddingKeyword(false);
     }
   };
+
   const deleteKeyword = async (id: string) => {
     try {
       const {
@@ -209,6 +287,7 @@ const WhatsAppSupportConfig = () => {
       toast.error('Failed to delete keyword');
     }
   };
+
   return <motion.div initial={{
     opacity: 0,
     y: 20
@@ -385,4 +464,5 @@ const WhatsAppSupportConfig = () => {
       </div>
     </motion.div>;
 };
+
 export default WhatsAppSupportConfig;
