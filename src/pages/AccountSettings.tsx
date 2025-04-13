@@ -11,6 +11,7 @@ import { Loader2, Building } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
 import logger from '@/utils/logger';
+
 export default function AccountSettings() {
   const {
     user
@@ -24,6 +25,7 @@ export default function AccountSettings() {
   const [isLoading, setIsLoading] = useState(false);
   const [isPasswordResetSent, setIsPasswordResetSent] = useState(false);
   const isMobile = useIsMobile();
+
   useEffect(() => {
     if (user) {
       setFullName(user.user_metadata?.full_name || '');
@@ -36,6 +38,7 @@ export default function AccountSettings() {
       }
     }
   }, [user]);
+
   const fetchBusinessNameFromProfile = async () => {
     if (!user) return;
     try {
@@ -54,6 +57,7 @@ export default function AccountSettings() {
       logger.error('Error fetching business name:', error);
     }
   };
+
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -65,6 +69,7 @@ export default function AccountSettings() {
       setAvatarUrl(URL.createObjectURL(file));
     }
   };
+
   const deleteOldAvatar = async (oldAvatarUrl: string): Promise<boolean> => {
     if (!oldAvatarUrl || !oldAvatarUrl.includes('avatars/')) return true;
     try {
@@ -84,6 +89,7 @@ export default function AccountSettings() {
       return false;
     }
   };
+
   const uploadAvatar = async (): Promise<string | null> => {
     if (!avatarFile || !user) return avatarUrl;
     try {
@@ -107,6 +113,7 @@ export default function AccountSettings() {
       return null;
     }
   };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -152,12 +159,11 @@ export default function AccountSettings() {
       setIsLoading(false);
     }
   };
+
   const handlePasswordReset = async () => {
     try {
       setIsLoading(true);
-      const {
-        error
-      } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth?reset=true`
       });
       if (error) {
@@ -171,14 +177,17 @@ export default function AccountSettings() {
       setIsLoading(false);
     }
   };
+
   const getInitials = (name: string) => {
     return name.split(' ').map(part => part[0]).join('').toUpperCase().slice(0, 2);
   };
+
   if (!user) {
     return <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>;
   }
+
   return <motion.div initial={{
     opacity: 0,
     y: 20

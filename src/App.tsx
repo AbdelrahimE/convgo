@@ -24,7 +24,7 @@ import './App.css';
 
 function AppContent() {
   const location = useLocation();
-  const isAuthPage = location.pathname === '/auth';
+  const isAuthPage = location.pathname === '/auth' || location.search.includes('reset=true');
   const isMobile = useIsMobile();
 
   return (
