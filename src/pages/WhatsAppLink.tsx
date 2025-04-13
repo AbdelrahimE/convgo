@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,7 +15,6 @@ import { motion } from "framer-motion";
 import logger from '@/utils/logger';
 import { logWebhook } from '@/utils/webhook-logger';
 import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
-
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
@@ -26,7 +24,6 @@ interface WhatsAppInstance {
   reject_calls: boolean;
   reject_calls_message: string;
 }
-
 const statusConfig = {
   CONNECTED: {
     color: "text-green-500 bg-green-50 dark:bg-green-950/50",
@@ -53,7 +50,6 @@ const statusConfig = {
     label: "Connecting"
   }
 };
-
 const StatusBadge = ({
   status
 }: {
@@ -66,7 +62,6 @@ const StatusBadge = ({
       {config.label}
     </div>;
 };
-
 const InstanceActions = ({
   instance,
   isLoading,
@@ -110,15 +105,7 @@ const InstanceActions = ({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button 
-              variant="outline" 
-              onClick={onToggleCallRejection} 
-              disabled={isLoading || instance.status !== 'CONNECTED'} 
-              className="w-full sm:w-auto"
-            >
-              <PhoneOff className="mr-2 h-4 w-4" />
-              Call Settings
-            </Button>
+            
           </TooltipTrigger>
           <TooltipContent>
             <p>Configure call rejection settings</p>
@@ -148,7 +135,6 @@ const InstanceActions = ({
       </div>
     </TooltipProvider>;
 };
-
 const EmptyState = ({
   onCreateClick
 }: {
@@ -211,8 +197,7 @@ const EmptyState = ({
       </CardContent>
     </Card>;
 };
-
-const CallRejectionForm = ({ 
+const CallRejectionForm = ({
   instance,
   onCancel,
   onSave,
@@ -224,13 +209,15 @@ const CallRejectionForm = ({
   isLoading: boolean;
 }) => {
   const [message, setMessage] = useState(instance.reject_calls_message || 'Sorry, I cannot take your call right now. Please leave a message and I will get back to you.');
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.3 }}
-    >
+  return <motion.div initial={{
+    opacity: 0,
+    y: 20
+  }} animate={{
+    opacity: 1,
+    y: 0
+  }} transition={{
+    delay: 0.3
+  }}>
       <Card className="mb-6 md:mb-8">
         <CardHeader className="space-y-1">
           <CardTitle className="text-xl md:text-2xl font-bold">Call Rejection Settings</CardTitle>
@@ -239,62 +226,39 @@ const CallRejectionForm = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            if (message.trim()) {
-              onSave(message);
-            }
-          }} className="space-y-4 md:space-y-6">
+          <form onSubmit={e => {
+          e.preventDefault();
+          if (message.trim()) {
+            onSave(message);
+          }
+        }} className="space-y-4 md:space-y-6">
             <div className="space-y-2">
               <Label htmlFor="rejection-message">Rejection Message</Label>
-              <Input
-                id="rejection-message"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Enter message to send when rejecting calls"
-                className="w-full"
-              />
+              <Input id="rejection-message" value={message} onChange={e => setMessage(e.target.value)} placeholder="Enter message to send when rejecting calls" className="w-full" />
               <p className="text-sm text-muted-foreground">
                 This message will be automatically sent when rejecting incoming calls.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button 
-                type="submit" 
-                disabled={isLoading || !message.trim()} 
-                size="lg" 
-                className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600"
-              >
-                {isLoading ? (
-                  <>
+              <Button type="submit" disabled={isLoading || !message.trim()} size="lg" className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600">
+                {isLoading ? <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Saving...
-                  </>
-                ) : (
-                  <>
+                  </> : <>
                     <Send className="mr-2 h-4 w-4" />
                     Enable Call Rejection
-                  </>
-                )}
+                  </>}
               </Button>
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={onCancel} 
-                className="w-full sm:flex-1" 
-                size="lg"
-              >
+              <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:flex-1" size="lg">
                 Cancel
               </Button>
             </div>
           </form>
         </CardContent>
       </Card>
-    </motion.div>
-  );
+    </motion.div>;
 };
-
-const CallRejectionToggle = ({ 
+const CallRejectionToggle = ({
   instance,
   onSettings,
   onToggle,
@@ -305,51 +269,36 @@ const CallRejectionToggle = ({
   onToggle: (enabled: boolean) => Promise<void>;
   isLoading: boolean;
 }) => {
-  return (
-    <div className="space-y-4 mt-4 border-t pt-4">
+  return <div className="space-y-4 mt-4 border-t pt-4">
       <div className="flex items-center justify-between">
         <Label htmlFor={`call-rejection-toggle-${instance.id}`} className="text-base">
           Auto-Reject Calls
         </Label>
         <div className="flex items-center space-x-2">
-          <Switch
-            id={`call-rejection-toggle-${instance.id}`}
-            checked={instance.reject_calls}
-            onCheckedChange={(checked) => {
-              if (checked) {
-                onSettings();
-              } else {
-                onToggle(false);
-              }
-            }}
-            disabled={isLoading || instance.status !== 'CONNECTED'}
-            className="data-[state=checked]:bg-green-500"
-          />
-          {instance.reject_calls && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={onSettings}
-              className="h-8 px-2"
-            >
+          <Switch id={`call-rejection-toggle-${instance.id}`} checked={instance.reject_calls} onCheckedChange={checked => {
+          if (checked) {
+            onSettings();
+          } else {
+            onToggle(false);
+          }
+        }} disabled={isLoading || instance.status !== 'CONNECTED'} className="data-[state=checked]:bg-green-500" />
+          {instance.reject_calls && <Button variant="ghost" size="sm" onClick={onSettings} className="h-8 px-2">
               Edit
-            </Button>
-          )}
+            </Button>}
         </div>
       </div>
       
-      {instance.reject_calls && (
-        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+      {instance.reject_calls && <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
           <p className="text-sm text-muted-foreground mb-1">Current rejection message:</p>
           <p className="text-sm font-medium">{instance.reject_calls_message}</p>
-        </div>
-      )}
-    </div>
-  );
+        </div>}
+    </div>;
 };
-
 const WhatsAppLink = () => {
-  const { user, loading: authLoading } = useAuth();
+  const {
+    user,
+    loading: authLoading
+  } = useAuth();
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [instanceName, setInstanceName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -359,7 +308,6 @@ const WhatsAppLink = () => {
   const [selectedInstanceForCallSettings, setSelectedInstanceForCallSettings] = useState<WhatsAppInstance | null>(null);
   const [instanceLimit, setInstanceLimit] = useState(0);
   const [isValidName, setIsValidName] = useState(true);
-
   useEffect(() => {
     if (!authLoading && user) {
       fetchInstances();
@@ -368,51 +316,38 @@ const WhatsAppLink = () => {
       setInitialLoading(false);
     }
   }, [user, authLoading]);
-
   useEffect(() => {
     if (!user) return;
-    
-    logWebhook('Setting up realtime subscription for WhatsApp instances', { userId: user.id });
-    
-    const channel = supabase
-      .channel('whatsapp-instances-changes')
-      .on('postgres_changes', 
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'whatsapp_instances',
-          filter: `user_id=eq.${user.id}`
-        }, 
-        (payload) => {
-          logger.log('Received real-time update for WhatsApp instance:', payload);
-          
-          const updatedInstance = payload.new as WhatsAppInstance;
-          
-          setInstances(prevInstances => 
-            prevInstances.map(instance => 
-              instance.id === updatedInstance.id ? {...instance, ...updatedInstance} : instance
-            )
-          );
-          
-          if (updatedInstance.status === 'CONNECTED') {
-            const instanceName = updatedInstance.instance_name;
-            toast.success(`WhatsApp instance ${instanceName} connected successfully`);
-          }
-        }
-      )
-      .subscribe((status) => {
-        logger.log(`Supabase channel status: ${status}`);
-        if (status === 'SUBSCRIBED') {
-          logger.log('Successfully subscribed to WhatsApp instances changes');
-        }
-      });
-    
+    logWebhook('Setting up realtime subscription for WhatsApp instances', {
+      userId: user.id
+    });
+    const channel = supabase.channel('whatsapp-instances-changes').on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'whatsapp_instances',
+      filter: `user_id=eq.${user.id}`
+    }, payload => {
+      logger.log('Received real-time update for WhatsApp instance:', payload);
+      const updatedInstance = payload.new as WhatsAppInstance;
+      setInstances(prevInstances => prevInstances.map(instance => instance.id === updatedInstance.id ? {
+        ...instance,
+        ...updatedInstance
+      } : instance));
+      if (updatedInstance.status === 'CONNECTED') {
+        const instanceName = updatedInstance.instance_name;
+        toast.success(`WhatsApp instance ${instanceName} connected successfully`);
+      }
+    }).subscribe(status => {
+      logger.log(`Supabase channel status: ${status}`);
+      if (status === 'SUBSCRIBED') {
+        logger.log('Successfully subscribed to WhatsApp instances changes');
+      }
+    });
     return () => {
       logger.log('Cleaning up realtime subscription');
       supabase.removeChannel(channel);
     };
   }, [user]);
-
   const fetchUserProfile = async () => {
     try {
       const {
@@ -426,7 +361,6 @@ const WhatsAppLink = () => {
       toast.error('Failed to fetch user profile');
     }
   };
-
   const fetchInstances = async () => {
     try {
       setInitialLoading(true);
@@ -443,7 +377,6 @@ const WhatsAppLink = () => {
       setInitialLoading(false);
     }
   };
-
   const checkInstanceStatus = async (name: string) => {
     try {
       const {
@@ -455,31 +388,23 @@ const WhatsAppLink = () => {
           instanceName: name.trim()
         }
       });
-      
       if (error) throw error;
       if (data) {
         const state = data.state;
         const statusReason = data.statusReason;
-        const updatedStatus = state === 'open' || state === 'CONNECTED' ? 'CONNECTED' : 
-                            state === 'connecting' || state === 'STARTING' ? 'CONNECTING' : 
-                            state === 'qrcode' ? 'CONNECTING' : 'DISCONNECTED';
-        
+        const updatedStatus = state === 'open' || state === 'CONNECTED' ? 'CONNECTED' : state === 'connecting' || state === 'STARTING' ? 'CONNECTING' : state === 'qrcode' ? 'CONNECTING' : 'DISCONNECTED';
         if (updatedStatus === 'CONNECTED') {
           await supabase.from('whatsapp_instances').update({
             status: updatedStatus,
             last_connected: new Date().toISOString()
           }).eq('instance_name', name);
         }
-        
-        setInstances(prev => prev.map(instance => 
-          instance.instance_name === name ? {
-            ...instance,
-            status: updatedStatus,
-            qr_code: updatedStatus === 'CONNECTED' ? undefined : instance.qr_code,
-            last_connected: updatedStatus === 'CONNECTED' ? new Date().toISOString() : instance.last_connected
-          } : instance
-        ));
-        
+        setInstances(prev => prev.map(instance => instance.instance_name === name ? {
+          ...instance,
+          status: updatedStatus,
+          qr_code: updatedStatus === 'CONNECTED' ? undefined : instance.qr_code,
+          last_connected: updatedStatus === 'CONNECTED' ? new Date().toISOString() : instance.last_connected
+        } : instance));
         return updatedStatus === 'CONNECTED';
       }
       return false;
@@ -488,7 +413,6 @@ const WhatsAppLink = () => {
       return false;
     }
   };
-
   const createInstance = async (instanceName: string) => {
     try {
       if (instances.length >= instanceLimit) {
@@ -505,7 +429,6 @@ const WhatsAppLink = () => {
           instanceName
         }
       });
-      
       if (error) throw error;
       logger.log('Response from create:', data);
       const qrCodeData = extractQRCode(data);
@@ -534,7 +457,6 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
-
   const handleDelete = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -546,7 +468,6 @@ const WhatsAppLink = () => {
           instanceName
         }
       });
-      
       if (error) throw error;
       await supabase.from('whatsapp_instances').delete().eq('id', instanceId);
       setInstances(prev => prev.filter(instance => instance.id !== instanceId));
@@ -558,7 +479,6 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
-
   const handleLogout = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -570,7 +490,6 @@ const WhatsAppLink = () => {
           instanceName
         }
       });
-      
       if (error) throw error;
       await supabase.from('whatsapp_instances').update({
         status: 'DISCONNECTED',
@@ -589,7 +508,6 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
-
   const handleReconnect = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
@@ -612,7 +530,6 @@ const WhatsAppLink = () => {
           instanceName: instanceName.trim()
         }
       });
-      
       if (error) throw error;
       logger.log('Response from reconnect:', data);
       const qrCodeData = extractQRCode(data);
@@ -639,17 +556,17 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
-
   const handleCallRejectionToggle = (instance: WhatsAppInstance) => {
     setSelectedInstanceForCallSettings(instance);
     setShowCallRejectionForm(true);
   };
-
   const updateCallRejectionSettings = async (instanceId: string, instanceName: string, enable: boolean, message?: string) => {
     try {
       setIsLoading(true);
-      
-      const { data, error } = await supabase.functions.invoke('evolution-api', {
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('evolution-api', {
         body: {
           operation: 'CALL_SETTINGS',
           instanceName: instanceName,
@@ -657,27 +574,17 @@ const WhatsAppLink = () => {
           rejectCallsMessage: message || ''
         }
       });
-
       if (error) throw error;
-
-      await supabase
-        .from('whatsapp_instances')
-        .update({ 
-          reject_calls: enable, 
-          reject_calls_message: message || ''
-        })
-        .eq('id', instanceId);
-
-      setInstances(prevInstances => 
-        prevInstances.map(instance => 
-          instance.id === instanceId 
-            ? { ...instance, reject_calls: enable, reject_calls_message: message || instance.reject_calls_message } 
-            : instance
-        )
-      );
-      
+      await supabase.from('whatsapp_instances').update({
+        reject_calls: enable,
+        reject_calls_message: message || ''
+      }).eq('id', instanceId);
+      setInstances(prevInstances => prevInstances.map(instance => instance.id === instanceId ? {
+        ...instance,
+        reject_calls: enable,
+        reject_calls_message: message || instance.reject_calls_message
+      } : instance));
       toast.success(`Call rejection ${enable ? 'enabled' : 'disabled'} for ${instanceName}`);
-      
       if (showCallRejectionForm) {
         setShowCallRejectionForm(false);
         setSelectedInstanceForCallSettings(null);
@@ -689,33 +596,22 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
-
   const handleCallRejectionSave = async (message: string) => {
     if (!selectedInstanceForCallSettings) return;
-    
-    await updateCallRejectionSettings(
-      selectedInstanceForCallSettings.id,
-      selectedInstanceForCallSettings.instance_name,
-      true,
-      message
-    );
+    await updateCallRejectionSettings(selectedInstanceForCallSettings.id, selectedInstanceForCallSettings.instance_name, true, message);
   };
-
   const handleCallRejectionCancel = () => {
     setShowCallRejectionForm(false);
     setSelectedInstanceForCallSettings(null);
   };
-
   const disableCallRejection = async (instanceId: string, instanceName: string) => {
     await updateCallRejectionSettings(instanceId, instanceName, false);
   };
-
   const validateInstanceName = (name: string) => {
     const isValid = /^[a-zA-Z0-9]+$/.test(name);
     setIsValidName(isValid);
     return isValid;
   };
-
   const extractQRCode = (data: any): string | null => {
     logger.log('Extracting QR code from response:', data);
     if (data.base64 && data.base64.startsWith('data:image/')) {
@@ -736,7 +632,6 @@ const WhatsAppLink = () => {
     logger.log('No QR code found in response');
     return null;
   };
-
   const formatQrCodeDataUrl = (qrCodeData: string) => {
     if (!qrCodeData) return '';
     try {
@@ -750,7 +645,6 @@ const WhatsAppLink = () => {
       return '';
     }
   };
-
   if (authLoading || initialLoading) {
     return <div className="container mx-auto max-w-5xl py-8">
         <Card>
@@ -763,7 +657,6 @@ const WhatsAppLink = () => {
         </Card>
       </div>;
   }
-
   if (!user) {
     return <div className="container mx-auto max-w-5xl py-8">
         <Card>
@@ -775,37 +668,25 @@ const WhatsAppLink = () => {
         </Card>
       </div>;
   }
-
-  return (
-    <motion.div 
-      initial={{
-        opacity: 0,
-        y: 20
-      }} 
-      animate={{
-        opacity: 1,
-        y: 0
-      }} 
-      transition={{
-        duration: 0.3
-      }} 
-      className="container mx-auto px-4 py-8 max-w-7xl"
-    >
+  return <motion.div initial={{
+    opacity: 0,
+    y: 20
+  }} animate={{
+    opacity: 1,
+    y: 0
+  }} transition={{
+    duration: 0.3
+  }} className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="space-y-8">
-        <motion.h1 
-          initial={{
-            opacity: 0,
-            x: -20
-          }} 
-          animate={{
-            opacity: 1,
-            x: 0
-          }} 
-          transition={{
-            delay: 0.2
-          }} 
-          className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl"
-        >
+        <motion.h1 initial={{
+        opacity: 0,
+        x: -20
+      }} animate={{
+        opacity: 1,
+        x: 0
+      }} transition={{
+        delay: 0.2
+      }} className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl">
           WhatsApp Instances
         </motion.h1>
         
@@ -821,20 +702,15 @@ const WhatsAppLink = () => {
           </Button>
         </div>
 
-        {showCreateForm && (
-          <motion.div 
-            initial={{
-              opacity: 0,
-              y: 20
-            }} 
-            animate={{
-              opacity: 1,
-              y: 0
-            }} 
-            transition={{
-              delay: 0.3
-            }}
-          >
+        {showCreateForm && <motion.div initial={{
+        opacity: 0,
+        y: 20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        delay: 0.3
+      }}>
             <Card className="mb-6 md:mb-8">
               <CardHeader className="space-y-1">
                 <CardTitle className="text-xl md:text-2xl font-bold">Create New Instance</CardTitle>
@@ -844,72 +720,54 @@ const WhatsAppLink = () => {
               </CardHeader>
               <CardContent>
                 <form onSubmit={e => {
-                  e.preventDefault();
-                  if (validateInstanceName(instanceName)) {
-                    createInstance(instanceName);
-                  }
-                }} className="space-y-4 md:space-y-6">
+              e.preventDefault();
+              if (validateInstanceName(instanceName)) {
+                createInstance(instanceName);
+              }
+            }} className="space-y-4 md:space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="instanceName">Instance Name</Label>
                     <Input id="instanceName" value={instanceName} onChange={e => {
-                      setInstanceName(e.target.value);
-                      validateInstanceName(e.target.value);
-                    }} placeholder="Enter instance name" className={!isValidName ? 'border-red-500' : ''} required />
-                    {!isValidName && (
-                      <p className="text-sm text-red-500">
+                  setInstanceName(e.target.value);
+                  validateInstanceName(e.target.value);
+                }} placeholder="Enter instance name" className={!isValidName ? 'border-red-500' : ''} required />
+                    {!isValidName && <p className="text-sm text-red-500">
                         Instance name can only contain letters and numbers
-                      </p>
-                    )}
+                      </p>}
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4">
                     <Button type="submit" disabled={isLoading || !isValidName || !instanceName} size="lg" className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600">
-                      {isLoading ? (
-                        <>
+                      {isLoading ? <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Creating...
-                        </>
-                      ) : 'Create Instance'}
+                        </> : 'Create Instance'}
                     </Button>
                     <Button type="button" variant="outline" onClick={() => {
-                      setShowCreateForm(false);
-                      setInstanceName('');
-                      setIsValidName(true);
-                    }} className="w-full sm:flex-1" size="lg">
+                  setShowCreateForm(false);
+                  setInstanceName('');
+                  setIsValidName(true);
+                }} className="w-full sm:flex-1" size="lg">
                       Cancel
                     </Button>
                   </div>
                 </form>
               </CardContent>
             </Card>
-          </motion.div>
-        )}
+          </motion.div>}
 
-        {showCallRejectionForm && selectedInstanceForCallSettings && (
-          <CallRejectionForm 
-            instance={selectedInstanceForCallSettings}
-            onCancel={handleCallRejectionCancel}
-            onSave={handleCallRejectionSave}
-            isLoading={isLoading}
-          />
-        )}
+        {showCallRejectionForm && selectedInstanceForCallSettings && <CallRejectionForm instance={selectedInstanceForCallSettings} onCancel={handleCallRejectionCancel} onSave={handleCallRejectionSave} isLoading={isLoading} />}
 
-        {instances.length > 0 ? (
-          <motion.div 
-            initial={{
-              opacity: 0,
-              y: 20
-            }} 
-            animate={{
-              opacity: 1,
-              y: 0
-            }} 
-            transition={{
-              delay: 0.4
-            }}
-          >
+        {instances.length > 0 ? <motion.div initial={{
+        opacity: 0,
+        y: 20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        delay: 0.4
+      }}>
             <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              {instances.map(instance => (
-                <Card key={instance.id} className="flex flex-col transition-all duration-200 hover:shadow-lg">
+              {instances.map(instance => <Card key={instance.id} className="flex flex-col transition-all duration-200 hover:shadow-lg">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base md:text-lg font-bold">{instance.instance_name}</CardTitle>
@@ -917,47 +775,23 @@ const WhatsAppLink = () => {
                     </div>
                   </CardHeader>
                   <CardContent className="flex-grow">
-                    {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && (
-                      <div className="flex flex-col items-center space-y-2 mb-4">
+                    {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && <div className="flex flex-col items-center space-y-2 mb-4">
                         <p className="text-sm font-medium">Scan QR Code</p>
                         <div className="relative bg-white p-2 rounded-lg">
-                          <img 
-                            src={formatQrCodeDataUrl(instance.qr_code)} 
-                            alt="WhatsApp QR Code" 
-                            className="w-full h-auto max-w-[200px]" 
-                          />
+                          <img src={formatQrCodeDataUrl(instance.qr_code)} alt="WhatsApp QR Code" className="w-full h-auto max-w-[200px]" />
                         </div>
-                      </div>
-                    )}
+                      </div>}
                     
-                    <InstanceActions 
-                      instance={instance}
-                      isLoading={isLoading}
-                      onLogout={() => handleLogout(instance.id, instance.instance_name)}
-                      onReconnect={() => handleReconnect(instance.id, instance.instance_name)}
-                      onDelete={() => handleDelete(instance.id, instance.instance_name)}
-                      onToggleCallRejection={() => handleCallRejectionToggle(instance)}
-                    />
+                    <InstanceActions instance={instance} isLoading={isLoading} onLogout={() => handleLogout(instance.id, instance.instance_name)} onReconnect={() => handleReconnect(instance.id, instance.instance_name)} onDelete={() => handleDelete(instance.id, instance.instance_name)} onToggleCallRejection={() => handleCallRejectionToggle(instance)} />
                     
                     <WhatsAppAIToggle instanceId={instance.id} instanceName={instance.instance_name} />
                     
-                    <CallRejectionToggle 
-                      instance={instance}
-                      onSettings={() => handleCallRejectionToggle(instance)}
-                      onToggle={(enabled) => updateCallRejectionSettings(instance.id, instance.instance_name, enabled)}
-                      isLoading={isLoading}
-                    />
+                    <CallRejectionToggle instance={instance} onSettings={() => handleCallRejectionToggle(instance)} onToggle={enabled => updateCallRejectionSettings(instance.id, instance.instance_name, enabled)} isLoading={isLoading} />
                   </CardContent>
-                </Card>
-              ))}
+                </Card>)}
             </div>
-          </motion.div>
-        ) : (
-          <EmptyState onCreateClick={() => setShowCreateForm(true)} />
-        )}
+          </motion.div> : <EmptyState onCreateClick={() => setShowCreateForm(true)} />}
       </div>
-    </motion.div>
-  );
+    </motion.div>;
 };
-
 export default WhatsAppLink;
