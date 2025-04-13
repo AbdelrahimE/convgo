@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -212,9 +213,11 @@ const CallRejectionSettings = ({
 
   const handleCallRejectionToggle = async () => {
     if (!rejectCall) {
+      // When enabling, show the dialog to enter message
       setTempMessage(rejectCallsMessage);
       setShowMessageDialog(true);
     } else {
+      // When disabling, just update the setting
       await updateCallRejectionSettings(false, rejectCallsMessage);
     }
   };
@@ -274,9 +277,9 @@ const CallRejectionSettings = ({
       </div>
       
       <Dialog open={showMessageDialog} onOpenChange={setShowMessageDialog}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="max-w-md mx-auto">
           <DialogHeader>
-            <DialogTitle>Call Rejection Message</DialogTitle>
+            <DialogTitle className="text-xl font-bold">Call Rejection Message</DialogTitle>
             <DialogDescription>
               Enter the message that will be sent when rejecting calls automatically.
             </DialogDescription>
@@ -289,21 +292,23 @@ const CallRejectionSettings = ({
                 value={tempMessage}
                 onChange={(e) => setTempMessage(e.target.value)}
                 placeholder="Enter message to send when rejecting calls"
+                className="w-full"
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex flex-col sm:flex-row gap-3">
             <Button 
               variant="outline" 
               onClick={() => setShowMessageDialog(false)}
               disabled={isLoading}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
             <Button 
               onClick={handleMessageConfirm} 
               disabled={isLoading || !tempMessage.trim()}
-              className="bg-blue-700 hover:bg-blue-600"
+              className="bg-blue-700 hover:bg-blue-600 w-full sm:w-auto"
             >
               {isLoading ? (
                 <>
