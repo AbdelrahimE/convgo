@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, Plus, Check, X, RefreshCw, LogOut, Trash2, MessageSquare, ArrowRight, Bot, Send } from "lucide-react";
+import { Loader2, Plus, Check, X, RefreshCw, LogOut, Trash2, MessageSquare, ArrowRight, Bot, Send, PhoneOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import logger from '@/utils/logger';
@@ -71,13 +71,15 @@ const InstanceActions = ({
   isLoading,
   onLogout,
   onReconnect,
-  onDelete
+  onDelete,
+  onToggleCallRejection
 }: {
   instance: WhatsAppInstance;
   isLoading: boolean;
   onLogout: () => void;
   onReconnect: () => void;
   onDelete: () => void;
+  onToggleCallRejection: () => void;
 }) => {
   return <TooltipProvider>
       <div className="flex items-center justify-end space-x-2">
@@ -104,6 +106,23 @@ const InstanceActions = ({
               <p>Reconnect this WhatsApp instance</p>
             </TooltipContent>
           </Tooltip>}
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="outline" 
+              onClick={onToggleCallRejection} 
+              disabled={isLoading || instance.status !== 'CONNECTED'} 
+              className="w-full sm:w-auto"
+            >
+              <PhoneOff className="mr-2 h-4 w-4" />
+              Call Settings
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Configure call rejection settings</p>
+          </TooltipContent>
+        </Tooltip>
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
@@ -192,170 +211,136 @@ const EmptyState = ({
     </Card>;
 };
 
-const CallRejectionSettings = ({ 
-  instanceId, 
-  instanceName, 
-  initialRejectCalls, 
-  initialRejectCallsMessage 
+const CallRejectionForm = ({ 
+  instance,
+  onCancel,
+  onSave,
+  isLoading
 }: {
-  instanceId: string, 
-  instanceName: string, 
-  initialRejectCalls: boolean, 
-  initialRejectCallsMessage: string
+  instance: WhatsAppInstance;
+  onCancel: () => void;
+  onSave: (message: string) => Promise<void>;
+  isLoading: boolean;
 }) => {
-  const [rejectCall, setRejectCall] = useState(initialRejectCalls);
-  const [rejectCallsMessage, setRejectCallsMessage] = useState(initialRejectCallsMessage);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showMessageForm, setShowMessageForm] = useState(false);
-  const [tempMessage, setTempMessage] = useState(initialRejectCallsMessage);
+  const [message, setMessage] = useState(instance.reject_calls_message || 'Sorry, I cannot take your call right now. Please leave a message and I will get back to you.');
 
-  const handleCallRejectionToggle = async () => {
-    if (!rejectCall) {
-      setTempMessage(rejectCallsMessage);
-      setShowMessageForm(true);
-    } else {
-      await updateCallRejectionSettings(false, rejectCallsMessage);
-    }
-  };
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3 }}
+    >
+      <Card className="mb-6 md:mb-8">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl md:text-2xl font-bold">Call Rejection Settings</CardTitle>
+          <CardDescription>
+            Configure automatic call rejection for <span className="font-medium">{instance.instance_name}</span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            if (message.trim()) {
+              onSave(message);
+            }
+          }} className="space-y-4 md:space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="rejection-message">Rejection Message</Label>
+              <Input
+                id="rejection-message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Enter message to send when rejecting calls"
+                className="w-full"
+              />
+              <p className="text-sm text-muted-foreground">
+                This message will be automatically sent when rejecting incoming calls.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button 
+                type="submit" 
+                disabled={isLoading || !message.trim()} 
+                size="lg" 
+                className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Enable Call Rejection
+                  </>
+                )}
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={onCancel} 
+                className="w-full sm:flex-1" 
+                size="lg"
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+};
 
-  const updateCallRejectionSettings = async (newRejectCallState: boolean, message: string) => {
-    try {
-      setIsLoading(true);
-      
-      const { data, error } = await supabase.functions.invoke('evolution-api', {
-        body: {
-          operation: 'CALL_SETTINGS',
-          instanceName: instanceName,
-          rejectCall: newRejectCallState,
-          rejectCallsMessage: message
-        }
-      });
-
-      if (error) throw error;
-
-      await supabase
-        .from('whatsapp_instances')
-        .update({ 
-          reject_calls: newRejectCallState, 
-          reject_calls_message: message 
-        })
-        .eq('id', instanceId);
-
-      setRejectCall(newRejectCallState);
-      setRejectCallsMessage(message);
-      toast.success(`Call rejection ${newRejectCallState ? 'enabled' : 'disabled'} for ${instanceName}`);
-    } catch (error) {
-      logger.error('Error updating call rejection settings:', error);
-      toast.error('Failed to update call rejection settings');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleMessageConfirm = async () => {
-    await updateCallRejectionSettings(true, tempMessage);
-    setShowMessageForm(false);
-  };
-
+const CallRejectionToggle = ({ 
+  instance,
+  onSettings,
+  onToggle,
+  isLoading
+}: {
+  instance: WhatsAppInstance;
+  onSettings: () => void;
+  onToggle: (enabled: boolean) => Promise<void>;
+  isLoading: boolean;
+}) => {
   return (
     <div className="space-y-4 mt-4 border-t pt-4">
       <div className="flex items-center justify-between">
-        <Label htmlFor="call-rejection-toggle" className="text-base">
-          Automatically Reject Calls
+        <Label htmlFor={`call-rejection-toggle-${instance.id}`} className="text-base">
+          Auto-Reject Calls
         </Label>
-        <Switch
-          id="call-rejection-toggle"
-          checked={rejectCall}
-          onCheckedChange={handleCallRejectionToggle}
-          disabled={isLoading}
-          className="data-[state=checked]:bg-green-500"
-        />
+        <div className="flex items-center space-x-2">
+          <Switch
+            id={`call-rejection-toggle-${instance.id}`}
+            checked={instance.reject_calls}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                onSettings();
+              } else {
+                onToggle(false);
+              }
+            }}
+            disabled={isLoading || instance.status !== 'CONNECTED'}
+            className="data-[state=checked]:bg-green-500"
+          />
+          {instance.reject_calls && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={onSettings}
+              className="h-8 px-2"
+            >
+              Edit
+            </Button>
+          )}
+        </div>
       </div>
       
-      {showMessageForm && (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="my-6"
-        >
-          <Card className="mb-6 md:mb-8">
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-xl md:text-2xl font-bold">Call Rejection Message</CardTitle>
-              <CardDescription>
-                Enter the message that will be sent when rejecting calls automatically.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                if (tempMessage.trim()) {
-                  handleMessageConfirm();
-                }
-              }} className="space-y-4 md:space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="rejection-message">Message</Label>
-                  <Input
-                    id="rejection-message"
-                    value={tempMessage}
-                    onChange={(e) => setTempMessage(e.target.value)}
-                    placeholder="Enter message to send when rejecting calls"
-                    className="w-full"
-                  />
-                </div>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Button 
-                    type="submit" 
-                    disabled={isLoading || !tempMessage.trim()} 
-                    size="lg" 
-                    className="w-full sm:flex-1 bg-blue-700 hover:bg-blue-600"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="mr-2 h-4 w-4" />
-                        Save Message
-                      </>
-                    )}
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => {
-                      setShowMessageForm(false);
-                      setRejectCall(false);
-                    }} 
-                    className="w-full sm:flex-1" 
-                    size="lg"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
-      
-      {rejectCall && !showMessageForm && (
+      {instance.reject_calls && (
         <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
           <p className="text-sm text-muted-foreground mb-1">Current rejection message:</p>
-          <p className="text-sm font-medium">{rejectCallsMessage}</p>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="mt-2"
-            onClick={() => {
-              setTempMessage(rejectCallsMessage);
-              setShowMessageForm(true);
-            }}
-          >
-            Edit Message
-          </Button>
+          <p className="text-sm font-medium">{instance.reject_calls_message}</p>
         </div>
       )}
     </div>
@@ -363,15 +348,14 @@ const CallRejectionSettings = ({
 };
 
 const WhatsAppLink = () => {
-  const {
-    user,
-    loading: authLoading
-  } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [instanceName, setInstanceName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showCallRejectionForm, setShowCallRejectionForm] = useState(false);
+  const [selectedInstanceForCallSettings, setSelectedInstanceForCallSettings] = useState<WhatsAppInstance | null>(null);
   const [instanceLimit, setInstanceLimit] = useState(0);
   const [isValidName, setIsValidName] = useState(true);
 
@@ -655,6 +639,76 @@ const WhatsAppLink = () => {
     }
   };
 
+  const handleCallRejectionToggle = (instance: WhatsAppInstance) => {
+    setSelectedInstanceForCallSettings(instance);
+    setShowCallRejectionForm(true);
+  };
+
+  const updateCallRejectionSettings = async (instanceId: string, instanceName: string, enable: boolean, message?: string) => {
+    try {
+      setIsLoading(true);
+      
+      const { data, error } = await supabase.functions.invoke('evolution-api', {
+        body: {
+          operation: 'CALL_SETTINGS',
+          instanceName: instanceName,
+          rejectCall: enable,
+          rejectCallsMessage: message || ''
+        }
+      });
+
+      if (error) throw error;
+
+      await supabase
+        .from('whatsapp_instances')
+        .update({ 
+          reject_calls: enable, 
+          reject_calls_message: message || ''
+        })
+        .eq('id', instanceId);
+
+      setInstances(prevInstances => 
+        prevInstances.map(instance => 
+          instance.id === instanceId 
+            ? { ...instance, reject_calls: enable, reject_calls_message: message || instance.reject_calls_message } 
+            : instance
+        )
+      );
+      
+      toast.success(`Call rejection ${enable ? 'enabled' : 'disabled'} for ${instanceName}`);
+      
+      if (showCallRejectionForm) {
+        setShowCallRejectionForm(false);
+        setSelectedInstanceForCallSettings(null);
+      }
+    } catch (error) {
+      logger.error('Error updating call rejection settings:', error);
+      toast.error('Failed to update call rejection settings');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCallRejectionSave = async (message: string) => {
+    if (!selectedInstanceForCallSettings) return;
+    
+    await updateCallRejectionSettings(
+      selectedInstanceForCallSettings.id,
+      selectedInstanceForCallSettings.instance_name,
+      true,
+      message
+    );
+  };
+
+  const handleCallRejectionCancel = () => {
+    setShowCallRejectionForm(false);
+    setSelectedInstanceForCallSettings(null);
+  };
+
+  const disableCallRejection = async (instanceId: string, instanceName: string) => {
+    await updateCallRejectionSettings(instanceId, instanceName, false);
+  };
+
   const validateInstanceName = (name: string) => {
     const isValid = /^[a-zA-Z0-9]+$/.test(name);
     setIsValidName(isValid);
@@ -808,6 +862,15 @@ const WhatsAppLink = () => {
             </Card>
           </motion.div>}
 
+        {showCallRejectionForm && selectedInstanceForCallSettings && (
+          <CallRejectionForm 
+            instance={selectedInstanceForCallSettings}
+            onCancel={handleCallRejectionCancel}
+            onSave={handleCallRejectionSave}
+            isLoading={isLoading}
+          />
+        )}
+
         {instances.length > 0 ? <motion.div initial={{
         opacity: 0,
         y: 20
@@ -827,33 +890,4 @@ const WhatsAppLink = () => {
                   </CardHeader>
                   <CardContent className="flex-grow">
                     {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && <div className="flex flex-col items-center space-y-2 mb-4">
-                        <p className="text-sm font-medium">Scan QR Code to Connect</p>
-                        <img src={instance.qr_code} alt="WhatsApp QR Code" className="w-full max-w-[200px] h-auto mx-auto" />
-                      </div>}
-                    <InstanceActions instance={instance} isLoading={isLoading} onLogout={() => handleLogout(instance.id, instance.instance_name)} onReconnect={() => handleReconnect(instance.id, instance.instance_name)} onDelete={() => handleDelete(instance.id, instance.instance_name)} />
-                    <WhatsAppAIToggle instanceId={instance.id} instanceName={instance.instance_name} />
-                    <CallRejectionSettings
-                      instanceId={instance.id}
-                      instanceName={instance.instance_name}
-                      initialRejectCalls={instance.reject_calls || false}
-                      initialRejectCallsMessage={instance.reject_calls_message || 'Sorry, I cannot take your call right now. Please leave a message and I will get back to you.'}
-                    />
-                  </CardContent>
-                </Card>)}
-            </div>
-          </motion.div> : !showCreateForm && <motion.div initial={{
-        opacity: 0,
-        y: 20
-      }} animate={{
-        opacity: 1,
-        y: 0
-      }} transition={{
-        delay: 0.4
-      }}>
-              <EmptyState onCreateClick={() => setShowCreateForm(true)} />
-            </motion.div>}
-      </div>
-    </motion.div>;
-};
-
-export default WhatsAppLink;
+                        <p className="text-sm font-medium">Scan QR Code
