@@ -718,7 +718,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         status: searchResponse.status,
         error: errorText
       });
-      console.error('Semantic search failed:', errorText);
+      logger.error('Semantic search failed:', errorText);
       
       // Continue with empty context instead of failing
       await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
@@ -796,7 +796,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     );
   } catch (error) {
     await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
-    console.error('Error in processMessageForAI:', error);
+    logger.error('Error in processMessageForAI:', error);
     return false;
   }
 }
