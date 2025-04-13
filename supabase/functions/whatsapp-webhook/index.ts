@@ -976,14 +976,6 @@ serve(async (req) => {
         await logDebug('WEBHOOK_SAVED', 'Webhook message saved successfully');
       }
       
-      // CRITICAL FIX: Process connection status events here if they weren't caught earlier
-      // This ensures all connection status events update the database regardless of how they were detected
-      if (event === 'connection.update') {
-        await logDebug('WEBHOOK_CONNECTION_SECONDARY_PATH', 'Processing connection status from secondary detection path');
-        await processConnectionStatus(instanceName, normalizedData);
-        await logDebug('WEBHOOK_CONNECTION_PROCESSED', 'Connection status processed successfully from secondary path');
-      }
-      
       // Process for support escalation if this is a message event
       let skipAiProcessing = false;
       let foundInstanceId = null;
