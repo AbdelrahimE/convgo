@@ -1,7 +1,7 @@
 
 import * as React from "react"
-
 import { cn } from "@/lib/utils"
+import { useMergeRefs } from "@/hooks/use-merge-refs"
 
 export interface TextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -14,13 +14,7 @@ export interface TextareaProps
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, autoExpand, minRows, maxRows, ...props }, ref) => {
     const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
-    const combinedRef = React.useMergeRefs ? 
-      React.useMergeRefs([textareaRef, ref]) : 
-      (node: HTMLTextAreaElement) => {
-        textareaRef.current = node;
-        if (typeof ref === 'function') ref(node);
-        else if (ref) ref.current = node;
-      };
+    const combinedRef = useMergeRefs([textareaRef, ref]);
 
     // Auto-expand functionality
     const adjustHeight = React.useCallback(() => {
@@ -93,21 +87,6 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     )
   }
 )
-
-// Add a useMergeRefs helper if not available globally
-if (!React.useMergeRefs) {
-  React.useMergeRefs = (refs: React.Ref<any>[]) => {
-    return (instance: any) => {
-      refs.forEach((ref) => {
-        if (typeof ref === "function") {
-          ref(instance);
-        } else if (ref != null) {
-          (ref as React.MutableRefObject<any>).current = instance;
-        }
-      });
-    };
-  };
-}
 
 Textarea.displayName = "Textarea"
 

@@ -110,7 +110,9 @@ const InstanceActions = ({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            
+            <Button variant="secondary" onClick={onToggleCallRejection} disabled={isLoading} className="w-full sm:w-auto">
+              <PhoneOff className="mr-2 h-4 w-4" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent>
             <p>Configure call rejection settings</p>
@@ -802,15 +804,4 @@ const WhatsAppLink = () => {
                     
                     <InstanceActions instance={instance} isLoading={isLoading} onLogout={() => handleLogout(instance.id, instance.instance_name)} onReconnect={() => handleReconnect(instance.id, instance.instance_name)} onDelete={() => handleDelete(instance.id, instance.instance_name)} onToggleCallRejection={() => handleCallRejectionToggle(instance)} />
                     
-                    <WhatsAppAIToggle instanceId={instance.id} instanceName={instance.instance_name} />
-                    
-                    <CallRejectionToggle instance={instance} onSettings={() => handleCallRejectionToggle(instance)} onToggle={enabled => updateCallRejectionSettings(instance.id, instance.instance_name, enabled)} isLoading={isLoading} />
-                  </CardContent>
-                </Card>)}
-            </div>
-          </motion.div> : <EmptyState onCreateClick={() => setShowCreateForm(true)} />}
-      </div>
-    </motion.div>;
-};
-
-export default WhatsAppLink;
+                    <WhatsAppAIToggle instanceId={instance.id} instanceName={instance.

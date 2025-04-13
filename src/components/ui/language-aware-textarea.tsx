@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useClientLanguageDetection } from "@/hooks/use-client-language-detection";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
+import { useMergeRefs } from "@/hooks/use-merge-refs";
 
 export interface LanguageAwareTextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -29,7 +30,7 @@ const LanguageAwareTextarea = React.forwardRef<
   const { detectLanguage } = useClientLanguageDetection();
   const [detectedLang, setDetectedLang] = useState<'ar' | 'en' | 'auto'>(defaultLanguage);
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
-  const combinedRef = React.useMergeRefs([textareaRef, ref]);
+  const combinedRef = useMergeRefs([textareaRef, ref]);
   
   // Update language detection when value changes
   useEffect(() => {
@@ -67,19 +68,6 @@ const LanguageAwareTextarea = React.forwardRef<
     adjustHeight();
   }, [adjustHeight, value]);
   
-  // Create a helper function to merge refs if not available globally
-  const useMergeRefs = (refs: React.Ref<any>[]) => {
-    return (instance: any) => {
-      refs.forEach((ref) => {
-        if (typeof ref === "function") {
-          ref(instance);
-        } else if (ref != null) {
-          (ref as React.MutableRefObject<any>).current = instance;
-        }
-      });
-    };
-  };
-  
   // Apply language-specific class
   const langClass = detectedLang === 'ar' ? 'lang-ar' : 
                    (detectedLang === 'en' ? 'lang-en' : '');
@@ -107,19 +95,6 @@ const LanguageAwareTextarea = React.forwardRef<
     />
   );
 });
-
-// Create the useMergeRefs helper function
-React.useMergeRefs = (refs: React.Ref<any>[]) => {
-  return (instance: any) => {
-    refs.forEach((ref) => {
-      if (typeof ref === "function") {
-        ref(instance);
-      } else if (ref != null) {
-        (ref as React.MutableRefObject<any>).current = instance;
-      }
-    });
-  };
-};
 
 LanguageAwareTextarea.displayName = "LanguageAwareTextarea";
 
