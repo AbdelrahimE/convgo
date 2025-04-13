@@ -21,11 +21,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
 import logger from '@/utils/logger';
+
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
+
 interface AIConfig {
   id: string;
   system_prompt: string;
@@ -35,6 +37,7 @@ interface AIConfig {
   voice_message_default_response: string;
   default_voice_language: string;
 }
+
 const WhatsAppAIConfig = () => {
   const {
     user
@@ -71,6 +74,7 @@ const WhatsAppAIConfig = () => {
   const [useRealConversation, setUseRealConversation] = useState(true);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [showVoiceFeature, setShowVoiceFeature] = useState(true);
+
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
     try {
@@ -98,11 +102,13 @@ const WhatsAppAIConfig = () => {
       setIsCleaningUp(false);
     }
   }, []);
+
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
+
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -113,6 +119,7 @@ const WhatsAppAIConfig = () => {
       setDefaultVoiceLanguage('ar');
     }
   }, [selectedInstance]);
+
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
@@ -126,11 +133,13 @@ const WhatsAppAIConfig = () => {
       }
     };
   }, [testConversationId, useRealConversation, cleanupTestConversation]);
+
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
     }
   }, [activeTab, selectedInstance, useRealConversation]);
+
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -150,6 +159,7 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
+
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
@@ -178,6 +188,7 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
+
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
@@ -231,9 +242,11 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
+
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
+
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
@@ -265,6 +278,7 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
+
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
     try {
@@ -296,6 +310,7 @@ const WhatsAppAIConfig = () => {
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
+
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       const idToDelete = testConversationId;
@@ -310,6 +325,7 @@ const WhatsAppAIConfig = () => {
       setConversation([]);
     }
   };
+
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -391,6 +407,7 @@ const WhatsAppAIConfig = () => {
       }]);
     }
   };
+
   return <motion.div initial={{
     opacity: 0,
     y: 20
@@ -449,7 +466,12 @@ const WhatsAppAIConfig = () => {
         }} transition={{
           delay: 0.4
         }}>
-            <WhatsAppAIToggle instanceId={selectedInstance} instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} />
+            <WhatsAppAIToggle 
+              instanceId={selectedInstance} 
+              instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} 
+              instanceStatus={instances.find(i => i.id === selectedInstance)?.status}
+              variant="detailed" 
+            />
           </motion.div>}
         
         <motion.div initial={{
@@ -648,4 +670,5 @@ const WhatsAppAIConfig = () => {
     </Dialog>
   </motion.div>;
 };
+
 export default WhatsAppAIConfig;
