@@ -308,19 +308,11 @@ const WhatsAppLink = () => {
                             state === 'connecting' || state === 'STARTING' ? 'CONNECTING' : 
                             state === 'qrcode' ? 'CONNECTING' : 'DISCONNECTED';
         
-        if (updatedStatus === 'CONNECTED') {
-          await supabase.from('whatsapp_instances').update({
-            status: updatedStatus,
-            last_connected: new Date().toISOString()
-          }).eq('instance_name', name);
-        }
-        
         setInstances(prev => prev.map(instance => 
           instance.instance_name === name ? {
             ...instance,
             status: updatedStatus,
             qr_code: updatedStatus === 'CONNECTED' ? undefined : instance.qr_code,
-            last_connected: updatedStatus === 'CONNECTED' ? new Date().toISOString() : instance.last_connected
           } : instance
         ));
         
@@ -410,16 +402,13 @@ const WhatsAppLink = () => {
         }
       });
       if (error) throw error;
-      await supabase.from('whatsapp_instances').update({
-        status: 'DISCONNECTED',
-        last_connected: null
-      }).eq('id', instanceId);
+      
       setInstances(prev => prev.map(instance => instance.id === instanceId ? {
         ...instance,
         status: 'DISCONNECTED',
-        last_connected: null
       } : instance));
-      toast.success('WhatsApp instance logged out successfully');
+      
+      toast.success('WhatsApp instance logout initiated. Status will update soon.');
     } catch (error) {
       logger.error('Error logging out WhatsApp instance:', error);
       toast.error('Failed to logout WhatsApp instance');
@@ -431,16 +420,12 @@ const WhatsAppLink = () => {
   const handleReconnect = async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
-      const {
-        error: updateError
-      } = await supabase.from('whatsapp_instances').update({
-        status: 'CONNECTING'
-      }).eq('id', instanceId);
-      if (updateError) throw updateError;
+      
       setInstances(prev => prev.map(instance => instance.id === instanceId ? {
         ...instance,
         status: 'CONNECTING'
       } : instance));
+      
       const {
         data,
         error
@@ -455,18 +440,18 @@ const WhatsAppLink = () => {
       if (!qrCodeData) {
         throw new Error('No QR code received from server');
       }
+      
       setInstances(prev => prev.map(instance => instance.id === instanceId ? {
         ...instance,
         status: 'CONNECTING',
         qr_code: qrCodeData
       } : instance));
+      
       toast.success('Scan the QR code to reconnect your WhatsApp instance');
     } catch (error: any) {
       logger.error('Error reconnecting WhatsApp instance:', error);
       toast.error('Failed to reconnect WhatsApp instance');
-      await supabase.from('whatsapp_instances').update({
-        status: 'DISCONNECTED'
-      }).eq('id', instanceId);
+      
       setInstances(prev => prev.map(instance => instance.id === instanceId ? {
         ...instance,
         status: 'DISCONNECTED'
