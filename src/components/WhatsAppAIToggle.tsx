@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -6,10 +7,12 @@ import { Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/utils/logger';
+
 interface WhatsAppAIToggleProps {
   instanceId: string;
   instanceName: string;
 }
+
 const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
   instanceId,
   instanceName
@@ -17,11 +20,13 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+
   useEffect(() => {
     if (instanceId) {
       fetchAIStatus();
     }
   }, [instanceId]);
+
   const fetchAIStatus = async () => {
     try {
       setIsLoading(true);
@@ -45,6 +50,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       setIsLoading(false);
     }
   };
+
   const toggleAI = async () => {
     try {
       setIsUpdating(true);
@@ -85,6 +91,27 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       setIsUpdating(false);
     }
   };
-  return;
+
+  return (
+    <div className="space-y-2 mt-4 border-t pt-4">
+      <div className="flex items-center justify-between">
+        <Label htmlFor="ai-toggle" className="text-base">
+          Enable AI Responses
+        </Label>
+        <Switch
+          id="ai-toggle"
+          checked={isEnabled}
+          onCheckedChange={toggleAI}
+          disabled={isLoading || isUpdating}
+          className="data-[state=checked]:bg-green-500"
+        />
+      </div>
+      {isLoading && <div className="flex items-center justify-center py-2">
+        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+        <span className="text-sm text-muted-foreground">Loading...</span>
+      </div>}
+    </div>
+  );
 };
+
 export default WhatsAppAIToggle;

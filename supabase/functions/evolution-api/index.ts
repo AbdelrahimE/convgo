@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -69,7 +70,7 @@ serve(async (req) => {
         url = `${baseUrl}/settings/set/${params.instanceName}`;
         method = 'POST';
         body = JSON.stringify({
-          rejectCall: params.rejectCalls,
+          rejectCall: params.rejectCall, // Fixed: Changed from rejectCalls to rejectCall
           msgCall: params.rejectCallsMessage,
           groupsIgnore: false,
           alwaysOnline: false,
