@@ -8,14 +8,28 @@ import { Textarea } from "@/components/ui/textarea";
 export interface LanguageAwareTextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   defaultLanguage?: 'ar' | 'en' | 'auto';
+  autoExpand?: boolean;
+  minRows?: number;
+  maxRows?: number;
 }
 
 const LanguageAwareTextarea = React.forwardRef<
   HTMLTextAreaElement,
   LanguageAwareTextareaProps
->(({ className, defaultLanguage = 'auto', value, onChange, ...props }, ref) => {
+>(({ 
+  className, 
+  defaultLanguage = 'auto', 
+  value, 
+  onChange, 
+  autoExpand = false,
+  minRows = 3,
+  maxRows = 8,
+  ...props 
+}, ref) => {
   const { detectLanguage } = useClientLanguageDetection();
   const [detectedLang, setDetectedLang] = useState<'ar' | 'en' | 'auto'>(defaultLanguage);
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const combinedRef = React.useMergeRefs([textareaRef, ref]);
   
   // Update language detection when value changes
   useEffect(() => {
@@ -25,6 +39,47 @@ const LanguageAwareTextarea = React.forwardRef<
     }
   }, [value, detectLanguage]);
 
+  // Auto-expand functionality
+  const adjustHeight = React.useCallback(() => {
+    if (!autoExpand || !textareaRef.current) return;
+    
+    const textarea = textareaRef.current;
+    
+    // Reset height to get the correct scrollHeight
+    textarea.style.height = 'auto';
+    
+    // Calculate the proper height with limits
+    const lineHeight = parseInt(getComputedStyle(textarea).lineHeight) || 24;
+    const minHeight = lineHeight * minRows;
+    const maxHeight = lineHeight * maxRows;
+    
+    const scrollHeight = textarea.scrollHeight;
+    const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
+    
+    textarea.style.height = `${newHeight}px`;
+    
+    // Show/hide scrollbar if content exceeds maxHeight
+    textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [autoExpand, minRows, maxRows]);
+  
+  // Adjust height on mount and when value changes
+  React.useEffect(() => {
+    adjustHeight();
+  }, [adjustHeight, value]);
+  
+  // Create a helper function to merge refs if not available globally
+  const useMergeRefs = (refs: React.Ref<any>[]) => {
+    return (instance: any) => {
+      refs.forEach((ref) => {
+        if (typeof ref === "function") {
+          ref(instance);
+        } else if (ref != null) {
+          (ref as React.MutableRefObject<any>).current = instance;
+        }
+      });
+    };
+  };
+  
   // Apply language-specific class
   const langClass = detectedLang === 'ar' ? 'lang-ar' : 
                    (detectedLang === 'en' ? 'lang-en' : '');
@@ -32,10 +87,13 @@ const LanguageAwareTextarea = React.forwardRef<
   // Handle direction automatically
   const directionClass = detectedLang === 'ar' ? 'direction-rtl' : 'direction-ltr';
   
+  // Add autoExpand styles if enabled
+  const expandClass = autoExpand ? 'resize-none overflow-hidden' : '';
+  
   return (
     <Textarea
-      ref={ref}
-      className={cn(langClass, directionClass, className)}
+      ref={combinedRef}
+      className={cn(langClass, directionClass, expandClass, className)}
       value={value}
       onChange={(e) => {
         if (onChange) {
@@ -49,6 +107,19 @@ const LanguageAwareTextarea = React.forwardRef<
     />
   );
 });
+
+// Create the useMergeRefs helper function
+React.useMergeRefs = (refs: React.Ref<any>[]) => {
+  return (instance: any) => {
+    refs.forEach((ref) => {
+      if (typeof ref === "function") {
+        ref(instance);
+      } else if (ref != null) {
+        (ref as React.MutableRefObject<any>).current = instance;
+      }
+    });
+  };
+};
 
 LanguageAwareTextarea.displayName = "LanguageAwareTextarea";
 

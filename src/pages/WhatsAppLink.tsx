@@ -15,6 +15,8 @@ import { motion } from "framer-motion";
 import logger from '@/utils/logger';
 import { logWebhook } from '@/utils/webhook-logger';
 import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
+import { LanguageAwareTextarea } from '@/components/ui/language-aware-textarea';
+
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
@@ -24,6 +26,7 @@ interface WhatsAppInstance {
   reject_calls: boolean;
   reject_calls_message: string;
 }
+
 const statusConfig = {
   CONNECTED: {
     color: "text-green-500 bg-green-50 dark:bg-green-950/50",
@@ -50,6 +53,7 @@ const statusConfig = {
     label: "Connecting"
   }
 };
+
 const StatusBadge = ({
   status
 }: {
@@ -62,6 +66,7 @@ const StatusBadge = ({
       {config.label}
     </div>;
 };
+
 const InstanceActions = ({
   instance,
   isLoading,
@@ -135,6 +140,7 @@ const InstanceActions = ({
       </div>
     </TooltipProvider>;
 };
+
 const EmptyState = ({
   onCreateClick
 }: {
@@ -197,6 +203,7 @@ const EmptyState = ({
       </CardContent>
     </Card>;
 };
+
 const CallRejectionForm = ({
   instance,
   onCancel,
@@ -234,7 +241,16 @@ const CallRejectionForm = ({
         }} className="space-y-4 md:space-y-6">
             <div className="space-y-2">
               <Label htmlFor="rejection-message">Rejection Message</Label>
-              <Input id="rejection-message" value={message} onChange={e => setMessage(e.target.value)} placeholder="Enter message to send when rejecting calls" className="w-full" />
+              <LanguageAwareTextarea 
+                id="rejection-message" 
+                value={message} 
+                onChange={e => setMessage(e.target.value)} 
+                placeholder="Enter message to send when rejecting calls" 
+                className="w-full"
+                autoExpand={true}
+                minRows={3}
+                maxRows={6}
+              />
               <p className="text-sm text-muted-foreground">
                 This message will be automatically sent when rejecting incoming calls.
               </p>
@@ -258,6 +274,7 @@ const CallRejectionForm = ({
       </Card>
     </motion.div>;
 };
+
 const CallRejectionToggle = ({
   instance,
   onSettings,
@@ -294,6 +311,7 @@ const CallRejectionToggle = ({
         </div>}
     </div>;
 };
+
 const WhatsAppLink = () => {
   const {
     user,
@@ -794,4 +812,5 @@ const WhatsAppLink = () => {
       </div>
     </motion.div>;
 };
+
 export default WhatsAppLink;
