@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,10 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch"; // Add the import for Switch component
+import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, Plus, Check, X, RefreshCw, LogOut, Trash2, MessageSquare, ArrowRight, Bot } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Loader2, Plus, Check, X, RefreshCw, LogOut, Trash2, MessageSquare, ArrowRight, Bot, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import logger from '@/utils/logger';
@@ -193,7 +193,6 @@ const EmptyState = ({
     </Card>;
 };
 
-// Add a new component for Call Rejection Settings
 const CallRejectionSettings = ({ 
   instanceId, 
   instanceName, 
@@ -205,44 +204,58 @@ const CallRejectionSettings = ({
   initialRejectCalls: boolean, 
   initialRejectCallsMessage: string
 }) => {
-  const [rejectCalls, setRejectCalls] = useState(initialRejectCalls);
+  const [rejectCall, setRejectCall] = useState(initialRejectCalls);
   const [rejectCallsMessage, setRejectCallsMessage] = useState(initialRejectCallsMessage);
   const [isLoading, setIsLoading] = useState(false);
+  const [showMessageDialog, setShowMessageDialog] = useState(false);
+  const [tempMessage, setTempMessage] = useState(initialRejectCallsMessage);
 
   const handleCallRejectionToggle = async () => {
+    if (!rejectCall) {
+      setTempMessage(rejectCallsMessage);
+      setShowMessageDialog(true);
+    } else {
+      await updateCallRejectionSettings(false, rejectCallsMessage);
+    }
+  };
+
+  const updateCallRejectionSettings = async (newRejectCallState: boolean, message: string) => {
     try {
       setIsLoading(true);
       
-      // Call Evolution API to update call rejection settings
       const { data, error } = await supabase.functions.invoke('evolution-api', {
         body: {
           operation: 'CALL_SETTINGS',
           instanceName: instanceName,
-          rejectCalls: !rejectCalls,
-          rejectCallsMessage
+          rejectCall: newRejectCallState,
+          rejectCallsMessage: message
         }
       });
 
       if (error) throw error;
 
-      // Update local state and database
-      const newRejectCallsState = !rejectCalls;
       await supabase
         .from('whatsapp_instances')
         .update({ 
-          reject_calls: newRejectCallsState, 
-          reject_calls_message: rejectCallsMessage 
+          reject_calls: newRejectCallState, 
+          reject_calls_message: message 
         })
         .eq('id', instanceId);
 
-      setRejectCalls(newRejectCallsState);
-      toast.success(`Call rejection ${newRejectCallsState ? 'enabled' : 'disabled'} for ${instanceName}`);
+      setRejectCall(newRejectCallState);
+      setRejectCallsMessage(message);
+      toast.success(`Call rejection ${newRejectCallState ? 'enabled' : 'disabled'} for ${instanceName}`);
     } catch (error) {
       logger.error('Error updating call rejection settings:', error);
       toast.error('Failed to update call rejection settings');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleMessageConfirm = async () => {
+    await updateCallRejectionSettings(true, tempMessage);
+    setShowMessageDialog(false);
   };
 
   return (
@@ -253,21 +266,76 @@ const CallRejectionSettings = ({
         </Label>
         <Switch
           id="call-rejection-toggle"
-          checked={rejectCalls}
+          checked={rejectCall}
           onCheckedChange={handleCallRejectionToggle}
           disabled={isLoading}
           className="data-[state=checked]:bg-green-500"
         />
       </div>
-      {rejectCalls && (
-        <div className="space-y-2">
-          <Label>Rejection Message</Label>
-          <Input
-            value={rejectCallsMessage}
-            onChange={(e) => setRejectCallsMessage(e.target.value)}
-            placeholder="Enter message to send when rejecting calls"
-            disabled={isLoading}
-          />
+      
+      <Dialog open={showMessageDialog} onOpenChange={setShowMessageDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Call Rejection Message</DialogTitle>
+            <DialogDescription>
+              Enter the message that will be sent when rejecting calls automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="rejection-message">Message</Label>
+              <Input
+                id="rejection-message"
+                value={tempMessage}
+                onChange={(e) => setTempMessage(e.target.value)}
+                placeholder="Enter message to send when rejecting calls"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowMessageDialog(false)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleMessageConfirm} 
+              disabled={isLoading || !tempMessage.trim()}
+              className="bg-blue-700 hover:bg-blue-600"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Save Message
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {rejectCall && (
+        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+          <p className="text-sm text-muted-foreground mb-1">Current rejection message:</p>
+          <p className="text-sm font-medium">{rejectCallsMessage}</p>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="mt-2"
+            onClick={() => {
+              setTempMessage(rejectCallsMessage);
+              setShowMessageDialog(true);
+            }}
+          >
+            Edit Message
+          </Button>
         </div>
       )}
     </div>

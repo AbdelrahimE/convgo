@@ -70,7 +70,7 @@ serve(async (req) => {
         url = `${baseUrl}/settings/set/${params.instanceName}`;
         method = 'POST';
         body = JSON.stringify({
-          rejectCall: params.rejectCall, // Fixed: Changed from rejectCalls to rejectCall
+          rejectCall: params.rejectCall, // Correct parameter name as per API documentation
           msgCall: params.rejectCallsMessage,
           groupsIgnore: false,
           alwaysOnline: false,
@@ -78,6 +78,7 @@ serve(async (req) => {
           syncFullHistory: false,
           readStatus: false
         });
+        logger.info(`CALL_SETTINGS request for ${params.instanceName}: rejectCall=${params.rejectCall}, message='${params.rejectCallsMessage}'`);
         break;
 
       default:
@@ -85,6 +86,7 @@ serve(async (req) => {
     }
 
     // Make request to Evolution API
+    logger.info(`Making ${method} request to ${url}`);
     const response = await fetch(url, {
       method,
       headers: {
