@@ -6,10 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, Plus, Check, X, MoreVertical, RefreshCw, LogOut, Trash2, MessageSquare, ArrowRight, FileText, Bot } from "lucide-react";
+import { Loader2, Plus, Check, X, RefreshCw, LogOut, Trash2, MessageSquare, ArrowRight, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import logger from '@/utils/logger';
@@ -293,11 +292,13 @@ const WhatsAppLink = () => {
       const {
         data,
         error
-      } = await supabase.functions.invoke('whatsapp-instance-status', {
+      } = await supabase.functions.invoke('evolution-api', {
         body: {
+          operation: 'CHECK_STATUS',
           instanceName: name.trim()
         }
       });
+      
       if (error) throw error;
       if (data) {
         const state = data.state;
@@ -341,11 +342,13 @@ const WhatsAppLink = () => {
       const {
         data,
         error
-      } = await supabase.functions.invoke('whatsapp-instance-create', {
+      } = await supabase.functions.invoke('evolution-api', {
         body: {
+          operation: 'CREATE_INSTANCE',
           instanceName
         }
       });
+      
       if (error) throw error;
       logger.log('Response from create:', data);
       const qrCodeData = extractQRCode(data);
@@ -380,11 +383,13 @@ const WhatsAppLink = () => {
       setIsLoading(true);
       const {
         error
-      } = await supabase.functions.invoke('whatsapp-instance-delete', {
+      } = await supabase.functions.invoke('evolution-api', {
         body: {
+          operation: 'DELETE_INSTANCE',
           instanceName
         }
       });
+      
       if (error) throw error;
       await supabase.from('whatsapp_instances').delete().eq('id', instanceId);
       setInstances(prev => prev.filter(instance => instance.id !== instanceId));
@@ -402,11 +407,13 @@ const WhatsAppLink = () => {
       setIsLoading(true);
       const {
         error
-      } = await supabase.functions.invoke('whatsapp-instance-logout', {
+      } = await supabase.functions.invoke('evolution-api', {
         body: {
+          operation: 'LOGOUT_INSTANCE',
           instanceName
         }
       });
+      
       if (error) throw error;
       await supabase.from('whatsapp_instances').update({
         status: 'DISCONNECTED',
@@ -442,11 +449,13 @@ const WhatsAppLink = () => {
       const {
         data,
         error
-      } = await supabase.functions.invoke('whatsapp-instance-connect', {
+      } = await supabase.functions.invoke('evolution-api', {
         body: {
+          operation: 'CONNECT_INSTANCE',
           instanceName: instanceName.trim()
         }
       });
+      
       if (error) throw error;
       logger.log('Response from reconnect:', data);
       const qrCodeData = extractQRCode(data);
