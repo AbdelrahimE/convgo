@@ -26,7 +26,7 @@ export async function processConnectionStatus(instanceName: string, statusData: 
       statusReason: stateData.statusReason 
     });
     
-    // Map the webhook status to database status values
+    // Map the webhook status to database status values using the exact values from EVOLUTION API
     let dbStatus: string;
     switch (stateData.state) {
       case 'open':

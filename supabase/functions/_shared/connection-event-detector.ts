@@ -9,12 +9,12 @@
  * @returns boolean indicating whether this is a connection status event
  */
 export function isConnectionStatusEvent(data: any): boolean {
-  // Check if this is a standard connection event
+  // Check if this is a standard connection event with the exact format from EVOLUTION API
   if (data && data.event === 'connection.update') {
     return true;
   }
   
-  // Or directly check for state property in data or nested data
+  // Check for the specific state formats in the data structure
   const stateData = data?.data || data;
   return (
     data &&
@@ -23,3 +23,4 @@ export function isConnectionStatusEvent(data: any): boolean {
     ['open', 'connecting', 'close'].includes(stateData.state)
   );
 }
+
