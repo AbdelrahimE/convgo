@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -93,6 +94,7 @@ const WhatsAppSupportConfig = () => {
         userId: user.id 
       });
       
+      // Use maybeSingle() instead of single() to avoid 406 errors
       const {
         data,
         error,
@@ -102,21 +104,12 @@ const WhatsAppSupportConfig = () => {
         .select('*')
         .eq('whatsapp_instance_id', selectedInstance)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
       
       // Log the response status for debugging
       logger.log('Support config response status:', status);
       
       if (error) {
-        if (error.code === 'PGRST116') {
-          // No config found, use defaults
-          logger.log('No existing support config found, using defaults');
-          setSupportPhoneNumber('');
-          setNotificationMessage('A customer needs support. Please check your WhatsApp Support dashboard.');
-          setEscalationMessage('Thank you for your message. A support representative will get back to you as soon as possible.');
-          return;
-        }
-        
         // Log the detailed error for debugging
         logger.error('Error fetching support config:', { 
           code: error.code,
@@ -126,6 +119,15 @@ const WhatsAppSupportConfig = () => {
         });
         
         throw error;
+      }
+      
+      if (!data) {
+        // No config found, use defaults
+        logger.log('No existing support config found, using defaults');
+        setSupportPhoneNumber('');
+        setNotificationMessage('A customer needs support. Please check your WhatsApp Support dashboard.');
+        setEscalationMessage('Thank you for your message. A support representative will get back to you as soon as possible.');
+        return;
       }
       
       logger.log('Support config loaded successfully');
