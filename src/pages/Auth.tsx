@@ -45,6 +45,10 @@ export default function Auth() {
         throw new Error('Your password needs to be at least 8 characters long for better security');
       }
 
+      if (password !== confirmPassword) {
+        throw new Error('Passwords do not match. Please try again.');
+      }
+
       const hasLower = /[a-z]/.test(password);
       const hasUpper = /[A-Z]/.test(password);
       const hasNumber = /[0-9]/.test(password);
@@ -321,23 +325,65 @@ export default function Auth() {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div>
-                  <Label htmlFor="signup-email" className="text-left block py-[5px]">Email</Label>
-                  <Input id="signup-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
-                </div>
-                <div>
-                  <Label htmlFor="signup-password" className="text-left block py-[5px]">Password</Label>
-                  <Input id="signup-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-                </div>
-                <div>
                   <Label htmlFor="fullName" className="text-left block py-[5px]">Full Name</Label>
-                  <Input id="fullName" type="text" placeholder="John Doe" value={fullName} onChange={e => setFullName(e.target.value)} required />
+                  <Input 
+                    id="fullName" 
+                    type="text" 
+                    placeholder="John Doe" 
+                    value={fullName} 
+                    onChange={e => setFullName(e.target.value)} 
+                    required 
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="signup-email" className="text-left block py-[5px]">Email</Label>
+                  <Input 
+                    id="signup-email" 
+                    type="email" 
+                    placeholder="you@example.com" 
+                    value={email} 
+                    onChange={e => setEmail(e.target.value)} 
+                    required 
+                  />
                 </div>
                 <div>
                   <Label htmlFor="businessName" className="text-left block py-[5px]">Business Name</Label>
-                  <Input id="businessName" type="text" placeholder="Acme Inc" value={businessName} onChange={e => setBusinessName(e.target.value)} required />
+                  <Input 
+                    id="businessName" 
+                    type="text" 
+                    placeholder="Acme Inc" 
+                    value={businessName} 
+                    onChange={e => setBusinessName(e.target.value)} 
+                    required 
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="signup-password" className="text-left block py-[5px]">Password</Label>
+                  <Input 
+                    id="signup-password" 
+                    type="password" 
+                    value={password} 
+                    onChange={e => setPassword(e.target.value)} 
+                    required 
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="confirm-password" className="text-left block py-[5px]">Confirm Password</Label>
+                  <Input 
+                    id="confirm-password" 
+                    type="password" 
+                    value={confirmPassword} 
+                    onChange={e => setConfirmPassword(e.target.value)} 
+                    required 
+                  />
                 </div>
                 <Button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-600">
-                  {loading ? 'Signing up...' : 'Sign Up'}
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Signing up...
+                    </>
+                  ) : 'Sign Up'}
                 </Button>
               </form>
             </TabsContent>
