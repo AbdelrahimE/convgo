@@ -955,7 +955,7 @@ const countryCodes = [{
 }, {
   code: '+998',
   country: 'UZ',
-  flag: '🇺🇿',
+  flag: '🇺��',
   name: 'Uzbekistan'
 }, {
   code: '+678',
@@ -1026,9 +1026,25 @@ export default function Auth() {
       if (fullName.length < 3) {
         throw new Error('Full name must be at least 3 characters long');
       }
-      if (password.length < 6) {
-        throw new Error('Password must be at least 6 characters long');
+      
+      if (password.length < 8) {
+        throw new Error('Your password needs to be at least 8 characters long for better security');
       }
+
+      const hasLower = /[a-z]/.test(password);
+      const hasUpper = /[A-Z]/.test(password);
+      const hasNumber = /[0-9]/.test(password);
+      const hasSpecial = /[!@#$%^&*]/.test(password);
+
+      if (!hasLower || !hasUpper || !hasNumber || !hasSpecial) {
+        throw new Error('Please create a stronger password that includes:\n- At least one lowercase letter (a-z)\n- At least one uppercase letter (A-Z)\n- At least one number (0-9)\n- At least one special character (!@#$%^&*)');
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new Error('Please enter a valid email address (example: name@domain.com)');
+      }
+
       logger.info('Attempting to sign up with email:', email);
 
       const {
@@ -1045,14 +1061,12 @@ export default function Auth() {
           }
         }
       });
-      logger.info('Sign up response:', {
-        data,
-        error: signUpError
-      });
+
+      logger.info('Sign up response:', { data, error: signUpError });
 
       if (signUpError) {
         if (signUpError.message.includes('User already registered')) {
-          throw new Error('An account with this email already exists. Please sign in instead.');
+          throw new Error('This email is already registered. Please sign in instead or use a different email');
         }
         throw signUpError;
       }
@@ -1105,12 +1119,21 @@ export default function Auth() {
     setLoading(true);
     
     try {
-      if (password.length < 6) {
-        throw new Error('Password must be at least 6 characters long');
+      if (password.length < 8) {
+        throw new Error('Your password needs to be at least 8 characters long for better security');
+      }
+
+      const hasLower = /[a-z]/.test(password);
+      const hasUpper = /[A-Z]/.test(password);
+      const hasNumber = /[0-9]/.test(password);
+      const hasSpecial = /[!@#$%^&*]/.test(password);
+
+      if (!hasLower || !hasUpper || !hasNumber || !hasSpecial) {
+        throw new Error('Please create a stronger password that includes:\n- At least one lowercase letter (a-z)\n- At least one uppercase letter (A-Z)\n- At least one number (0-9)\n- At least one special character (!@#$%^&*)');
       }
       
       if (password !== confirmPassword) {
-        throw new Error('Passwords do not match');
+        throw new Error('The passwords you entered don\'t match. Please try again');
       }
       
       const { error } = await supabase.auth.updateUser({ password });
