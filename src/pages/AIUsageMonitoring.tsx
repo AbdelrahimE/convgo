@@ -10,6 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getGaugeColor } from '@/utils/gauge-utils';
 
 interface UsageData {
   allowed: boolean;
@@ -220,7 +221,7 @@ export default function AIUsageMonitoring() {
                     <div className="relative flex items-center justify-center w-48 h-48">
                       <svg className="w-full h-full" viewBox="0 0 100 100">
                         <circle className="text-muted-foreground/20" strokeWidth="10" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
-                        <circle className={getGaugeColor()} strokeWidth="10" strokeDasharray={`${percentageUsed * 2.51} 251.2`} strokeLinecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" transform="rotate(-90 50 50)" />
+                        <circle className={getGaugeColor(percentageUsed)} strokeWidth="10" strokeDasharray={`${percentageUsed * 2.51} 251.2`} strokeLinecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" transform="rotate(-90 50 50)" />
                       </svg>
                       <div className="absolute flex flex-col items-center justify-center text-center">
                         <span className="text-3xl font-bold">{Math.round(percentageUsed)}%</span>
