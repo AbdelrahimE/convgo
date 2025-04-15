@@ -1,4 +1,3 @@
-
 import logDebug from "./webhook-logger.ts";
 import { storeMessageInConversation } from "./conversation-storage.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -67,9 +66,9 @@ export async function generateAndSendAIResponse(
         context: context,
         systemPrompt: systemPrompt,
         temperature: aiConfig.temperature || 0.7,
-        model: 'gpt-4o-mini',
-        maxContextTokens: 3000, // Explicit token limit
-        imageUrl: imageUrl, // Pass the image URL if available
+        model: 'gpt-4.1-nano',
+        maxContextTokens: 3000,
+        imageUrl: imageUrl,
         userId: aiConfig.user_id || null
       })
     });
@@ -116,7 +115,7 @@ export async function generateAndSendAIResponse(
           total_tokens: responseData.usage?.total_tokens || 0,
           context_token_count: Math.ceil((context?.length || 0) / 4),
           search_result_count: context ? 1 : 0,
-          response_model: responseData.model || 'gpt-4o-mini'
+          response_model: responseData.model || 'gpt-4.1-nano'
         });
 
       if (interactionError) {
