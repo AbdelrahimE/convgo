@@ -23,11 +23,14 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import logger from '@/utils/logger';
 import { usePromptGenerationStats } from '@/hooks/use-prompt-generation-stats';
 import { format } from 'date-fns';
+import { PromptResetCountdown } from '@/components/ui/prompt-reset-countdown';
+
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
+
 interface AIConfig {
   id: string;
   system_prompt: string;
@@ -37,6 +40,7 @@ interface AIConfig {
   voice_message_default_response: string;
   default_voice_language: string;
 }
+
 const WhatsAppAIConfig = () => {
   const {
     user
@@ -84,6 +88,7 @@ const WhatsAppAIConfig = () => {
     isLoading: isLoadingStats,
     refreshStats
   } = usePromptGenerationStats();
+
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
     try {
@@ -111,11 +116,13 @@ const WhatsAppAIConfig = () => {
       setIsCleaningUp(false);
     }
   }, []);
+
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
+
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -126,6 +133,7 @@ const WhatsAppAIConfig = () => {
       setDefaultVoiceLanguage('ar');
     }
   }, [selectedInstance]);
+
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
@@ -139,11 +147,13 @@ const WhatsAppAIConfig = () => {
       }
     };
   }, [testConversationId, useRealConversation, cleanupTestConversation]);
+
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
     }
   }, [activeTab, selectedInstance, useRealConversation]);
+
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -163,6 +173,7 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
+
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
@@ -191,6 +202,7 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
+
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
@@ -244,9 +256,11 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
+
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
+
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
@@ -288,6 +302,7 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
+
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
     try {
@@ -319,6 +334,7 @@ const WhatsAppAIConfig = () => {
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
+
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       const idToDelete = testConversationId;
@@ -333,6 +349,7 @@ const WhatsAppAIConfig = () => {
       setConversation([]);
     }
   };
+
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -414,6 +431,7 @@ const WhatsAppAIConfig = () => {
       }]);
     }
   };
+
   return <motion.div initial={{
     opacity: 0,
     y: 20
@@ -635,7 +653,8 @@ const WhatsAppAIConfig = () => {
           <DialogTitle className="text-left font-bold">AI Prompt Generator</DialogTitle>
           <DialogDescription className="text-left">
             Describe what you want the AI to do in your own words, and we'll create a powerful system prompt for you.
-            {promptStats && <div className="mt-2 text-sm">
+            {promptStats && (
+              <div className="mt-2 text-sm">
                 <div className="flex justify-between items-center">
                   <span>
                     {promptStats.remaining} generations remaining
@@ -644,10 +663,14 @@ const WhatsAppAIConfig = () => {
                     ({promptStats.used}/{promptStats.limit} used)
                   </span>
                 </div>
-                {promptStats.resetsOn && <p className="text-xs text-muted-foreground mt-1 text-left">
-                    Resets on: {format(new Date(promptStats.resetsOn), 'MMM d, yyyy')}
-                  </p>}
-              </div>}
+                {promptStats.timeUntilReset && (
+                  <PromptResetCountdown 
+                    timeUntilReset={promptStats.timeUntilReset}
+                    className="mt-1"
+                  />
+                )}
+              </div>
+            )}
           </DialogDescription>
         </DialogHeader>
         
@@ -684,4 +707,5 @@ const WhatsAppAIConfig = () => {
     </Dialog>
   </motion.div>;
 };
+
 export default WhatsAppAIConfig;
