@@ -15,26 +15,21 @@ import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useDocumentEmbeddings } from "@/hooks/use-document-embeddings";
 import logger from '@/utils/logger';
-
 interface UploadingFile {
   file: File;
   id?: string;
 }
-
 interface RetryState {
   attempts: number;
   lastError: string | null;
   operation: 'upload' | 'metadata' | 'extraction';
 }
-
 interface ChunkingSettings {
   chunkSize: number;
   chunkOverlap: number;
 }
-
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
-
 export function FileUploader() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -47,7 +42,6 @@ export function FileUploader() {
     chunkSize: 1024,
     chunkOverlap: 120
   });
-
   const inputRef = useRef<HTMLInputElement>(null);
   const {
     toast
@@ -58,16 +52,13 @@ export function FileUploader() {
   const {
     generateEmbeddings
   } = useDocumentEmbeddings();
-
   const ALLOWED_FILE_TYPES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'text/csv', 'application/vnd.ms-excel', 'application/csv'];
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
   const [retryState, setRetryState] = useState<RetryState>({
     attempts: 0,
     lastError: null,
     operation: 'upload'
   });
-
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   const resetRetryState = () => {
     setRetryState({
@@ -76,7 +67,6 @@ export function FileUploader() {
       operation: 'upload'
     });
   };
-
   const handleRetry = async () => {
     if (retryState.attempts >= MAX_RETRY_ATTEMPTS) {
       toast({
@@ -110,7 +100,6 @@ export function FileUploader() {
         break;
     }
   };
-
   const validateFile = (file: File) => {
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
       toast({
@@ -130,7 +119,6 @@ export function FileUploader() {
     }
     return true;
   };
-
   const triggerTextExtraction = async (fileId: string) => {
     try {
       const {
@@ -176,7 +164,6 @@ export function FileUploader() {
       });
     }
   };
-
   const handleFileUpload = async (file: File) => {
     if (!file || !user) return;
     if (!validateFile(file)) return;
@@ -255,7 +242,6 @@ export function FileUploader() {
       if (inputRef.current) inputRef.current.value = '';
     }
   };
-
   const handleMetadataSave = () => {
     setShowMetadataDialog(false);
     setCurrentUploadingFile(null);
@@ -264,7 +250,6 @@ export function FileUploader() {
       description: "File metadata saved successfully"
     });
   };
-
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -273,40 +258,34 @@ export function FileUploader() {
       await handleFileUpload(e.dataTransfer.files[0]);
     }
   };
-
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(true);
   };
-
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
   };
-
   const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       await handleFileUpload(file);
     }
   };
-
   const handleChunkSizeChange = (value: number[]) => {
     setChunkingSettings(prev => ({
       ...prev,
       chunkSize: value[0]
     }));
   };
-
   const handleChunkOverlapChange = (value: number[]) => {
     setChunkingSettings(prev => ({
       ...prev,
       chunkOverlap: value[0]
     }));
   };
-
   const handleChunkSizeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
     if (!isNaN(value)) {
@@ -316,7 +295,6 @@ export function FileUploader() {
       }));
     }
   };
-
   const handleChunkOverlapInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
     if (!isNaN(value)) {
@@ -326,7 +304,6 @@ export function FileUploader() {
       }));
     }
   };
-
   return <>
       <motion.div whileHover={{
       scale: dragActive ? 1 : 1.01
@@ -403,25 +380,10 @@ export function FileUploader() {
             <div>
               <div className="flex justify-between">
                 <Label htmlFor="chunk-size">Chunk Size (tokens): {chunkingSettings.chunkSize}</Label>
-                <Input 
-                  type="number" 
-                  id="chunk-size-input" 
-                  className="w-20 h-8 text-xs" 
-                  value={chunkingSettings.chunkSize} 
-                  onChange={handleChunkSizeInputChange}
-                  min={100} 
-                  max={2000} 
-                />
+                <Input type="number" id="chunk-size-input" className="w-20 h-8 text-xs" value={chunkingSettings.chunkSize} onChange={handleChunkSizeInputChange} min={100} max={2000} />
               </div>
               <div className="pt-2">
-                <Slider 
-                  id="chunk-size" 
-                  min={100} 
-                  max={2000} 
-                  step={16} 
-                  value={[chunkingSettings.chunkSize]} 
-                  onValueChange={handleChunkSizeChange}
-                />
+                <Slider id="chunk-size" min={100} max={2000} step={16} value={[chunkingSettings.chunkSize]} onValueChange={handleChunkSizeChange} />
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 Controls how large each text chunk will be. Larger chunks provide more context but may be less precise.
@@ -431,25 +393,10 @@ export function FileUploader() {
             <div>
               <div className="flex justify-between">
                 <Label htmlFor="chunk-overlap">Chunk Overlap (tokens): {chunkingSettings.chunkOverlap}</Label>
-                <Input 
-                  type="number" 
-                  id="chunk-overlap-input" 
-                  className="w-20 h-8 text-xs" 
-                  value={chunkingSettings.chunkOverlap} 
-                  onChange={handleChunkOverlapInputChange}
-                  min={0} 
-                  max={200} 
-                />
+                <Input type="number" id="chunk-overlap-input" className="w-20 h-8 text-xs" value={chunkingSettings.chunkOverlap} onChange={handleChunkOverlapInputChange} min={0} max={200} />
               </div>
               <div className="pt-2">
-                <Slider 
-                  id="chunk-overlap" 
-                  min={0} 
-                  max={200} 
-                  step={8} 
-                  value={[chunkingSettings.chunkOverlap]} 
-                  onValueChange={handleChunkOverlapChange}
-                />
+                <Slider id="chunk-overlap" min={0} max={200} step={8} value={[chunkingSettings.chunkOverlap]} onValueChange={handleChunkOverlapChange} />
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 Controls how much text overlaps between chunks. Higher overlap preserves context between chunks.
@@ -471,8 +418,8 @@ export function FileUploader() {
       <Dialog open={showMetadataDialog} onOpenChange={setShowMetadataDialog}>
         <DialogContent className="sm:max-w-[600px] max-h-[80vh] p-6">
           <DialogHeader>
-            <DialogTitle>Add File Metadata</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="font-bold text-left">Add File Metadata</DialogTitle>
+            <DialogDescription className="text-left">
               Please provide the metadata for your uploaded file. This information will help organize and search your documents.
             </DialogDescription>
           </DialogHeader>
