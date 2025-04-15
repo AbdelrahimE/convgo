@@ -630,7 +630,7 @@ const WhatsAppAIConfig = () => {
     </div>
 
     <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
-      <DialogContent className="mx-4 sm:mx-auto sm:max-w-[500px] rounded-lg">
+      <DialogContent className="mx-4 sm:mx-auto sm:max-w-[500px] rounded">
         <DialogHeader>
           <DialogTitle>AI Prompt Generator</DialogTitle>
           <DialogDescription>
@@ -669,8 +669,8 @@ const WhatsAppAIConfig = () => {
           </div>
         </div>
         
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setPromptDialogOpen(false)}>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => setPromptDialogOpen(false)} className="">
             Cancel
           </Button>
           <Button onClick={handleGenerateSystemPrompt} disabled={isGeneratingPrompt || !userDescription.trim() || isLoadingStats || promptStats?.remaining === 0}>
