@@ -2,17 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Gauge, Calendar, Activity, AlertCircle } from "lucide-react";
-import { format, addDays } from 'date-fns';
+import { format, addDays, differenceInDays, differenceInHours, differenceInMinutes } from 'date-fns';
 import { useAIResponse } from "@/hooks/use-ai-response";
-import { supabase } from "@/integrations/supabase/client";
 import logger from '@/utils/logger';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { usePromptGenerationStats } from "@/hooks/use-prompt-generation-stats";
-import { PromptResetCountdown } from "@/components/ui/prompt-reset-countdown";
 
 interface UsageData {
   allowed: boolean;
@@ -20,6 +17,24 @@ interface UsageData {
   used: number;
   resetsOn: string | null;
 }
+
+const calculateTimeUntilReset = (resetDate: string | null): { days: number; hours: number; minutes: number; } | null => {
+  if (!resetDate) return null;
+  
+  const resetDateTime = new Date(resetDate);
+  const nextResetDate = addDays(resetDateTime, 30);
+  const now = new Date();
+
+  if (now > nextResetDate) {
+    return null;
+  }
+
+  const days = differenceInDays(nextResetDate, now);
+  const hours = differenceInHours(nextResetDate, now) % 24;
+  const minutes = differenceInMinutes(nextResetDate, now) % 60;
+
+  return { days, hours, minutes };
+};
 
 export default function AIUsageMonitoring() {
   const {
@@ -31,7 +46,32 @@ export default function AIUsageMonitoring() {
   const [isLoading, setIsLoading] = useState(true);
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [timeUntilReset, setTimeUntilReset] = useState<{ days: number; hours: number; minutes: number; } | null>(null);
   const isMobile = useIsMobile();
+
+  useEffect(() => {
+    if (user) {
+      fetchUsageData();
+    } else {
+      setIsLoading(false);
+      setErrorMessage("User authentication required");
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (usageData?.resetsOn) {
+      const updateTimeUntilReset = () => {
+        setTimeUntilReset(calculateTimeUntilReset(usageData.resetsOn));
+      };
+      
+      updateTimeUntilReset();
+      
+      const interval = setInterval(updateTimeUntilReset, 60000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [usageData?.resetsOn]);
+
   const fetchUsageData = async () => {
     try {
       setIsLoading(true);
@@ -53,36 +93,15 @@ export default function AIUsageMonitoring() {
       setIsLoading(false);
     }
   };
-  useEffect(() => {
-    if (user) {
-      fetchUsageData();
-    } else {
-      setIsLoading(false);
-      setErrorMessage("User authentication required");
-    }
-  }, [user]);
+
   const calculatePercentageUsed = () => {
     if (!usageData || usageData.limit === 0) return 0;
     const percentage = usageData.used / usageData.limit * 100;
     return Math.min(percentage, 100); // Ensure we don't exceed 100%
   };
+
   const percentageUsed = calculatePercentageUsed();
   const resetsOnDate = usageData?.resetsOn ? new Date(usageData.resetsOn) : null;
-  const getGaugeColor = () => {
-    if (percentageUsed < 50) return "text-emerald-500";
-    if (percentageUsed < 80) return "text-amber-500";
-    return "text-red-500";
-  };
-
-  const formatResetDate = (resetsOn: string | null) => {
-    if (!resetsOn) return null;
-    const resetDate = new Date(resetsOn);
-    const nextResetDate = addDays(resetDate, 30);
-    return format(nextResetDate, 'MMMM d, yyyy');
-  };
-
-  const { stats: promptStats } = usePromptGenerationStats();
-  const timeUntilReset = promptStats?.timeUntilReset;
 
   if (!user) {
     return <motion.div initial={{
@@ -114,6 +133,7 @@ export default function AIUsageMonitoring() {
         </Alert>
       </motion.div>;
   }
+
   return <motion.div initial={{
     opacity: 0,
     y: 20
@@ -136,7 +156,6 @@ export default function AIUsageMonitoring() {
       </motion.h1>
       
       {isLoading ? <div className="grid gap-8">
-          {/* Skeleton loading state */}
           <motion.div initial={{
         opacity: 0,
         y: 20
@@ -188,7 +207,6 @@ export default function AIUsageMonitoring() {
         delay: 0.3
       }}>
             <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-              {/* Usage Gauge Card */}
               <Card className="shadow-md transition-all">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 font-bold text-left">
@@ -201,9 +219,7 @@ export default function AIUsageMonitoring() {
                   <div className="flex flex-col items-center">
                     <div className="relative flex items-center justify-center w-48 h-48">
                       <svg className="w-full h-full" viewBox="0 0 100 100">
-                        {/* Background circle */}
                         <circle className="text-muted-foreground/20" strokeWidth="10" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
-                        {/* Progress circle */}
                         <circle className={getGaugeColor()} strokeWidth="10" strokeDasharray={`${percentageUsed * 2.51} 251.2`} strokeLinecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" transform="rotate(-90 50 50)" />
                       </svg>
                       <div className="absolute flex flex-col items-center justify-center text-center">
@@ -223,7 +239,6 @@ export default function AIUsageMonitoring() {
                 </CardFooter>
               </Card>
 
-              {/* Reset Date Card */}
               <Card className="shadow-md transition-all">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 font-bold text-left">
@@ -235,33 +250,32 @@ export default function AIUsageMonitoring() {
                 <CardContent className="flex flex-col items-center pt-4">
                   <div className="bg-muted w-24 h-24 rounded-full flex items-center justify-center mb-4">
                     <div className="text-center">
-                      {resetsOnDate ? <>
+                      {resetsOnDate ? (
+                        <>
                           <div className="text-2xl font-bold">
                             {format(addDays(resetsOnDate, 30), 'd')}
                           </div>
                           <div className="text-sm font-medium">
                             {format(addDays(resetsOnDate, 30), 'MMM')}
                           </div>
-                        </> : <div className="text-sm font-medium">Not set</div>}
+                        </>
+                      ) : (
+                        <div className="text-sm font-medium">Not set</div>
+                      )}
                     </div>
                   </div>
-                  {resetsOnDate && (
+                  {resetsOnDate && timeUntilReset && (
                     <p className="text-center">
                       Your usage limit will reset in{' '}
-                      {timeUntilReset ? (
-                        <span>
-                          {timeUntilReset.days} days, {timeUntilReset.hours} hours, and{' '}
-                          {timeUntilReset.minutes} minutes
-                        </span>
-                      ) : (
-                        'calculating...'
-                      )}
+                      <span>
+                        {timeUntilReset.days} days, {timeUntilReset.hours} hours, and{' '}
+                        {timeUntilReset.minutes} minutes
+                      </span>
                     </p>
                   )}
                 </CardContent>
               </Card>
 
-              {/* Usage Details Card */}
               <Card className="shadow-md transition-all">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 font-bold text-left">
