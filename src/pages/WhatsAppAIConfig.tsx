@@ -23,13 +23,11 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import logger from '@/utils/logger';
 import { usePromptGenerationStats } from '@/hooks/use-prompt-generation-stats';
 import { format } from 'date-fns';
-
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
   status: string;
 }
-
 interface AIConfig {
   id: string;
   system_prompt: string;
@@ -39,7 +37,6 @@ interface AIConfig {
   voice_message_default_response: string;
   default_voice_language: string;
 }
-
 const WhatsAppAIConfig = () => {
   const {
     user
@@ -82,8 +79,11 @@ const WhatsAppAIConfig = () => {
     remaining: number;
     resetsOn: string | null;
   } | null>(null);
-  const { stats: promptStats, isLoading: isLoadingStats, refreshStats } = usePromptGenerationStats();
-
+  const {
+    stats: promptStats,
+    isLoading: isLoadingStats,
+    refreshStats
+  } = usePromptGenerationStats();
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
     try {
@@ -111,13 +111,11 @@ const WhatsAppAIConfig = () => {
       setIsCleaningUp(false);
     }
   }, []);
-
   useEffect(() => {
     if (user) {
       loadWhatsAppInstances();
     }
   }, [user]);
-
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
@@ -128,7 +126,6 @@ const WhatsAppAIConfig = () => {
       setDefaultVoiceLanguage('ar');
     }
   }, [selectedInstance]);
-
   useEffect(() => {
     return () => {
       if (testConversationId && useRealConversation) {
@@ -142,13 +139,11 @@ const WhatsAppAIConfig = () => {
       }
     };
   }, [testConversationId, useRealConversation, cleanupTestConversation]);
-
   useEffect(() => {
     if (activeTab === 'test' && selectedInstance && useRealConversation && !testConversationId) {
       createTestConversation();
     }
   }, [activeTab, selectedInstance, useRealConversation]);
-
   const loadWhatsAppInstances = async () => {
     try {
       setIsLoading(true);
@@ -168,7 +163,6 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const loadAIConfig = async () => {
     try {
       setIsLoading(true);
@@ -197,7 +191,6 @@ const WhatsAppAIConfig = () => {
       setIsLoading(false);
     }
   };
-
   const saveAIConfig = async () => {
     if (!selectedInstance || !systemPrompt.trim()) {
       toast.error('Please select a WhatsApp instance and provide a system prompt');
@@ -251,30 +244,29 @@ const WhatsAppAIConfig = () => {
       setIsSaving(false);
     }
   };
-
   const generateSystemPrompt = async () => {
     setPromptDialogOpen(true);
   };
-
   const handleGenerateSystemPrompt = async () => {
     if (!userDescription.trim()) {
       toast.error('Please enter a description of what you want the AI to do');
       return;
     }
-
     if (promptStats && promptStats.remaining <= 0) {
       toast.error(`Monthly prompt generation limit reached (${promptStats.used}/${promptStats.limit})`);
       return;
     }
-
     try {
       setIsGeneratingPrompt(true);
-      const { data, error } = await supabase.functions.invoke('generate-system-prompt', {
-        body: { description: userDescription }
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('generate-system-prompt', {
+        body: {
+          description: userDescription
+        }
       });
-      
       if (error) throw error;
-      
       if (!data.success) {
         if (data.error === 'Monthly prompt generation limit reached') {
           toast.error(`Monthly limit reached (${data.details.used}/${data.details.limit})`);
@@ -284,7 +276,6 @@ const WhatsAppAIConfig = () => {
         }
         return;
       }
-
       setSystemPrompt(data.prompt);
       setPromptDialogOpen(false);
       setUserDescription('');
@@ -297,7 +288,6 @@ const WhatsAppAIConfig = () => {
       setIsGeneratingPrompt(false);
     }
   };
-
   const createTestConversation = async () => {
     if (!selectedInstance || !useRealConversation) return;
     try {
@@ -329,7 +319,6 @@ const WhatsAppAIConfig = () => {
       toast.error(`Error creating test conversation: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   };
-
   const resetTestConversation = async () => {
     if (testConversationId && useRealConversation) {
       const idToDelete = testConversationId;
@@ -344,7 +333,6 @@ const WhatsAppAIConfig = () => {
       setConversation([]);
     }
   };
-
   const sendTestMessage = async () => {
     if (!testQuery.trim()) {
       toast.error('Please enter a test message');
@@ -426,7 +414,6 @@ const WhatsAppAIConfig = () => {
       }]);
     }
   };
-
   return <motion.div initial={{
     opacity: 0,
     y: 20
@@ -485,12 +472,7 @@ const WhatsAppAIConfig = () => {
         }} transition={{
           delay: 0.4
         }}>
-            <WhatsAppAIToggle 
-              instanceId={selectedInstance} 
-              instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} 
-              instanceStatus={instances.find(i => i.id === selectedInstance)?.status}
-              variant="detailed" 
-            />
+            <WhatsAppAIToggle instanceId={selectedInstance} instanceName={instances.find(i => i.id === selectedInstance)?.instance_name || ''} instanceStatus={instances.find(i => i.id === selectedInstance)?.status} variant="detailed" />
           </motion.div>}
         
         <motion.div initial={{
@@ -653,8 +635,7 @@ const WhatsAppAIConfig = () => {
           <DialogTitle>AI Prompt Generator</DialogTitle>
           <DialogDescription>
             Describe what you want the AI to do in your own words, and we'll create a powerful system prompt for you.
-            {promptStats && (
-              <div className="mt-2 text-sm">
+            {promptStats && <div className="mt-2 text-sm">
                 <div className="flex justify-between items-center">
                   <span>
                     {promptStats.remaining} generations remaining
@@ -663,13 +644,10 @@ const WhatsAppAIConfig = () => {
                     ({promptStats.used}/{promptStats.limit} used)
                   </span>
                 </div>
-                {promptStats.resetsOn && (
-                  <p className="text-xs text-muted-foreground mt-1">
+                {promptStats.resetsOn && <p className="text-xs text-muted-foreground mt-1 text-left">
                     Resets on: {format(new Date(promptStats.resetsOn), 'MMM d, yyyy')}
-                  </p>
-                )}
-              </div>
-            )}
+                  </p>}
+              </div>}
           </DialogDescription>
         </DialogHeader>
         
@@ -678,13 +656,7 @@ const WhatsAppAIConfig = () => {
             <Label htmlFor="description" className="text-sm font-medium">
               Your Description
             </Label>
-            <LanguageAwareTextarea 
-              id="description" 
-              placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone." 
-              value={userDescription} 
-              onChange={e => setUserDescription(e.target.value)} 
-              className="min-h-[120px]" 
-            />
+            <LanguageAwareTextarea id="description" placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone." value={userDescription} onChange={e => setUserDescription(e.target.value)} className="min-h-[120px]" />
           </div>
           
           <div className="space-y-2">
@@ -701,30 +673,15 @@ const WhatsAppAIConfig = () => {
           <Button variant="outline" onClick={() => setPromptDialogOpen(false)}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleGenerateSystemPrompt} 
-            disabled={
-              isGeneratingPrompt || 
-              !userDescription.trim() || 
-              isLoadingStats ||
-              (promptStats?.remaining === 0)
-            }
-          >
-            {isGeneratingPrompt ? (
-              <>
+          <Button onClick={handleGenerateSystemPrompt} disabled={isGeneratingPrompt || !userDescription.trim() || isLoadingStats || promptStats?.remaining === 0}>
+            {isGeneratingPrompt ? <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
                 Generating...
-              </>
-            ) : promptStats?.remaining === 0 ? (
-              'Monthly limit reached'
-            ) : (
-              'Generate Prompt'
-            )}
+              </> : promptStats?.remaining === 0 ? 'Monthly limit reached' : 'Generate Prompt'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   </motion.div>;
 };
-
 export default WhatsAppAIConfig;
