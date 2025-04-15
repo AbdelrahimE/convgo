@@ -1,6 +1,6 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { corsHeaders } from "../_shared/cors.ts";
+import { getNextApiKey } from "../_shared/api-key-rotation.ts";
 
 // Create a simple logger for better debugging
 const logger = {
@@ -18,7 +18,8 @@ serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get('EVOLUTION_API_KEY');
+    // Use the key rotation mechanism instead of single key
+    const apiKey = getNextApiKey();
     if (!apiKey) {
       throw new Error('Evolution API key not configured');
     }
@@ -85,7 +86,7 @@ serve(async (req) => {
         throw new Error(`Unknown operation: ${operation}`);
     }
 
-    // Make request to Evolution API
+    // Make request to Evolution API with rotated key
     logger.info(`Making ${method} request to ${url}`);
     const response = await fetch(url, {
       method,
