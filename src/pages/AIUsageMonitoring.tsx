@@ -11,12 +11,16 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { usePromptGenerationStats } from "@/hooks/use-prompt-generation-stats";
+import { PromptResetCountdown } from "@/components/ui/prompt-reset-countdown";
+
 interface UsageData {
   allowed: boolean;
   limit: number;
   used: number;
   resetsOn: string | null;
 }
+
 export default function AIUsageMonitoring() {
   const {
     user
