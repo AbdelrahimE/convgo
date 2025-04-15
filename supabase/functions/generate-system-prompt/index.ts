@@ -1,8 +1,7 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { getNextOpenAIKey } from "../_shared/openai-key-rotation.ts";
 
-// Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
   log: (...args: any[]) => console.log(...args),
   error: (...args: any[]) => console.error(...args),
@@ -18,7 +17,6 @@ interface GenerateSystemPromptRequest {
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -41,11 +39,12 @@ serve(async (req) => {
 
     logger.log(`Generating system prompt from description: "${description}"`);
 
-    // Call OpenAI API to generate system prompt
+    const apiKey = getNextOpenAIKey();
+
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

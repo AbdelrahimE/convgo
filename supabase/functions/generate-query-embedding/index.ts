@@ -1,8 +1,7 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { corsHeaders } from '../_shared/cors.ts'
+import { getNextOpenAIKey } from "../_shared/openai-key-rotation.ts";
 
-// Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
   log: (...args: any[]) => console.log(...args),
   error: (...args: any[]) => console.error(...args),
@@ -19,7 +18,6 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -40,11 +38,12 @@ serve(async (req) => {
       );
     }
 
-    // Call OpenAI API to generate embeddings
+    const apiKey = getNextOpenAIKey();
+
     const response = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

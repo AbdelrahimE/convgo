@@ -1,9 +1,8 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { corsHeaders } from '../_shared/cors.ts'
+import { getNextOpenAIKey } from "../_shared/openai-key-rotation.ts";
 
-// Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
   log: (...args: any[]) => console.log(...args),
   error: (...args: any[]) => console.error(...args),
@@ -26,13 +25,11 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 const EMBEDDING_DIMENSIONS = 1536;
 
-// Create a Supabase client with the Admin key
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -53,7 +50,6 @@ serve(async (req) => {
       );
     }
 
-    // Update file status to "processing"
     await supabase
       .from('files')
       .update({
@@ -65,7 +61,6 @@ serve(async (req) => {
       })
       .eq('id', fileId);
 
-    // Get text chunks for this file
     const { data: chunks, error: chunksError } = await supabase
       .from('text_chunks')
       .select('id, content, metadata')
@@ -77,7 +72,6 @@ serve(async (req) => {
     }
 
     if (!chunks || chunks.length === 0) {
-      // Update file status to error
       await supabase
         .from('files')
         .update({
@@ -101,11 +95,9 @@ serve(async (req) => {
       );
     }
 
-    // Process chunks and generate embeddings
     let processedCount = 0;
     let errorCount = 0;
     
-    // Process chunks in batches of 20 (to avoid rate limits)
     const batchSize = 20;
     const totalBatches = Math.ceil(chunks.length / batchSize);
     
@@ -114,14 +106,13 @@ serve(async (req) => {
       const batchEnd = Math.min((batchIndex + 1) * batchSize, chunks.length);
       const batchChunks = chunks.slice(batchStart, batchEnd);
       
-      // Process each chunk in this batch in parallel
       const batchPromises = batchChunks.map(async (chunk: ChunkData) => {
         try {
-          // Call OpenAI API to generate embeddings
+          const apiKey = getNextOpenAIKey();
           const response = await fetch('https://api.openai.com/v1/embeddings', {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'Authorization': `Bearer ${apiKey}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
@@ -139,7 +130,6 @@ serve(async (req) => {
           const data = await response.json();
           const embedding = data.data[0].embedding;
 
-          // Store the embedding in the database
           const { error: insertError } = await supabase
             .from('document_embeddings')
             .insert({
@@ -161,7 +151,6 @@ serve(async (req) => {
           logger.error(`Error processing chunk ${chunk.id}:`, error);
           errorCount++;
           
-          // Record the error in the document_embeddings table
           await supabase
             .from('document_embeddings')
             .insert({
@@ -179,16 +168,13 @@ serve(async (req) => {
         }
       });
       
-      // Wait for all chunks in this batch to complete
       await Promise.all(batchPromises);
       
-      // Add a small delay between batches to avoid rate limits
       if (batchIndex < totalBatches - 1) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
 
-    // Update file status based on results
     const finalStatus = errorCount === 0 ? 'complete' : 
                          processedCount > 0 ? 'partial' : 'error';
                          

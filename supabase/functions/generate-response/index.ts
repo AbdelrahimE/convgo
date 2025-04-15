@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getNextOpenAIKey } from "../_shared/openai-key-rotation.ts";
 
 const logger = {
   log: (...args: any[]) => console.log(...args),
@@ -434,10 +434,11 @@ serve(async (req) => {
     }
 
     logger.log(`Calling OpenAI API with ${messages.length} messages, model: ${model}`);
+    const apiKey = getNextOpenAIKey();
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
