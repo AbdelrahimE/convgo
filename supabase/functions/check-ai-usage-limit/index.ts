@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { addDays } from "https://esm.sh/date-fns@3.6.0";
 
 // Simple logger for edge functions
 const logger = {
@@ -80,10 +81,9 @@ serve(async (req) => {
     const used = profile.monthly_ai_responses_used || 0;
     const lastReset = profile.last_responses_reset_date;
     
-    // Calculate next reset date - first day of next month
-    const currentDate = new Date(lastReset || new Date());
-    const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-    const nextResetDate = nextMonth.toISOString();
+    // Calculate next reset date - 30 days after the last reset
+    const lastResetDate = new Date(lastReset || new Date());
+    const nextResetDate = addDays(lastResetDate, 30).toISOString();
 
     const allowed = used < limit;
     logger.log(`User ${userId} has used ${used}/${limit} AI responses. Reset date: ${nextResetDate}`);
@@ -94,7 +94,7 @@ serve(async (req) => {
         allowed,
         limit,
         used,
-        resetsOn: nextResetDate,
+        resetsOn: lastReset,  // Send the original last reset date, not the calculated next reset
         errorMessage: !allowed ? `Monthly AI response limit reached (${used}/${limit})` : undefined
       }),
       { 
