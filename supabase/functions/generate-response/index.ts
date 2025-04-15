@@ -331,7 +331,7 @@ serve(async (req) => {
     const { 
       query, 
       context, 
-      model = 'gpt-4.1-nano', 
+      model = 'gpt-4o-mini', 
       temperature = 0.3,
       systemPrompt,
       includeConversationHistory = false,
