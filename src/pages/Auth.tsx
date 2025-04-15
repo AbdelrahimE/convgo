@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -90,12 +91,15 @@ export default function Auth() {
           description: "Please check your email to confirm your account."
         });
         
+        // Reset form fields
         setEmail('');
         setPassword('');
         setFullName('');
         setBusinessName('');
         setConfirmPassword('');
-        setActiveTab('signin');
+        
+        // Navigate to /auth which defaults to signin tab
+        navigate('/auth');
       } else {
         throw new Error('Failed to create account. Please try again.');
       }
