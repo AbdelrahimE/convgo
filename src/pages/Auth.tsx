@@ -87,7 +87,7 @@ export default function Auth() {
 
       if (data?.user) {
         toast.success("Success!", {
-          description: "Please check your email to confirm your account. You can now sign in."
+          description: "Please check your email to confirm your account."
         });
         
         setEmail('');
