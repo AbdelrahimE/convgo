@@ -630,7 +630,7 @@ const WhatsAppAIConfig = () => {
     </div>
 
     <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="mx-4 sm:mx-auto sm:max-w-[500px] rounded-lg">
         <DialogHeader>
           <DialogTitle>AI Prompt Generator</DialogTitle>
           <DialogDescription>
