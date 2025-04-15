@@ -385,9 +385,8 @@ export function FileUploader() {
               <div className="pt-2">
                 <Slider id="chunk-size" min={100} max={2000} step={16} value={[chunkingSettings.chunkSize]} onValueChange={handleChunkSizeChange} />
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Controls how large each text chunk will be. Larger chunks provide more context but may be less precise.
-              </p>
+              <p className="text-xs text-gray-500 mt-1">Controls how much text is included in each searchable part.
+Larger chunks give the AI more context, but might slightly reduce answer precision if the chunk contains too many mixed ideas.</p>
             </div>
 
             <div>
@@ -398,9 +397,8 @@ export function FileUploader() {
               <div className="pt-2">
                 <Slider id="chunk-overlap" min={0} max={200} step={8} value={[chunkingSettings.chunkOverlap]} onValueChange={handleChunkOverlapChange} />
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Controls how much text overlaps between chunks. Higher overlap preserves context between chunks.
-              </p>
+              <p className="text-xs text-gray-500 mt-1">Controls how much text is repeated between chunks.
+Higher overlap helps the AI preserve context and better understand connections between sections.</p>
             </div>
 
             <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
