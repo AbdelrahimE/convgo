@@ -21,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
 import logger from '@/utils/logger';
+import { usePromptGenerationStats } from '@/hooks/use-prompt-generation-stats';
+import { format } from 'date-fns';
 
 interface WhatsAppInstance {
   id: string;
@@ -80,6 +82,7 @@ const WhatsAppAIConfig = () => {
     remaining: number;
     resetsOn: string | null;
   } | null>(null);
+  const { stats: promptStats, isLoading: isLoadingStats, refreshStats } = usePromptGenerationStats();
 
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
@@ -258,15 +261,16 @@ const WhatsAppAIConfig = () => {
       toast.error('Please enter a description of what you want the AI to do');
       return;
     }
+
+    if (promptStats && promptStats.remaining <= 0) {
+      toast.error(`Monthly prompt generation limit reached (${promptStats.used}/${promptStats.limit})`);
+      return;
+    }
+
     try {
       setIsGeneratingPrompt(true);
-      const {
-        data,
-        error
-      } = await supabase.functions.invoke('generate-system-prompt', {
-        body: {
-          description: userDescription
-        }
+      const { data, error } = await supabase.functions.invoke('generate-system-prompt', {
+        body: { description: userDescription }
       });
       
       if (error) throw error;
@@ -274,12 +278,7 @@ const WhatsAppAIConfig = () => {
       if (!data.success) {
         if (data.error === 'Monthly prompt generation limit reached') {
           toast.error(`Monthly limit reached (${data.details.used}/${data.details.limit})`);
-          setPromptGenerationStats({
-            limit: data.details.limit,
-            used: data.details.used,
-            remaining: 0,
-            resetsOn: data.details.resetsOn
-          });
+          await refreshStats();
         } else {
           throw new Error(data.error || 'Failed to generate system prompt');
         }
@@ -289,7 +288,7 @@ const WhatsAppAIConfig = () => {
       setSystemPrompt(data.prompt);
       setPromptDialogOpen(false);
       setUserDescription('');
-      setPromptGenerationStats(data.promptGeneration);
+      await refreshStats();
       toast.success('System prompt generated successfully');
     } catch (error) {
       logger.error('Error generating system prompt:', error);
@@ -654,12 +653,21 @@ const WhatsAppAIConfig = () => {
           <DialogTitle>AI Prompt Generator</DialogTitle>
           <DialogDescription>
             Describe what you want the AI to do in your own words, and we'll create a powerful system prompt for you.
-            {promptGenerationStats && (
+            {promptStats && (
               <div className="mt-2 text-sm">
-                <span className="font-medium">
-                  {promptGenerationStats.remaining} generations remaining
-                </span>{' '}
-                this month ({promptGenerationStats.used}/{promptGenerationStats.limit} used)
+                <div className="flex justify-between items-center">
+                  <span>
+                    {promptStats.remaining} generations remaining
+                  </span>
+                  <span className="text-muted-foreground">
+                    ({promptStats.used}/{promptStats.limit} used)
+                  </span>
+                </div>
+                {promptStats.resetsOn && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Resets on: {format(new Date(promptStats.resetsOn), 'MMM d, yyyy')}
+                  </p>
+                )}
               </div>
             )}
           </DialogDescription>
@@ -670,7 +678,13 @@ const WhatsAppAIConfig = () => {
             <Label htmlFor="description" className="text-sm font-medium">
               Your Description
             </Label>
-            <LanguageAwareTextarea id="description" placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone." value={userDescription} onChange={e => setUserDescription(e.target.value)} className="min-h-[120px]" />
+            <LanguageAwareTextarea 
+              id="description" 
+              placeholder="Example: I need an AI assistant that can answer customer questions about our product return policy in a friendly but professional tone." 
+              value={userDescription} 
+              onChange={e => setUserDescription(e.target.value)} 
+              className="min-h-[120px]" 
+            />
           </div>
           
           <div className="space-y-2">
@@ -692,13 +706,20 @@ const WhatsAppAIConfig = () => {
             disabled={
               isGeneratingPrompt || 
               !userDescription.trim() || 
-              (promptGenerationStats?.remaining === 0)
+              isLoadingStats ||
+              (promptStats?.remaining === 0)
             }
           >
-            {isGeneratingPrompt ? <>
+            {isGeneratingPrompt ? (
+              <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
                 Generating...
-              </> : 'Generate Prompt'}
+              </>
+            ) : promptStats?.remaining === 0 ? (
+              'Monthly limit reached'
+            ) : (
+              'Generate Prompt'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
