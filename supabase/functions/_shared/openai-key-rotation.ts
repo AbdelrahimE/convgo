@@ -8,8 +8,6 @@ const logger = {
   debug: (...args: any[]) => console.debug(...args),
 };
 
-let currentKeyIndex = 0;
-
 export function getNextOpenAIKey(): string {
   try {
     // Get all OpenAI API keys from environment variables
@@ -30,13 +28,13 @@ export function getNextOpenAIKey(): string {
       throw new Error('No OpenAI API keys configured');
     }
 
-    // Get next key in rotation
+    // Use timestamp-based rotation with 5-second intervals
+    const currentKeyIndex = Math.floor(Date.now() / (5 * 1000)) % keys.length;
+    
+    // Get key based on current time slot
     const key = keys[currentKeyIndex];
     
-    // Update index for next call, wrapping around to 0 if we hit the end
-    currentKeyIndex = (currentKeyIndex + 1) % keys.length;
-    
-    logger.info(`Using OpenAI API key ${currentKeyIndex} of ${keys.length}`);
+    logger.info(`Using OpenAI API key ${currentKeyIndex + 1} of ${keys.length}`);
     
     return key;
   } catch (error) {
