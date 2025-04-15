@@ -74,6 +74,12 @@ const WhatsAppAIConfig = () => {
   const [useRealConversation, setUseRealConversation] = useState(true);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [showVoiceFeature, setShowVoiceFeature] = useState(true);
+  const [promptGenerationStats, setPromptGenerationStats] = useState<{
+    limit: number;
+    used: number;
+    remaining: number;
+    resetsOn: string | null;
+  } | null>(null);
 
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
@@ -262,15 +268,29 @@ const WhatsAppAIConfig = () => {
           description: userDescription
         }
       });
+      
       if (error) throw error;
-      if (data.success && data.prompt) {
-        setSystemPrompt(data.prompt);
-        setPromptDialogOpen(false);
-        setUserDescription('');
-        toast.success('System prompt generated successfully');
-      } else {
-        throw new Error('Failed to generate system prompt');
+      
+      if (!data.success) {
+        if (data.error === 'Monthly prompt generation limit reached') {
+          toast.error(`Monthly limit reached (${data.details.used}/${data.details.limit})`);
+          setPromptGenerationStats({
+            limit: data.details.limit,
+            used: data.details.used,
+            remaining: 0,
+            resetsOn: data.details.resetsOn
+          });
+        } else {
+          throw new Error(data.error || 'Failed to generate system prompt');
+        }
+        return;
       }
+
+      setSystemPrompt(data.prompt);
+      setPromptDialogOpen(false);
+      setUserDescription('');
+      setPromptGenerationStats(data.promptGeneration);
+      toast.success('System prompt generated successfully');
     } catch (error) {
       logger.error('Error generating system prompt:', error);
       toast.error('Failed to generate system prompt. Please try again.');
@@ -634,6 +654,14 @@ const WhatsAppAIConfig = () => {
           <DialogTitle>AI Prompt Generator</DialogTitle>
           <DialogDescription>
             Describe what you want the AI to do in your own words, and we'll create a powerful system prompt for you.
+            {promptGenerationStats && (
+              <div className="mt-2 text-sm">
+                <span className="font-medium">
+                  {promptGenerationStats.remaining} generations remaining
+                </span>{' '}
+                this month ({promptGenerationStats.used}/{promptGenerationStats.limit} used)
+              </div>
+            )}
           </DialogDescription>
         </DialogHeader>
         
@@ -659,7 +687,14 @@ const WhatsAppAIConfig = () => {
           <Button variant="outline" onClick={() => setPromptDialogOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={handleGenerateSystemPrompt} disabled={isGeneratingPrompt || !userDescription.trim()}>
+          <Button 
+            onClick={handleGenerateSystemPrompt} 
+            disabled={
+              isGeneratingPrompt || 
+              !userDescription.trim() || 
+              (promptGenerationStats?.remaining === 0)
+            }
+          >
             {isGeneratingPrompt ? <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
                 Generating...

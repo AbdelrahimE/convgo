@@ -251,9 +251,12 @@ export type Database = {
           id: string
           instance_limit: number
           is_active: boolean | null
+          last_prompt_generations_reset_date: string | null
           last_responses_reset_date: string | null
           monthly_ai_response_limit: number
           monthly_ai_responses_used: number
+          monthly_prompt_generations_limit: number
+          monthly_prompt_generations_used: number
           storage_limit_mb: number
           updated_at: string | null
         }
@@ -264,9 +267,12 @@ export type Database = {
           id: string
           instance_limit?: number
           is_active?: boolean | null
+          last_prompt_generations_reset_date?: string | null
           last_responses_reset_date?: string | null
           monthly_ai_response_limit?: number
           monthly_ai_responses_used?: number
+          monthly_prompt_generations_limit?: number
+          monthly_prompt_generations_used?: number
           storage_limit_mb?: number
           updated_at?: string | null
         }
@@ -277,9 +283,12 @@ export type Database = {
           id?: string
           instance_limit?: number
           is_active?: boolean | null
+          last_prompt_generations_reset_date?: string | null
           last_responses_reset_date?: string | null
           monthly_ai_response_limit?: number
           monthly_ai_responses_used?: number
+          monthly_prompt_generations_limit?: number
+          monthly_prompt_generations_used?: number
           storage_limit_mb?: number
           updated_at?: string | null
         }
@@ -909,6 +918,10 @@ export type Database = {
         Returns: Json
       }
       reset_monthly_ai_responses: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      reset_monthly_prompt_generations: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }

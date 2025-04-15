@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getNextOpenAIKey } from "../_shared/openai-key-rotation.ts";
@@ -23,6 +24,67 @@ serve(async (req) => {
 
   try {
     const { description } = await req.json() as GenerateSystemPromptRequest;
+    
+    // Get user ID from the request
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Missing authorization header');
+    }
+
+    // Extract user ID from JWT
+    const token = authHeader.replace('Bearer ', '');
+    const userResponse = await fetch('https://okoaoguvtjauiecfajri.supabase.co/auth/v1/user', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!userResponse.ok) {
+      throw new Error('Failed to get user information');
+    }
+
+    const userData = await userResponse.json();
+    const userId = userData.id;
+
+    // Check user's prompt generation limit
+    const profileResponse = await fetch(
+      'https://okoaoguvtjauiecfajri.supabase.co/rest/v1/profiles?id=eq.' + userId,
+      {
+        headers: {
+          'apikey': Deno.env.get('SUPABASE_ANON_KEY') || '',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+      }
+    );
+
+    if (!profileResponse.ok) {
+      throw new Error('Failed to check prompt generation limit');
+    }
+
+    const [profile] = await profileResponse.json();
+    
+    if (!profile) {
+      throw new Error('User profile not found');
+    }
+
+    // Check if user has reached their limit
+    if (profile.monthly_prompt_generations_used >= profile.monthly_prompt_generations_limit) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Monthly prompt generation limit reached',
+          details: {
+            limit: profile.monthly_prompt_generations_limit,
+            used: profile.monthly_prompt_generations_used,
+            resetsOn: profile.last_prompt_generations_reset_date
+          }
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 403
+        }
+      );
+    }
 
     if (!description) {
       return new Response(
@@ -82,10 +144,37 @@ ${description}`
     const responseData = await openaiResponse.json();
     const generatedPrompt = responseData.choices[0].message.content.trim();
 
+    // Increment the usage counter
+    const updateResponse = await fetch(
+      'https://okoaoguvtjauiecfajri.supabase.co/rest/v1/profiles?id=eq.' + userId,
+      {
+        method: 'PATCH',
+        headers: {
+          'apikey': Deno.env.get('SUPABASE_ANON_KEY') || '',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          monthly_prompt_generations_used: profile.monthly_prompt_generations_used + 1
+        })
+      }
+    );
+
+    if (!updateResponse.ok) {
+      logger.error('Failed to update prompt generation count:', await updateResponse.text());
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
-        prompt: generatedPrompt
+        prompt: generatedPrompt,
+        promptGeneration: {
+          limit: profile.monthly_prompt_generations_limit,
+          used: profile.monthly_prompt_generations_used + 1,
+          remaining: profile.monthly_prompt_generations_limit - (profile.monthly_prompt_generations_used + 1),
+          resetsOn: profile.last_prompt_generations_reset_date
+        }
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
