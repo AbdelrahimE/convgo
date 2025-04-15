@@ -66,7 +66,7 @@ export async function generateAndSendAIResponse(
         query: query,
         context: context,
         systemPrompt: systemPrompt,
-        temperature: aiConfig.temperature || 0.7,
+        temperature: aiConfig.temperature || 0.5,
         model: 'gpt-4o-mini',
         maxContextTokens: 3000, // Explicit token limit
         imageUrl: imageUrl, // Pass the image URL if available
