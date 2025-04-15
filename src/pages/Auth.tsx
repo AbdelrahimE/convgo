@@ -87,12 +87,15 @@ export default function Auth() {
 
       if (data?.user) {
         toast.success("Success!", {
-          description: "Please check your email to confirm your account."
+          description: "Please check your email to confirm your account. You can now sign in."
         });
+        
         setEmail('');
         setPassword('');
         setFullName('');
         setBusinessName('');
+        setConfirmPassword('');
+        setActiveTab('signin');
       } else {
         throw new Error('Failed to create account. Please try again.');
       }
