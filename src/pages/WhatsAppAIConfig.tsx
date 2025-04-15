@@ -632,7 +632,7 @@ const WhatsAppAIConfig = () => {
     <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
       <DialogContent className="">
         <DialogHeader>
-          <DialogTitle className="font-semibold">AI Prompt Generator</DialogTitle>
+          <DialogTitle className="text-left font-bold">AI Prompt Generator</DialogTitle>
           <DialogDescription className="text-left">
             Describe what you want the AI to do in your own words, and we'll create a powerful system prompt for you.
             {promptStats && <div className="mt-2 text-sm">
