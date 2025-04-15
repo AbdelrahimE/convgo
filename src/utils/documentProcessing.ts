@@ -1,21 +1,18 @@
-
 import logger from '@/utils/logger';
 
 import { 
   chunkText, 
   preprocessText, 
   createChunkMetadata,
-  ChunkingOptions
 } from './textProcessing';
 
 /**
  * Default chunking options matching backend settings
  */
-export const DEFAULT_CHUNKING_OPTIONS: ChunkingOptions = {
+export const DEFAULT_CHUNKING_OPTIONS = {
   chunkSize: 768,
-  chunkOverlap: 80,
-  splitBySentence: true
-};
+  chunkOverlap: 80
+} as const;
 
 /**
  * Interface for a text chunk with metadata
@@ -76,4 +73,21 @@ export async function processDocumentForChunking(
     chunks: chunksWithMetadata,
     stats
   };
+}
+
+/**
+ * Configuration options for text chunking
+ */
+export interface ChunkingOptions {
+  /**
+   * Maximum size of each chunk in characters
+   * Recommended range: 256-1024 characters for embedding models
+   */
+  chunkSize?: number;
+  
+  /**
+   * Amount of overlap between chunks in characters
+   * Helps maintain context between chunks
+   */
+  chunkOverlap?: number;
 }

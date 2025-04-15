@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Upload, AlertCircle, RefreshCw, ChevronDown, ChevronUp, Settings } from "lucide-react";
+import { Upload, AlertCircle, ChevronDown, ChevronUp, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,27 +14,27 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useDocumentEmbeddings } from "@/hooks/use-document-embeddings";
-import { Switch } from "@/components/ui/switch";
 import logger from '@/utils/logger';
+
 interface UploadingFile {
   file: File;
   id?: string;
 }
+
 interface RetryState {
   attempts: number;
   lastError: string | null;
   operation: 'upload' | 'metadata' | 'extraction';
 }
+
 interface ChunkingSettings {
   chunkSize: number;
   chunkOverlap: number;
-  splitBySentence?: boolean;
-  structureAware?: boolean;
-  preserveTables?: boolean;
-  cleanRedundantData?: boolean;
 }
+
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
+
 export function FileUploader() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -45,12 +45,9 @@ export function FileUploader() {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [chunkingSettings, setChunkingSettings] = useState<ChunkingSettings>({
     chunkSize: 1024,
-    chunkOverlap: 120,
-    splitBySentence: true,
-    structureAware: true,
-    preserveTables: true,
-    cleanRedundantData: true
+    chunkOverlap: 120
   });
+
   const inputRef = useRef<HTMLInputElement>(null);
   const {
     toast
@@ -61,13 +58,16 @@ export function FileUploader() {
   const {
     generateEmbeddings
   } = useDocumentEmbeddings();
+
   const ALLOWED_FILE_TYPES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'text/csv', 'application/vnd.ms-excel', 'application/csv'];
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
   const [retryState, setRetryState] = useState<RetryState>({
     attempts: 0,
     lastError: null,
     operation: 'upload'
   });
+
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   const resetRetryState = () => {
     setRetryState({
@@ -76,6 +76,7 @@ export function FileUploader() {
       operation: 'upload'
     });
   };
+
   const handleRetry = async () => {
     if (retryState.attempts >= MAX_RETRY_ATTEMPTS) {
       toast({
@@ -109,6 +110,7 @@ export function FileUploader() {
         break;
     }
   };
+
   const validateFile = (file: File) => {
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
       toast({
@@ -128,6 +130,7 @@ export function FileUploader() {
     }
     return true;
   };
+
   const triggerTextExtraction = async (fileId: string) => {
     try {
       const {
@@ -137,11 +140,7 @@ export function FileUploader() {
           fileId,
           chunkingSettings: {
             chunkSize: chunkingSettings.chunkSize,
-            chunkOverlap: chunkingSettings.chunkOverlap,
-            splitBySentence: chunkingSettings.splitBySentence,
-            structureAware: chunkingSettings.structureAware,
-            preserveTables: chunkingSettings.preserveTables,
-            cleanRedundantData: chunkingSettings.cleanRedundantData
+            chunkOverlap: chunkingSettings.chunkOverlap
           }
         }
       });
@@ -177,6 +176,7 @@ export function FileUploader() {
       });
     }
   };
+
   const handleFileUpload = async (file: File) => {
     if (!file || !user) return;
     if (!validateFile(file)) return;
@@ -255,6 +255,7 @@ export function FileUploader() {
       if (inputRef.current) inputRef.current.value = '';
     }
   };
+
   const handleMetadataSave = () => {
     setShowMetadataDialog(false);
     setCurrentUploadingFile(null);
@@ -263,6 +264,7 @@ export function FileUploader() {
       description: "File metadata saved successfully"
     });
   };
+
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -271,34 +273,40 @@ export function FileUploader() {
       await handleFileUpload(e.dataTransfer.files[0]);
     }
   };
+
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(true);
   };
+
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
   };
+
   const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       await handleFileUpload(file);
     }
   };
+
   const handleChunkSizeChange = (value: number[]) => {
     setChunkingSettings(prev => ({
       ...prev,
       chunkSize: value[0]
     }));
   };
+
   const handleChunkOverlapChange = (value: number[]) => {
     setChunkingSettings(prev => ({
       ...prev,
       chunkOverlap: value[0]
     }));
   };
+
   const handleChunkSizeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
     if (!isNaN(value)) {
@@ -308,6 +316,7 @@ export function FileUploader() {
       }));
     }
   };
+
   const handleChunkOverlapInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
     if (!isNaN(value)) {
@@ -317,30 +326,35 @@ export function FileUploader() {
       }));
     }
   };
+
   const toggleStructureAware = () => {
     setChunkingSettings(prev => ({
       ...prev,
       structureAware: !prev.structureAware
     }));
   };
+
   const togglePreserveTables = () => {
     setChunkingSettings(prev => ({
       ...prev,
       preserveTables: !prev.preserveTables
     }));
   };
+
   const toggleCleanRedundantData = () => {
     setChunkingSettings(prev => ({
       ...prev,
       cleanRedundantData: !prev.cleanRedundantData
     }));
   };
+
   const toggleSplitBySentence = () => {
     setChunkingSettings(prev => ({
       ...prev,
       splitBySentence: !prev.splitBySentence
     }));
   };
+
   return <>
       <motion.div whileHover={{
       scale: dragActive ? 1 : 1.01
@@ -403,7 +417,7 @@ export function FileUploader() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-gray-500" />
-            <h3 className="text-base font-semibold text-left">Advanced Text Chunking Settings</h3>
+            <h3 className="text-base font-semibold text-left">Text Chunking Settings</h3>
           </div>
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="sm">
@@ -417,84 +431,93 @@ export function FileUploader() {
             <div>
               <div className="flex justify-between">
                 <Label htmlFor="chunk-size">Chunk Size (tokens): {chunkingSettings.chunkSize}</Label>
-                <Input type="number" id="chunk-size-input" className="w-20 h-8 text-xs" value={chunkingSettings.chunkSize} onChange={handleChunkSizeInputChange} min={100} max={2000} />
+                <Input 
+                  type="number" 
+                  id="chunk-size-input" 
+                  className="w-20 h-8 text-xs" 
+                  value={chunkingSettings.chunkSize} 
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value, 10);
+                    if (!isNaN(value)) {
+                      setChunkingSettings(prev => ({
+                        ...prev,
+                        chunkSize: Math.min(Math.max(value, 100), 2000)
+                      }));
+                    }
+                  }}
+                  min={100} 
+                  max={2000} 
+                />
               </div>
               <div className="pt-2">
-                <Slider id="chunk-size" min={100} max={2000} step={16} value={[chunkingSettings.chunkSize]} onValueChange={handleChunkSizeChange} />
+                <Slider 
+                  id="chunk-size" 
+                  min={100} 
+                  max={2000} 
+                  step={16} 
+                  value={[chunkingSettings.chunkSize]} 
+                  onValueChange={(value) => {
+                    setChunkingSettings(prev => ({
+                      ...prev,
+                      chunkSize: value[0]
+                    }));
+                  }}
+                />
               </div>
-              <p className="text-xs text-gray-500 mt-1 my-[12px]">
-                Controls how large each text chunk will be. Larger chunks (768-1024) provide more context but may be less precise. 
-                Smaller chunks (256-512) are more precise but may miss broader context.
+              <p className="text-xs text-gray-500 mt-1">
+                Controls how large each text chunk will be. Larger chunks provide more context but may be less precise.
               </p>
             </div>
 
             <div>
               <div className="flex justify-between">
                 <Label htmlFor="chunk-overlap">Chunk Overlap (tokens): {chunkingSettings.chunkOverlap}</Label>
-                <Input type="number" id="chunk-overlap-input" className="w-20 h-8 text-xs" value={chunkingSettings.chunkOverlap} onChange={handleChunkOverlapInputChange} min={0} max={200} />
+                <Input 
+                  type="number" 
+                  id="chunk-overlap-input" 
+                  className="w-20 h-8 text-xs" 
+                  value={chunkingSettings.chunkOverlap} 
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value, 10);
+                    if (!isNaN(value)) {
+                      setChunkingSettings(prev => ({
+                        ...prev,
+                        chunkOverlap: Math.min(Math.max(value, 0), 200)
+                      }));
+                    }
+                  }}
+                  min={0} 
+                  max={200} 
+                />
               </div>
               <div className="pt-2">
-                <Slider id="chunk-overlap" min={0} max={200} step={8} value={[chunkingSettings.chunkOverlap]} onValueChange={handleChunkOverlapChange} />
+                <Slider 
+                  id="chunk-overlap" 
+                  min={0} 
+                  max={200} 
+                  step={8} 
+                  value={[chunkingSettings.chunkOverlap]} 
+                  onValueChange={(value) => {
+                    setChunkingSettings(prev => ({
+                      ...prev,
+                      chunkOverlap: value[0]
+                    }));
+                  }}
+                />
               </div>
-              <p className="text-xs text-gray-500 mt-1 my-[12px]">
-                Controls how much text overlaps between chunks. Higher overlap (60-100) preserves context between chunks 
-                but creates more redundancy. Lower values (20-40) reduce redundancy but may cause context loss.
+              <p className="text-xs text-gray-500 mt-1">
+                Controls how much text overlaps between chunks. Higher overlap preserves context between chunks.
               </p>
             </div>
 
-            <div className="space-y-2 pt-2">
-              <div className="flex items-center space-x-2">
-                <Switch id="structure-aware" checked={chunkingSettings.structureAware} onCheckedChange={toggleStructureAware} />
-                <Label htmlFor="structure-aware" className="text-sm">Structure-Aware Chunking</Label>
-              </div>
-              <p className="text-xs text-gray-500 pl-7 text-left px-0">
-                Enables smart chunking that respects document structure like headings, paragraphs, and tables.
-                This helps keep related content together and improves context preservation.
+            <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
+              <p className="text-xs text-blue-700">
+                <strong>Recommended settings by document type:</strong><br />
+                • Technical/Reference: 512-768 chunk size, 40-60 overlap<br />
+                • Narrative/Conversational: 768-1024 chunk size, 80-100 overlap<br />
+                • Short Form Content: 256-512 chunk size, 20-40 overlap
               </p>
             </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Switch id="preserve-tables" checked={chunkingSettings.preserveTables} onCheckedChange={togglePreserveTables} />
-                <Label htmlFor="preserve-tables" className="text-sm">Preserve Table Integrity</Label>
-              </div>
-              <p className="text-xs text-gray-500 pl-7 text-left px-0">
-                Keeps tables intact during chunking by identifying tabular data and treating 
-                them as special elements. Prevents table rows from being split across chunks.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Switch id="clean-redundant" checked={chunkingSettings.cleanRedundantData} onCheckedChange={toggleCleanRedundantData} />
-                <Label htmlFor="clean-redundant" className="text-sm">Clean Redundant Data</Label>
-              </div>
-              <p className="text-xs text-gray-500 pl-7 text-left px-0">
-                Removes repeated information like duplicate contact details, reformats tables for better readability, 
-                and normalizes spacing to improve overall text quality.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Switch id="split-sentence" checked={chunkingSettings.splitBySentence} onCheckedChange={toggleSplitBySentence} />
-                <Label htmlFor="split-sentence" className="text-sm">Respect Sentence Boundaries</Label>
-              </div>
-              <p className="text-xs text-gray-500 pl-7 text-left px-0">
-                Tries to keep complete sentences together when creating chunks, which helps maintain semantic meaning.
-                Disable this if you prefer strict size-based chunking.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-            <p className="text-xs text-blue-700 text-left px-0">
-              <strong>Recommended settings by document type:</strong><br />
-              • Technical/Reference with Tables: Enable "Preserve Table Integrity" for best results<br />
-              • Technical/Reference: 512-768 chunk size, 40-60 overlap, Structure-Aware ON<br />
-              • Narrative/Conversational: 768-1024 chunk size, 80-100 overlap, Sentence Boundaries ON<br />
-              • Short Form Content: 256-512 chunk size, 20-40 overlap, Clean Redundant Data ON
-            </p>
           </div>
         </CollapsibleContent>
       </Collapsible>

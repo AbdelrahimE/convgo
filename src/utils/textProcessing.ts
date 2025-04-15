@@ -195,14 +195,14 @@ export function formatTableText(tableText: string): string {
  */
 export function chunkText(text: string, options: ChunkingOptions = {}): string[] {
   // Default options
-  const {
-    chunkSize = 1024,
-    chunkOverlap = 120,
-    splitBySentence = true,
-    structureAware = true,
-    preserveTables = true,
-    ensureHeaderInChunks = true
-  } = options;
+  const chunkSize = options.chunkSize || 1024;
+  const chunkOverlap = options.chunkOverlap || 120;
+  
+  // Best practices always enabled
+  const structureAware = true;
+  const preserveTables = true;
+  const splitBySentence = true;
+  const cleanRedundantData = true;
 
   // CSV detection and special handling
   if (isCSVContent(text)) {
@@ -1133,4 +1133,3 @@ export function extractKeywords(text: string, maxKeywords: number = 20): string[
       .map(([word]) => word);
   }
 }
-
