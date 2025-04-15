@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Gauge, Calendar, Activity, AlertCircle } from "lucide-react";
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { useAIResponse } from "@/hooks/use-ai-response";
 import { supabase } from "@/integrations/supabase/client";
 import logger from '@/utils/logger';
@@ -69,6 +69,17 @@ export default function AIUsageMonitoring() {
     if (percentageUsed < 80) return "text-amber-500";
     return "text-red-500";
   };
+
+  const formatResetDate = (resetsOn: string | null) => {
+    if (!resetsOn) return null;
+    const resetDate = new Date(resetsOn);
+    const nextResetDate = addDays(resetDate, 30);
+    return format(nextResetDate, 'MMMM d, yyyy');
+  };
+
+  const { stats: promptStats } = usePromptGenerationStats();
+  const timeUntilReset = promptStats?.timeUntilReset;
+
   if (!user) {
     return <motion.div initial={{
       opacity: 0,
@@ -221,14 +232,28 @@ export default function AIUsageMonitoring() {
                   <div className="bg-muted w-24 h-24 rounded-full flex items-center justify-center mb-4">
                     <div className="text-center">
                       {resetsOnDate ? <>
-                          <div className="text-2xl font-bold">{format(resetsOnDate, 'd')}</div>
-                          <div className="text-sm font-medium">{format(resetsOnDate, 'MMM')}</div>
+                          <div className="text-2xl font-bold">
+                            {format(addDays(resetsOnDate, 30), 'd')}
+                          </div>
+                          <div className="text-sm font-medium">
+                            {format(addDays(resetsOnDate, 30), 'MMM')}
+                          </div>
                         </> : <div className="text-sm font-medium">Not set</div>}
                     </div>
                   </div>
-                  {resetsOnDate && <p className="text-center">
-                      Your usage limit will reset on {format(resetsOnDate, 'MMMM d, yyyy')}
-                    </p>}
+                  {resetsOnDate && (
+                    <p className="text-center">
+                      Your usage limit will reset in{' '}
+                      {timeUntilReset ? (
+                        <span>
+                          {timeUntilReset.days} days, {timeUntilReset.hours} hours, and{' '}
+                          {timeUntilReset.minutes} minutes
+                        </span>
+                      ) : (
+                        'calculating...'
+                      )}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import logger from '@/utils/logger';
-import { differenceInDays, differenceInHours, differenceInMinutes, addDays, format } from 'date-fns';
+import { differenceInDays, differenceInHours, differenceInMinutes, addDays } from 'date-fns';
 
 export interface PromptGenerationStats {
   limit: number;
@@ -80,11 +80,9 @@ export function usePromptGenerationStats() {
     }
   }, [user?.id]);
 
-  // Fetch stats initially and set up refresh interval
   useEffect(() => {
     fetchStats();
     
-    // Refresh stats every minute to keep the countdown accurate
     const intervalId = setInterval(fetchStats, 60000);
     
     return () => clearInterval(intervalId);
