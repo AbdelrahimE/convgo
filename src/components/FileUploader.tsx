@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Upload, AlertCircle, ChevronDown, ChevronUp, Settings } from "lucide-react";
+import { Upload, AlertCircle, ChevronDown, ChevronUp, Settings, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -327,34 +327,6 @@ export function FileUploader() {
     }
   };
 
-  const toggleStructureAware = () => {
-    setChunkingSettings(prev => ({
-      ...prev,
-      structureAware: !prev.structureAware
-    }));
-  };
-
-  const togglePreserveTables = () => {
-    setChunkingSettings(prev => ({
-      ...prev,
-      preserveTables: !prev.preserveTables
-    }));
-  };
-
-  const toggleCleanRedundantData = () => {
-    setChunkingSettings(prev => ({
-      ...prev,
-      cleanRedundantData: !prev.cleanRedundantData
-    }));
-  };
-
-  const toggleSplitBySentence = () => {
-    setChunkingSettings(prev => ({
-      ...prev,
-      splitBySentence: !prev.splitBySentence
-    }));
-  };
-
   return <>
       <motion.div whileHover={{
       scale: dragActive ? 1 : 1.01
@@ -436,15 +408,7 @@ export function FileUploader() {
                   id="chunk-size-input" 
                   className="w-20 h-8 text-xs" 
                   value={chunkingSettings.chunkSize} 
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value, 10);
-                    if (!isNaN(value)) {
-                      setChunkingSettings(prev => ({
-                        ...prev,
-                        chunkSize: Math.min(Math.max(value, 100), 2000)
-                      }));
-                    }
-                  }}
+                  onChange={handleChunkSizeInputChange}
                   min={100} 
                   max={2000} 
                 />
@@ -456,12 +420,7 @@ export function FileUploader() {
                   max={2000} 
                   step={16} 
                   value={[chunkingSettings.chunkSize]} 
-                  onValueChange={(value) => {
-                    setChunkingSettings(prev => ({
-                      ...prev,
-                      chunkSize: value[0]
-                    }));
-                  }}
+                  onValueChange={handleChunkSizeChange}
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
@@ -477,15 +436,7 @@ export function FileUploader() {
                   id="chunk-overlap-input" 
                   className="w-20 h-8 text-xs" 
                   value={chunkingSettings.chunkOverlap} 
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value, 10);
-                    if (!isNaN(value)) {
-                      setChunkingSettings(prev => ({
-                        ...prev,
-                        chunkOverlap: Math.min(Math.max(value, 0), 200)
-                      }));
-                    }
-                  }}
+                  onChange={handleChunkOverlapInputChange}
                   min={0} 
                   max={200} 
                 />
@@ -497,12 +448,7 @@ export function FileUploader() {
                   max={200} 
                   step={8} 
                   value={[chunkingSettings.chunkOverlap]} 
-                  onValueChange={(value) => {
-                    setChunkingSettings(prev => ({
-                      ...prev,
-                      chunkOverlap: value[0]
-                    }));
-                  }}
+                  onValueChange={handleChunkOverlapChange}
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
