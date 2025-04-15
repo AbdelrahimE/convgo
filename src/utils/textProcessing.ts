@@ -786,3 +786,350 @@ function detectFrenchNamedEntity(word: string, context: string[] = []): {
       break;
     }
   }
+  
+  return result;
+}
+
+/**
+ * Enhanced scoring for Arabic keywords considering both statistical and semantic factors
+ */
+function scoreArabicWord(
+  word: string,
+  frequency: number,
+  totalWords: number,
+  context: string[]
+): number {
+  // Base TF-IDF score
+  const tfIdfScore = calculateTfIdf(word, frequency, totalWords);
+  
+  // Named entity detection
+  const nerResult = detectArabicNamedEntity(word, context);
+  
+  // Calculate final score
+  let finalScore = tfIdfScore;
+  
+  // Boost score for named entities
+  if (nerResult.isEntity) {
+    finalScore *= (1 + nerResult.confidence);
+    
+    // Additional boost for specific entity types
+    switch (nerResult.type) {
+      case 'person':
+        finalScore *= 1.3;
+        break;
+      case 'location':
+        finalScore *= 1.2;
+        break;
+      case 'organization':
+        finalScore *= 1.2;
+        break;
+    }
+  }
+  
+  // Length bonus (longer words often carry more meaning in Arabic)
+  const lengthBonus = Math.min(1.2, word.length / 5);
+  finalScore *= lengthBonus;
+  
+  return finalScore;
+}
+
+/**
+ * Enhanced scoring for English keywords considering both statistical and semantic factors
+ */
+function scoreEnglishWord(
+  word: string,
+  frequency: number,
+  totalWords: number,
+  context: string[]
+): number {
+  // Base TF-IDF score
+  const tfIdfScore = calculateTfIdf(word, frequency, totalWords);
+  
+  // Named entity detection
+  const nerResult = detectEnglishNamedEntity(word, context);
+  
+  // Calculate final score
+  let finalScore = tfIdfScore;
+  
+  // Boost score for named entities
+  if (nerResult.isEntity) {
+    finalScore *= (1 + nerResult.confidence);
+    
+    // Additional boost for specific entity types
+    switch (nerResult.type) {
+      case 'person':
+        finalScore *= 1.3;
+        break;
+      case 'location':
+        finalScore *= 1.2;
+        break;
+      case 'organization':
+        finalScore *= 1.2;
+        break;
+    }
+  }
+  
+  // Length bonus (longer words often carry more meaning)
+  const lengthBonus = Math.min(1.1, word.length / 7);
+  finalScore *= lengthBonus;
+  
+  return finalScore;
+}
+
+/**
+ * Enhanced scoring for French keywords considering both statistical and semantic factors
+ */
+function scoreFrenchWord(
+  word: string,
+  frequency: number,
+  totalWords: number,
+  context: string[]
+): number {
+  // Base TF-IDF score
+  const tfIdfScore = calculateTfIdf(word, frequency, totalWords);
+  
+  // Named entity detection
+  const nerResult = detectFrenchNamedEntity(word, context);
+  
+  // Calculate final score
+  let finalScore = tfIdfScore;
+  
+  // Boost score for named entities
+  if (nerResult.isEntity) {
+    finalScore *= (1 + nerResult.confidence);
+    
+    // Additional boost for specific entity types
+    switch (nerResult.type) {
+      case 'person':
+        finalScore *= 1.3;
+        break;
+      case 'location':
+        finalScore *= 1.2;
+        break;
+      case 'organization':
+        finalScore *= 1.2;
+        break;
+    }
+  }
+  
+  // Length bonus (longer words often carry more meaning)
+  const lengthBonus = Math.min(1.1, word.length / 6);
+  finalScore *= lengthBonus;
+  
+  return finalScore;
+}
+
+/**
+ * Enhanced keyword extraction using TF-IDF and NER
+ */
+export function extractKeywords(text: string, maxKeywords: number = 20): string[] {
+  if (!text) return [];
+  
+  const detectedLang = detectLanguage(text);
+  logger.log("Detected language:", detectedLang);
+  
+  // Extract all words using Unicode property escapes to support all scripts
+  const allWords = text.match(/\p{L}+/gu) || [];
+  
+  // Create context windows (5 words before and after each word)
+  const contextWindows: string[][] = [];
+  for (let i = 0; i < allWords.length; i++) {
+    const windowStart = Math.max(0, i - 5);
+    const windowEnd = Math.min(allWords.length, i + 6);
+    contextWindows.push(allWords.slice(windowStart, windowEnd));
+  }
+  
+  if (detectedLang === 'arabic') {
+    // Filter out function words
+    const contentWords = allWords.filter(word => !isArabicFunctionWord(word));
+    
+    if (contentWords.length >= 5) {
+      // Count frequencies
+      const wordFreq: Record<string, number> = {};
+      contentWords.forEach(word => {
+        const normalized = word.toLowerCase();
+        wordFreq[normalized] = (wordFreq[normalized] || 0) + 1;
+      });
+      
+      // Calculate scores using enhanced scoring function
+      const scores: Record<string, number> = {};
+      Object.entries(wordFreq).forEach(([word, freq]) => {
+        // Find the original index of this word to get its context
+        const originalIndexes: number[] = [];
+        for (let i = 0; i < allWords.length; i++) {
+          if (allWords[i].toLowerCase() === word) {
+            originalIndexes.push(i);
+          }
+        }
+        
+        // Use the first occurrence's context, or empty if not found
+        const context = originalIndexes.length > 0 
+          ? contextWindows[originalIndexes[0]] 
+          : [];
+        
+        scores[word] = scoreArabicWord(word, freq, contentWords.length, context);
+      });
+      
+      // Sort by score and return top keywords
+      return Object.entries(scores)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, maxKeywords)
+        .map(([word]) => word);
+    }
+    
+    return [...new Set(contentWords)].slice(0, maxKeywords);
+  } else if (detectedLang === 'english') {
+    // For English language, use the standard approach with NER
+    const stopWords = getStopWords(detectedLang);
+    
+    // Filter out stopwords
+    const filteredWords = allWords.filter(word => {
+      // Add null/undefined check and make sure word is a string
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      return normalized && !stopWords.has(normalized) && normalized.length > 1;
+    });
+    
+    // If we have very few words after filtering, return them all
+    if (filteredWords.length < 5) {
+      return [...new Set(filteredWords)].slice(0, maxKeywords);
+    }
+    
+    // Calculate word frequencies
+    const wordFrequency: Record<string, number> = {};
+    filteredWords.forEach(word => {
+      // Make sure word is a string
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      if (normalized) {
+        wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+      }
+    });
+    
+    // Calculate scores using English NER enhanced scoring
+    const scores: Record<string, number> = {};
+    const wordCount = filteredWords.length;
+    
+    Object.entries(wordFrequency).forEach(([word, freq]) => {
+      // Find context for this word
+      const originalIndexes: number[] = [];
+      for (let i = 0; i < allWords.length; i++) {
+        // Make sure word is a string and comparable
+        const currentWord = typeof allWords[i] === 'string' ? allWords[i].toLowerCase() : '';
+        if (currentWord === word) {
+          originalIndexes.push(i);
+        }
+      }
+      
+      // Use the first occurrence's context
+      const context = originalIndexes.length > 0 
+        ? contextWindows[originalIndexes[0]] 
+        : [];
+      
+      scores[word] = scoreEnglishWord(word, freq, wordCount, context);
+    });
+    
+    // Sort by score and take top N
+    return Object.entries(scores)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxKeywords)
+      .map(([word]) => word);
+  } else if (detectedLang === 'french') {
+    // For French language, use the standard approach with NER
+    const stopWords = getStopWords(detectedLang);
+    
+    // Filter out stopwords
+    const filteredWords = allWords.filter(word => {
+      // Add null/undefined check and make sure word is a string
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      return normalized && !stopWords.has(normalized) && normalized.length > 1;
+    });
+    
+    // If we have very few words after filtering, return them all
+    if (filteredWords.length < 5) {
+      return [...new Set(filteredWords)].slice(0, maxKeywords);
+    }
+    
+    // Calculate word frequencies
+    const wordFrequency: Record<string, number> = {};
+    filteredWords.forEach(word => {
+      // Make sure word is a string
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      if (normalized) {
+        wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+      }
+    });
+    
+    // Calculate scores using French NER enhanced scoring
+    const scores: Record<string, number> = {};
+    const wordCount = filteredWords.length;
+    
+    Object.entries(wordFrequency).forEach(([word, freq]) => {
+      // Find context for this word
+      const originalIndexes: number[] = [];
+      for (let i = 0; i < allWords.length; i++) {
+        // Make sure word is a string and comparable
+        const currentWord = typeof allWords[i] === 'string' ? allWords[i].toLowerCase() : '';
+        if (currentWord === word) {
+          originalIndexes.push(i);
+        }
+      }
+      
+      // Use the first occurrence's context
+      const context = originalIndexes.length > 0 
+        ? contextWindows[originalIndexes[0]] 
+        : [];
+      
+      scores[word] = scoreFrenchWord(word, freq, wordCount, context);
+    });
+    
+    // Sort by score and take top N
+    return Object.entries(scores)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxKeywords)
+      .map(([word]) => word);
+  } else {
+    // For non-Arabic/English/French languages, use the standard approach
+    const stopWords = getStopWords(detectedLang);
+    
+    // First filter out stopwords with proper type checking
+    const filteredWords = allWords.filter(word => {
+      // Add null/undefined check and make sure word is a string
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      return normalized && !stopWords.has(normalized) && normalized.length > 1;
+    });
+    
+    // If we have very few words after filtering, return them all
+    if (filteredWords.length < 5) {
+      return [...new Set(filteredWords)].slice(0, maxKeywords);
+    }
+    
+    // Calculate word frequencies (Term Frequency)
+    const wordFrequency: Record<string, number> = {};
+    filteredWords.forEach(word => {
+      const normalized = typeof word === 'string' ? word.toLowerCase() : '';
+      if (normalized) {
+        wordFrequency[normalized] = (wordFrequency[normalized] || 0) + 1;
+      }
+    });
+    
+    // Calculate scores with TF-IDF inspired approach
+    const scores: Record<string, number> = {};
+    const wordCount = filteredWords.length;
+    
+    Object.entries(wordFrequency).forEach(([word, freq]) => {
+      // TF component (frequency in this document)
+      const tf = freq / wordCount;
+      
+      // IDF-like component (boost longer words and penalize very common words)
+      const lengthBoost = Math.min(1.0, word.length / 5); // Boost for longer words
+      const commonnessPenalty = Math.max(0.5, 1.0 - (freq / wordCount) * 10); // Penalize very common words
+      
+      scores[word] = tf * lengthBoost * commonnessPenalty;
+    });
+    
+    // Sort words by score and take top N
+    return Object.entries(scores)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxKeywords)
+      .map(([word]) => word);
+  }
+}
