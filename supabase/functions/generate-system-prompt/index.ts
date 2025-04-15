@@ -71,7 +71,7 @@ Create a system prompt that is formatted as a complete, ready-to-use prompt with
 ${description}`
           }
         ],
-        temperature: 0.7,
+        temperature: 1.0,
       }),
     });
 
