@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { LogoWithText } from '@/components/Logo';
 import { Loader2 } from 'lucide-react';
 import logger from '@/utils/logger';
+import { PasswordInput } from '@/components/PasswordInput';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -40,10 +41,6 @@ export default function Auth() {
       if (fullName.length < 3) {
         throw new Error('Full name must be at least 3 characters long');
       }
-      
-      if (password.length < 8) {
-        throw new Error('Your password needs to be at least 8 characters long for better security');
-      }
 
       if (password !== confirmPassword) {
         throw new Error('Passwords do not match. Please try again.');
@@ -54,8 +51,8 @@ export default function Auth() {
       const hasNumber = /[0-9]/.test(password);
       const hasSpecial = /[!@#$%^&*]/.test(password);
 
-      if (!hasLower || !hasUpper || !hasNumber || !hasSpecial) {
-        throw new Error('Please create a stronger password that includes:\n- At least one lowercase letter (a-z)\n- At least one uppercase letter (A-Z)\n- At least one number (0-9)\n- At least one special character (!@#$%^&*)');
+      if (password.length < 8 || !hasLower || !hasUpper || !hasNumber || !hasSpecial) {
+        throw new Error('Please ensure your password meets all the requirements');
       }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -357,26 +354,22 @@ export default function Auth() {
                     required 
                   />
                 </div>
-                <div>
-                  <Label htmlFor="signup-password" className="text-left block py-[5px]">Password</Label>
-                  <Input 
-                    id="signup-password" 
-                    type="password" 
-                    value={password} 
-                    onChange={e => setPassword(e.target.value)} 
-                    required 
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="confirm-password" className="text-left block py-[5px]">Confirm Password</Label>
-                  <Input 
-                    id="confirm-password" 
-                    type="password" 
-                    value={confirmPassword} 
-                    onChange={e => setConfirmPassword(e.target.value)} 
-                    required 
-                  />
-                </div>
+                <PasswordInput
+                  id="signup-password"
+                  label="Password"
+                  value={password}
+                  onChange={setPassword}
+                  required
+                />
+                <PasswordInput
+                  id="confirm-password"
+                  label="Confirm Password"
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  isConfirm
+                  originalPassword={password}
+                  required
+                />
                 <Button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-600">
                   {loading ? (
                     <>
