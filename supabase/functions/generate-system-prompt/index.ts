@@ -1,7 +1,8 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { getNextOpenAIKey } from "../_shared/openai-key-rotation.ts";
+
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const SUPABASE_URL = 'https://okoaoguvtjauiecfajri.supabase.co';
 
 const logger = {
   log: (...args: any[]) => console.log(...args),
@@ -33,10 +34,13 @@ serve(async (req) => {
 
     // Extract user ID from JWT
     const token = authHeader.replace('Bearer ', '');
-    const userResponse = await fetch('https://okoaoguvtjauiecfajri.supabase.co/auth/v1/user', {
+    
+    // Use service role key to fetch user information
+    const userResponse = await fetch(`${SUPABASE_URL}/rest/v1/auth/users?apikey=${SUPABASE_SERVICE_ROLE_KEY}`, {
       headers: {
-        'Authorization': `Bearer ${token}`,
-      },
+        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        'apikey': SUPABASE_SERVICE_ROLE_KEY
+      }
     });
 
     if (!userResponse.ok) {
@@ -44,7 +48,7 @@ serve(async (req) => {
     }
 
     const userData = await userResponse.json();
-    const userId = userData.id;
+    const userId = userData[0].id; // Assuming the first user in the response
 
     // Check user's prompt generation limit
     const profileResponse = await fetch(
