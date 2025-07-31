@@ -49,6 +49,7 @@ const WebhookEndpointInfo = () => {
   "destination": "YOUR_WEBHOOK_URL",
   "date_time": "2025-03-14T21:34:05.210Z",
   "sender": "201018090321@s.whatsapp.net",
+
   "server_url": "https://api.botifiy.com",
   "apikey": "YOUR_API_KEY"
 }`;
