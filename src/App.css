@@ -1,0 +1,101 @@
+
+#root {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  font-family: 'Nunito Sans', system-ui, sans-serif;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+.direction-rtl {
+  direction: rtl;
+  text-align: right;
+  font-family: 'Tajawal', Arial, sans-serif;
+}
+
+.direction-ltr {
+  direction: ltr;
+  text-align: left;
+  font-family: 'Nunito Sans', system-ui, sans-serif;
+}
+
+/* Auto language detection classes */
+.lang-ar {
+  font-family: 'Tajawal', Arial, sans-serif;
+}
+
+.lang-en {
+  font-family: 'Nunito Sans', system-ui, sans-serif;
+}
+
+/* Ensure icons maintain their original dimensions */
+img.icon, .icon img {
+  object-fit: contain;
+  width: auto;
+  height: auto;
+}
+
+/* This ensures favicon and other browser icons respect their original dimensions */
+link[rel="icon"], link[rel="alternate icon"] {
+  width: 24px !important;
+  height: 20px !important;
+}
+
+/* Mobile header responsive adjustments */
+@media (max-width: 767px) {
+  .mobile-header {
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* Tablet Portrait adjustments */
+@media (max-width: 1024px) and (min-width: 768px) {
+  /* Add specific tablet portrait styles if needed */
+}
+
+/* Tablet Landscape adjustments */
+@media (max-width: 1200px) and (min-width: 1025px) {
+  /* Add specific tablet landscape styles if needed */
+}
+
+/* Laptop adjustments */
+@media (max-width: 1366px) and (min-width: 1201px) {
+  /* Add specific laptop styles if needed */
+}

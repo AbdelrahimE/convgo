@@ -1,0 +1,9 @@
+project_id = "okoaoguvtjauiecfajri"
+
+[functions]
+# Disable JWT verification for all functions
+# verify_jwt = false
+
+# If you want to disable for specific functions, you can do:
+[functions.whatsapp-webhook]
+verify_jwt = false

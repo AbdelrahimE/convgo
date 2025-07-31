@@ -1,0 +1,3 @@
+
+[deploy]
+out_dir = "dist"
