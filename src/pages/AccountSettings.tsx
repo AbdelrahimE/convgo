@@ -266,7 +266,7 @@ export default function AccountSettings() {
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" disabled={isLoading} className="bg-blue-700 hover:bg-blue-600">
+                  <Button type="submit" disabled={isLoading} className="bg-blue-600 hover:bg-blue-700">
                     {isLoading ? <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Saving...

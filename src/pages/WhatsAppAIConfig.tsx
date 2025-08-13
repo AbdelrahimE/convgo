@@ -583,7 +583,7 @@ const WhatsAppAIConfig = () => {
                         </p>
                       </div>}
                     
-                    <Button onClick={saveAIConfig} disabled={isSaving || !systemPrompt.trim() || !selectedInstance || !processVoiceMessages && !voiceMessageDefaultResponse.trim()} className="w-full bg-blue-700 hover:bg-blue-600">
+                    <Button onClick={saveAIConfig} disabled={isSaving || !systemPrompt.trim() || !selectedInstance || !processVoiceMessages && !voiceMessageDefaultResponse.trim()} className="w-full bg-blue-600 hover:bg-blue-700">
                       {isSaving ? 'Saving...' : 'Save Configuration'}
                     </Button>
                   </CardContent>
@@ -635,7 +635,7 @@ const WhatsAppAIConfig = () => {
                     
                     <div className="flex gap-2">
                       <LanguageAwareInput value={testQuery} onChange={e => setTestQuery(e.target.value)} placeholder="Type a message to test..." onKeyDown={e => e.key === 'Enter' && sendTestMessage()} />
-                      <Button onClick={sendTestMessage} disabled={isGenerating || !testQuery.trim() || !selectedInstance} className="bg-blue-700 hover:bg-blue-600 font-bold">
+                      <Button onClick={sendTestMessage} disabled={isGenerating || !testQuery.trim() || !selectedInstance} className="bg-blue-600 hover:bg-blue-700 font-bold">
                         {isGenerating ? 'Sending...' : 'Send'}
                       </Button>
                     </div>

@@ -63,62 +63,7 @@ export type Database = {
           },
         ]
       }
-      file_metadata: {
-        Row: {
-          created_at: string | null
-          field_id: string
-          file_id: string
-          id: string
-          updated_at: string | null
-          value: Json
-        }
-        Insert: {
-          created_at?: string | null
-          field_id: string
-          file_id: string
-          id?: string
-          updated_at?: string | null
-          value: Json
-        }
-        Update: {
-          created_at?: string | null
-          field_id?: string
-          file_id?: string
-          id?: string
-          updated_at?: string | null
-          value?: Json
-        }
-        Relationships: [
-          {
-            foreignKeyName: "file_metadata_field_id_fkey"
-            columns: ["field_id"]
-            isOneToOne: false
-            referencedRelation: "metadata_fields"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "file_metadata_file_id_fkey"
-            columns: ["file_id"]
-            isOneToOne: false
-            referencedRelation: "files"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_file_metadata_field"
-            columns: ["field_id"]
-            isOneToOne: false
-            referencedRelation: "metadata_fields"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_file_metadata_file"
-            columns: ["file_id"]
-            isOneToOne: false
-            referencedRelation: "files"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+
       files: {
         Row: {
           arabic_script_details: Json | null
@@ -199,50 +144,7 @@ export type Database = {
           },
         ]
       }
-      metadata_fields: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          field_type: Database["public"]["Enums"]["metadata_field_type"]
-          id: string
-          is_required: boolean | null
-          name: string
-          options: Json | null
-          profile_id: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          field_type: Database["public"]["Enums"]["metadata_field_type"]
-          id?: string
-          is_required?: boolean | null
-          name: string
-          options?: Json | null
-          profile_id: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          field_type?: Database["public"]["Enums"]["metadata_field_type"]
-          id?: string
-          is_required?: boolean | null
-          name?: string
-          options?: Json | null
-          profile_id?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "metadata_fields_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+
       profiles: {
         Row: {
           business_name: string | null
@@ -848,14 +750,8 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
-      insert_date_metadata: {
-        Args: { p_file_id: string; p_field_id: string; p_date_value: string }
-        Returns: boolean
-      }
-      insert_default_metadata_fields: {
-        Args: { target_profile_id: string }
-        Returns: undefined
-      }
+
+
       ivfflat_bit_support: {
         Args: { "": unknown }
         Returns: unknown
@@ -875,24 +771,6 @@ export type Database = {
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
         Returns: string
-      }
-      match_document_chunks: {
-        Args: {
-          query_embedding: string
-          match_threshold: number
-          match_count: number
-          min_content_length?: number
-          filter_language?: string
-        }
-        Returns: {
-          id: string
-          chunk_id: string
-          file_id: string
-          content: string
-          metadata: Json
-          similarity: number
-          language: string
-        }[]
       }
       match_document_chunks_by_files: {
         Args: {
@@ -964,7 +842,6 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
-      metadata_field_type: "text" | "number" | "date" | "boolean" | "select"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1081,7 +958,6 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
-      metadata_field_type: ["text", "number", "date", "boolean", "select"],
     },
   },
 } as const

@@ -246,7 +246,7 @@ export default function Auth() {
                   required
                 />
               </div>
-              <Button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-600">
+              <Button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700">
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -276,7 +276,7 @@ export default function Auth() {
                 <Input id="reset-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
               </div>
               <div className="flex gap-4">
-                <Button type="submit" disabled={loading} className="flex-1 bg-blue-700 hover:bg-blue-600">
+                <Button type="submit" disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700">
                   {loading ? 'Sending...' : 'Send Reset Link'}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setShowResetPassword(false)} className="flex-1">
@@ -316,7 +316,7 @@ export default function Auth() {
                 <Button type="button" variant="link" onClick={() => setShowResetPassword(true)} className="px-0 justify-start w-auto h-auto text-left my-0 mx-0 py-0">
                   Can't access your account?
                 </Button>
-                <Button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-600">
+                <Button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700">
                   {loading ? 'Signing in...' : 'Sign In'}
                 </Button>
               </form>
@@ -373,7 +373,7 @@ export default function Auth() {
                   originalPassword={password}
                   required
                 />
-                <Button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-600">
+                <Button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700">
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

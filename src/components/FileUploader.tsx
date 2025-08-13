@@ -7,22 +7,18 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { FileMetadataForm } from "@/components/FileMetadataForm";
+
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useDocumentEmbeddings } from "@/hooks/use-document-embeddings";
 import logger from '@/utils/logger';
-interface UploadingFile {
-  file: File;
-  id?: string;
-}
+
 interface RetryState {
   attempts: number;
   lastError: string | null;
-  operation: 'upload' | 'metadata' | 'extraction';
+  operation: 'upload' | 'extraction';
 }
 interface ChunkingSettings {
   chunkSize: number;
@@ -34,8 +30,7 @@ export function FileUploader() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
-  const [showMetadataDialog, setShowMetadataDialog] = useState(false);
-  const [currentUploadingFile, setCurrentUploadingFile] = useState<UploadingFile | null>(null);
+
   const [isLoading, setIsLoading] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [chunkingSettings, setChunkingSettings] = useState<ChunkingSettings>({
@@ -52,7 +47,7 @@ export function FileUploader() {
   const {
     generateEmbeddings
   } = useDocumentEmbeddings();
-  const ALLOWED_FILE_TYPES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'text/csv', 'application/vnd.ms-excel', 'application/csv'];
+  const ALLOWED_FILE_TYPES = ['application/pdf', 'text/plain', 'text/csv'];
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
   const [retryState, setRetryState] = useState<RetryState>({
     attempts: 0,
@@ -67,45 +62,20 @@ export function FileUploader() {
       operation: 'upload'
     });
   };
-  const handleRetry = async () => {
-    if (retryState.attempts >= MAX_RETRY_ATTEMPTS) {
-      toast({
-        variant: "destructive",
-        title: "Maximum retry attempts reached",
-        description: "Please try uploading the file again"
-      });
-      resetRetryState();
-      return;
-    }
-    setRetryState(prev => ({
-      ...prev,
-      attempts: prev.attempts + 1
-    }));
-    await sleep(RETRY_DELAY_MS * Math.pow(2, retryState.attempts));
-    switch (retryState.operation) {
-      case 'upload':
-        if (currentUploadingFile?.file) {
-          await handleFileUpload(currentUploadingFile.file);
-        }
-        break;
-      case 'metadata':
-        if (currentUploadingFile?.id) {
-          await triggerTextExtraction(currentUploadingFile.id);
-        }
-        break;
-      case 'extraction':
-        if (currentUploadingFile?.id) {
-          await triggerTextExtraction(currentUploadingFile.id);
-        }
-        break;
-    }
+  // Simplified retry mechanism - user can manually retry by uploading again
+  const handleRetry = () => {
+    toast({
+      title: "Try Again",
+      description: "Please try uploading your file again."
+    });
+    resetRetryState();
   };
   const validateFile = (file: File) => {
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
       toast({
         variant: "destructive",
         title: "Invalid file type",
-        description: "Please upload a PDF, DOC, DOCX, TXT, XLSX, or CSV file"
+        description: "Please upload a PDF, TXT, or CSV file"
       });
       return false;
     }
@@ -209,22 +179,17 @@ export function FileUploader() {
         setRetryState(prev => ({
           attempts: prev.attempts,
           lastError: dbError.message,
-          operation: 'metadata'
+          operation: 'upload'
         }));
         throw dbError;
       }
       if (fileData) {
-        setCurrentUploadingFile({
-          file,
-          id: fileData.id
-        });
-        setShowMetadataDialog(true);
         await triggerTextExtraction(fileData.id);
       }
       resetRetryState();
       toast({
         title: "Success",
-        description: "File uploaded successfully. Please add metadata."
+        description: "File uploaded and processed successfully. Embeddings will be generated automatically."
       });
     } catch (error: any) {
       toast({
@@ -242,14 +207,7 @@ export function FileUploader() {
       if (inputRef.current) inputRef.current.value = '';
     }
   };
-  const handleMetadataSave = () => {
-    setShowMetadataDialog(false);
-    setCurrentUploadingFile(null);
-    toast({
-      title: "Success",
-      description: "File metadata saved successfully"
-    });
-  };
+
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -304,123 +262,166 @@ export function FileUploader() {
       }));
     }
   };
-  return <>
-      <motion.div whileHover={{
-      scale: dragActive ? 1 : 1.01
-    }} transition={{
-      duration: 0.2
-    }} className={`relative flex flex-col items-center justify-center w-full h-32 sm:h-40 md:h-48 border-2 border-dashed rounded-lg transition-all duration-200
-          ${dragActive ? 'border-primary bg-primary/10 scale-102' : 'border-gray-300 hover:border-primary'}
-        `} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-        <input type="file" id="file-upload" className="hidden" onChange={handleChange} disabled={isUploading} ref={inputRef} accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.csv" />
+  return (
+    <div className="space-y-4">
+      {/* Upload Area */}
+      <motion.div 
+        whileHover={{ scale: dragActive ? 1 : 1.01 }} 
+        transition={{ duration: 0.2 }}
+        className={`relative flex flex-col items-center justify-center w-full h-36 overflow-hidden border-2 border-dashed rounded-xl transition-all duration-200 ${
+          dragActive 
+            ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 scale-102' 
+            : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-400 bg-slate-50/50 dark:bg-slate-800/50'
+        }`} 
+        onDragOver={handleDragOver} 
+        onDragLeave={handleDragLeave} 
+        onDrop={handleDrop}
+      >
+        <input 
+          type="file" 
+          id="file-upload" 
+          className="hidden" 
+          onChange={handleChange} 
+          disabled={isLoading} 
+          ref={inputRef} 
+          accept=".pdf,.txt,.csv" 
+        />
         <label htmlFor="file-upload" className="flex flex-col items-center justify-center w-full h-full cursor-pointer">
-          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-            <motion.div animate={isLoading ? {
-            rotate: 360
-          } : {}} transition={{
-            duration: 2,
-            repeat: Infinity,
-            ease: "linear"
-          }}>
-              <Upload className={`w-8 h-8 mb-2 sm:w-10 sm:h-10 md:w-12 md:h-12 ${isLoading ? 'text-primary' : ''}`} />
-            </motion.div>
-            <p className="mb-2 text-sm sm:text-base md:text-lg text-gray-500 text-center px-4">
-              {dragActive ? "Drop the file here" : isLoading ? "Uploading..." : "Drag & drop or click to upload"}
-            </p>
-            <div className="flex items-center gap-2">
-              <p className="text-xs sm:text-sm text-gray-500 text-center">
-                PDF, DOC, DOCX, TXT, CSV, XLSX (max 10MB)
-                {retryState.lastError && retryState.attempts > 0 && <span className="text-destructive ml-2">
-                    Retry attempt {retryState.attempts}/{MAX_RETRY_ATTEMPTS}
-                  </span>}
-              </p>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <AlertCircle className="h-4 w-4 text-gray-400" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Files will be validated for:</p>
-                    <ul className="text-xs mt-1 list-disc pl-4">
-                      <li>UTF-8 encoding</li>
-                      <li>Text content presence</li>
-                      <li>Character set compatibility</li>
-                    </ul>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+          <div className="flex flex-col items-center justify-center">
+            <div className="mb-3 p-3 bg-blue-100 dark:bg-blue-900/50 rounded-full">
+              <Upload className={`w-6 h-6 ${isLoading ? 'text-blue-600 animate-pulse' : 'text-blue-500'}`} />
             </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400 text-center max-w-xs">
+              Drag and drop, or click to browse
+            </p>
+            <div className="flex items-center gap-1 mt-2">
+              <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+                <span>PDF, TXT, CSV</span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+                <span>Max 10 MB</span>
+              </div>
+            </div>
+            {retryState.lastError && retryState.attempts > 0 && (
+              <div className="mt-2 text-xs text-red-600 dark:text-red-400">
+                Retry attempt {retryState.attempts}/{MAX_RETRY_ATTEMPTS}
+              </div>
+            )}
           </div>
         </label>
 
-        {isLoading && <motion.div initial={{
-        opacity: 0
-      }} animate={{
-        opacity: 1
-      }} className="absolute bottom-0 left-0 w-full px-4 pb-4">
-            <Progress value={uploadProgress} className="h-1" />
-          </motion.div>}
+        {isLoading && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            className="absolute bottom-0 left-0 w-full px-6 pb-4"
+          >
+            <Progress value={uploadProgress} className="h-2 bg-slate-200 dark:bg-slate-700" />
+          </motion.div>
+        )}
       </motion.div>
 
-      <Collapsible open={showAdvancedSettings} onOpenChange={setShowAdvancedSettings} className="mt-4 border rounded-md p-4 w-full">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-gray-500" />
-            <h3 className="text-base font-semibold text-left">Text Chunking Settings</h3>
-          </div>
+      {/* Advanced Settings */}
+      <Collapsible open={showAdvancedSettings} onOpenChange={setShowAdvancedSettings}>
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm">
-              {showAdvancedSettings ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </Button>
+            <div className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer rounded-t-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                  <Settings className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    Text Chunking Settings
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Configure how your documents are processed
+                  </p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                {showAdvancedSettings ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
           </CollapsibleTrigger>
+
+          <CollapsibleContent>
+            <div className="px-4 pb-4 space-y-6 border-t border-slate-200 dark:border-slate-700 pt-4">
+              {/* Chunk Size */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="chunk-size" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Chunk Size: {chunkingSettings.chunkSize} tokens
+                  </Label>
+                  <Input 
+                    type="number" 
+                    id="chunk-size-input" 
+                    className="w-20 h-8 text-xs" 
+                    value={chunkingSettings.chunkSize} 
+                    onChange={handleChunkSizeInputChange} 
+                    min={100} 
+                    max={2000} 
+                  />
+                </div>
+                <Slider 
+                  id="chunk-size" 
+                  min={100} 
+                  max={2000} 
+                  step={16} 
+                  value={[chunkingSettings.chunkSize]} 
+                  onValueChange={handleChunkSizeChange}
+                  className="w-full"
+                />
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Controls how much text is included in each searchable part. Larger chunks provide more context.
+                </p>
+              </div>
+
+              {/* Chunk Overlap */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="chunk-overlap" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Chunk Overlap: {chunkingSettings.chunkOverlap} tokens
+                  </Label>
+                  <Input 
+                    type="number" 
+                    id="chunk-overlap-input" 
+                    className="w-20 h-8 text-xs" 
+                    value={chunkingSettings.chunkOverlap} 
+                    onChange={handleChunkOverlapInputChange} 
+                    min={0} 
+                    max={200} 
+                  />
+                </div>
+                <Slider 
+                  id="chunk-overlap" 
+                  min={0} 
+                  max={200} 
+                  step={8} 
+                  value={[chunkingSettings.chunkOverlap]} 
+                  onValueChange={handleChunkOverlapChange}
+                  className="w-full"
+                />
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Controls how much text is repeated between chunks. Higher overlap preserves context.
+                </p>
+              </div>
+
+              {/* Recommendations */}
+              <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                <h4 className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-2">
+                  Recommended Settings:
+                </h4>
+                <div className="space-y-1 text-xs text-blue-700 dark:text-blue-300">
+                  <div>Technical Documents: 512–768 chunk size, 40–60 overlap</div>
+                  <div>Narrative Content: 768–1024 chunk size, 80–100 overlap</div>
+                  <div>Short Form Content: 256–512 chunk size, 20–40 overlap</div>
+                </div>
+              </div>
+            </div>
+          </CollapsibleContent>
         </div>
-
-        <CollapsibleContent className="mt-2 space-y-4">
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between">
-                <Label htmlFor="chunk-size">Chunk Size (tokens): {chunkingSettings.chunkSize}</Label>
-                <Input type="number" id="chunk-size-input" className="w-20 h-8 text-xs" value={chunkingSettings.chunkSize} onChange={handleChunkSizeInputChange} min={100} max={2000} />
-              </div>
-              <div className="pt-2">
-                <Slider id="chunk-size" min={100} max={2000} step={16} value={[chunkingSettings.chunkSize]} onValueChange={handleChunkSizeChange} />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Controls how much text is included in each searchable part. Larger chunks give the AI more context, but might slightly reduce answer precision if the chunk contains too many mixed ideas.</p>
-            </div>
-
-            <div>
-              <div className="flex justify-between">
-                <Label htmlFor="chunk-overlap">Chunk Overlap (tokens): {chunkingSettings.chunkOverlap}</Label>
-                <Input type="number" id="chunk-overlap-input" className="w-20 h-8 text-xs" value={chunkingSettings.chunkOverlap} onChange={handleChunkOverlapInputChange} min={0} max={200} />
-              </div>
-              <div className="pt-2">
-                <Slider id="chunk-overlap" min={0} max={200} step={8} value={[chunkingSettings.chunkOverlap]} onValueChange={handleChunkOverlapChange} />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Controls how much text is repeated between chunks. Higher overlap helps the AI preserve context and better understand connections between sections.</p>
-            </div>
-
-            <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-              <p className="text-xs text-blue-700">
-                <strong>Recommended settings by document type:</strong><br />
-                • Technical or Reference Documents: 512–768 chunk size, 40–60 overlap<br />
-                • Conversational or Narrative Content: 768–1024 chunk size, 80–100 overlap<br />
-                • Short Form Content (e.g. posts, messages): 256–512 chunk size, 20–40 overlap
-              </p>
-            </div>
-          </div>
-        </CollapsibleContent>
       </Collapsible>
-
-      <Dialog open={showMetadataDialog} onOpenChange={setShowMetadataDialog}>
-        <DialogContent className="sm:max-w-[600px] max-h-[80vh] p-6">
-          <DialogHeader>
-            <DialogTitle className="font-bold text-left">Add File Metadata</DialogTitle>
-            <DialogDescription className="text-left">
-              Please provide the metadata for your uploaded file. This information will help organize and search your documents.
-            </DialogDescription>
-          </DialogHeader>
-          {currentUploadingFile?.id && <FileMetadataForm fileId={currentUploadingFile.id} onSave={handleMetadataSave} />}
-        </DialogContent>
-      </Dialog>
-    </>;
+    </div>
+  );
 }

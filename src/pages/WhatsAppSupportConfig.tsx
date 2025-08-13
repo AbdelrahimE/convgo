@@ -376,7 +376,7 @@ const WhatsAppSupportConfig = () => {
                             <p className="flex items-center text-amber-600 text-xs text-left">Customize the message that will be sent to customers when their conversation is escalated to human support.</p>
                           </div>
                           
-                          <Button onClick={saveSupportConfig} disabled={isSaving || !supportPhoneNumber} className="w-full bg-blue-700 hover:bg-blue-600">
+                          <Button onClick={saveSupportConfig} disabled={isSaving || !supportPhoneNumber} className="w-full bg-blue-600 hover:bg-blue-700">
                             {isSaving ? <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 Saving...
@@ -412,7 +412,7 @@ const WhatsAppSupportConfig = () => {
                                 <LanguageAwareInput id="new-category" placeholder="e.g. billing, technical" value={newCategory} onChange={e => setNewCategory(e.target.value)} disabled={!selectedInstance} />
                               </div>
                               <div className="flex items-end">
-                                <Button onClick={addKeyword} disabled={isAddingKeyword || !newKeyword.trim() || !selectedInstance} className="w-full sm:w-auto bg-blue-700 hover:bg-blue-600">
+                                <Button onClick={addKeyword} disabled={isAddingKeyword || !newKeyword.trim() || !selectedInstance} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
                                   {isAddingKeyword ? <Loader2 className="h-4 w-4 animate-spin" /> : <>
                                       <Plus className="h-4 w-4 mr-2" />
                                       Add

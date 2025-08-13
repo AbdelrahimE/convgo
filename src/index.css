@@ -5,89 +5,130 @@
 
 @layer base {
   :root {
+    /* Base Colors */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
 
+    /* Card Colors */
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
 
+    /* Popover Colors */
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 222.2 47.4% 11.2%;
+    /* Primary Colors - Blue Brand (blue-600) */
+    --primary: var(--blue-600);
     --primary-foreground: 210 40% 98%;
 
+    /* Secondary Colors */
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
 
+    /* Muted Colors */
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
+    /* Accent Colors */
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
 
+    /* Destructive Colors */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
+    /* Border & Input Colors */
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: var(--blue-600);
 
+    /* Border Radius */
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Sidebar Colors - Unified Theme */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222.2 84% 4.9%;
+    --sidebar-primary: var(--blue-600);
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: var(--blue-50);
+    --sidebar-accent-foreground: var(--blue-700);
+    --sidebar-border: 240 20% 85%;
+    --sidebar-ring: var(--blue-600);
 
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 211 100% 55%;
-
-    --sidebar-primary-foreground: 0 0% 100%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 211 100% 55%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 211 100% 55%;
+    /* Blue Color Palette remapped to Blue Brand (Tailwind blue) */
+    --blue-50: 213.8 100% 96.8%;
+    --blue-100: 214.3 94.6% 92.7%;
+    --blue-200: 213.1 93.9% 87.8%;
+    --blue-300: 212.7 97.2% 83.7%;
+    --blue-400: 215.3 95.1% 73.5%;
+    --blue-500: 217.2 91.2% 59.8%;
+    --blue-600: 221.2 83.2% 53.3%;
+    --blue-700: 224.3 76.3% 48%;
+    --blue-800: 226.2 70.7% 40.2%;
+    --blue-900: 224.3 64.6% 32.5%;
+    --blue-950: 226.2 55.3% 25.3%;
   }
 
   .dark {
+    /* Dark Mode Base Colors */
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
 
+    /* Dark Mode Card Colors */
     --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
 
+    /* Dark Mode Popover Colors */
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 210 40% 98%;
+    /* Dark Mode Primary Colors - Blue Brand */
+    --primary: var(--blue-600);
     --primary-foreground: 222.2 47.4% 11.2%;
 
-    --secondary: 217.2 32.6% 17.5%;
+    /* Dark Mode Secondary Colors */
+    --secondary: 240 20% 20%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
+    /* Dark Mode Muted Colors */
+    --muted: 240 20% 20%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%;
+    /* Dark Mode Accent Colors */
+    --accent: 240 20% 20%;
     --accent-foreground: 210 40% 98%;
 
+    /* Dark Mode Destructive Colors */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 211 100% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 211 100% 55%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 211 100% 55%;
+    /* Dark Mode Border & Input Colors */
+    --border: 240 20% 20%;
+    --input: 240 20% 20%;
+    --ring: var(--blue-600);
+
+    /* Dark Mode Sidebar Colors */
+    --sidebar-background: 222.2 84% 4.9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: var(--blue-600);
+    --sidebar-primary-foreground: 222.2 47.4% 11.2%;
+    --sidebar-accent: var(--blue-800);
+    --sidebar-accent-foreground: 217.2 91.2% 59.8%;
+    --sidebar-border: 240 20% 25%;
+    --sidebar-ring: var(--blue-600);
+
+    /* Dark Mode Blue Palette (reversed for dark context) */
+    --blue-50: 226.2 55.3% 25.3%;
+    --blue-100: 224.3 64.6% 32.5%;
+    --blue-200: 226.2 70.7% 40.2%;
+    --blue-300: 224.3 76.3% 48%;
+    --blue-400: 221.2 83.2% 53.3%;
+    --blue-500: 217.2 91.2% 59.8%;
+    --blue-600: 215.3 95.1% 73.5%;
+    --blue-700: 212.7 97.2% 83.7%;
+    --blue-800: 213.1 93.9% 87.8%;
+    --blue-900: 214.3 94.6% 92.7%;
+    --blue-950: 213.8 100% 96.8%;
   }
 }
 
@@ -98,5 +139,80 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Custom Blue Utility Classes */
+@layer utilities {
+  .bg-blue-brand {
+    background-color: hsl(var(--blue-600));
+  }
+  
+  .text-blue-brand {
+    color: hsl(var(--blue-600));
+  }
+  
+  .border-blue-brand {
+    border-color: hsl(var(--blue-600));
+  }
+  
+  .hover\:bg-blue-brand:hover {
+    background-color: hsl(var(--blue-700));
+  }
+  
+  .hover\:text-blue-brand:hover {
+    color: hsl(var(--blue-600));
+  }
+
+  /* Liquid Glass active effect */
+  .glass-active {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.75rem; /* match rounded-xl */
+    background: linear-gradient(
+      135deg,
+      hsl(var(--blue-700) / 0.18) 0%,
+      hsl(var(--blue-500) / 0.12) 100%
+    );
+    backdrop-filter: saturate(180%) blur(10px);
+    -webkit-backdrop-filter: saturate(180%) blur(10px);
+    border: none;
+    box-shadow: none;
+  }
+  .glass-active::before {
+    content: "";
+    position: absolute;
+    inset: -20% 40% 60% -30%;
+    background: radial-gradient(
+      60% 60% at 50% 50%,
+      hsl(0 0% 100% / 0.28) 0%,
+      hsl(0 0% 100% / 0.08) 60%,
+      transparent 100%
+    );
+    filter: blur(8px);
+    pointer-events: none;
+  }
+  .glass-active::after {
+    content: "";
+    position: absolute;
+    inset: 50% -10% -20% 60%;
+    background: radial-gradient(
+      50% 50% at 50% 50%,
+      hsl(var(--blue-600) / 0.25) 0%,
+      transparent 70%
+    );
+    filter: blur(16px);
+    pointer-events: none;
+  }
+
+  .dark .glass-active {
+    border-radius: 0.75rem; /* match rounded-xl */
+    background: linear-gradient(
+      135deg,
+      hsl(var(--blue-400) / 0.14) 0%,
+      hsl(var(--blue-300) / 0.10) 100%
+    );
+    border: none;
+    box-shadow: none;
   }
 }

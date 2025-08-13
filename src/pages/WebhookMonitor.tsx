@@ -116,7 +116,7 @@ const WebhookMonitor = () => {
       case 'messages.upsert':
         return 'bg-green-500';
       case 'connection.update':
-        return 'bg-blue-500';
+        return 'bg-blue-600';
       case 'qrcode.updated':
         return 'bg-purple-500';
       case 'send.message':

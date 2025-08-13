@@ -98,7 +98,7 @@ export function DebugLogsTable() {
   
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
-      'WEBHOOK_REQUEST': 'bg-blue-500',
+      'WEBHOOK_REQUEST': 'bg-blue-600',
       'WEBHOOK_ERROR': 'bg-red-500',
       'AI_PROCESS_START': 'bg-purple-500',
       'AI_ENABLED': 'bg-green-500',

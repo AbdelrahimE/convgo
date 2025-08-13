@@ -289,7 +289,7 @@ export const EscalatedConversations = ({
               </div>
               
               <div className="flex flex-col space-y-2">
-                <Button type="submit" className="bg-blue-700 hover:bg-blue-600 w-full sm:w-auto" disabled={isAddingNumber}>
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto" disabled={isAddingNumber}>
                   {isAddingNumber ? <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Adding...
