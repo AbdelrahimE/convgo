@@ -3,13 +3,15 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, Plus, Check, X, RefreshCw, LogOut, Trash2, MessageSquare, ArrowRight, Bot, Send, PhoneOff, RotateCcw } from "lucide-react";
+import { Loader2, Plus, Check, X, RefreshCw, LogOut, Trash2, MessageSquare, ArrowRight, Bot, Send, PhoneOff, RotateCcw, Settings, Wifi, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import logger from '@/utils/logger';
@@ -56,7 +58,7 @@ const StatusBadge = ({
 }: {
   status: string;
 }) => {
-  const config = statusConfig[status as keyof typeof statusConfig];
+  const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Disconnected;
   const Icon = config.icon;
   return <div className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium", config.color, status === "Connecting" && "animate-pulse")}>
       <Icon className={cn("w-4 h-4 mr-1.5", config.animation)} />
@@ -70,7 +72,10 @@ const InstanceActions = ({
   onReconnect,
   onDelete,
   onToggleCallRejection,
-  onCheckStatus
+  onCheckStatus,
+  formatQrCodeDataUrl,
+  isQrOpen,
+  onQrOpenChange
 }: {
   instance: WhatsAppInstance;
   isLoading: boolean;
@@ -79,13 +84,16 @@ const InstanceActions = ({
   onDelete: () => void;
   onToggleCallRejection: () => void;
   onCheckStatus: () => void;
+  formatQrCodeDataUrl: (qrCodeData: string) => string;
+  isQrOpen: boolean;
+  onQrOpenChange: (open: boolean) => void;
 }) => {
   return <TooltipProvider>
-      <div className="flex items-center justify-end space-x-2">
+      <div className="flex items-center justify-end space-x-1 md:space-x-1">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="outline" size="icon" onClick={onCheckStatus} disabled={isLoading} className="h-9 w-9">
-              <RotateCcw className="h-4 w-4" />
+            <Button variant="outline" size="sm" onClick={onCheckStatus} disabled={isLoading} className="h-8 w-8 p-0 md:h-8 md:w-8">
+              <RotateCcw className="h-3 w-3 md:h-3 md:w-3" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -93,46 +101,50 @@ const InstanceActions = ({
           </TooltipContent>
         </Tooltip>
         
+        {( (instance.status === 'Created' || instance.status === 'Connecting') && instance.qr_code) && (
+          <QRCodeDialog 
+            instance={instance} 
+            formatQrCodeDataUrl={formatQrCodeDataUrl}
+            isOpen={isQrOpen}
+            onOpenChange={onQrOpenChange}
+          />
+        )}
+        
         {instance.status === 'Connected' && <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="secondary" onClick={onLogout} disabled={isLoading} className="w-full sm:w-auto font-semibold">
-                <LogOut className="mr-2 h-4 w-4" />
-                Disconnect
+              <Button variant="outline" size="sm" onClick={onLogout} disabled={isLoading} className="h-8 px-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50">
+                <LogOut className="h-3 w-3" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Disconnect this WhatsApp instance</p>
+              <p>Disconnect</p>
             </TooltipContent>
           </Tooltip>}
         
         {instance.status === 'Disconnected' && <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="secondary" onClick={onReconnect} disabled={isLoading} className="w-full sm:w-auto">
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Reconnect
+              <Button variant="outline" size="sm" onClick={onReconnect} disabled={isLoading} className="h-8 px-2 text-green-600 hover:text-green-700 hover:bg-green-50">
+                <Wifi className="h-3 w-3" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Reconnect this WhatsApp instance</p>
+              <p>Reconnect</p>
             </TooltipContent>
           </Tooltip>}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Configure call rejection settings</p>
-          </TooltipContent>
-        </Tooltip>
-
         <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive" disabled={isLoading} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-center font-semibold">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </Button>
-          </AlertDialogTrigger>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isLoading} className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50">
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </AlertDialogTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Delete instance</p>
+            </TooltipContent>
+          </Tooltip>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Delete WhatsApp Instance</AlertDialogTitle>
@@ -202,7 +214,8 @@ const EmptyState = ({
                 </div>)}
             </div>
 
-            <Button onClick={onCreateClick} size="lg" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
+            <Button onClick={onCreateClick} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl">
+              <Plus className="mr-2 h-4 w-4" />
               Create Your First Instance
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -243,7 +256,7 @@ const CallRejectionForm = ({
   }}>
       <Card className="mb-6 md:mb-8">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-xl md:text-2xl font-bold">Call Rejection Settings</CardTitle>
+          <CardTitle className="text-xl md:text-2xl font-semibold">Call Rejection Settings</CardTitle>
           <CardDescription>
             Configure automatic call rejection for <span className="font-medium">{instance.instance_name}</span>
           </CardDescription>
@@ -277,7 +290,7 @@ const CallRejectionForm = ({
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button type="submit" disabled={isLoading || !message.trim() || isOverLimit} size="lg" className="w-full sm:flex-1 bg-blue-600 hover:bg-blue-700">
+              <Button type="submit" disabled={isLoading || !message.trim() || isOverLimit} size="lg" className="w-full sm:flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl">
                 {isLoading ? <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Saving...
@@ -286,7 +299,8 @@ const CallRejectionForm = ({
                     Enable Call Rejection
                   </>}
               </Button>
-              <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:flex-1" size="lg">
+              <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:flex-1 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:hover:from-gray-600 dark:hover:to-gray-700 border-0 text-gray-700 dark:text-gray-200 rounded-xl" size="lg">
+                <X className="mr-2 h-4 w-4" />
                 Cancel
               </Button>
             </div>
@@ -295,6 +309,64 @@ const CallRejectionForm = ({
       </Card>
     </motion.div>;
 };
+const QRCodeDialog = ({
+  instance,
+  formatQrCodeDataUrl,
+  isOpen,
+  onOpenChange
+}: {
+  instance: WhatsAppInstance;
+  formatQrCodeDataUrl: (qrCodeData: string) => string;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}) => {
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-8 w-8 p-0"
+              disabled={!(instance.status === 'Created' || instance.status === 'Connecting') || !instance.qr_code}
+            >
+              <QrCode className="h-3 w-3" />
+            </Button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Show QR Code</p>
+        </TooltipContent>
+      </Tooltip>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Scan QR Code</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col items-center space-y-4 p-6">
+          {instance.qr_code ? (
+            <>
+              <div className="relative bg-white p-4 rounded-lg border">
+                <img 
+                  src={formatQrCodeDataUrl(instance.qr_code)} 
+                  alt="WhatsApp QR Code" 
+                  className="w-64 h-64 object-contain" 
+                />
+              </div>
+              <p className="text-sm text-muted-foreground text-center">
+                Scan this QR code with your WhatsApp mobile app to connect
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">No QR code available</p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const CallRejectionToggle = ({
   instance,
   onSettings,
@@ -306,29 +378,24 @@ const CallRejectionToggle = ({
   onToggle: (enabled: boolean) => Promise<void>;
   isLoading: boolean;
 }) => {
-  return <div className="space-y-4 mt-4 border-t pt-4">
-      <div className="flex items-center justify-between">
-        <Label htmlFor={`call-rejection-toggle-${instance.id}`} className="text-base">
-          Auto-Reject Calls
-        </Label>
-        <div className="flex items-center space-x-2">
-          <Switch id={`call-rejection-toggle-${instance.id}`} checked={instance.reject_calls} onCheckedChange={checked => {
-          if (checked) {
-            onSettings();
-          } else {
-            onToggle(false);
-          }
-        }} disabled={isLoading || instance.status !== 'Connected'} className="data-[state=checked]:bg-green-500" />
-          {instance.reject_calls && <Button variant="ghost" size="sm" onClick={onSettings} className="h-8 px-2">
-              Edit
-            </Button>}
-        </div>
-      </div>
-      
-      {instance.reject_calls && <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
-          <p className="text-sm text-muted-foreground mb-1">Current rejection message:</p>
-          <p className="text-sm font-medium">{instance.reject_calls_message}</p>
-        </div>}
+  return <div className="flex items-center justify-center space-x-2">
+      <Switch id={`call-rejection-toggle-${instance.id}`} checked={instance.reject_calls} onCheckedChange={checked => {
+        if (checked) {
+          onSettings();
+        } else {
+          onToggle(false);
+        }
+      }} disabled={isLoading || instance.status !== 'Connected'} className="data-[state=checked]:bg-green-500" />
+      {instance.reject_calls && <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="sm" onClick={onSettings} className="h-6 w-6 p-0 rounded-full">
+              <Settings className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Edit rejection message</p>
+          </TooltipContent>
+        </Tooltip>}
     </div>;
 };
 const WhatsAppLink = () => {
@@ -350,6 +417,21 @@ const WhatsAppLink = () => {
   const [proxyPort, setProxyPort] = useState('');
   const [proxyUsername, setProxyUsername] = useState('');
   const [proxyPassword, setProxyPassword] = useState('');
+  const [openQrInstanceId, setOpenQrInstanceId] = useState<string | null>(null);
+
+  const formatQrCodeDataUrl = (qrCodeData: string) => {
+    if (!qrCodeData) return '';
+    try {
+      if (qrCodeData.startsWith('data:image/')) {
+        return qrCodeData;
+      }
+      const cleanBase64 = qrCodeData.trim().replace(/[\n\r\s]/g, '').replace(/-/g, '+').replace(/_/g, '/');
+      return `data:image/png;base64,${cleanBase64}`;
+    } catch (error) {
+      logger.error('Error formatting QR code:', error);
+      return '';
+    }
+  };
   useEffect(() => {
     if (!authLoading && user) {
       fetchInstances();
@@ -374,7 +456,8 @@ const WhatsAppLink = () => {
       const updatedInstance = payload.new as WhatsAppInstance;
       setInstances(prevInstances => prevInstances.map(instance => instance.id === updatedInstance.id ? {
         ...instance,
-        ...updatedInstance
+        ...updatedInstance,
+        qr_code: instance.qr_code  // Preserve local qr_code data
       } : instance));
       if (previousInstance && updatedInstance.status === 'Connected' && previousInstance.status !== 'Connected') {
         const instanceName = updatedInstance.instance_name;
@@ -531,6 +614,7 @@ const WhatsAppLink = () => {
         ...instanceData,
         qr_code: qrCodeData
       }]);
+      setOpenQrInstanceId(instanceData.id);
       setShowCreateForm(false);
       setInstanceName('');
       setShowProxyFields(false);
@@ -629,6 +713,7 @@ const WhatsAppLink = () => {
         status: 'Connecting',
         qr_code: qrCodeData
       } : instance));
+      setOpenQrInstanceId(instanceId);
       toast.success('Scan the QR code to reconnect your WhatsApp instance');
     } catch (error: any) {
       logger.error('Error reconnecting WhatsApp instance:', error);
@@ -724,19 +809,6 @@ const WhatsAppLink = () => {
     logger.log('No QR code found in response');
     return null;
   };
-  const formatQrCodeDataUrl = (qrCodeData: string) => {
-    if (!qrCodeData) return '';
-    try {
-      if (qrCodeData.startsWith('data:image/')) {
-        return qrCodeData;
-      }
-      const cleanBase64 = qrCodeData.trim().replace(/[\n\r\s]/g, '').replace(/-/g, '+').replace(/_/g, '/');
-      return `data:image/png;base64,${cleanBase64}`;
-    } catch (error) {
-      logger.error('Error formatting QR code:', error);
-      return '';
-    }
-  };
   if (authLoading || initialLoading) {
     return <div className="container mx-auto max-w-5xl py-8">
         <Card>
@@ -760,7 +832,8 @@ const WhatsAppLink = () => {
         </Card>
       </div>;
   }
-  return <motion.div initial={{
+  return <TooltipProvider>
+    <motion.div initial={{
     opacity: 0,
     y: 20
   }} animate={{
@@ -772,44 +845,51 @@ const WhatsAppLink = () => {
       {/* Header Section */}
       <div className="bg-white dark:bg-slate-900">
         <div className="px-4 sm:px-6 lg:px-8 py-4">
-          <motion.h1 initial={{
-          opacity: 0,
-          x: -20
-        }} animate={{
-          opacity: 1,
-          x: 0
-        }} transition={{
-          delay: 0.2
-        }} className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
-            WhatsApp Instances
-          </motion.h1>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="flex-1">
+              <motion.h1 initial={{
+                opacity: 0,
+                x: -20
+              }} animate={{
+                opacity: 1,
+                x: 0
+              }} transition={{
+                delay: 0.2
+              }} className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
+                WhatsApp Instances
+              </motion.h1>
+              <motion.p initial={{
+                opacity: 0,
+                x: -20
+              }} animate={{
+                opacity: 1,
+                x: 0
+              }} transition={{
+                delay: 0.25
+              }} className="mt-1 text-sm md:text-base text-slate-600 dark:text-slate-400">
+                {instances.length} of {instanceLimit} instances used
+              </motion.p>
+            </div>
+            <motion.div initial={{
+              opacity: 0,
+              y: -20
+            }} animate={{
+              opacity: 1,
+              y: 0
+            }} transition={{
+              delay: 0.3
+            }} className="flex-shrink-0">
+              <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold rounded-xl">
+                <Plus className="mr-2 h-4 w-4" />
+                New Instance
+              </Button>
+            </motion.div>
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6">
-        {/* Usage + New button section */}
-        <motion.div initial={{
-          opacity: 0,
-          y: 20
-        }} animate={{
-          opacity: 1,
-          y: 0
-        }} transition={{
-          delay: 0.25
-        }} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 font-medium text-left">
-                {instances.length} of {instanceLimit} instances used
-              </p>
-            </div>
-            <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-auto bg-blue-600 hover:bg-blue-700 font-semibold">
-              <Plus className="mr-2 h-4 w-4" />
-              New Instance
-            </Button>
-          </div>
-        </motion.div>
 
         {showCreateForm && <motion.div initial={{
         opacity: 0,
@@ -821,21 +901,23 @@ const WhatsAppLink = () => {
         delay: 0.3
       }}>
             <Card className="mb-0 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardHeader className="space-y-1 p-4">
-                <CardTitle className="text-xl md:text-2xl font-bold">Create New Instance</CardTitle>
-                <CardDescription>
-                  Enter your WhatsApp phone number
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-4">
-                <form onSubmit={e => {
-              e.preventDefault();
-              if (validateInstanceName(instanceName)) {
-                createInstance(instanceName);
-              }
-            }} className="space-y-4 md:space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="instanceName">WhatsApp Number</Label>
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  <div>
+                    <CardTitle className="text-xl md:text-2xl font-semibold">Create New Instance</CardTitle>
+                    <CardDescription className="mt-1">
+                      Enter your WhatsApp phone number
+                    </CardDescription>
+                  </div>
+                  
+                  <form onSubmit={e => {
+                e.preventDefault();
+                if (validateInstanceName(instanceName)) {
+                  createInstance(instanceName);
+                }
+              }} className="space-y-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="instanceName" className="text-sm font-medium">WhatsApp Number</Label>
                     <Input id="instanceName" value={instanceName} onChange={e => {
                   const cleanedValue = cleanPhoneNumber(e.target.value);
                   setInstanceName(cleanedValue);
@@ -849,16 +931,6 @@ const WhatsAppLink = () => {
                       </p>}
                   </div>
                   
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowProxyFields(!showProxyFields)}
-                      className="flex-1"
-                    >
-                      {showProxyFields ? 'Hide Proxy' : 'Add Proxy'}
-                    </Button>
-                  </div>
                   
                   {showProxyFields && (
                     <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -903,13 +975,7 @@ const WhatsAppLink = () => {
                       </div>
                     </div>
                   )}
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Button type="submit" disabled={isLoading || !isValidName || !instanceName || (showProxyFields && (!proxyHost || !proxyPort))} size="lg" className="w-full sm:flex-1 bg-blue-600 hover:bg-blue-700">
-                      {isLoading ? <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creating...
-                        </> : 'Create Instance'}
-                    </Button>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-between">
                     <Button type="button" variant="outline" onClick={() => {
                   setShowCreateForm(false);
                   setInstanceName('');
@@ -919,11 +985,34 @@ const WhatsAppLink = () => {
                   setProxyPort('');
                   setProxyUsername('');
                   setProxyPassword('');
-                }} className="w-full sm:flex-1" size="lg">
+                }} className="w-full sm:w-auto bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:hover:from-gray-600 dark:hover:to-gray-700 border-0 text-gray-700 dark:text-gray-200 rounded-xl" size="lg">
+                      <X className="mr-2 h-4 w-4" />
                       Cancel
                     </Button>
-                  </div>
-                </form>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowProxyFields(!showProxyFields)}
+                        className="w-full sm:w-auto bg-gradient-to-r from-blue-100 to-blue-200 hover:from-blue-200 hover:to-blue-300 dark:from-blue-900 dark:to-blue-800 dark:hover:from-blue-800 dark:hover:to-blue-700 border-0 text-blue-700 dark:text-blue-200 rounded-xl"
+                        size="lg"
+                      >
+                        <Settings className="mr-2 h-4 w-4" />
+                        {showProxyFields ? 'Hide Proxy' : 'Add Proxy'}
+                      </Button>
+                      <Button type="submit" disabled={isLoading || !isValidName || !instanceName || (showProxyFields && (!proxyHost || !proxyPort))} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl">
+                        {isLoading ? <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating...
+                          </> : <>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Create Instance
+                          </>}
+                      </Button>
+                    </div>
+                    </div>
+                  </form>
+                </div>
               </CardContent>
             </Card>
           </motion.div>}
@@ -939,32 +1028,119 @@ const WhatsAppLink = () => {
       }} transition={{
         delay: 0.4
       }}>
-            <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              {instances.map(instance => <Card key={instance.id} className="flex flex-col rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-200">
-                  <CardHeader className="p-4">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base md:text-lg font-bold">{instance.instance_name}</CardTitle>
+            {/* Desktop Table View - Hidden on Mobile */}
+            <Card className="hidden md:block rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[200px] min-w-[150px]">Instance</TableHead>
+                      <TableHead className="min-w-[120px]">Status</TableHead>
+                      <TableHead className="text-center min-w-[120px]">AI Assistant</TableHead>
+                      <TableHead className="text-center min-w-[120px] hidden md:table-cell">Call Rejection</TableHead>
+                      <TableHead className="text-right min-w-[120px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                <TableBody>
+                    {instances.map(instance => <TableRow key={instance.id} className="hover:bg-muted/50">
+                        <TableCell className="font-medium">
+                          <div className="font-semibold text-base">{instance.instance_name}</div>
+                          {instance.last_connected && <div className="text-sm text-muted-foreground">
+                            </div>}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={instance.status} />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <WhatsAppAIToggle instanceId={instance.id} instanceName={instance.instance_name} instanceStatus={instance.status} />
+                        </TableCell>
+                        <TableCell className="text-center hidden md:table-cell">
+                          <CallRejectionToggle instance={instance} onSettings={() => handleCallRejectionToggle(instance)} onToggle={enabled => updateCallRejectionSettings(instance.id, instance.instance_name, enabled)} isLoading={isLoading} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <InstanceActions 
+                            instance={instance} 
+                            isLoading={isLoading} 
+                            onLogout={() => handleLogout(instance.id, instance.instance_name)} 
+                            onReconnect={() => handleReconnect(instance.id, instance.instance_name)} 
+                            onDelete={() => handleDelete(instance.id, instance.instance_name)} 
+                            onToggleCallRejection={() => handleCallRejectionToggle(instance)} 
+                            onCheckStatus={() => handleCheckStatus(instance.id, instance.instance_name)} 
+                            formatQrCodeDataUrl={formatQrCodeDataUrl}
+                            isQrOpen={openQrInstanceId === instance.id}
+                            onQrOpenChange={(open) => setOpenQrInstanceId(open ? instance.id : null)}
+                          />
+                        </TableCell>
+                      </TableRow>)}
+                </TableBody>
+                </Table>
+              </div>
+            </Card>
+
+            {/* Mobile Card View - Shown on Mobile Only */}
+            <div className="md:hidden space-y-4">
+              {instances.map(instance => (
+                <Card key={instance.id} className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <CardContent className="p-4">
+                    {/* Instance Name at Top */}
+                    <div className="mb-3">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        {instance.instance_name}
+                      </h3>
+                    </div>
+
+                    {/* Status Badge Prominently Displayed */}
+                    <div className="mb-4">
                       <StatusBadge status={instance.status} />
                     </div>
-                  </CardHeader>
-                  <CardContent className="flex-grow p-4 pt-0">
-                    {(instance.status === 'Created' || instance.status === 'Connecting') && instance.qr_code && <div className="flex flex-col items-center space-y-2 mb-4">
-                        <p className="text-sm font-medium">Scan QR Code</p>
-                        <div className="relative bg-white p-2 rounded-lg">
-                          <img src={formatQrCodeDataUrl(instance.qr_code)} alt="WhatsApp QR Code" className="w-full h-auto max-w-[200px]" />
-                        </div>
-                      </div>}
-                    
-                    <InstanceActions instance={instance} isLoading={isLoading} onLogout={() => handleLogout(instance.id, instance.instance_name)} onReconnect={() => handleReconnect(instance.id, instance.instance_name)} onDelete={() => handleDelete(instance.id, instance.instance_name)} onToggleCallRejection={() => handleCallRejectionToggle(instance)} onCheckStatus={() => handleCheckStatus(instance.id, instance.instance_name)} />
-                    
-                    <WhatsAppAIToggle instanceId={instance.id} instanceName={instance.instance_name} instanceStatus={instance.status} />
-                    
-                    <CallRejectionToggle instance={instance} onSettings={() => handleCallRejectionToggle(instance)} onToggle={enabled => updateCallRejectionSettings(instance.id, instance.instance_name, enabled)} isLoading={isLoading} />
+
+                    {/* AI Assistant Toggle - Clear and Visible */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          AI Assistant
+                        </label>
+                        <WhatsAppAIToggle instanceId={instance.id} instanceName={instance.instance_name} instanceStatus={instance.status} />
+                      </div>
+                    </div>
+
+                    {/* Call Rejection Toggle - Mobile Friendly */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          Call Rejection
+                        </label>
+                        <CallRejectionToggle 
+                          instance={instance} 
+                          onSettings={() => handleCallRejectionToggle(instance)} 
+                          onToggle={enabled => updateCallRejectionSettings(instance.id, instance.instance_name, enabled)} 
+                          isLoading={isLoading} 
+                        />
+                      </div>
+                    </div>
+
+                    {/* Actions Row at Bottom */}
+                    <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                      <InstanceActions 
+                        instance={instance} 
+                        isLoading={isLoading} 
+                        onLogout={() => handleLogout(instance.id, instance.instance_name)} 
+                        onReconnect={() => handleReconnect(instance.id, instance.instance_name)} 
+                        onDelete={() => handleDelete(instance.id, instance.instance_name)} 
+                        onToggleCallRejection={() => handleCallRejectionToggle(instance)} 
+                        onCheckStatus={() => handleCheckStatus(instance.id, instance.instance_name)} 
+                        formatQrCodeDataUrl={formatQrCodeDataUrl}
+                        isQrOpen={openQrInstanceId === instance.id}
+                        onQrOpenChange={(open) => setOpenQrInstanceId(open ? instance.id : null)}
+                      />
+                    </div>
                   </CardContent>
-                </Card>)}
+                </Card>
+              ))}
             </div>
           </motion.div> : <EmptyState onCreateClick={() => setShowCreateForm(true)} />}
       </div>
-    </motion.div>;
+    </motion.div>
+  </TooltipProvider>;
 };
 export default WhatsAppLink;

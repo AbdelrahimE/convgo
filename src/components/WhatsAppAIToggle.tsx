@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -100,28 +99,14 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
   // Render simple toggle version (used in instance cards)
   if (variant === 'simple') {
     return (
-      <div className="space-y-2 mt-4 border-t pt-4">
-        <div className="flex items-center justify-between">
-          <Label htmlFor={`ai-toggle-${instanceId}`} className="text-base">
-            Enable AI Responses
-          </Label>
-          <Switch
-            id={`ai-toggle-${instanceId}`}
-            checked={isEnabled}
-            onCheckedChange={toggleAI}
-            disabled={isLoading || isUpdating || (instanceStatus && !isInstanceConnected)}
-            className="data-[state=checked]:bg-green-500"
-          />
-        </div>
-        {isLoading && <div className="flex items-center justify-center py-2">
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-          <span className="text-sm text-muted-foreground">Loading...</span>
-        </div>}
-        {instanceStatus && !isInstanceConnected && (
-          <p className="text-sm text-amber-500">
-            Connect your WhatsApp instance to enable AI responses
-          </p>
-        )}
+      <div className="flex items-center justify-center">
+        <Switch
+          id={`ai-toggle-${instanceId}`}
+          checked={isEnabled}
+          onCheckedChange={toggleAI}
+          disabled={isLoading || isUpdating || (instanceStatus && !isInstanceConnected)}
+          className="data-[state=checked]:bg-green-500"
+        />
       </div>
     );
   }

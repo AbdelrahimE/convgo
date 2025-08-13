@@ -15,6 +15,6 @@ export function LogoWithText({
   className?: string;
 }) {
   return <div className={`flex items-center justify-center ${className}`}>
-      <img src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon/convgo-logo.png" alt="ConvGo Logo" className="h-8 w-auto md:h-9 object-contain" />
+      <img src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon/convgo-logo.png" alt="ConvGo Logo" className="h-8 w-auto md:h-8 object-contain" />
     </div>;
 }
