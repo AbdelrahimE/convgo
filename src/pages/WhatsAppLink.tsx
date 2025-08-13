@@ -26,25 +26,25 @@ interface WhatsAppInstance {
   reject_calls_message: string;
 }
 const statusConfig = {
-  CONNECTED: {
+  Connected: {
     color: "text-green-500 bg-green-50 dark:bg-green-950/50",
     icon: Check,
     animation: "",
     label: "Connected"
   },
-  DISCONNECTED: {
+  Disconnected: {
     color: "text-red-500 bg-red-50 dark:bg-red-950/50",
     icon: X,
     animation: "",
     label: "Disconnected"
   },
-  CONNECTING: {
+  Connecting: {
     color: "text-yellow-500 bg-yellow-50 dark:bg-yellow-950/50",
     icon: Loader2,
     animation: "animate-spin",
     label: "Connecting"
   },
-  CREATED: {
+  Created: {
     color: "text-yellow-500 bg-yellow-50 dark:bg-yellow-950/50",
     icon: Loader2,
     animation: "animate-spin",
@@ -58,7 +58,7 @@ const StatusBadge = ({
 }) => {
   const config = statusConfig[status as keyof typeof statusConfig];
   const Icon = config.icon;
-  return <div className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium", config.color, status === "CONNECTING" && "animate-pulse")}>
+  return <div className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium", config.color, status === "Connecting" && "animate-pulse")}>
       <Icon className={cn("w-4 h-4 mr-1.5", config.animation)} />
       {config.label}
     </div>;
@@ -93,7 +93,7 @@ const InstanceActions = ({
           </TooltipContent>
         </Tooltip>
         
-        {instance.status === 'CONNECTED' && <Tooltip>
+        {instance.status === 'Connected' && <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="secondary" onClick={onLogout} disabled={isLoading} className="w-full sm:w-auto font-semibold">
                 <LogOut className="mr-2 h-4 w-4" />
@@ -105,7 +105,7 @@ const InstanceActions = ({
             </TooltipContent>
           </Tooltip>}
         
-        {instance.status === 'DISCONNECTED' && <Tooltip>
+        {instance.status === 'Disconnected' && <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="secondary" onClick={onReconnect} disabled={isLoading} className="w-full sm:w-auto">
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -318,7 +318,7 @@ const CallRejectionToggle = ({
           } else {
             onToggle(false);
           }
-        }} disabled={isLoading || instance.status !== 'CONNECTED'} className="data-[state=checked]:bg-green-500" />
+        }} disabled={isLoading || instance.status !== 'Connected'} className="data-[state=checked]:bg-green-500" />
           {instance.reject_calls && <Button variant="ghost" size="sm" onClick={onSettings} className="h-8 px-2">
               Edit
             </Button>}
@@ -345,6 +345,11 @@ const WhatsAppLink = () => {
   const [selectedInstanceForCallSettings, setSelectedInstanceForCallSettings] = useState<WhatsAppInstance | null>(null);
   const [instanceLimit, setInstanceLimit] = useState(0);
   const [isValidName, setIsValidName] = useState(true);
+  const [showProxyFields, setShowProxyFields] = useState(false);
+  const [proxyHost, setProxyHost] = useState('');
+  const [proxyPort, setProxyPort] = useState('');
+  const [proxyUsername, setProxyUsername] = useState('');
+  const [proxyPassword, setProxyPassword] = useState('');
   useEffect(() => {
     if (!authLoading && user) {
       fetchInstances();
@@ -371,7 +376,7 @@ const WhatsAppLink = () => {
         ...instance,
         ...updatedInstance
       } : instance));
-      if (previousInstance && updatedInstance.status === 'CONNECTED' && previousInstance.status !== 'CONNECTED') {
+      if (previousInstance && updatedInstance.status === 'Connected' && previousInstance.status !== 'Connected') {
         const instanceName = updatedInstance.instance_name;
         toast.success(`WhatsApp instance ${instanceName} connected successfully`);
       }
@@ -448,14 +453,14 @@ const WhatsAppLink = () => {
       if (error) throw error;
       if (data) {
         const state = data.state;
-        const updatedStatus = state === 'open' || state === 'CONNECTED' ? 'CONNECTED' : state === 'connecting' || state === 'STARTING' ? 'CONNECTING' : state === 'qrcode' ? 'CONNECTING' : 'DISCONNECTED';
+        const updatedStatus = state === 'open' || state === 'Connected' ? 'Connected' : state === 'connecting' || state === 'STARTING' ? 'Connecting' : state === 'qrcode' ? 'Connecting' : 'Disconnected';
         
         // Update database with the new status
         const updateData: any = {
           status: updatedStatus
         };
         
-        if (updatedStatus === 'CONNECTED') {
+        if (updatedStatus === 'Connected') {
           updateData.last_connected = new Date().toISOString();
         }
         
@@ -465,11 +470,11 @@ const WhatsAppLink = () => {
         setInstances(prev => prev.map(instance => instance.instance_name === name ? {
           ...instance,
           status: updatedStatus,
-          qr_code: updatedStatus === 'CONNECTED' ? undefined : instance.qr_code,
-          last_connected: updatedStatus === 'CONNECTED' ? new Date().toISOString() : instance.last_connected
+          qr_code: updatedStatus === 'Connected' ? undefined : instance.qr_code,
+          last_connected: updatedStatus === 'Connected' ? new Date().toISOString() : instance.last_connected
         } : instance));
         
-        return updatedStatus === 'CONNECTED';
+        return updatedStatus === 'Connected';
       }
       return false;
     } catch (error: any) {
@@ -484,14 +489,28 @@ const WhatsAppLink = () => {
         return;
       }
       setIsLoading(true);
+      const requestBody: any = {
+        operation: 'CREATE_INSTANCE',
+        instanceName
+      };
+      
+      if (showProxyFields && proxyHost && proxyPort) {
+        requestBody.proxyHost = proxyHost;
+        requestBody.proxyPort = proxyPort;
+        requestBody.proxyProtocol = 'http';
+        if (proxyUsername) {
+          requestBody.proxyUsername = proxyUsername;
+        }
+        if (proxyPassword) {
+          requestBody.proxyPassword = proxyPassword;
+        }
+      }
+      
       const {
         data,
         error
       } = await supabase.functions.invoke('evolution-api', {
-        body: {
-          operation: 'CREATE_INSTANCE',
-          instanceName
-        }
+        body: requestBody
       });
       if (error) throw error;
       logger.log('Response from create:', data);
@@ -505,7 +524,7 @@ const WhatsAppLink = () => {
       } = await supabase.from('whatsapp_instances').insert({
         user_id: user?.id,
         instance_name: instanceName,
-        status: 'CREATED'
+        status: 'Created'
       }).select().single();
       if (dbError) throw dbError;
       setInstances(prev => [...prev, {
@@ -514,6 +533,11 @@ const WhatsAppLink = () => {
       }]);
       setShowCreateForm(false);
       setInstanceName('');
+      setShowProxyFields(false);
+      setProxyHost('');
+      setProxyPort('');
+      setProxyUsername('');
+      setProxyPassword('');
     } catch (error: any) {
       logger.error('Error creating WhatsApp instance:', error);
       toast.error(`Failed to create WhatsApp instance: ${error.message}`);
@@ -556,12 +580,12 @@ const WhatsAppLink = () => {
       });
       if (error) throw error;
       await supabase.from('whatsapp_instances').update({
-        status: 'DISCONNECTED',
+        status: 'Disconnected',
         last_connected: null
       }).eq('id', instanceId);
       setInstances(prev => prev.map(instance => instance.id === instanceId ? {
         ...instance,
-        status: 'DISCONNECTED',
+        status: 'Disconnected',
         last_connected: null
       } : instance));
       toast.success('WhatsApp instance logged out successfully');
@@ -578,12 +602,12 @@ const WhatsAppLink = () => {
       const {
         error: updateError
       } = await supabase.from('whatsapp_instances').update({
-        status: 'CONNECTING'
+        status: 'Connecting'
       }).eq('id', instanceId);
       if (updateError) throw updateError;
       setInstances(prev => prev.map(instance => instance.id === instanceId ? {
         ...instance,
-        status: 'CONNECTING'
+        status: 'Connecting'
       } : instance));
       const {
         data,
@@ -602,7 +626,7 @@ const WhatsAppLink = () => {
       }
       setInstances(prev => prev.map(instance => instance.id === instanceId ? {
         ...instance,
-        status: 'CONNECTING',
+        status: 'Connecting',
         qr_code: qrCodeData
       } : instance));
       toast.success('Scan the QR code to reconnect your WhatsApp instance');
@@ -610,11 +634,11 @@ const WhatsAppLink = () => {
       logger.error('Error reconnecting WhatsApp instance:', error);
       toast.error('Failed to reconnect WhatsApp instance');
       await supabase.from('whatsapp_instances').update({
-        status: 'DISCONNECTED'
+        status: 'Disconnected'
       }).eq('id', instanceId);
       setInstances(prev => prev.map(instance => instance.id === instanceId ? {
         ...instance,
-        status: 'DISCONNECTED'
+        status: 'Disconnected'
       } : instance));
     } finally {
       setIsLoading(false);
@@ -672,9 +696,13 @@ const WhatsAppLink = () => {
     await updateCallRejectionSettings(instanceId, instanceName, false);
   };
   const validateInstanceName = (name: string) => {
-    const isValid = /^[a-zA-Z0-9]+$/.test(name);
+    const isValid = /^[0-9]+$/.test(name);
     setIsValidName(isValid);
     return isValid;
+  };
+
+  const cleanPhoneNumber = (value: string) => {
+    return value.replace(/[^0-9]/g, '');
   };
   const extractQRCode = (data: any): string | null => {
     logger.log('Extracting QR code from response:', data);
@@ -796,7 +824,7 @@ const WhatsAppLink = () => {
               <CardHeader className="space-y-1 p-4">
                 <CardTitle className="text-xl md:text-2xl font-bold">Create New Instance</CardTitle>
                 <CardDescription>
-                  Enter a unique name using only letters and numbers
+                  Enter your WhatsApp phone number
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-4">
@@ -807,17 +835,76 @@ const WhatsAppLink = () => {
               }
             }} className="space-y-4 md:space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="instanceName">Instance Name</Label>
+                    <Label htmlFor="instanceName">WhatsApp Number</Label>
                     <Input id="instanceName" value={instanceName} onChange={e => {
-                  setInstanceName(e.target.value);
-                  validateInstanceName(e.target.value);
-                }} placeholder="Enter instance name" className={!isValidName ? 'border-red-500' : ''} required />
+                  const cleanedValue = cleanPhoneNumber(e.target.value);
+                  setInstanceName(cleanedValue);
+                  validateInstanceName(cleanedValue);
+                }} placeholder="Enter WhatsApp number" className={!isValidName ? 'border-red-500' : ''} required />
+                    <p className="text-xs text-muted-foreground">
+                      Copy your phone number from WhatsApp and paste it here directly
+                    </p>
                     {!isValidName && <p className="text-sm text-red-500">
-                        Instance name can only contain letters and numbers
+                        WhatsApp number can only contain numbers
                       </p>}
                   </div>
+                  
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowProxyFields(!showProxyFields)}
+                      className="flex-1"
+                    >
+                      {showProxyFields ? 'Hide Proxy' : 'Add Proxy'}
+                    </Button>
+                  </div>
+                  
+                  {showProxyFields && (
+                    <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Proxy Configuration</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="proxyHost">Proxy Host</Label>
+                          <Input
+                            id="proxyHost"
+                            value={proxyHost}
+                            onChange={e => setProxyHost(e.target.value)}
+                            required={showProxyFields}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="proxyPort">Proxy Port</Label>
+                          <Input
+                            id="proxyPort"
+                            value={proxyPort}
+                            onChange={e => setProxyPort(e.target.value)}
+                            type="text"
+                            required={showProxyFields}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="proxyUsername">Proxy Username</Label>
+                          <Input
+                            id="proxyUsername"
+                            value={proxyUsername}
+                            onChange={e => setProxyUsername(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="proxyPassword">Proxy Password</Label>
+                          <Input
+                            id="proxyPassword"
+                            type="password"
+                            value={proxyPassword}
+                            onChange={e => setProxyPassword(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex flex-col sm:flex-row gap-4">
-                    <Button type="submit" disabled={isLoading || !isValidName || !instanceName} size="lg" className="w-full sm:flex-1 bg-blue-600 hover:bg-blue-700">
+                    <Button type="submit" disabled={isLoading || !isValidName || !instanceName || (showProxyFields && (!proxyHost || !proxyPort))} size="lg" className="w-full sm:flex-1 bg-blue-600 hover:bg-blue-700">
                       {isLoading ? <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Creating...
@@ -827,6 +914,11 @@ const WhatsAppLink = () => {
                   setShowCreateForm(false);
                   setInstanceName('');
                   setIsValidName(true);
+                  setShowProxyFields(false);
+                  setProxyHost('');
+                  setProxyPort('');
+                  setProxyUsername('');
+                  setProxyPassword('');
                 }} className="w-full sm:flex-1" size="lg">
                       Cancel
                     </Button>
@@ -856,7 +948,7 @@ const WhatsAppLink = () => {
                     </div>
                   </CardHeader>
                   <CardContent className="flex-grow p-4 pt-0">
-                    {(instance.status === 'CREATED' || instance.status === 'CONNECTING') && instance.qr_code && <div className="flex flex-col items-center space-y-2 mb-4">
+                    {(instance.status === 'Created' || instance.status === 'Connecting') && instance.qr_code && <div className="flex flex-col items-center space-y-2 mb-4">
                         <p className="text-sm font-medium">Scan QR Code</p>
                         <div className="relative bg-white p-2 rounded-lg">
                           <img src={formatQrCodeDataUrl(instance.qr_code)} alt="WhatsApp QR Code" className="w-full h-auto max-w-[200px]" />

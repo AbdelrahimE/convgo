@@ -95,7 +95,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
   };
 
   // Check if the instance is connected before allowing toggle
-  const isInstanceConnected = instanceStatus === 'CONNECTED';
+  const isInstanceConnected = instanceStatus === 'Connected';
 
   // Render simple toggle version (used in instance cards)
   if (variant === 'simple') {

@@ -30,16 +30,16 @@ export async function processConnectionStatus(instanceName: string, statusData: 
     let dbStatus: string;
     switch (stateData.state) {
       case 'open':
-        dbStatus = 'CONNECTED';
+        dbStatus = 'Connected';
         break;
       case 'connecting':
-        dbStatus = 'CONNECTING';
+        dbStatus = 'Connecting';
         break;
       case 'close':
-        dbStatus = 'DISCONNECTED';
+        dbStatus = 'Disconnected';
         break;
       default:
-        dbStatus = 'UNKNOWN';
+        dbStatus = 'Unknown';
         break;
     }
     
@@ -62,8 +62,8 @@ export async function processConnectionStatus(instanceName: string, statusData: 
       updated_at: new Date().toISOString()
     };
     
-    // If connecting to CONNECTED state, update the last_connected timestamp
-    if (dbStatus === 'CONNECTED') {
+    // If connecting to Connected state, update the last_connected timestamp
+    if (dbStatus === 'Connected') {
       updateData.last_connected = new Date().toISOString();
     }
     

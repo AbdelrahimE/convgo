@@ -35,11 +35,28 @@ serve(async (req) => {
       case 'CREATE_INSTANCE':
         url = `${baseUrl}/instance/create`;
         method = 'POST';
-        body = JSON.stringify({
+        const requestPayload: any = {
           instanceName: params.instanceName,
           qrcode: true,
           integration: 'WHATSAPP-BAILEYS'
-        });
+        };
+        
+        // Add proxy configuration if provided
+        if (params.proxyHost && params.proxyPort) {
+          requestPayload.proxyHost = params.proxyHost;
+          requestPayload.proxyPort = params.proxyPort;
+          requestPayload.proxyProtocol = params.proxyProtocol || 'http';
+          
+          if (params.proxyUsername) {
+            requestPayload.proxyUsername = params.proxyUsername;
+          }
+          
+          if (params.proxyPassword) {
+            requestPayload.proxyPassword = params.proxyPassword;
+          }
+        }
+        
+        body = JSON.stringify(requestPayload);
         break;
 
       case 'CONNECT_INSTANCE':
