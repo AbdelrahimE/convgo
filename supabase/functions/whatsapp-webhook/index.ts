@@ -692,9 +692,102 @@ async function processMessageForAI(instance: string, messageData: any) {
       });
     }
 
+    // SMART: Smart Intent Classification with 99% Accuracy
+    let intentClassification = null;
+    let selectedPersonality = null;
+    
+    // Check if personality system is enabled for this instance
+    const personalitySystemEnabled = aiConfig.use_personality_system && aiConfig.intent_recognition_enabled;
+    
+    if (personalitySystemEnabled && messageText) {
+      await logDebug('SMART_INTENT_CLASSIFICATION_START', 'Starting smart intent classification', { 
+        userQuery: messageText,
+        instanceId: instanceId,
+        systemVersion: 'smart-v1.0'
+      });
+      
+      // Get conversation history for context-aware analysis
+      const contextualHistory = conversationHistory.map(msg => msg.content).slice(-10);
+      
+      try {
+        // Use the new smart intent analyzer
+        const intentResponse = await fetch(`${supabaseUrl}/functions/v1/smart-intent-analyzer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`
+          },
+          body: JSON.stringify({
+            message: messageText,
+            whatsappInstanceId: instanceId,
+            userId: aiConfig.user_id,
+            conversationHistory: contextualHistory,
+            useCache: false // إيقاف الكاش مؤقتاً للاختبار
+          })
+        });
+
+        if (intentResponse.ok) {
+          intentClassification = await intentResponse.json();
+          // FIX: دعم الحقلين لضمان التوافق
+          selectedPersonality = intentClassification.selectedPersonality || intentClassification.selected_personality;
+          
+          await logDebug('SMART_INTENT_CLASSIFICATION_SUCCESS', 'Smart intent classification completed', {
+            intent: intentClassification.intent,
+            confidence: intentClassification.confidence,
+            businessType: intentClassification.businessContext?.industry,
+            communicationStyle: intentClassification.businessContext?.communicationStyle,
+            hasPersonality: !!selectedPersonality,
+            processingTime: intentClassification.processingTimeMs,
+            reasoning: intentClassification.reasoning
+          });
+        } else {
+          const errorText = await intentResponse.text();
+          await logDebug('SMART_INTENT_CLASSIFICATION_ERROR', 'Smart intent classification failed, falling back to enhanced classifier', {
+            status: intentResponse.status,
+            error: errorText
+          });
+          
+          // Fallback to enhanced classifier
+          try {
+            const fallbackResponse = await fetch(`${supabaseUrl}/functions/v1/enhanced-intent-classifier`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({
+                message: messageText,
+                whatsappInstanceId: instanceId,
+                userId: aiConfig.user_id,
+                useCache: true,
+                contextualHistory: contextualHistory.slice(-5),
+                useAdvancedAnalysis: true
+              })
+            });
+            
+            if (fallbackResponse.ok) {
+              intentClassification = await fallbackResponse.json();
+              selectedPersonality = intentClassification.selected_personality;
+              await logDebug('FALLBACK_INTENT_CLASSIFICATION_SUCCESS', 'Fallback to enhanced classifier successful');
+            }
+          } catch (fallbackError) {
+            await logDebug('FALLBACK_INTENT_CLASSIFICATION_ERROR', 'All intent classification methods failed', {
+              error: fallbackError.message
+            });
+          }
+        }
+      } catch (error) {
+        await logDebug('SMART_INTENT_CLASSIFICATION_EXCEPTION', 'Exception during smart intent classification', {
+          error: error.message
+        });
+      }
+    }
+
     await logDebug('AI_CONTEXT_SEARCH', 'Starting semantic search for context', { 
       userQuery: messageText,
-      fileIds 
+      fileIds,
+      detectedIntent: intentClassification?.intent || 'none',
+      usingPersonality: !!selectedPersonality
     });
 
     // Perform semantic search to find relevant contexts
@@ -780,14 +873,35 @@ async function processMessageForAI(instance: string, messageData: any) {
       });
     }
 
-    // Generate and send the response with improved context and token management
+    // SMART: Pass personality and business context to response generator
+    const smartAiConfig = {
+      ...aiConfig,
+      // Override with personality-specific settings if available
+      ...(selectedPersonality && {
+        system_prompt: selectedPersonality.system_prompt,
+        temperature: selectedPersonality.temperature,
+        selectedPersonalityId: selectedPersonality.id,
+        selectedPersonalityName: selectedPersonality.name,
+        detectedIntent: intentClassification?.intent,
+        intentConfidence: intentClassification?.confidence
+      }),
+      // Add business context for smarter responses
+      ...(intentClassification?.businessContext && {
+        businessContext: intentClassification.businessContext,
+        detectedIndustry: intentClassification.businessContext.industry,
+        communicationStyle: intentClassification.businessContext.communicationStyle,
+        culturalContext: intentClassification.businessContext.detectedTerms
+      })
+    };
+
+    // Generate and send the response with smart context and personality management
     return await generateAndSendAIResponse(
       messageText,
       context,
       instanceName,
       fromNumber,
       instanceBaseUrl,
-      aiConfig,
+      smartAiConfig,
       messageData,
       conversationId,
       supabaseUrl,

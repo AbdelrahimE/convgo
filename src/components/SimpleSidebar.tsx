@@ -15,7 +15,8 @@ import {
   ChevronUp, 
   HelpCircle, 
   Crown,
-  X
+  X,
+  Users
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -45,6 +46,10 @@ const navigation = [{
   name: 'AI Assistant Settings',
   href: '/whatsapp-ai-config',
   icon: BrainCog
+}, {
+  name: 'AI Personalities',
+  href: '/ai-personalities',
+  icon: Users
 }, {
   name: 'Smart Escalation Rules',
   href: '/whatsapp-support-config',

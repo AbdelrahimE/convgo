@@ -22,6 +22,16 @@ interface GenerateResponseRequest {
   maxContextTokens?: number;
   imageUrl?: string;
   userId?: string;
+  // Personality system fields
+  selectedPersonalityId?: string;
+  selectedPersonalityName?: string;
+  detectedIntent?: string;
+  intentConfidence?: number;
+  // SMART: Business context fields for intelligent responses
+  businessContext?: any;
+  detectedIndustry?: string;
+  communicationStyle?: string;
+  culturalContext?: string[];
 }
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
@@ -339,10 +349,25 @@ serve(async (req) => {
       conversationId,
       maxContextTokens = MAX_CONTEXT_TOKENS,
       imageUrl,
-      userId
+      userId,
+      // Personality system fields
+      selectedPersonalityId,
+      selectedPersonalityName,
+      detectedIntent,
+      intentConfidence,
+      // SMART: Business context fields
+      businessContext,
+      detectedIndustry,
+      communicationStyle,
+      culturalContext
     } = await req.json() as GenerateResponseRequest;
 
-    logger.log(`Processing request for user ID: ${userId || 'not provided'}`);
+    logger.log(`Processing request for user ID: ${userId || 'not provided'}`, {
+      hasPersonality: !!selectedPersonalityId,
+      personalityName: selectedPersonalityName,
+      detectedIntent,
+      intentConfidence
+    });
 
     if (!query && !imageUrl) {
       return new Response(
@@ -384,6 +409,26 @@ serve(async (req) => {
     }
 
     let finalSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
+    
+    // SMART: Enhance system prompt with business context
+    if (businessContext || detectedIndustry || communicationStyle) {
+      finalSystemPrompt += `\n\nBUSINESS CONTEXT:
+`;
+      
+      if (detectedIndustry) {
+        finalSystemPrompt += `- Industry: ${detectedIndustry}\n`;
+      }
+      
+      if (communicationStyle) {
+        finalSystemPrompt += `- Communication Style: ${communicationStyle}\n`;
+      }
+      
+      if (culturalContext && culturalContext.length > 0) {
+        finalSystemPrompt += `- Key Terms: ${culturalContext.slice(0, 5).join(', ')}\n`;
+      }
+      
+      finalSystemPrompt += `\nIMPORTANT: Adapt your response to match the industry context and communication style. Use appropriate terminology and tone for this business domain.`;
+    }
     
     if (!finalSystemPrompt.includes("Don't use markdown")) {
       finalSystemPrompt += `\n\nIMPORTANT: Don't use markdown formatting in your responses. Format your text as plain text for WhatsApp.
@@ -494,7 +539,23 @@ serve(async (req) => {
           total: responseData.usage.total_tokens
         },
         aiUsage: usageDetails,
-        conversationId: conversationId
+        conversationId: conversationId,
+        // SMART: Personality and business context metadata
+        personalityInfo: selectedPersonalityId ? {
+          personalityId: selectedPersonalityId,
+          personalityName: selectedPersonalityName,
+          detectedIntent,
+          intentConfidence,
+          personalitySystemUsed: true
+        } : {
+          personalitySystemUsed: false
+        },
+        businessContextInfo: {
+          detectedIndustry: detectedIndustry || null,
+          communicationStyle: communicationStyle || null,
+          culturalContext: culturalContext || null,
+          businessContextUsed: !!(businessContext || detectedIndustry || communicationStyle)
+        }
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

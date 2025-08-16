@@ -18,6 +18,7 @@ import WhatsAppSupportConfig from '@/pages/WhatsAppSupportConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
 import AccountSettings from '@/pages/AccountSettings';
 import AIUsageMonitoring from '@/pages/AIUsageMonitoring';
+import AIPersonalities from '@/pages/AIPersonalities';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 
@@ -82,6 +83,14 @@ function AppContent() {
                     element={
                       <ProtectedRoute>
                         <WhatsAppAIConfig />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/ai-personalities"
+                    element={
+                      <ProtectedRoute>
+                        <AIPersonalities />
                       </ProtectedRoute>
                     }
                   />

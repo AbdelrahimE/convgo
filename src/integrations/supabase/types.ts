@@ -9,6 +9,227 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      ai_personalities: {
+        Row: {
+          id: string
+          whatsapp_instance_id: string
+          user_id: string
+          name: string
+          description: string | null
+          system_prompt: string
+          temperature: number
+          model: string
+          intent_categories: string[]
+          is_active: boolean
+          is_default: boolean
+          priority: number
+          process_voice_messages: boolean
+          voice_message_default_response: string | null
+          default_voice_language: string
+          usage_count: number
+          performance_rating: number
+          is_template: boolean
+          template_category: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          whatsapp_instance_id: string
+          user_id: string
+          name: string
+          description?: string | null
+          system_prompt: string
+          temperature?: number
+          model?: string
+          intent_categories?: string[]
+          is_active?: boolean
+          is_default?: boolean
+          priority?: number
+          process_voice_messages?: boolean
+          voice_message_default_response?: string | null
+          default_voice_language?: string
+          usage_count?: number
+          performance_rating?: number
+          is_template?: boolean
+          template_category?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          whatsapp_instance_id?: string
+          user_id?: string
+          name?: string
+          description?: string | null
+          system_prompt?: string
+          temperature?: number
+          model?: string
+          intent_categories?: string[]
+          is_active?: boolean
+          is_default?: boolean
+          priority?: number
+          process_voice_messages?: boolean
+          voice_message_default_response?: string | null
+          default_voice_language?: string
+          usage_count?: number
+          performance_rating?: number
+          is_template?: boolean
+          template_category?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_personalities_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_personalities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      intent_categories: {
+        Row: {
+          id: string
+          user_id: string
+          category_key: string
+          display_name: string
+          description: string | null
+          keywords: string[]
+          example_phrases: string[]
+          classification_prompt: string | null
+          is_active: boolean
+          confidence_threshold: number
+          is_system_category: boolean
+          match_count: number
+          avg_confidence: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          category_key: string
+          display_name: string
+          description?: string | null
+          keywords?: string[]
+          example_phrases?: string[]
+          classification_prompt?: string | null
+          is_active?: boolean
+          confidence_threshold?: number
+          is_system_category?: boolean
+          match_count?: number
+          avg_confidence?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          category_key?: string
+          display_name?: string
+          description?: string | null
+          keywords?: string[]
+          example_phrases?: string[]
+          classification_prompt?: string | null
+          is_active?: boolean
+          confidence_threshold?: number
+          is_system_category?: boolean
+          match_count?: number
+          avg_confidence?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intent_categories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      intent_recognition_cache: {
+        Row: {
+          id: string
+          message_hash: string
+          user_id: string
+          whatsapp_instance_id: string
+          original_message: string
+          message_length: number
+          recognized_intent: string
+          confidence_score: number
+          selected_personality_id: string | null
+          alternative_intents: Json
+          classification_model: string
+          processing_time_ms: number | null
+          hit_count: number
+          last_used_at: string
+          expires_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          message_hash: string
+          user_id: string
+          whatsapp_instance_id: string
+          original_message: string
+          message_length: number
+          recognized_intent: string
+          confidence_score: number
+          selected_personality_id?: string | null
+          alternative_intents?: Json
+          classification_model?: string
+          processing_time_ms?: number | null
+          hit_count?: number
+          last_used_at?: string
+          expires_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          message_hash?: string
+          user_id?: string
+          whatsapp_instance_id?: string
+          original_message?: string
+          message_length?: number
+          recognized_intent?: string
+          confidence_score?: number
+          selected_personality_id?: string | null
+          alternative_intents?: Json
+          classification_model?: string
+          processing_time_ms?: number | null
+          hit_count?: number
+          last_used_at?: string
+          expires_at?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intent_cache_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intent_cache_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       document_embeddings: {
         Row: {
           chunk_id: string | null
@@ -307,6 +528,13 @@ export type Database = {
           user_id: string
           voice_message_default_response: string | null
           whatsapp_instance_id: string
+          use_personality_system: boolean | null
+          fallback_personality_id: string | null
+          intent_recognition_enabled: boolean | null
+          intent_confidence_threshold: number | null
+          total_personality_switches: number | null
+          intent_recognition_accuracy: number | null
+          personality_system_metadata: Json | null
         }
         Insert: {
           created_at?: string
@@ -320,6 +548,13 @@ export type Database = {
           user_id: string
           voice_message_default_response?: string | null
           whatsapp_instance_id: string
+          use_personality_system?: boolean | null
+          fallback_personality_id?: string | null
+          intent_recognition_enabled?: boolean | null
+          intent_confidence_threshold?: number | null
+          total_personality_switches?: number | null
+          intent_recognition_accuracy?: number | null
+          personality_system_metadata?: Json | null
         }
         Update: {
           created_at?: string
@@ -333,6 +568,13 @@ export type Database = {
           user_id?: string
           voice_message_default_response?: string | null
           whatsapp_instance_id?: string
+          use_personality_system?: boolean | null
+          fallback_personality_id?: string | null
+          intent_recognition_enabled?: boolean | null
+          intent_confidence_threshold?: number | null
+          total_personality_switches?: number | null
+          intent_recognition_accuracy?: number | null
+          personality_system_metadata?: Json | null
         }
         Relationships: [
           {
@@ -351,6 +593,7 @@ export type Database = {
           context_token_count: number | null
           created_at: string
           id: string
+          metadata: Json | null
           prompt_tokens: number | null
           response_model: string | null
           search_result_count: number | null
@@ -366,6 +609,7 @@ export type Database = {
           context_token_count?: number | null
           created_at?: string
           id?: string
+          metadata?: Json | null
           prompt_tokens?: number | null
           response_model?: string | null
           search_result_count?: number | null
@@ -381,6 +625,7 @@ export type Database = {
           context_token_count?: number | null
           created_at?: string
           id?: string
+          metadata?: Json | null
           prompt_tokens?: number | null
           response_model?: string | null
           search_result_count?: number | null

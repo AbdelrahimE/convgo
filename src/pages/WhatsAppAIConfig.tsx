@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -12,7 +12,7 @@ import { LanguageAwareInput } from '@/components/ui/language-aware-input';
 import { useSimpleSearch } from '@/hooks/use-simple-search';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Loader2, Lightbulb, RotateCcw, AlertTriangle, Headphones } from 'lucide-react';
+import { Loader2, Lightbulb, RotateCcw, AlertTriangle, Headphones, Users, Settings, BarChart3 } from 'lucide-react';
 import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -39,6 +39,10 @@ interface AIConfig {
   process_voice_messages: boolean;
   voice_message_default_response: string;
   default_voice_language: string;
+  // NEW: Personality system fields
+  use_personality_system?: boolean;
+  intent_recognition_enabled?: boolean;
+  intent_confidence_threshold?: number;
 }
 
 const WhatsAppAIConfig = () => {
@@ -88,6 +92,12 @@ const WhatsAppAIConfig = () => {
     isLoading: isLoadingStats,
     refreshStats
   } = usePromptGenerationStats();
+  
+  // NEW: Personality system state
+  const [usePersonalitySystem, setUsePersonalitySystem] = useState(false);
+  const [intentRecognitionEnabled, setIntentRecognitionEnabled] = useState(true);
+  const [intentConfidenceThreshold, setIntentConfidenceThreshold] = useState(0.6);
+  const [personalityCount, setPersonalityCount] = useState(0);
 
   const cleanupTestConversation = useCallback(async (conversationId: string) => {
     if (!conversationId) return false;
@@ -126,11 +136,14 @@ const WhatsAppAIConfig = () => {
   useEffect(() => {
     if (selectedInstance) {
       loadAIConfig();
+      loadPersonalityCount();
     } else {
       setSystemPrompt('');
       setProcessVoiceMessages(true);
       setVoiceMessageDefaultResponse("I'm sorry, but I cannot process voice messages at the moment. Please send your question as text, and I'll be happy to assist you.");
       setDefaultVoiceLanguage('ar');
+      setUsePersonalitySystem(false);
+      setPersonalityCount(0);
     }
   }, [selectedInstance]);
 
@@ -195,11 +208,38 @@ const WhatsAppAIConfig = () => {
       setProcessVoiceMessages(data.process_voice_messages !== undefined ? data.process_voice_messages : true);
       setVoiceMessageDefaultResponse(data.voice_message_default_response || "I'm sorry, but I cannot process voice messages at the moment. Please send your question as text, and I'll be happy to assist you.");
       setDefaultVoiceLanguage(data.default_voice_language || 'ar');
+      
+      // NEW: Load personality system settings
+      setUsePersonalitySystem(data.use_personality_system || false);
+      setIntentRecognitionEnabled(data.intent_recognition_enabled !== undefined ? data.intent_recognition_enabled : true);
+      setIntentConfidenceThreshold(data.intent_confidence_threshold || 0.6);
     } catch (error) {
       logger.error('Error loading AI config:', error);
       toast.error('Failed to load AI configuration');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // NEW: Load personality count for the instance
+  const loadPersonalityCount = async () => {
+    if (!selectedInstance) return;
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-personalities', {
+        body: {
+          action: 'list',
+          whatsappInstanceId: selectedInstance
+        }
+      });
+      
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      
+      setPersonalityCount(data.personalities?.length || 0);
+    } catch (error) {
+      logger.error('Error loading personality count:', error);
+      setPersonalityCount(0);
     }
   };
 
@@ -230,6 +270,10 @@ const WhatsAppAIConfig = () => {
           process_voice_messages: processVoiceMessages,
           voice_message_default_response: voiceMessageDefaultResponse,
           default_voice_language: defaultVoiceLanguage,
+          // NEW: Personality system fields
+          use_personality_system: usePersonalitySystem,
+          intent_recognition_enabled: intentRecognitionEnabled,
+          intent_confidence_threshold: intentConfidenceThreshold,
           updated_at: new Date().toISOString()
         }).eq('id', existingConfig.id);
         if (error) throw error;
@@ -244,7 +288,11 @@ const WhatsAppAIConfig = () => {
           is_active: true,
           process_voice_messages: processVoiceMessages,
           voice_message_default_response: voiceMessageDefaultResponse,
-          default_voice_language: defaultVoiceLanguage
+          default_voice_language: defaultVoiceLanguage,
+          // NEW: Personality system fields
+          use_personality_system: usePersonalitySystem,
+          intent_recognition_enabled: intentRecognitionEnabled,
+          intent_confidence_threshold: intentConfidenceThreshold
         });
         if (error) throw error;
       }
@@ -535,6 +583,121 @@ const WhatsAppAIConfig = () => {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* NEW: Personality System Configuration */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-bold flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      AI Personality System
+                    </CardTitle>
+                    <CardDescription>
+                      Enable intelligent personality switching based on customer inquiry types. This allows your AI to respond differently for sales, support, technical issues, etc.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="use-personality-system">Enable Personality System</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Use multiple AI personalities that respond differently based on customer inquiry types
+                        </p>
+                      </div>
+                      <Switch
+                        id="use-personality-system"
+                        checked={usePersonalitySystem}
+                        onCheckedChange={setUsePersonalitySystem}
+                        className="data-[state=checked]:bg-blue-500 data-[state=checked]:hover:bg-blue-400"
+                      />
+                    </div>
+                    
+                    {usePersonalitySystem && (
+                      <>
+                        <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                              <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-medium text-blue-900 dark:text-blue-100">
+                                {personalityCount > 0 ? `${personalityCount} personalities configured` : 'No personalities configured yet'}
+                              </p>
+                              <p className="text-sm text-blue-700 dark:text-blue-300">
+                                {personalityCount > 0 
+                                  ? 'Your AI will intelligently switch between personalities based on customer inquiry types'
+                                  : 'Create personalities to enable intelligent response switching'
+                                }
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                asChild
+                                className="border-blue-300 text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900"
+                              >
+                                <Link to="/ai-personalities">
+                                  <Settings className="h-4 w-4 mr-2" />
+                                  Manage Personalities
+                                </Link>
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="intent-recognition">Intent Recognition</Label>
+                            <p className="text-sm text-muted-foreground">
+                              Automatically detect customer inquiry types (support, sales, technical, etc.)
+                            </p>
+                          </div>
+                          <Switch
+                            id="intent-recognition"
+                            checked={intentRecognitionEnabled}
+                            onCheckedChange={setIntentRecognitionEnabled}
+                            className="data-[state=checked]:bg-green-500 data-[state=checked]:hover:bg-green-400"
+                          />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="confidence-threshold">Intent Confidence Threshold ({intentConfidenceThreshold})</Label>
+                          <input
+                            type="range"
+                            id="confidence-threshold"
+                            min="0.1"
+                            max="0.9"
+                            step="0.1"
+                            value={intentConfidenceThreshold}
+                            onChange={(e) => setIntentConfidenceThreshold(parseFloat(e.target.value))}
+                            className="w-full"
+                          />
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Less strict (0.1)</span>
+                            <span>More strict (0.9)</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Higher values require more certainty before switching personalities
+                          </p>
+                        </div>
+                      </>
+                    )}
+                    
+                    {!usePersonalitySystem && (
+                      <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-800">
+                        <div className="text-center space-y-3">
+                          <Users className="mx-auto h-8 w-8 text-gray-400" />
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-gray-100">Single Personality Mode</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Your AI uses one personality for all customer interactions. Enable the personality system for more intelligent responses.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
                 
                 <Card>
                   <CardHeader>
@@ -622,6 +785,19 @@ const WhatsAppAIConfig = () => {
                         Reset Conversation
                       </Button>
                     </div>
+
+                    {/* NEW: Intent Recognition Analytics */}
+                    {usePersonalitySystem && intentRecognitionEnabled && (
+                      <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800 mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <BarChart3 className="h-4 w-4 text-blue-600" />
+                          <span className="font-medium text-blue-900 dark:text-blue-100">Intent Recognition Active</span>
+                        </div>
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                          Your messages will be analyzed for intent and routed to the appropriate personality. Watch the conversation for personality switches!
+                        </p>
+                      </div>
+                    )}
                     
                     {useRealConversation}
                     

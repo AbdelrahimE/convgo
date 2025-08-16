@@ -188,6 +188,234 @@ export function formatTableText(tableText: string): string {
 }
 
 /**
+ * Finds a safe break point at word boundaries to avoid cutting words in half
+ * Works with Arabic, English, and other languages
+ * @param text - The text to analyze
+ * @param position - The target position to break at
+ * @param direction - Whether to search backward or forward from position
+ * @param maxDistance - Maximum distance to search for a safe break point
+ * @returns The safe break position
+ */
+function findSafeBreakPoint(
+  text: string, 
+  position: number, 
+  direction: 'backward' | 'forward' = 'backward',
+  maxDistance: number = 200
+): number {
+  // If position is at the start or end, return as is
+  if (position <= 0) return 0;
+  if (position >= text.length) return text.length;
+  
+  // Word boundary patterns for different languages
+  // Arabic: spaces, Arabic punctuation, line breaks
+  // English: spaces, punctuation, line breaks
+  const wordBoundaryPattern = /[\s\n\r.!?؟،;:\-\u2000-\u206F\u3000]/;
+  
+  if (direction === 'backward') {
+    // Search backward for the last word boundary
+    for (let i = position; i >= Math.max(0, position - maxDistance); i--) {
+      if (wordBoundaryPattern.test(text[i])) {
+        // Return position after the boundary character
+        return Math.min(i + 1, text.length);
+      }
+    }
+    // If no boundary found within maxDistance, try to find at least a space
+    for (let i = position; i >= Math.max(0, position - maxDistance * 2); i--) {
+      if (text[i] === ' ') {
+        return i + 1;
+      }
+    }
+  } else {
+    // Search forward for the next word boundary
+    for (let i = position; i < Math.min(text.length, position + maxDistance); i++) {
+      if (wordBoundaryPattern.test(text[i])) {
+        return i;
+      }
+    }
+    // If no boundary found within maxDistance, try to find at least a space
+    for (let i = position; i < Math.min(text.length, position + maxDistance * 2); i++) {
+      if (text[i] === ' ') {
+        return i;
+      }
+    }
+  }
+  
+  // If no safe break point found, return original position
+  return position;
+}
+
+/**
+ * Finds a safe starting position for overlap that respects word boundaries
+ * @param text - The text to analyze
+ * @param endPos - The end position of the current chunk
+ * @param targetOverlap - The desired overlap size
+ * @returns Safe starting position for the overlap that doesn't break words
+ */
+function findSafeOverlapStart(text: string, endPos: number, targetOverlap: number): number {
+  // Calculate the ideal starting position
+  const idealStart = endPos - targetOverlap;
+  
+  // If we're at the beginning of text, no overlap needed
+  if (idealStart <= 0) {
+    return 0;
+  }
+  
+  // If the ideal start is already at a word boundary, use it
+  if (idealStart < text.length) {
+    const charBefore = idealStart > 0 ? text[idealStart - 1] : '';
+    const charAt = text[idealStart];
+    
+    const wordBoundaryPattern = /[\s\n\r.!?؟،;:\-\u2000-\u206F\u3000]/;
+    
+    if (wordBoundaryPattern.test(charBefore) || wordBoundaryPattern.test(charAt)) {
+      return idealStart;
+    }
+  }
+  
+  // Search backwards for a safe word boundary within reasonable distance
+  const maxSearchDistance = Math.min(targetOverlap * 0.5, 100);
+  const safeBackwardPos = findSafeBreakPoint(text, idealStart, 'backward', maxSearchDistance);
+  
+  // Check if the backward position gives us reasonable overlap
+  const backwardOverlap = endPos - safeBackwardPos;
+  const minAcceptableOverlap = targetOverlap * 0.6; // At least 60% of target overlap
+  
+  if (backwardOverlap >= minAcceptableOverlap) {
+    return safeBackwardPos;
+  }
+  
+  // If backward search doesn't give enough overlap, try forward search
+  const safeForwardPos = findSafeBreakPoint(text, idealStart, 'forward', maxSearchDistance);
+  const forwardOverlap = endPos - safeForwardPos;
+  
+  // Use forward position if it gives reasonable overlap, otherwise fall back to ideal
+  if (forwardOverlap >= minAcceptableOverlap * 0.8) {
+    return safeForwardPos;
+  }
+  
+  // As a last resort, return the ideal position (better than breaking completely)
+  return idealStart;
+}
+
+/**
+ * Improved function to split text by size while respecting word boundaries
+ * @param text - The text to split
+ * @param chunkSize - Target size of each chunk
+ * @param overlap - Overlap between chunks
+ * @returns Array of text chunks
+ */
+function splitTextBySizeWithWordBoundary(text: string, chunkSize: number, overlap: number): string[] {
+  const chunks: string[] = [];
+  let i = 0;
+  
+  while (i < text.length) {
+    let endPos = Math.min(i + chunkSize, text.length);
+    
+    // If we're not at the end of the text, find a safe break point
+    if (endPos < text.length) {
+      // First try to find a safe break point backwards
+      const safeEndPos = findSafeBreakPoint(text, endPos, 'backward', chunkSize * 0.2);
+      
+      // If the safe break point is too far back, try forward
+      if (safeEndPos < i + chunkSize * 0.5) {
+        const forwardSafePos = findSafeBreakPoint(text, endPos, 'forward', chunkSize * 0.2);
+        endPos = forwardSafePos;
+      } else {
+        endPos = safeEndPos;
+      }
+    }
+    
+    const chunk = text.substring(i, endPos).trim();
+    if (chunk) {
+      // Check for duplicate content before adding chunk
+      const lastChunk = chunks[chunks.length - 1];
+      const isSubsetOfPrevious = lastChunk && lastChunk.includes(chunk);
+      const isDuplicateContent = lastChunk && chunk.includes(lastChunk);
+      
+      if (!isSubsetOfPrevious && !isDuplicateContent) {
+        chunks.push(chunk);
+      }
+    }
+    
+    // IMPROVED: Calculate next position with word boundary consideration
+    let nextPos = findSafeOverlapStart(text, endPos, overlap);
+    
+    // Make sure we don't go backwards and get stuck in a loop
+    if (nextPos <= i) {
+      nextPos = i + Math.min(chunkSize - overlap, endPos - i);
+    }
+    
+    // CRITICAL FIX: Check if remaining text is too small to warrant a new chunk
+    const remainingLength = text.length - nextPos;
+    const minNewChunkSize = Math.max(overlap * 1.5, chunkSize * 0.3);
+    
+    if (remainingLength <= overlap || remainingLength < minNewChunkSize) {
+      // Remaining text is too small or would be entirely overlap - don't create new chunk
+      break;
+    }
+    
+    i = nextPos;
+    
+    // Safety check to prevent infinite loops
+    if (i >= endPos && endPos >= text.length) {
+      break;
+    }
+  }
+  
+  return chunks;
+}
+
+/**
+ * Improved function for sentence-aware chunking
+ * @param text - The text to chunk
+ * @param chunkSize - Target chunk size
+ * @param chunkOverlap - Overlap between chunks
+ * @returns Array of text chunks
+ */
+function chunkTextBySentenceImproved(text: string, chunkSize: number, chunkOverlap: number): string[] {
+  // Enhanced sentence splitting regex that works better with Arabic and English
+  // This pattern looks for sentence-ending punctuation followed by optional whitespace
+  const sentenceRegex = /[^.!?؟،\n]+[.!?؟،]+\s*|[^.!?؟،\n]+(?=\n|$)/g;
+  const sentences = text.match(sentenceRegex) || [text];
+  
+  const chunks: string[] = [];
+  let currentChunk = '';
+  
+  for (const sentence of sentences) {
+    const trimmedSentence = sentence.trim();
+    if (!trimmedSentence) continue;
+    
+    // If adding this sentence would exceed chunk size, save the current chunk
+    if (currentChunk.length + trimmedSentence.length + 1 > chunkSize) {
+      if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+      }
+      
+      // If the sentence itself is longer than chunk size, split it safely
+      if (trimmedSentence.length > chunkSize) {
+        const sentenceChunks = splitTextBySizeWithWordBoundary(trimmedSentence, chunkSize, chunkOverlap);
+        chunks.push(...sentenceChunks);
+        currentChunk = '';
+        continue;
+      }
+      
+      // Start a new chunk with this sentence
+      currentChunk = trimmedSentence;
+    } else {
+      // Add sentence to current chunk
+      currentChunk += (currentChunk ? ' ' : '') + trimmedSentence;
+    }
+  }
+  
+  // Add the last chunk if there's anything left
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+  
+  return chunks;
+}
+
+/**
  * Splits text into chunks suitable for embedding models
  * @param text - Full document text to be chunked
  * @param options - Chunking configuration options
@@ -199,10 +427,8 @@ export function chunkText(text: string, options: ChunkingOptions = {}): string[]
   const chunkOverlap = options.chunkOverlap || 120;
   
   // Best practices always enabled
-  const structureAware = true;
   const preserveTables = true;
   const splitBySentence = true;
-  const cleanRedundantData = true;
 
   // CSV detection and special handling
   if (isCSVContent(text)) {
@@ -216,8 +442,6 @@ export function chunkText(text: string, options: ChunkingOptions = {}): string[]
   if (text.length <= chunkSize) {
     return [text];
   }
-
-  const chunks: string[] = [];
   
   // Special case: handle tables if option is enabled
   if (preserveTables && isTableContent(text)) {
@@ -226,42 +450,12 @@ export function chunkText(text: string, options: ChunkingOptions = {}): string[]
   
   // Default chunking by sentences or size
   if (splitBySentence) {
-    // Split by sentences
-    const sentenceRegex = /[^.!?؟،]+[.!?؟،]+(\s|$)/g;
-    const sentences = text.match(sentenceRegex) || [text];
-    
-    let currentChunk = '';
-    
-    for (const sentence of sentences) {
-      if (currentChunk.length + sentence.length > chunkSize) {
-        if (currentChunk) {
-          chunks.push(currentChunk);
-        }
-        
-        if (sentence.length > chunkSize) {
-          // If a single sentence is too long, split it by size
-          for (let i = 0; i < sentence.length; i += chunkSize - chunkOverlap) {
-            chunks.push(sentence.substring(i, i + chunkSize));
-          }
-        } else {
-          currentChunk = sentence;
-        }
-      } else {
-        currentChunk += sentence;
-      }
-    }
-    
-    if (currentChunk) {
-      chunks.push(currentChunk);
-    }
+    // Use improved sentence-aware chunking
+    return chunkTextBySentenceImproved(text, chunkSize, chunkOverlap);
   } else {
-    // Split by size only
-    for (let i = 0; i < text.length; i += chunkSize - chunkOverlap) {
-      chunks.push(text.substring(i, i + chunkSize));
-    }
+    // Use improved size-based splitting with word boundary protection
+    return splitTextBySizeWithWordBoundary(text, chunkSize, chunkOverlap);
   }
-  
-  return chunks;
 }
 
 /**

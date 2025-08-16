@@ -70,7 +70,16 @@ export async function generateAndSendAIResponse(
         model: 'gpt-4o-mini',
         maxContextTokens: 3000, // Explicit token limit
         imageUrl: imageUrl, // Pass the image URL if available
-        userId: aiConfig.user_id || null
+        userId: aiConfig.user_id || null,
+        // SMART: Pass business context and personality info for smarter responses
+        selectedPersonalityId: aiConfig.selectedPersonalityId || null,
+        selectedPersonalityName: aiConfig.selectedPersonalityName || null,
+        detectedIntent: aiConfig.detectedIntent || null,
+        intentConfidence: aiConfig.intentConfidence || null,
+        businessContext: aiConfig.businessContext || null,
+        detectedIndustry: aiConfig.detectedIndustry || null,
+        communicationStyle: aiConfig.communicationStyle || null,
+        culturalContext: aiConfig.culturalContext || null
       })
     });
 
@@ -116,7 +125,17 @@ export async function generateAndSendAIResponse(
           total_tokens: responseData.usage?.total_tokens || 0,
           context_token_count: Math.ceil((context?.length || 0) / 4),
           search_result_count: context ? 1 : 0,
-          response_model: responseData.model || 'gpt-4o-mini'
+          response_model: responseData.model || 'gpt-4o-mini',
+          // NEW: Add personality system metadata
+          metadata: {
+            personality_id: aiConfig.selectedPersonalityId || null,
+            personality_name: aiConfig.selectedPersonalityName || null,
+            detected_intent: aiConfig.detectedIntent || null,
+            intent_confidence: aiConfig.intentConfidence || null,
+            personality_system_used: !!aiConfig.selectedPersonalityId,
+            image_processed: !!imageUrl,
+            timestamp: new Date().toISOString()
+          }
         });
 
       if (interactionError) {
