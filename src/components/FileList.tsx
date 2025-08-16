@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, Sparkles, Download, Eye, Calendar, Clock, MoreHorizontal, FileSearch, User, File, Loader2 } from "lucide-react";
+import { Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, Sparkles, Download, Clock, MoreHorizontal, FileSearch, File, Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -327,7 +327,6 @@ export function FileList() {
     }
   };
 
-  const [previewFile, setPreviewFile] = useState<FileWithMetadata | null>(null);
   const [chunksViewerFile, setChunksViewerFile] = useState<FileWithMetadata | null>(null);
 
   // WhatsApp linking state
@@ -409,9 +408,6 @@ export function FileList() {
     }
   };
 
-  const handlePreviewFile = (file: FileWithMetadata) => {
-    setPreviewFile(file);
-  };
 
   const handleViewChunks = (file: FileWithMetadata) => {
     setChunksViewerFile(file);
@@ -662,10 +658,6 @@ export function FileList() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={() => handlePreviewFile(file)}>
-                      <Eye className="h-4 w-4 mr-2" />
-                      Preview Content
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleViewChunks(file)}>
                       <FileSearch className="h-4 w-4 mr-2" />
                       View Text Chunks
@@ -722,48 +714,6 @@ export function FileList() {
         </>
       )}
 
-      {/* File Preview Dialog */}
-      {previewFile && (
-        <AlertDialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-          <AlertDialogContent className="w-[min(calc(100vw-2rem),64rem)] sm:w-full max-w-4xl max-h-[80vh] rounded-xl sm:rounded-2xl overflow-y-auto overflow-x-hidden">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center space-x-2">
-                {getFileIcon(previewFile.mime_type)}
-                <span>{previewFile.filename}</span>
-              </AlertDialogTitle>
-              <AlertDialogDescription className="text-left">
-                <div className="space-y-2 text-sm">
-                  <div>Size: {formatFileSize(previewFile.size_bytes)}</div>
-                  <div>Type: {previewFile.mime_type}</div>
-                  <div>Language: {previewFile.primary_language || 'Unknown'}</div>
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="mt-4">
-              {previewFile.text_content ? (
-                <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg max-h-96 overflow-y-auto overflow-x-hidden w-full max-w-full">
-                  <pre className="whitespace-pre-wrap break-words break-all text-sm font-mono">
-                    {previewFile.text_content.length > 2000 
-                      ? previewFile.text_content.substring(0, 2000) + '...' 
-                      : previewFile.text_content
-                    }
-                  </pre>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-slate-600 dark:text-slate-400">
-                  <FileIcon className="mx-auto h-12 w-12 mb-2" />
-                  <p>Content not available or still processing</p>
-                </div>
-              )}
-            </div>
-            <AlertDialogFooter>
-              <AlertDialogAction onClick={() => setPreviewFile(null)}>
-                Close
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
 
       {/* Chunks Viewer Dialog */}
       <ChunksViewer
