@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { handleSupportEscalation, handleSmartEscalation } from "../_shared/escalation-utils.ts";
+import { handleSupportEscalation } from "../_shared/escalation-utils.ts";
 import { analyzeEscalationNeed, attemptAISolution } from "../_shared/smart-escalation-analyzer.ts";
 import logDebug from "../_shared/webhook-logger.ts";
 import { calculateSimilarity } from "../_shared/text-similarity.ts";
@@ -1376,16 +1376,12 @@ serve(async (req) => {
                       transcribedText
                     );
                   }
-                } else if (smartEscalationResult.suggestedAction === 'escalate_immediate' || 
-                          smartEscalationResult.suggestedAction === 'escalate_with_context') {
-                  // Direct smart escalation (immediate or with context)
-                  await logDebug('SMART_ESCALATION_DIRECT', `Smart analysis suggests ${smartEscalationResult.suggestedAction}`);
+                } else {
+                  // Direct escalation
+                  await logDebug('SMART_ESCALATION_DIRECT', 'Smart analysis suggests direct escalation');
                   
-                  escalationResult = await handleSmartEscalation(
+                  escalationResult = await handleSupportEscalation(
                     webhookData,
-                    smartEscalationResult,
-                    intentAnalysis,
-                    emotionAnalysis,
                     supabaseUrl,
                     supabaseAnonKey,
                     evolutionApiUrl,
@@ -1395,25 +1391,13 @@ serve(async (req) => {
                     transcribedText
                   );
                   
-                  await logDebug('SMART_ESCALATION_DIRECT_RESULT', 'Result from smart escalation call', {
+                  await logDebug('SMART_ESCALATION_DIRECT_RESULT', 'Result from direct escalation call', {
                     success: escalationResult.success,
                     action: escalationResult.action,
-                    escalation_id: escalationResult.escalation_id,
-                    escalation_type: escalationResult.escalation_type,
                     error: escalationResult.error
                   });
                   
                   shouldSkipAiProcessing = true;
-                } else {
-                  // Unknown escalation action - fallback to no escalation
-                  await logDebug('SMART_ESCALATION_UNKNOWN_ACTION', `Unknown escalation action: ${smartEscalationResult.suggestedAction}`);
-                  
-                  escalationResult = {
-                    success: true,
-                    action: 'unknown_escalation_action',
-                    skip_ai_processing: false,
-                    reasoning: `Unknown suggested action: ${smartEscalationResult.suggestedAction}`
-                  };
                 }
               } else {
                 // No escalation needed according to smart analysis
@@ -1427,27 +1411,34 @@ serve(async (req) => {
                 };
               }
             } else {
-              // No message content or instance ID - skip escalation
-              escalationResult = {
-                success: true,
-                action: 'no_content_or_instance',
-                skip_ai_processing: false,
-                reasoning: 'No message content or instance ID available'
-              };
+              // Fallback to traditional escalation if no message content or instance ID
+              escalationResult = await handleSupportEscalation(
+                webhookData,
+                supabaseUrl,
+                supabaseAnonKey,
+                evolutionApiUrl,
+                evolutionApiKey,
+                supabaseServiceKey,
+                foundInstanceId,
+                transcribedText
+              );
             }
           } catch (smartEscalationError) {
-            await logDebug('SMART_ESCALATION_ERROR', 'Error in smart escalation analysis, skipping escalation', {
+            await logDebug('SMART_ESCALATION_ERROR', 'Error in smart escalation analysis, falling back to traditional', {
               error: smartEscalationError
             });
             
-            // Log error and continue with AI processing
-            escalationResult = {
-              success: true,
-              action: 'smart_escalation_error',
-              skip_ai_processing: false,
-              error: 'Smart escalation analysis failed',
-              reasoning: 'Error in smart escalation analysis'
-            };
+            // Fallback to traditional escalation
+            escalationResult = await handleSupportEscalation(
+              webhookData,
+              supabaseUrl,
+              supabaseAnonKey,
+              evolutionApiUrl,
+              evolutionApiKey,
+              supabaseServiceKey,
+              foundInstanceId,
+              transcribedText
+            );
           }
           
           await logDebug('SUPPORT_ESCALATION_RESULT', 'Support escalation check result', { 

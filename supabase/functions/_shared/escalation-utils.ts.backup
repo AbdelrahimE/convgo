@@ -16,8 +16,135 @@ const logger = {
   debug: (...args: any[]) => console.debug(...args),
 };
 
+// Enhanced fuzzy matching function with balanced cross-language support
+export function fuzzyMatch(text: string, keyword: string): boolean {
+  // Detect language context
+  const isArabic = /[\u0600-\u06FF]/.test(keyword);
+  
+  // Apply appropriate normalization
+  const normalizedText = normalizeText(text, isArabic);
+  const normalizedKeyword = normalizeText(keyword, isArabic);
+  
+  // Exact match after normalization
+  if (normalizedText.includes(normalizedKeyword)) {
+    return true;
+  }
+  
+  // Character omission test (works for both languages)
+  if (normalizedKeyword.length > 3) {
+    for (let i = 0; i < normalizedKeyword.length; i++) {
+      const fuzzyKeyword = normalizedKeyword.slice(0, i) + normalizedKeyword.slice(i + 1);
+      if (normalizedText.includes(fuzzyKeyword)) {
+        return true;
+      }
+    }
+  }
+  
+  // Character transposition test (for both languages)
+  if (normalizedKeyword.length > 3) {
+    for (let i = 0; i < normalizedKeyword.length - 1; i++) {
+      const transposedKeyword = 
+        normalizedKeyword.slice(0, i) + 
+        normalizedKeyword[i+1] + 
+        normalizedKeyword[i] + 
+        normalizedKeyword.slice(i+2);
+      
+      if (normalizedText.includes(transposedKeyword)) {
+        return true;
+      }
+    }
+  }
+  
+  // For Arabic, try common prefix/suffix variations
+  if (isArabic && normalizedKeyword.length > 3) {
+    // Common prefixes: ال، و، ب، ل، ف
+    const withoutPrefix = normalizedKeyword.replace(/^(ال|و|ب|ل|ف)/, '');
+    if (normalizedText.includes(withoutPrefix) && withoutPrefix.length > 2) {
+      return true;
+    }
+    
+    // Common suffixes: ة، ه، ها، ات، ون، ين
+    const withoutSuffix = normalizedKeyword.replace(/(ة|ه|ها|ات|ون|ين)$/, '');
+    if (normalizedText.includes(withoutSuffix) && withoutSuffix.length > 2) {
+      return true;
+    }
+  }
+  
+  // For English, handle common plurals and word forms
+  if (!isArabic && normalizedKeyword.length > 3) {
+    // Simple plurals
+    if (normalizedKeyword.endsWith('s')) {
+      const singular = normalizedKeyword.slice(0, -1);
+      if (normalizedText.includes(singular) && singular.length > 2) {
+        return true;
+      }
+    } else {
+      const plural = normalizedKeyword + 's';
+      if (normalizedText.includes(plural)) {
+        return true;
+      }
+    }
+    
+    // Simple suffixes: ing, ed, er
+    for (const suffix of ['ing', 'ed', 'er']) {
+      if (normalizedKeyword.endsWith(suffix)) {
+        const base = normalizedKeyword.slice(0, -suffix.length);
+        if (normalizedText.includes(base) && base.length > 2) {
+          return true;
+        }
+      }
+    }
+  }
+  
+  // For both languages: limited edit distance for short keywords
+  if (normalizedKeyword.length <= 5) {
+    const words = normalizedText.split(/\s+/);
+    for (const word of words) {
+      if (simpleEditDistance(word, normalizedKeyword) <= 1) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
 
+// Helper function for text normalization
+function normalizeText(text: string, isArabic: boolean): string {
+  // Basic normalization for all languages
+  let normalized = text.toLowerCase().trim();
+  
+  // Arabic-specific normalization
+  if (isArabic || /[\u0600-\u06FF]/.test(normalized)) {
+    normalized = normalized
+      // Remove diacritics
+      .replace(/[\u064B-\u065F]/g, '')
+      // Normalize alef forms
+      .replace(/[أإآ]/g, 'ا')
+      // Normalize ya/alef maksura
+      .replace(/[ى]/g, 'ي')
+      // Normalize taa marbutah and haa (treating ة and ه as equivalent)
+      .replace(/[ة]/g, 'ه');
+  }
+  
+  return normalized;
+}
 
+// Simple edit distance calculation (efficient for short strings)
+function simpleEditDistance(s1: string, s2: string): number {
+  if (Math.abs(s1.length - s2.length) > 1) return 2; // Early exit for efficiency
+  
+  let distance = 0;
+  const len = Math.min(s1.length, s2.length);
+  
+  for (let i = 0; i < len; i++) {
+    if (s1[i] !== s2[i]) distance++;
+    if (distance > 1) return distance; // Early exit if distance exceeds 1
+  }
+  
+  distance += Math.abs(s1.length - s2.length);
+  return distance;
+}
 
 export interface MessageData {
   key: {
@@ -294,162 +421,117 @@ export async function handleSupportEscalation(
       };
     }
 
-    // Note: This function now only handles Smart escalation system
-    // Traditional keyword-based escalation has been deprecated
-    logger.log(`Traditional keyword escalation system has been deprecated`);
-    
-    // Return no escalation needed - let smart system handle everything
-    return { 
-      success: true, 
-      action: 'keywords_system_deprecated', 
-      skip_ai_processing: false,
-      userId: instanceUserId
-    };
+    // Note: Smart escalation check is now handled in the webhook processor
+    // This function will only handle traditional keyword-based escalation as fallback
+    logger.log(`Processing traditional keyword-based escalation for instance ${businessInstanceId}`);
 
-  } catch (error) {
-    logger.error('Error processing message for escalation:', error);
-    return { success: false, error: 'Internal error processing message', details: error, skip_ai_processing: false };
-  }
-}
-
-/**
- * Smart escalation handler - handles escalation based on AI analysis
- */
-export async function handleSmartEscalation(
-  webhookData: WebhookData,
-  smartEscalationResult: any,
-  intentAnalysis: any,
-  emotionAnalysis: any,
-  supabaseUrl: string,
-  supabaseAnonKey: string,
-  evolutionApiUrl: string,
-  evolutionApiKey: string,
-  supabaseServiceRoleKey?: string,
-  foundInstanceId?: string,
-  transcribedText?: string
-): Promise<{
-  success: boolean;
-  action?: string;
-  escalation_id?: string;
-  error?: string;
-  details?: any;
-  skip_ai_processing?: boolean;
-  escalation_type?: 'smart_analysis';
-}> {
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey || supabaseAnonKey);
-  
-  try {
-    const { instance, data } = webhookData;
-    const businessInstanceName = instance;
+    // Step 3: Get support keywords for this instance
+    // UPDATE: Modified to filter keywords by the specific instance ID
+    const { data: keywords, error: keywordsError } = await supabaseAdmin
+      .from('whatsapp_support_keywords')
+      .select('keyword, category')
+      .eq('is_active', true)
+      .eq('whatsapp_instance_id', businessInstanceId);
     
-    let messageContent = data.message.conversation || 
-                        data.message.extendedTextMessage?.text || 
-                        '';
-    
-    if (transcribedText) {
-      messageContent = transcribedText;
+    if (keywordsError) {
+      logger.error('Error fetching keywords:', keywordsError);
+      return { success: false, error: 'Failed to fetch keywords', details: keywordsError, skip_ai_processing: false };
     }
     
-    const phoneNumber = data.key.remoteJid.split('@')[0];
-    
-    // Skip messages sent by the bot itself
-    if (data.key.fromMe) {
-      return { success: true, action: 'skipped_bot_message', skip_ai_processing: false };
+    if (!keywords || keywords.length === 0) {
+      logger.log('No keywords configured, skipping escalation check');
+      return { success: true, action: 'no_keywords_configured', skip_ai_processing: false };
     }
 
-    // Skip empty messages
-    if (!messageContent.trim()) {
-      return { success: true, action: 'skipped_empty_message', skip_ai_processing: false };
-    }
-
-    logger.log(`Processing smart escalation for ${phoneNumber} in instance ${businessInstanceName}`);
-    logger.log(`Smart escalation decision: ${smartEscalationResult.suggestedAction} (confidence: ${smartEscalationResult.confidence})`);
-
-    const businessInstanceId = foundInstanceId;
+    // Step 4: Check if message contains any of the keywords
+    let matchedKeyword = null;
+    let keywordCategory = null;
     
-    if (!businessInstanceId) {
-      return { 
-        success: false, 
-        error: 'Business instance not found or invalid', 
-        skip_ai_processing: false 
-      };
+    for (const kw of keywords) {
+      if (fuzzyMatch(messageContent, kw.keyword)) {
+        matchedKeyword = kw.keyword;
+        keywordCategory = kw.category;
+        break;
+      }
     }
-
-    // Check if conversation is already escalated
-    const { data: existingEscalation } = await supabaseAdmin
-      .from('whatsapp_escalated_conversations')
-      .select('id')
-      .eq('whatsapp_instance_id', businessInstanceId)
-      .eq('user_phone', phoneNumber)
-      .eq('is_resolved', false)
-      .maybeSingle();
     
-    if (existingEscalation) {
-      logger.log(`Conversation with ${phoneNumber} is already escalated`);
+    if (!matchedKeyword) {
+      logger.log('No keywords matched, no escalation needed');
+      // IMPORTANT: Return the instance user ID so it can be used in AI processing
       return { 
         success: true, 
-        action: 'already_escalated', 
-        escalation_id: existingEscalation.id,
-        skip_ai_processing: true 
+        action: 'no_keywords_matched', 
+        skip_ai_processing: false,
+        userId: instanceUserId  // Add the user ID here for AI processing
       };
     }
+    
+    logger.log(`Matched keyword "${matchedKeyword}" in category "${keywordCategory || 'uncategorized'}"`);
 
-    // Get support configuration
-    logger.log(`Getting support config for business instance: ${businessInstanceId}`);
+    // Step 5: Get support configuration - ALWAYS use the business instance ID
+    logger.log(`Looking for support config for business instance ID: ${businessInstanceId}`);
     const { data: supportConfig, error: configError } = await supabaseAdmin
       .from('whatsapp_support_config')
       .select('support_phone_number, escalation_message, notification_message')
       .eq('whatsapp_instance_id', businessInstanceId)
-      .maybeSingle();
+      .maybeSingle(); // Use maybeSingle to avoid throwing errors
     
     if (configError) {
-      logger.error('Error fetching support config:', configError);
+      logger.error('Error fetching support config for business instance:', businessInstanceId, configError);
+      // Log details for troubleshooting but continue processing
+      await supabaseAdmin.from('webhook_debug_logs').insert({
+        category: 'escalation_config_error',
+        message: `Error fetching support config for instance: ${businessInstanceId}`,
+        data: { error: configError, businessInstanceId }
+      });
       return { success: false, error: 'Error fetching support config', details: configError, skip_ai_processing: false };
     }
     
     if (!supportConfig) {
       logger.error('Support config not found for business instance:', businessInstanceId);
-      return { success: false, error: 'Support config not found - please configure support settings first', skip_ai_processing: false };
+      // Log details for troubleshooting
+      await supabaseAdmin.from('webhook_debug_logs').insert({
+        category: 'escalation_config_missing',
+        message: `Support config not found for instance: ${businessInstanceId}`,
+        data: { businessInstanceId, businessInstanceName: businessInstanceName || '' }
+      });
+      return { success: false, error: 'Support config not found - please configure support settings first', details: { businessInstanceId }, skip_ai_processing: false };
     }
     
     const { support_phone_number, escalation_message, notification_message } = supportConfig;
-    logger.log(`Support config found. Support phone: ${support_phone_number ? 'configured' : 'not configured'}`);
+    logger.log(`Support config found successfully for instance ${businessInstanceId}. Support phone: ${support_phone_number ? 'configured' : 'not configured'}`);
     
     if (!support_phone_number) {
       logger.error('Support phone number not configured for business instance:', businessInstanceId);
       return { success: false, error: 'Support phone number not configured', skip_ai_processing: false };
     }
 
-    // Create escalation record with smart escalation data
-    logger.log(`Creating smart escalation record for phone ${phoneNumber}`);
+    // Step 6: Create escalation record with business instance ID
+    logger.log(`Creating escalation record for phone ${phoneNumber} on instance ${businessInstanceId}`);
     const { data: escalation, error: escalationError } = await supabaseAdmin
       .from('whatsapp_escalated_conversations')
       .insert({
-        whatsapp_instance_id: businessInstanceId,
+        whatsapp_instance_id: businessInstanceId, // Use business instance ID, never support instance
         user_phone: phoneNumber,
-        is_resolved: false,
-        escalation_type: 'smart_analysis',
-        intent_analysis: intentAnalysis,
-        emotion_analysis: emotionAnalysis,
-        escalation_reasoning: smartEscalationResult.reasoning,
-        confidence_score: smartEscalationResult.confidence,
-        urgency_level: smartEscalationResult.urgencyLevel
+        is_resolved: false
       })
       .select()
       .single();
     
     if (escalationError) {
-      logger.error('Failed to create smart escalation record:', escalationError);
+      logger.error('Failed to create escalation record:', escalationError);
       return { success: false, error: 'Failed to create escalation record', details: escalationError, skip_ai_processing: false };
     }
 
+    // Ensure evolutionApiUrl has a valid value, using the default if necessary
     const apiBaseUrl = evolutionApiUrl || DEFAULT_EVOLUTION_API_URL;
 
-    // Send escalation message to customer
+    // Step 7: Send message to customer using the business instance
     if (escalation_message) {
       try {
+        // Use customer's phone number (phoneNumber) and ensure full URL with protocol
         const apiUrl = `${apiBaseUrl}/message/sendText/${businessInstanceName}`;
-        logger.log(`Sending smart escalation message to customer via ${businessInstanceName}`);
+        logger.log(`Sending escalation message to customer via business instance ${businessInstanceName} at URL: ${apiUrl}`);
         
         const customerResponse = await fetch(apiUrl, {
           method: 'POST',
@@ -458,38 +540,30 @@ export async function handleSmartEscalation(
             'apikey': evolutionApiKey
           },
           body: JSON.stringify({
-            number: phoneNumber,
-            text: escalation_message
+            number: phoneNumber, // Send TO the customer phone number
+            text: escalation_message // Use the simple text format
           })
         });
         
         if (!customerResponse.ok) {
-          const errorText = await customerResponse.text();
-          logger.error('Failed to send escalation message to customer:', errorText);
+          logger.error('Failed to send escalation message to customer:', await customerResponse.text());
         } else {
-          logger.log('Successfully sent escalation message to customer');
+          logger.log('Sent escalation message to customer');
         }
       } catch (err) {
-        logger.error('Error sending escalation message to customer:', err);
+        logger.error('Error sending message to customer:', err);
       }
     }
 
-    // Send smart notification to support agent
+    // Step 8: Notify support agent - Also use the business instance
     if (notification_message) {
       try {
-        // Create enhanced notification with smart analysis data
-        const smartNotification = `${notification_message}\n\n` +
-          `📱 From: +${phoneNumber}\n` +
-          `🧠 AI Analysis:\n` +
-          `   • Intent: ${intentAnalysis?.intent || 'Unknown'}\n` +
-          `   • Emotion: ${emotionAnalysis?.primary_emotion || 'Unknown'} (${emotionAnalysis?.intensity || 'N/A'})\n` +
-          `   • Urgency: ${smartEscalationResult.urgencyLevel}\n` +
-          `   • Confidence: ${Math.round(smartEscalationResult.confidence * 100)}%\n` +
-          `💬 Message: "${messageContent.substring(0, 150)}${messageContent.length > 150 ? '...' : ''}"\n` +
-          `🤖 Reason: ${smartEscalationResult.reasoning}`;
+        // Create a customized notification message with the customer message and other details
+        const customNotification = `${notification_message}\n\nFrom: +${phoneNumber}\nKeyword: ${matchedKeyword}${keywordCategory ? `\nCategory: ${keywordCategory}` : ''}\nMessage: "${messageContent.substring(0, 100)}${messageContent.length > 100 ? '...' : ''}"`;
         
+        // Use the business instance to send to the support agent
         const apiUrl = `${apiBaseUrl}/message/sendText/${businessInstanceName}`;
-        logger.log(`Sending smart notification to support agent via ${businessInstanceName}`);
+        logger.log(`Sending notification to support agent via business instance ${businessInstanceName} at URL: ${apiUrl}`);
         
         const supportResponse = await fetch(apiUrl, {
           method: 'POST',
@@ -498,36 +572,31 @@ export async function handleSmartEscalation(
             'apikey': evolutionApiKey
           },
           body: JSON.stringify({
-            number: support_phone_number,
-            text: smartNotification
+            number: support_phone_number, // Send TO the support phone number
+            text: customNotification // Use the simple text format
           })
         });
         
         if (!supportResponse.ok) {
-          const errorText = await supportResponse.text();
-          logger.error('Failed to send notification to support agent:', errorText);
+          logger.error('Failed to send notification to support agent:', await supportResponse.text());
         } else {
-          logger.log('Successfully sent smart notification to support agent');
+          logger.log('Sent notification to support agent');
         }
       } catch (err) {
-        logger.error('Error sending notification to support agent:', err);
+        logger.error('Error sending message to support agent:', err);
       }
     }
 
-    // Log the smart escalation action
+    // Log the escalation action for debug purposes
     await supabaseAdmin.from('webhook_debug_logs').insert({
-      category: 'smart_escalation',
-      message: `Smart escalation completed for ${phoneNumber} in instance ${businessInstanceName}`,
+      category: 'escalation',
+      message: `Escalated conversation with ${phoneNumber} due to keyword "${matchedKeyword}" using business instance ${businessInstanceName}`,
       data: {
         business_instance: businessInstanceName,
         business_instance_id: businessInstanceId,
         phone: phoneNumber,
-        escalation_type: 'smart_analysis',
-        intent: intentAnalysis?.intent,
-        emotion: emotionAnalysis?.primary_emotion,
-        urgency_level: smartEscalationResult.urgencyLevel,
-        confidence: smartEscalationResult.confidence,
-        reasoning: smartEscalationResult.reasoning,
+        keyword: matchedKeyword,
+        category: keywordCategory,
         escalation_id: escalation.id,
         message_preview: messageContent.substring(0, 100)
       }
@@ -535,14 +604,15 @@ export async function handleSmartEscalation(
 
     return { 
       success: true, 
-      action: 'smart_escalated',
+      action: 'escalated',
+      matched_keyword: matchedKeyword,
+      category: keywordCategory,
       escalation_id: escalation.id,
       skip_ai_processing: true,
-      escalation_type: 'smart_analysis'
+      escalation_type: 'keyword_based'
     };
-
   } catch (error) {
-    logger.error('Error in smart escalation processing:', error);
-    return { success: false, error: 'Internal error in smart escalation', details: error, skip_ai_processing: false };
+    logger.error('Error processing message for escalation:', error);
+    return { success: false, error: 'Internal error processing message', details: error, skip_ai_processing: false };
   }
 }

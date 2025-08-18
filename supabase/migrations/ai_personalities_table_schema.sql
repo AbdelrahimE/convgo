@@ -53,6 +53,16 @@ create unique INDEX IF not exists idx_ai_personalities_single_default on public.
 where
   (is_default = true);
 
+create index IF not exists idx_ai_personalities_intent_active on public.ai_personalities using btree (
+  whatsapp_instance_id,
+  intent_categories,
+  is_active
+) TABLESPACE pg_default
+where
+  (is_active = true);
+
+create index IF not exists idx_ai_personalities_intent_categories_gin on public.ai_personalities using gin (intent_categories) TABLESPACE pg_default;
+
 create trigger update_ai_personalities_updated_at BEFORE
 update on ai_personalities for EACH row
 execute FUNCTION update_ai_personalities_updated_at ();

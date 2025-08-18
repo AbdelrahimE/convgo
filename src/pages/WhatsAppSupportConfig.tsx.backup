@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { LanguageAwareInput } from '@/components/ui/language-aware-input';
 import { LanguageAwareTextarea } from '@/components/ui/language-aware-textarea';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, MessageSquare, Phone, Save } from 'lucide-react';
+import { Loader2, Plus, Tags, X, MessageSquare, Phone, Save, Trash2 } from 'lucide-react';
 import { EscalatedConversations } from '@/components/EscalatedConversations';
 import { SmartEscalationConfig } from '@/components/SmartEscalationConfig';
 import { SmartEscalationTesting } from '@/components/SmartEscalationTesting';
@@ -32,6 +32,14 @@ const WhatsAppSupportConfig = () => {
   const [supportPhoneNumber, setSupportPhoneNumber] = useState('');
   const [notificationMessage, setNotificationMessage] = useState('A customer needs support. Please check your WhatsApp Support dashboard.');
   const [escalationMessage, setEscalationMessage] = useState('Thank you for your message. A support representative will get back to you as soon as possible.');
+  const [keywords, setKeywords] = useState<Array<{
+    id: string;
+    keyword: string;
+    category: string | null;
+  }>>([]);
+  const [newKeyword, setNewKeyword] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  const [isAddingKeyword, setIsAddingKeyword] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -42,10 +50,12 @@ const WhatsAppSupportConfig = () => {
   useEffect(() => {
     if (selectedInstance) {
       loadSupportConfig();
+      loadKeywords();
     } else {
       setSupportPhoneNumber('');
       setNotificationMessage('A customer needs support. Please check your WhatsApp Support dashboard.');
       setEscalationMessage('Thank you for your message. A support representative will get back to you as soon as possible.');
+      setKeywords([]);
     }
   }, [selectedInstance]);
 
@@ -134,6 +144,57 @@ const WhatsAppSupportConfig = () => {
     }
   };
 
+  const loadKeywords = async () => {
+    if (!selectedInstance || !user?.id) {
+      logger.warn('Cannot load keywords: Missing instance ID or user ID');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      
+      // Log the request parameters for debugging
+      logger.log('Loading support keywords with params:', { 
+        instanceId: selectedInstance, 
+        userId: user.id 
+      });
+      
+      const {
+        data,
+        error,
+        status
+      } = await supabase
+        .from('whatsapp_support_keywords')
+        .select('id, keyword, category')
+        .eq('user_id', user.id)
+        .eq('whatsapp_instance_id', selectedInstance)
+        .order('created_at', {
+          ascending: false
+        });
+      
+      // Log the response status for debugging
+      logger.log('Support keywords response status:', status);
+      
+      if (error) {
+        // Log the detailed error for debugging
+        logger.error('Error fetching support keywords:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        throw error;
+      }
+      
+      logger.log('Support keywords loaded successfully');
+      setKeywords(data || []);
+    } catch (error) {
+      logger.error('Error loading keywords:', error);
+      toast.error('Failed to load support keywords');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const saveSupportConfig = async () => {
     if (!selectedInstance) {
@@ -184,7 +245,52 @@ const WhatsAppSupportConfig = () => {
     }
   };
 
+  const addKeyword = async () => {
+    if (!newKeyword.trim()) {
+      toast.error('Please enter a keyword');
+      return;
+    }
+    if (!selectedInstance) {
+      toast.error('Please select a WhatsApp instance');
+      return;
+    }
+    try {
+      setIsAddingKeyword(true);
+      const {
+        data,
+        error
+      } = await supabase.from('whatsapp_support_keywords').insert({
+        user_id: user?.id,
+        whatsapp_instance_id: selectedInstance,
+        keyword: newKeyword.trim(),
+        category: newCategory.trim() || null
+      }).select().single();
+      if (error) throw error;
+      setKeywords([data, ...keywords]);
+      setNewKeyword('');
+      setNewCategory('');
+      toast.success('Keyword added successfully');
+    } catch (error) {
+      logger.error('Error adding keyword:', error);
+      toast.error('Failed to add keyword');
+    } finally {
+      setIsAddingKeyword(false);
+    }
+  };
 
+  const deleteKeyword = async (id: string) => {
+    try {
+      const {
+        error
+      } = await supabase.from('whatsapp_support_keywords').delete().eq('id', id).eq('user_id', user?.id);
+      if (error) throw error;
+      setKeywords(keywords.filter(keyword => keyword.id !== id));
+      toast.success('Keyword removed successfully');
+    } catch (error) {
+      logger.error('Error deleting keyword:', error);
+      toast.error('Failed to delete keyword');
+    }
+  };
 
   return <motion.div initial={{
     opacity: 0,
@@ -238,6 +344,7 @@ const WhatsAppSupportConfig = () => {
                   <Tabs defaultValue="settings" className="space-y-6">
                     <TabsList>
                       <TabsTrigger value="settings">Settings</TabsTrigger>
+                      <TabsTrigger value="keywords">Keywords</TabsTrigger>
                       <TabsTrigger value="smart-escalation">Smart Escalation</TabsTrigger>
                       <TabsTrigger value="testing">Testing</TabsTrigger>
                       <TabsTrigger value="escalated">Escalated Conversations</TabsTrigger>
@@ -286,6 +393,58 @@ const WhatsAppSupportConfig = () => {
                       </Card>
                     </TabsContent>
                     
+                    <TabsContent value="keywords">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center font-semibold">
+                            <Tags className="h-5 w-5 mr-2" />
+                            Support Keywords
+                          </CardTitle>
+                          <CardDescription>
+                            Manage keywords that will trigger automatic support escalation for this WhatsApp number
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="space-y-4 mb-6">
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <div className="flex-1">
+                                <Label htmlFor="new-keyword">New Keyword</Label>
+                                <LanguageAwareInput id="new-keyword" placeholder="e.g. help, urgent, support" value={newKeyword} onChange={e => setNewKeyword(e.target.value)} disabled={!selectedInstance} />
+                              </div>
+                              <div className="flex-1">
+                                <Label htmlFor="new-category">Category (Optional)</Label>
+                                <LanguageAwareInput id="new-category" placeholder="e.g. billing, technical" value={newCategory} onChange={e => setNewCategory(e.target.value)} disabled={!selectedInstance} />
+                              </div>
+                              <div className="flex items-end">
+                                <Button onClick={addKeyword} disabled={isAddingKeyword || !newKeyword.trim() || !selectedInstance} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
+                                  {isAddingKeyword ? <Loader2 className="h-4 w-4 animate-spin" /> : <>
+                                      <Plus className="h-4 w-4 mr-2" />
+                                      Add
+                                    </>}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <h3 className="text-sm font-medium mb-2">Current Keywords for this WhatsApp Number</h3>
+                            {keywords.length === 0 ? <p className="text-sm text-muted-foreground py-4">
+                                No keywords added yet for this WhatsApp number. Keywords help identify when a customer message should be escalated to human support.
+                              </p> : <div className="flex flex-wrap gap-2">
+                                {keywords.map(keyword => <div key={keyword.id} className="flex items-center bg-muted px-3 py-1 rounded-full">
+                                    <span className="text-sm font-medium mr-1">{keyword.keyword}</span>
+                                    {keyword.category && <Badge variant="outline" className="mr-1 h-5">
+                                        {keyword.category}
+                                      </Badge>}
+                                    <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full" onClick={() => deleteKeyword(keyword.id)}>
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>)}
+                              </div>}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
                     
                     <TabsContent value="smart-escalation">
                       <SmartEscalationConfig instanceId={selectedInstance} />
