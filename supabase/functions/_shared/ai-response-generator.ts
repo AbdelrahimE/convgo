@@ -2,6 +2,7 @@
 import logDebug from "./webhook-logger.ts";
 import { storeMessageInConversation } from "./conversation-storage.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { detectMessageLanguage, type DetectedLanguage } from "./language-detector.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -45,6 +46,13 @@ export async function generateAndSendAIResponse(
     // Initialize Supabase admin client for database operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
+    // Detect message language
+    const detectedLanguage = detectMessageLanguage(query);
+    await logDebug('AI_LANGUAGE_DETECTION', 'Detected message language', { 
+      query: query.substring(0, 50) + '...',
+      detectedLanguage
+    });
+    
     // Generate system prompt
     await logDebug('AI_SYSTEM_PROMPT', 'Using system prompt from configuration', { 
       userSystemPrompt: aiConfig.system_prompt
@@ -71,6 +79,8 @@ export async function generateAndSendAIResponse(
         maxContextTokens: 3000, // Explicit token limit
         imageUrl: imageUrl, // Pass the image URL if available
         userId: aiConfig.user_id || null,
+        // Language detection
+        detectedLanguage: detectedLanguage,
         // SMART: Pass business context and personality info for smarter responses
         selectedPersonalityId: aiConfig.selectedPersonalityId || null,
         selectedPersonalityName: aiConfig.selectedPersonalityName || null,
@@ -126,7 +136,7 @@ export async function generateAndSendAIResponse(
           context_token_count: Math.ceil((context?.length || 0) / 4),
           search_result_count: context ? 1 : 0,
           response_model: responseData.model || 'gpt-4o-mini',
-          // NEW: Add personality system metadata
+          // ENHANCED: Add comprehensive analysis metadata
           metadata: {
             personality_id: aiConfig.selectedPersonalityId || null,
             personality_name: aiConfig.selectedPersonalityName || null,
@@ -134,7 +144,21 @@ export async function generateAndSendAIResponse(
             intent_confidence: aiConfig.intentConfidence || null,
             personality_system_used: !!aiConfig.selectedPersonalityId,
             image_processed: !!imageUrl,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            // البيانات الجديدة من التحليل المتقدم
+            emotion_analysis: aiConfig.emotionAnalysis || null,
+            customer_journey: aiConfig.customerJourney || null,
+            product_interest: aiConfig.productInterest || null,
+            business_context: aiConfig.businessContext || null,
+            // معرف المحادثة للتتبع المتقدم
+            conversation_id: conversationId,
+            // مؤشرات الجودة
+            analysis_quality: {
+              intent_confidence: aiConfig.intentConfidence || 0,
+              emotion_intensity: aiConfig.emotionAnalysis?.intensity || 0,
+              stage_confidence: aiConfig.customerJourney?.stage_confidence || 0,
+              conversion_probability: aiConfig.customerJourney?.conversion_probability || 0
+            }
           }
         });
 

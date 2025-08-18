@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getNextOpenAIKey } from "../_shared/openai-key-rotation.ts";
+import { getLanguageInstruction, type DetectedLanguage } from "../_shared/language-detector.ts";
 
 const logger = {
   log: (...args: any[]) => console.log(...args),
@@ -22,6 +23,8 @@ interface GenerateResponseRequest {
   maxContextTokens?: number;
   imageUrl?: string;
   userId?: string;
+  // Language detection field
+  detectedLanguage?: DetectedLanguage;
   // Personality system fields
   selectedPersonalityId?: string;
   selectedPersonalityName?: string;
@@ -40,13 +43,26 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-const DEFAULT_SYSTEM_PROMPT = `You are a helpful WhatsApp AI assistant that answers questions based on the provided context. 
-If the information to answer the question is not in the context, say "I don't have enough information to answer that question."
-If the question is not related to the context, still try to be helpful but make it clear that you're providing general knowledge.
-Always be concise, professional, and accurate. Don't make things up.
-IMPORTANT: Don't use markdown formatting in your responses. Format your text as plain text for WhatsApp.
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful WhatsApp AI assistant that answers questions based on the provided context.
+
+CONTEXT EVALUATION AND RESPONSE GUIDELINES:
+1. If the provided context contains relevant information that directly answers the user's question, use it to provide a helpful response
+2. Pay attention to similarity scores in the context - scores above 0.3 generally indicate relevant information
+3. If the context seems partially relevant but not perfectly matching, use the relevant parts and acknowledge any limitations
+4. If the context is clearly unrelated to the user's question, politely say you don't have enough information
+5. For greeting messages or general questions, provide appropriate responses even without specific context
+
+RESPONSE QUALITY:
+- Prioritize accuracy and helpfulness over being overly cautious
+- If you can provide useful information from the context, do so clearly and directly
+- Be honest about any uncertainty but don't be unnecessarily restrictive
+- For pricing, services, or product questions, use any relevant information from the context
+
+FORMATTING RULES:
+- Always be concise, professional, and accurate
+- Don't use markdown formatting - format text as plain text for WhatsApp
 - Don't use headings with # symbols
-- Don't format links as [text](url) - instead write the text followed by the URL on a new line if needed
+- Don't format links as [text](url) - instead write the text followed by the URL if needed
 - Use *text* for emphasis instead of **text**`;
 
 const EMPTY_CONTEXT_ADDITION = `
@@ -350,6 +366,8 @@ serve(async (req) => {
       maxContextTokens = MAX_CONTEXT_TOKENS,
       imageUrl,
       userId,
+      // Language detection field
+      detectedLanguage = 'auto',
       // Personality system fields
       selectedPersonalityId,
       selectedPersonalityName,
@@ -366,7 +384,8 @@ serve(async (req) => {
       hasPersonality: !!selectedPersonalityId,
       personalityName: selectedPersonalityName,
       detectedIntent,
-      intentConfidence
+      intentConfidence,
+      detectedLanguage
     });
 
     if (!query && !imageUrl) {
@@ -436,6 +455,9 @@ serve(async (req) => {
 - Don't format links as [text](url) - instead write the text followed by the URL on a new line if needed
 - Use *text* for emphasis instead of **text**`;
     }
+    
+    // Add language instruction based on detected language
+    finalSystemPrompt += getLanguageInstruction(detectedLanguage);
     
     if (imageUrl) {
       finalSystemPrompt += IMAGE_CONTEXT_ADDITION;

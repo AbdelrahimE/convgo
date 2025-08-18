@@ -336,7 +336,7 @@ const AIPersonalities = () => {
           initial={{ opacity: 0, x: -20 }} 
           animate={{ opacity: 1, x: 0 }} 
           transition={{ delay: 0.2 }}
-          className="text-2xl font-extrabold text-left md:text-3xl lg:text-4xl"
+          className="text-2xl font-semibold text-left md:text-3xl lg:text-4xl"
         >
           AI Personalities
         </motion.h1>
@@ -344,7 +344,7 @@ const AIPersonalities = () => {
         {/* Instance Selection */}
         <Card>
           <CardHeader>
-            <CardTitle className="font-bold">Choose WhatsApp Number</CardTitle>
+            <CardTitle className="font-semibold">Choose WhatsApp Number</CardTitle>
             <CardDescription>
               Select the WhatsApp number to manage AI personalities for
             </CardDescription>

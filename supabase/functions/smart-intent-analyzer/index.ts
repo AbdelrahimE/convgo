@@ -48,6 +48,30 @@ interface SmartIntentResult {
   reasoning: string;
   processingTimeMs: number;
   cacheHit: boolean;
+  // البيانات الجديدة المضافة
+  emotionAnalysis?: {
+    primary_emotion: string;
+    intensity: number;
+    emotional_indicators: string[];
+    sentiment_score: number;
+    emotional_state: string;
+    urgency_detected: boolean;
+  };
+  customerJourney?: {
+    current_stage: string;
+    stage_confidence: number;
+    progression_indicators: string[];
+    next_expected_action: string;
+    conversion_probability: number;
+  };
+  productInterest?: {
+    requested_item: string | null;
+    category: string | null;
+    specifications: string[];
+    price_range_discussed: boolean;
+    urgency_level: string;
+    decision_factors: string[];
+  };
   error?: string;
 }
 
@@ -207,6 +231,287 @@ async function understandIntentFromMeaning(
 }
 
 /**
+ * تحليل المشاعر المتقدم
+ * يحلل المشاعر الأساسية والحالة العاطفية للعميل
+ */
+async function analyzeSentiment(
+  message: string,
+  conversationHistory: string[],
+  businessContext: any
+): Promise<{
+  primary_emotion: string;
+  intensity: number;
+  emotional_indicators: string[];
+  sentiment_score: number;
+  emotional_state: string;
+  urgency_detected: boolean;
+}> {
+  try {
+    const recentContext = conversationHistory.slice(-5).join('\n');
+    
+    const sentimentPrompt = `أنت محلل نفسي ومشاعري متخصص. حلل هذه الرسالة والسياق لتحديد المشاعر والحالة العاطفية.
+
+السياق التجاري: ${businessContext.industry}
+أسلوب التواصل: ${businessContext.communicationStyle}
+
+المحادثة السابقة:
+${recentContext}
+
+الرسالة الحالية: "${message}"
+
+حدد بدقة:
+1. المشاعر الأساسية (excited, frustrated, satisfied, neutral, concerned, angry, happy, confused, urgent)
+2. شدة المشاعر (0-1)
+3. المؤشرات العاطفية الموجودة في النص
+4. درجة الإيجابية/السلبية (-1 إلى 1)
+5. الحالة العاطفية بالعربية
+6. هل يوجد استعجال أو إلحاح؟
+
+اجب في JSON:
+{
+  "primary_emotion": "المشاعر الأساسية",
+  "intensity": 0.8,
+  "emotional_indicators": ["مؤشر1", "مؤشر2"],
+  "sentiment_score": 0.5,
+  "emotional_state": "وصف الحالة العاطفية بالعربية",
+  "urgency_detected": false
+}`;
+
+    const apiKey = getNextOpenAIKey();
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: sentimentPrompt },
+          { role: 'user', content: `حلل المشاعر: "${message}"` }
+        ],
+        temperature: 0.1,
+        max_tokens: 200
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const responseData = await response.json();
+    const result = JSON.parse(responseData.choices[0].message.content);
+
+    return {
+      primary_emotion: result.primary_emotion || 'neutral',
+      intensity: Math.min(1, Math.max(0, result.intensity || 0.5)),
+      emotional_indicators: result.emotional_indicators || [],
+      sentiment_score: Math.min(1, Math.max(-1, result.sentiment_score || 0)),
+      emotional_state: result.emotional_state || 'حالة عادية',
+      urgency_detected: result.urgency_detected || false
+    };
+  } catch (error) {
+    logger.error('Error analyzing sentiment:', error);
+    return {
+      primary_emotion: 'neutral',
+      intensity: 0.5,
+      emotional_indicators: [],
+      sentiment_score: 0,
+      emotional_state: 'تعذر تحليل المشاعر',
+      urgency_detected: false
+    };
+  }
+}
+
+/**
+ * تحليل مرحلة العميل في رحلة الشراء
+ * يحدد أين يقف العميل في مسار التحويل
+ */
+async function determineCustomerStage(
+  message: string,
+  conversationHistory: string[],
+  businessContext: any,
+  sentimentAnalysis: any
+): Promise<{
+  current_stage: string;
+  stage_confidence: number;
+  progression_indicators: string[];
+  next_expected_action: string;
+  conversion_probability: number;
+}> {
+  try {
+    const recentContext = conversationHistory.slice(-10).join('\n');
+    
+    const stagePrompt = `أنت محلل رحلة العميل متخصص في ${businessContext.industry}. 
+    
+حلل هذه المحادثة لتحديد مرحلة العميل:
+
+السياق:
+- المجال: ${businessContext.industry}
+- الحالة العاطفية: ${sentimentAnalysis.emotional_state}
+- المشاعر: ${sentimentAnalysis.primary_emotion}
+
+المحادثة:
+${recentContext}
+
+الرسالة الحالية: "${message}"
+
+حدد المرحلة من:
+- awareness: يكتشف المشكلة/الحاجة
+- consideration: يبحث عن الحلول ويقارن
+- decision: قريب من اتخاذ القرار
+- purchase: جاهز للشراء أو يسأل عن التفاصيل النهائية  
+- support: عميل حالي يحتاج مساعدة
+- retention: عميل حالي قد يفكر في الإلغاء
+
+اجب في JSON:
+{
+  "current_stage": "المرحلة",
+  "stage_confidence": 0.85,
+  "progression_indicators": ["مؤشر1", "مؤشر2"],
+  "next_expected_action": "الإجراء المتوقع التالي",
+  "conversion_probability": 0.7
+}`;
+
+    const apiKey = getNextOpenAIKey();
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: stagePrompt },
+          { role: 'user', content: `حلل المرحلة: "${message}"` }
+        ],
+        temperature: 0.1,
+        max_tokens: 180
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const responseData = await response.json();
+    const result = JSON.parse(responseData.choices[0].message.content);
+
+    return {
+      current_stage: result.current_stage || 'awareness',
+      stage_confidence: Math.min(1, Math.max(0, result.stage_confidence || 0.5)),
+      progression_indicators: result.progression_indicators || [],
+      next_expected_action: result.next_expected_action || 'متابعة المحادثة',
+      conversion_probability: Math.min(1, Math.max(0, result.conversion_probability || 0.3))
+    };
+  } catch (error) {
+    logger.error('Error determining customer stage:', error);
+    return {
+      current_stage: 'awareness',
+      stage_confidence: 0.3,
+      progression_indicators: [],
+      next_expected_action: 'متابعة المحادثة',
+      conversion_probability: 0.3
+    };
+  }
+}
+
+/**
+ * استخراج المنتج أو الخدمة المطلوبة
+ * يحلل النص لفهم ما يريده العميل بالتحديد
+ */
+async function extractProductInterest(
+  message: string,
+  conversationHistory: string[],
+  businessContext: any
+): Promise<{
+  requested_item: string | null;
+  category: string | null;
+  specifications: string[];
+  price_range_discussed: boolean;
+  urgency_level: string;
+  decision_factors: string[];
+}> {
+  try {
+    const recentContext = conversationHistory.slice(-8).join('\n');
+    
+    const productPrompt = `أنت محلل منتجات وخدمات متخصص في ${businessContext.industry}.
+
+السياق التجاري:
+- المجال: ${businessContext.industry}
+- المصطلحات: ${businessContext.detectedTerms.join(', ')}
+
+المحادثة:
+${recentContext}
+
+الرسالة الحالية: "${message}"
+
+استخرج:
+1. المنتج/الخدمة المطلوبة (إن وجد)
+2. فئة المنتج
+3. المواصفات أو المتطلبات المذكورة
+4. هل تم مناقشة السعر؟
+5. مستوى الاستعجال (low, medium, high)
+6. العوامل المؤثرة في القرار
+
+اجب في JSON:
+{
+  "requested_item": "اسم المنتج/الخدمة أو null",
+  "category": "فئة المنتج أو null", 
+  "specifications": ["مواصفة1", "مواصفة2"],
+  "price_range_discussed": false,
+  "urgency_level": "medium",
+  "decision_factors": ["عامل1", "عامل2"]
+}`;
+
+    const apiKey = getNextOpenAIKey();
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: productPrompt },
+          { role: 'user', content: `استخرج المنتج: "${message}"` }
+        ],
+        temperature: 0.1,
+        max_tokens: 150
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const responseData = await response.json();
+    const result = JSON.parse(responseData.choices[0].message.content);
+
+    return {
+      requested_item: result.requested_item || null,
+      category: result.category || null,
+      specifications: result.specifications || [],
+      price_range_discussed: result.price_range_discussed || false,
+      urgency_level: result.urgency_level || 'medium',
+      decision_factors: result.decision_factors || []
+    };
+  } catch (error) {
+    logger.error('Error extracting product interest:', error);
+    return {
+      requested_item: null,
+      category: null,
+      specifications: [],
+      price_range_discussed: false,
+      urgency_level: 'low',
+      decision_factors: []
+    };
+  }
+}
+
+/**
  * وظيفة التعلم من النجاح
  * تحفظ الأنماط الناجحة لتحسين الأداء المستقبلي
  */
@@ -302,8 +607,8 @@ async function getSmartPersonality(
 }
 
 /**
- * النظام الذكي المتكامل
- * يجمع كل الوظائف في تحليل واحد ذكي
+ * النظام الذكي المتكامل - نسخة محسنة
+ * يجمع كل الوظائف في تحليل واحد ذكي شامل
  */
 async function smartIntentAnalysis(
   message: string,
@@ -315,6 +620,9 @@ async function smartIntentAnalysis(
   businessContext: any;
   reasoning: string;
   selectedPersonality: any;
+  emotionAnalysis: any;
+  customerJourney: any;
+  productInterest: any;
 }> {
   
   // 1. فهم السياق التجاري
@@ -323,10 +631,24 @@ async function smartIntentAnalysis(
   // 2. فهم النية من المعنى
   const intentResult = await understandIntentFromMeaning(message, businessContext);
   
-  // 3. الحصول على الشخصية المناسبة
+  // 3. تحليل المشاعر والحالة العاطفية
+  const emotionAnalysis = await analyzeSentiment(message, conversationHistory, businessContext);
+  
+  // 4. تحديد مرحلة العميل في رحلة الشراء
+  const customerJourney = await determineCustomerStage(
+    message, 
+    conversationHistory, 
+    businessContext, 
+    emotionAnalysis
+  );
+  
+  // 5. استخراج المنتج أو الخدمة المطلوبة
+  const productInterest = await extractProductInterest(message, conversationHistory, businessContext);
+  
+  // 6. الحصول على الشخصية المناسبة (مع مراعاة التحليلات الجديدة)
   const selectedPersonality = await getSmartPersonality(instanceId, intentResult.intent, businessContext);
   
-  // 3.1. تحديث عداد استخدام الشخصية إذا تم العثور عليها
+  // 6.1. تحديث عداد استخدام الشخصية إذا تم العثور عليها
   if (selectedPersonality?.personality_id) {
     try {
       await supabaseAdmin.rpc('increment_personality_usage', {
@@ -337,7 +659,7 @@ async function smartIntentAnalysis(
     }
   }
   
-  // 4. التعلم من هذا التحليل
+  // 7. التعلم من هذا التحليل (مع البيانات الجديدة)
   await learnFromSuccess(instanceId, message, businessContext, intentResult.intent, intentResult.confidence);
   
   return {
@@ -345,7 +667,10 @@ async function smartIntentAnalysis(
     confidence: intentResult.confidence,
     businessContext,
     reasoning: intentResult.reasoning,
-    selectedPersonality
+    selectedPersonality,
+    emotionAnalysis,
+    customerJourney,
+    productInterest
   };
 }
 
@@ -410,7 +735,11 @@ serve(async (req) => {
       } : undefined,
       reasoning: analysisResult.reasoning,
       processingTimeMs,
-      cacheHit: false
+      cacheHit: false,
+      // البيانات الجديدة المُطورة
+      emotionAnalysis: analysisResult.emotionAnalysis,
+      customerJourney: analysisResult.customerJourney,
+      productInterest: analysisResult.productInterest
     };
 
     logger.log(`Smart intent analysis completed:`, {
@@ -441,7 +770,31 @@ serve(async (req) => {
         },
         reasoning: 'حدث خطأ في التحليل',
         processingTimeMs: Date.now() - startTime,
-        cacheHit: false
+        cacheHit: false,
+        // بيانات افتراضية للخطأ
+        emotionAnalysis: {
+          primary_emotion: 'neutral',
+          intensity: 0.5,
+          emotional_indicators: [],
+          sentiment_score: 0,
+          emotional_state: 'تعذر تحليل المشاعر',
+          urgency_detected: false
+        },
+        customerJourney: {
+          current_stage: 'unknown',
+          stage_confidence: 0.1,
+          progression_indicators: [],
+          next_expected_action: 'المحاولة مرة أخرى',
+          conversion_probability: 0.0
+        },
+        productInterest: {
+          requested_item: null,
+          category: null,
+          specifications: [],
+          price_range_discussed: false,
+          urgency_level: 'low',
+          decision_factors: []
+        }
       } as SmartIntentResult),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { CategoryBadge } from '@/components/ui/category-badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -216,9 +216,7 @@ export function DebugLogsTable() {
                       {format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss.SSS')}
                     </TableCell>
                     <TableCell>
-                      <Badge className={getCategoryColor(log.category)}>
-                        {log.category}
-                      </Badge>
+                      <CategoryBadge category={log.category} />
                     </TableCell>
                     <TableCell>{log.message}</TableCell>
                     <TableCell>

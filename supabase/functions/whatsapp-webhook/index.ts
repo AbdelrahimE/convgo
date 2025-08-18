@@ -783,14 +783,22 @@ async function processMessageForAI(instance: string, messageData: any) {
       }
     }
 
+    // Simple greeting detection for better context handling
+    const hasGreeting = messageText.includes('السلام عليكم') || 
+                       messageText.includes('أهلا') || 
+                       messageText.includes('مرحبا') ||
+                       messageText.includes('صباح الخير') ||
+                       messageText.includes('مساء الخير');
+    
     await logDebug('AI_CONTEXT_SEARCH', 'Starting semantic search for context', { 
       userQuery: messageText,
+      hasGreeting,
       fileIds,
       detectedIntent: intentClassification?.intent || 'none',
       usingPersonality: !!selectedPersonality
     });
 
-    // Perform semantic search to find relevant contexts
+    // Perform simple semantic search - restored to original approach
     const searchResponse = await fetch(`${supabaseUrl}/functions/v1/semantic-search`, {
       method: 'POST',
       headers: {
@@ -801,7 +809,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         query: messageText,
         fileIds: fileIds.length > 0 ? fileIds : undefined,
         limit: 5,
-        threshold: 0.3
+        threshold: 0.1
       })
     });
 
@@ -817,7 +825,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
       return await generateAndSendAIResponse(
         messageText, 
-        context, 
+        '', 
         instanceName, 
         fromNumber, 
         instanceBaseUrl, 
@@ -836,7 +844,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       similarity: searchResults.results?.[0]?.similarity || 0
     });
 
-    // IMPROVED CONTEXT ASSEMBLY: Balance between conversation history and RAG content
+    // IMPROVED CONTEXT ASSEMBLY: Enhanced filtering and quality assessment
     let context = '';
     let ragContext = '';
     
@@ -845,24 +853,39 @@ async function processMessageForAI(instance: string, messageData: any) {
       .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
       .join('\n\n');
     
-    // 2. Format RAG results if available - more token-efficient formatting
+    // 2. Simple RAG results processing - restored to original approach
     if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
-      // Only include the most relevant sections to save tokens
+      // Take the best results (max 3 for token efficiency) 
       const topResults = searchResults.results.slice(0, 3);
       
-      // Join RAG content with separators and add source information
+      // Enhanced formatting with better context information for AI
       ragContext = topResults
-        .map((result, index) => `DOCUMENT ${index + 1} (similarity: ${result.similarity.toFixed(2)}):\n${result.content.trim()}`)
+        .map((result, index) => {
+          const qualityIndicator = result.similarity >= 0.5 ? 'GOOD MATCH' : 
+                                  result.similarity >= 0.3 ? 'MODERATE MATCH' : 'WEAK MATCH';
+          return `DOCUMENT ${index + 1} (${qualityIndicator} - similarity: ${result.similarity.toFixed(3)}):\n${result.content.trim()}`;
+        })
         .join('\n\n---\n\n');
       
-      // 3. The context assembly is now handled by the balanceContextTokens function in generate-response
-      context = `${conversationContext}\n\n${ragContext}`;
+      // Enhanced context combination with greeting handling
+      if (hasGreeting) {
+        const greetingNote = "\nNOTE: User message contains greeting - respond appropriately and then address their main question.\n";
+        context = conversationContext ? 
+          `${conversationContext}${greetingNote}\nRELEVANT INFORMATION:\n${ragContext}` : 
+          `${greetingNote}\nRELEVANT INFORMATION:\n${ragContext}`;
+      } else {
+        context = conversationContext ? 
+          `${conversationContext}\n\nRELEVANT INFORMATION:\n${ragContext}` : 
+          `RELEVANT INFORMATION:\n${ragContext}`;
+      }
       
-      await logDebug('AI_CONTEXT_ASSEMBLED', 'Enhanced context assembled for token balancing', { 
+      await logDebug('AI_CONTEXT_ASSEMBLED', 'Context assembled with search results', { 
         conversationChars: conversationContext.length,
         ragChars: ragContext.length,
         totalChars: context.length,
-        estimatedTokens: Math.ceil(context.length * 0.25)
+        estimatedTokens: Math.ceil(context.length * 0.25),
+        resultCount: topResults.length,
+        similarities: topResults.map(r => r.similarity)
       });
     } else {
       // Only conversation history is available
@@ -873,7 +896,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       });
     }
 
-    // SMART: Pass personality and business context to response generator
+    // ENHANCED: Pass comprehensive analysis data to response generator
     const smartAiConfig = {
       ...aiConfig,
       // Override with personality-specific settings if available
@@ -891,6 +914,16 @@ async function processMessageForAI(instance: string, messageData: any) {
         detectedIndustry: intentClassification.businessContext.industry,
         communicationStyle: intentClassification.businessContext.communicationStyle,
         culturalContext: intentClassification.businessContext.detectedTerms
+      }),
+      // البيانات المتقدمة الجديدة
+      ...(intentClassification?.emotionAnalysis && {
+        emotionAnalysis: intentClassification.emotionAnalysis
+      }),
+      ...(intentClassification?.customerJourney && {
+        customerJourney: intentClassification.customerJourney
+      }),
+      ...(intentClassification?.productInterest && {
+        productInterest: intentClassification.productInterest
       })
     };
 

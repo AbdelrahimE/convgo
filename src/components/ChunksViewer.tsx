@@ -3,9 +3,9 @@ import { X, Search, Languages, FileText, Copy, CheckCircle2 } from "lucide-react
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { LanguageBadge } from "@/components/ui/language-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import logger from '@/utils/logger';
@@ -104,18 +104,6 @@ export function ChunksViewer({ fileId, fileName, isOpen, onClose }: ChunksViewer
     }
   };
 
-  const getLanguageColor = (language: string | null) => {
-    if (!language) return "bg-gray-100 text-gray-800";
-    
-    const colors: Record<string, string> = {
-      'arabic': 'bg-green-100 text-green-800',
-      'english': 'bg-blue-100 text-blue-800',
-      'french': 'bg-purple-100 text-purple-800',
-      'spanish': 'bg-orange-100 text-orange-800',
-    };
-    
-    return colors[language.toLowerCase()] || 'bg-slate-100 text-slate-800';
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -162,8 +150,8 @@ export function ChunksViewer({ fileId, fileName, isOpen, onClose }: ChunksViewer
               </p>
             </div>
           ) : (
-            <div className="space-y-3 sm:space-y-4">
-              {filteredChunks.map((chunk, index) => (
+              <div className="space-y-3 sm:space-y-4">
+                {filteredChunks.map((chunk, index) => (
                 <Card key={chunk.id} className="group">
                   <CardHeader className="pb-3 px-3 sm:px-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
@@ -172,21 +160,19 @@ export function ChunksViewer({ fileId, fileName, isOpen, onClose }: ChunksViewer
                           Chunk #{chunk.chunk_order + 1}
                         </CardTitle>
                         {chunk.language && (
-                          <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Badge className={`${getLanguageColor(chunk.language)} text-xs`}>
+                                <LanguageBadge language={chunk.language} className="text-xs">
                                   <Languages className="h-2 w-2 sm:h-3 sm:w-3 mr-1" />
                                   <span className="hidden sm:inline">{chunk.language}</span>
                                   <span className="sm:hidden">{chunk.language.substring(0, 2).toUpperCase()}</span>
-                                </Badge>
+                                </LanguageBadge>
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p>Detected language: {chunk.language}</p>
                                 {chunk.direction && <p>Text direction: {chunk.direction}</p>}
                               </TooltipContent>
                             </Tooltip>
-                          </TooltipProvider>
                         )}
                       </div>
                       <Button
@@ -217,7 +203,7 @@ export function ChunksViewer({ fileId, fileName, isOpen, onClose }: ChunksViewer
                   </CardContent>
                 </Card>
               ))}
-            </div>
+              </div>
           )}
         </div>
       </DialogContent>

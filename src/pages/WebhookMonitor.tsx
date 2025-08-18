@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw, Trash2, AlertTriangle, Info, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { EventBadge } from '@/components/ui/event-badge';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,6 +15,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import WebhookEndpointInfo from '@/components/WebhookEndpointInfo';
 import { DebugLogsTable } from '@/components/DebugLogsTable';
+import { CustomerInsightCard } from '@/components/ui/customer-insight-card';
+import { EmotionBadge } from '@/components/ui/emotion-badge';
+import { JourneyStageBadge } from '@/components/ui/journey-stage-badge';
+import { ProductInterestBadge } from '@/components/ui/product-interest-badge';
 import logger from '@/utils/logger';
 interface WebhookMessage {
   id: string;
@@ -22,12 +27,52 @@ interface WebhookMessage {
   data: any;
   received_at: string;
 }
+
+interface AIInteraction {
+  id: string;
+  user_phone: string;
+  user_message: string;
+  ai_response: string;
+  created_at: string;
+  metadata: {
+    emotion_analysis?: {
+      primary_emotion: string;
+      intensity: number;
+      emotional_indicators: string[];
+      sentiment_score: number;
+      emotional_state: string;
+      urgency_detected: boolean;
+    };
+    customer_journey?: {
+      current_stage: string;
+      stage_confidence: number;
+      progression_indicators: string[];
+      next_expected_action: string;
+      conversion_probability: number;
+    };
+    product_interest?: {
+      requested_item: string | null;
+      category: string | null;
+      specifications: string[];
+      price_range_discussed: boolean;
+      urgency_level: string;
+      decision_factors: string[];
+    };
+    business_context?: {
+      industry: string;
+      communicationStyle: string;
+      detectedTerms: string[];
+    };
+  };
+}
 const WebhookMonitor = () => {
   const {
     user
   } = useAuth();
   const [messages, setMessages] = useState<WebhookMessage[]>([]);
+  const [aiInteractions, setAiInteractions] = useState<AIInteraction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   const [lastMessageTime, setLastMessageTime] = useState<Date | null>(null);
@@ -40,6 +85,7 @@ const WebhookMonitor = () => {
   useEffect(() => {
     if (user) {
       fetchMessages();
+      fetchAIInteractions();
       startPolling();
     }
     return () => {
@@ -51,6 +97,7 @@ const WebhookMonitor = () => {
   const startPolling = () => {
     pollingRef.current = window.setInterval(() => {
       fetchMessages(false);
+      fetchAIInteractions(false);
     }, 15000);
   };
   const fetchMessages = async (showToast = true) => {
@@ -90,6 +137,45 @@ const WebhookMonitor = () => {
       setIsLoading(false);
     }
   };
+
+  const fetchAIInteractions = async (showToast = false) => {
+    try {
+      setIsLoadingAnalytics(true);
+      
+      // جلب التفاعلات من آخر 24 ساعة مع البيانات المتقدمة
+      const { data, error } = await supabase
+        .from('whatsapp_ai_interactions')
+        .select('*')
+        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        throw error;
+      }
+
+      // فلترة التفاعلات التي تحتوي على بيانات تحليل متقدمة
+      const enhancedInteractions = data?.filter(interaction => 
+        interaction.metadata?.emotion_analysis || 
+        interaction.metadata?.customer_journey || 
+        interaction.metadata?.product_interest
+      ) || [];
+
+      setAiInteractions(enhancedInteractions);
+      
+      if (showToast) {
+        toast.success(`تم تحديث ${enhancedInteractions.length} تحليل عميل`);
+      }
+    } catch (error) {
+      logger.error('Error fetching AI interactions:', error);
+      if (showToast) {
+        toast.error('فشل في تحميل تحليلات العملاء');
+      }
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  };
+
   const clearMessages = async () => {
     try {
       setIsDeleting(true);
@@ -205,7 +291,11 @@ const WebhookMonitor = () => {
       <WebhookEndpointInfo />
       
       <Tabs defaultValue="messages" className="space-y-6">
-        
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="messages">Webhook Messages</TabsTrigger>
+          <TabsTrigger value="analytics">Customer Analytics</TabsTrigger>
+          <TabsTrigger value="debug">Debug Logs</TabsTrigger>
+        </TabsList>
         
         <TabsContent value="messages">
           <Card>
@@ -259,9 +349,9 @@ const WebhookMonitor = () => {
                               <div className="flex justify-between items-start">
                                 <div className="space-y-1">
                                   <div className="flex items-center space-x-2">
-                                    <Badge className={getEventColor(message.event)}>
+                                    <EventBadge event={message.event}>
                                       {getEventIcon(message.event)} {message.event}
-                                    </Badge>
+                                    </EventBadge>
                                     <span className="text-sm font-medium">
                                       Instance: {message.instance}
                                     </span>
@@ -310,6 +400,104 @@ const WebhookMonitor = () => {
                 Showing {filteredMessages.length} of {messages.length} messages
               </div>
             </CardFooter>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="analytics">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Customer Analytics</CardTitle>
+                  <CardDescription>
+                    تحليلات متقدمة للعملاء ومشاعرهم ومراحل رحلة الشراء
+                  </CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => fetchAIInteractions(true)} 
+                  disabled={isLoadingAnalytics}
+                >
+                  {isLoadingAnalytics ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  <span className="ml-2">تحديث</span>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingAnalytics ? (
+                <div className="flex justify-center items-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                  <span className="ml-2">جاري تحميل التحليلات...</span>
+                </div>
+              ) : aiInteractions.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg mb-2">لا توجد تحليلات متاحة</p>
+                  <p className="text-sm">سيتم عرض التحليلات هنا عند وجود محادثات مع البيانات المتقدمة</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* إحصائيات سريعة */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <Card className="bg-blue-50">
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {aiInteractions.length}
+                        </div>
+                        <div className="text-sm text-blue-600">إجمالي التحليلات</div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card className="bg-green-50">
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-green-600">
+                          {aiInteractions.filter(i => i.metadata?.emotion_analysis?.primary_emotion === 'excited' || i.metadata?.emotion_analysis?.primary_emotion === 'happy').length}
+                        </div>
+                        <div className="text-sm text-green-600">مشاعر إيجابية</div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card className="bg-yellow-50">
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-yellow-600">
+                          {aiInteractions.filter(i => i.metadata?.customer_journey?.current_stage === 'decision' || i.metadata?.customer_journey?.current_stage === 'purchase').length}
+                        </div>
+                        <div className="text-sm text-yellow-600">قريبون من الشراء</div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card className="bg-purple-50">
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-purple-600">
+                          {Math.round(aiInteractions.reduce((sum, i) => sum + (i.metadata?.customer_journey?.conversion_probability || 0), 0) / aiInteractions.length * 100) || 0}%
+                        </div>
+                        <div className="text-sm text-purple-600">متوسط احتمالية التحويل</div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* قائمة التحليلات التفصيلية */}
+                  <ScrollArea className="h-[600px]">
+                    <div className="space-y-4">
+                      {aiInteractions.map((interaction) => (
+                        <CustomerInsightCard
+                          key={interaction.id}
+                          userPhone={interaction.user_phone}
+                          lastMessage={interaction.user_message}
+                          emotionAnalysis={interaction.metadata?.emotion_analysis}
+                          customerJourney={interaction.metadata?.customer_journey}
+                          productInterest={interaction.metadata?.product_interest}
+                          businessContext={interaction.metadata?.business_context}
+                          timestamp={interaction.created_at}
+                          className="border shadow-sm"
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+            </CardContent>
           </Card>
         </TabsContent>
         

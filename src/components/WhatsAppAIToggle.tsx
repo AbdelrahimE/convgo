@@ -118,7 +118,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
         <div className="flex justify-between items-center">
           <div className="flex items-center">
             <Zap className="h-5 w-5 mr-2 text-amber-500" />
-            <CardTitle className="text-xl font-bold">AI Auto-Response Status</CardTitle>
+            <CardTitle className="text-xl font-semibold">AI Auto-Response Status</CardTitle>
           </div>
           <Switch
             id={`ai-toggle-${instanceId}`}

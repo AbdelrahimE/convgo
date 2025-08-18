@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, Sparkles, Download, Clock, MoreHorizontal, FileSearch, File, Loader2 } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -451,13 +451,13 @@ export function FileList() {
         </Badge>;
     }
     if (status === 'complete') {
-      return <Badge variant="default" className="font-normal bg-blue-600 hover:bg-blue-700 flex items-center gap-1 text-xs">
+      return <Badge variant="outline" className="font-normal bg-blue-600 hover:bg-blue-700 text-white border-blue-600 flex items-center gap-1 text-xs">
           <CheckCircle2 className="h-3 w-3" />
           <span>Ready</span>
         </Badge>;
     }
     if (status === 'partial') {
-      return <Badge variant="secondary" className="bg-amber-100 text-amber-800 flex items-center gap-1 text-xs">
+      return <Badge variant="outline" className="bg-amber-100 text-amber-800 flex items-center gap-1 text-xs border-amber-200">
           <AlertCircle className="h-3 w-3" />
           <span>Partial</span>
         </Badge>;
@@ -483,8 +483,7 @@ export function FileList() {
     }
     const primaryLanguage = file.primary_language || file.detected_languages[0];
     const languageConfidence = file.language_confidence ? (file.language_confidence[primaryLanguage] || 0) * 100 : 0;
-    return <TooltipProvider>
-        <Tooltip>
+    return <Tooltip>
           <TooltipTrigger asChild>
             <div className="flex items-center gap-1 cursor-help text-xs">
               <Languages className="h-3 w-3 text-slate-400" />
@@ -506,14 +505,13 @@ export function FileList() {
             })}
             </div>
           </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>;
+        </Tooltip>;
   };
 
 
   const renderFilesTable = (filesToRender: FileWithMetadata[], showHeader = true) => (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-      <Table>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <Table>
         {showHeader && (
           <TableHeader>
             <TableRow className="border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
@@ -555,7 +553,6 @@ export function FileList() {
                     {getFileIcon(file.mime_type)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate cursor-help max-w-xs">
@@ -566,7 +563,6 @@ export function FileList() {
                           <p>{file.filename}</p>
                         </TooltipContent>
                       </Tooltip>
-                    </TooltipProvider>
                   </div>
                 </div>
               </TableCell>
@@ -680,8 +676,8 @@ export function FileList() {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
-    </div>
+        </Table>
+      </div>
   );
 
   return (

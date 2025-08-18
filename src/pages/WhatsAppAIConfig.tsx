@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -12,17 +12,16 @@ import { LanguageAwareInput } from '@/components/ui/language-aware-input';
 import { useSimpleSearch } from '@/hooks/use-simple-search';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Loader2, Lightbulb, RotateCcw, AlertTriangle, Headphones, Users, Settings, BarChart3 } from 'lucide-react';
+import { Loader2, Lightbulb, RotateCcw, Users, Settings, BarChart3 } from 'lucide-react';
 import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
-import { useIsMobile } from '@/hooks/use-mobile';
 import logger from '@/utils/logger';
 import { usePromptGenerationStats } from '@/hooks/use-prompt-generation-stats';
-import { format } from 'date-fns';
+// Removed unused import: format from date-fns
 import { PromptResetCountdown } from '@/components/ui/prompt-reset-countdown';
 
 interface WhatsAppInstance {
@@ -31,35 +30,23 @@ interface WhatsAppInstance {
   status: string;
 }
 
-interface AIConfig {
-  id: string;
-  system_prompt: string;
-  temperature: number;
-  is_active: boolean;
-  process_voice_messages: boolean;
-  voice_message_default_response: string;
-  default_voice_language: string;
-  // NEW: Personality system fields
-  use_personality_system?: boolean;
-  intent_recognition_enabled?: boolean;
-  intent_confidence_threshold?: number;
-}
+// Removed unused AIConfig interface - no longer needed
 
 const WhatsAppAIConfig = () => {
   const {
     user
   } = useAuth();
-  const navigate = useNavigate();
+  // Removed unused navigate variable
   const {
     search
   } = useSimpleSearch();
   const {
     generateResponse,
     cleanupTestConversations,
-    isGenerating,
-    responseResult
+    isGenerating
+    // Removed unused responseResult
   } = useAIResponse();
-  const isMobile = useIsMobile();
+  // Removed unused isMobile variable
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [systemPrompt, setSystemPrompt] = useState<string>('');
@@ -78,23 +65,17 @@ const WhatsAppAIConfig = () => {
   const [userDescription, setUserDescription] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [testConversationId, setTestConversationId] = useState<string | null>(null);
-  const [useRealConversation, setUseRealConversation] = useState(true);
+  const [useRealConversation] = useState(true); // Removed setter as it's not used
   const [isCleaningUp, setIsCleaningUp] = useState(false);
-  const [showVoiceFeature, setShowVoiceFeature] = useState(true);
-  const [promptGenerationStats, setPromptGenerationStats] = useState<{
-    limit: number;
-    used: number;
-    remaining: number;
-    resetsOn: string | null;
-  } | null>(null);
+  // Removed unused showVoiceFeature and promptGenerationStats variables
   const {
     stats: promptStats,
     isLoading: isLoadingStats,
     refreshStats
   } = usePromptGenerationStats();
   
-  // NEW: Personality system state
-  const [usePersonalitySystem, setUsePersonalitySystem] = useState(false);
+  // NEW: Personality system state - Always enabled
+  const [usePersonalitySystem] = useState(true); // Personality system is always enabled
   const [intentRecognitionEnabled, setIntentRecognitionEnabled] = useState(true);
   const [intentConfidenceThreshold, setIntentConfidenceThreshold] = useState(0.6);
   const [personalityCount, setPersonalityCount] = useState(0);
@@ -142,7 +123,7 @@ const WhatsAppAIConfig = () => {
       setProcessVoiceMessages(true);
       setVoiceMessageDefaultResponse("I'm sorry, but I cannot process voice messages at the moment. Please send your question as text, and I'll be happy to assist you.");
       setDefaultVoiceLanguage('ar');
-      setUsePersonalitySystem(false);
+      // usePersonalitySystem is always true, no need to set it
       setPersonalityCount(0);
     }
   }, [selectedInstance]);
@@ -209,8 +190,8 @@ const WhatsAppAIConfig = () => {
       setVoiceMessageDefaultResponse(data.voice_message_default_response || "I'm sorry, but I cannot process voice messages at the moment. Please send your question as text, and I'll be happy to assist you.");
       setDefaultVoiceLanguage(data.default_voice_language || 'ar');
       
-      // NEW: Load personality system settings
-      setUsePersonalitySystem(data.use_personality_system || false);
+      // NEW: Load personality system settings - always enabled
+      // usePersonalitySystem is always true, no need to load from data
       setIntentRecognitionEnabled(data.intent_recognition_enabled !== undefined ? data.intent_recognition_enabled : true);
       setIntentConfidenceThreshold(data.intent_confidence_threshold || 0.6);
     } catch (error) {
@@ -270,8 +251,8 @@ const WhatsAppAIConfig = () => {
           process_voice_messages: processVoiceMessages,
           voice_message_default_response: voiceMessageDefaultResponse,
           default_voice_language: defaultVoiceLanguage,
-          // NEW: Personality system fields
-          use_personality_system: usePersonalitySystem,
+          // NEW: Personality system fields - always enabled
+          use_personality_system: true,
           intent_recognition_enabled: intentRecognitionEnabled,
           intent_confidence_threshold: intentConfidenceThreshold,
           updated_at: new Date().toISOString()
@@ -289,8 +270,8 @@ const WhatsAppAIConfig = () => {
           process_voice_messages: processVoiceMessages,
           voice_message_default_response: voiceMessageDefaultResponse,
           default_voice_language: defaultVoiceLanguage,
-          // NEW: Personality system fields
-          use_personality_system: usePersonalitySystem,
+          // NEW: Personality system fields - always enabled
+          use_personality_system: true,
           intent_recognition_enabled: intentRecognitionEnabled,
           intent_confidence_threshold: intentConfidenceThreshold
         });
@@ -498,7 +479,7 @@ const WhatsAppAIConfig = () => {
         x: 0
       }} transition={{
         delay: 0.2
-      }} className="text-2xl font-extrabold text-left md:text-3xl lg:text-4xl">
+      }} className="text-2xl font-semibold text-left md:text-3xl lg:text-4xl">
         AI Configuration
       </motion.h1>
       
@@ -514,7 +495,7 @@ const WhatsAppAIConfig = () => {
         }}>
           <Card>
             <CardHeader>
-              <CardTitle className="font-bold">Choose WhatsApp Number</CardTitle>
+              <CardTitle className="font-semibold">Choose WhatsApp Number</CardTitle>
               <CardDescription>
                 Select the WhatsApp number you want to configure for AI responses
               </CardDescription>
@@ -565,7 +546,7 @@ const WhatsAppAIConfig = () => {
               <TabsContent value="config" className="space-y-6 mt-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="font-bold">AI System Prompt</CardTitle>
+                    <CardTitle className="font-semibold">AI System Prompt</CardTitle>
                     <CardDescription>
                       Set instructions that guide how the AI responds to incoming WhatsApp messages.
                     </CardDescription>
@@ -587,7 +568,7 @@ const WhatsAppAIConfig = () => {
                 {/* NEW: Personality System Configuration */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="font-bold flex items-center gap-2">
+                    <CardTitle className="font-semibold flex items-center gap-2">
                       <Users className="h-5 w-5" />
                       AI Personality System
                     </CardTitle>
@@ -598,22 +579,19 @@ const WhatsAppAIConfig = () => {
                   <CardContent className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label htmlFor="use-personality-system">Enable Personality System</Label>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="use-personality-system">Personality System</Label>
+                          <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100 dark:border-green-800">
+                            Always Enabled
+                          </Badge>
+                        </div>
                         <p className="text-sm text-muted-foreground">
-                          Use multiple AI personalities that respond differently based on customer inquiry types
+                          Multiple AI personalities automatically respond differently based on customer inquiry types
                         </p>
                       </div>
-                      <Switch
-                        id="use-personality-system"
-                        checked={usePersonalitySystem}
-                        onCheckedChange={setUsePersonalitySystem}
-                        className="data-[state=checked]:bg-blue-500 data-[state=checked]:hover:bg-blue-400"
-                      />
                     </div>
                     
-                    {usePersonalitySystem && (
-                      <>
-                        <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                    <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
                           <div className="flex items-center gap-3">
                             <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
                               <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -622,7 +600,7 @@ const WhatsAppAIConfig = () => {
                               <p className="font-medium text-blue-900 dark:text-blue-100">
                                 {personalityCount > 0 ? `${personalityCount} personalities configured` : 'No personalities configured yet'}
                               </p>
-                              <p className="text-sm text-blue-700 dark:text-blue-300">
+                              <p className="text-sm text-blue-700 dark:text-blue-300 font-normal">
                                 {personalityCount > 0 
                                   ? 'Your AI will intelligently switch between personalities based on customer inquiry types'
                                   : 'Create personalities to enable intelligent response switching'
@@ -680,28 +658,12 @@ const WhatsAppAIConfig = () => {
                             Higher values require more certainty before switching personalities
                           </p>
                         </div>
-                      </>
-                    )}
-                    
-                    {!usePersonalitySystem && (
-                      <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-800">
-                        <div className="text-center space-y-3">
-                          <Users className="mx-auto h-8 w-8 text-gray-400" />
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-gray-100">Single Personality Mode</p>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              Your AI uses one personality for all customer interactions. Enable the personality system for more intelligent responses.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
                 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="font-bold">Voice Message Settings</CardTitle>
+                    <CardTitle className="font-semibold">Voice Message Settings</CardTitle>
                     <CardDescription>
                       Set how your AI assistant handles incoming voice messages on WhatsApp
                     </CardDescription>

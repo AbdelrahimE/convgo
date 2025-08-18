@@ -122,7 +122,7 @@ export default function AIUsageMonitoring() {
         x: 0
       }} transition={{
         delay: 0.2
-      }} className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl mb-8">
+      }} className="text-2xl text-left md:text-3xl font-semibold lg:text-4xl mb-8">
           AI Usage Monitoring
         </motion.h1>
         <Alert variant="destructive">
@@ -152,7 +152,7 @@ export default function AIUsageMonitoring() {
       x: 0
     }} transition={{
       delay: 0.2
-    }} className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl mb-8">
+    }} className="text-2xl text-left md:text-3xl font-semibold lg:text-4xl mb-8">
         AI Usage Monitoring
       </motion.h1>
       
@@ -210,7 +210,7 @@ export default function AIUsageMonitoring() {
             <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
               <Card className="shadow-md transition-all">
                 <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 font-bold text-left">
+                  <CardTitle className="flex items-center gap-2 font-semibold text-left">
                     <Gauge className="h-5 w-5 text-primary" />
                     AI Response Usage
                   </CardTitle>
@@ -224,15 +224,15 @@ export default function AIUsageMonitoring() {
                         <circle className={getGaugeColor(percentageUsed)} strokeWidth="10" strokeDasharray={`${percentageUsed * 2.51} 251.2`} strokeLinecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" transform="rotate(-90 50 50)" />
                       </svg>
                       <div className="absolute flex flex-col items-center justify-center text-center">
-                        <span className="text-3xl font-bold">{Math.round(percentageUsed)}%</span>
+                        <span className="text-3xl font-semibold">{Math.round(percentageUsed)}%</span>
                         <span className="text-sm text-muted-foreground">used</span>
                       </div>
                     </div>
                   </div>
                 </CardContent>
                 <CardFooter className="flex flex-col items-center text-center pt-0">
-                  <p className="text-lg font-bold text-center">
-                    <span className="font-bold">{usageData.used.toLocaleString()}</span> of <span className="font-bold">{usageData.limit.toLocaleString()}</span> AI responses used
+                  <p className="text-lg font-semibold text-center">
+                    <span className="font-semibold">{usageData.used.toLocaleString()}</span> of <span className="font-semibold">{usageData.limit.toLocaleString()}</span> AI responses used
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {usageData.allowed ? "Your usage is within limits" : "You've reached your monthly limit"}
@@ -242,7 +242,7 @@ export default function AIUsageMonitoring() {
 
               <Card className="shadow-md transition-all">
                 <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 font-bold text-left">
+                  <CardTitle className="flex items-center gap-2 font-semibold text-left">
                     <Calendar className="h-5 w-5 text-primary" />
                     Next Reset Date
                   </CardTitle>
@@ -279,7 +279,7 @@ export default function AIUsageMonitoring() {
 
               <Card className="shadow-md transition-all">
                 <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 font-bold text-left">
+                  <CardTitle className="flex items-center gap-2 font-semibold text-left">
                     <Activity className="h-5 w-5 text-primary" />
                     Usage Details
                   </CardTitle>

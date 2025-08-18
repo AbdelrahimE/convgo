@@ -308,7 +308,7 @@ const WhatsAppSupportConfig = () => {
         x: 0
       }} transition={{
         delay: 0.2
-      }} className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl">
+      }} className="text-2xl text-left md:text-3xl font-semibold lg:text-4xl">
           Support Configuration
         </motion.h1>
         
@@ -349,7 +349,7 @@ const WhatsAppSupportConfig = () => {
                     <TabsContent value="settings">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="flex items-center font-bold">
+                          <CardTitle className="flex items-center font-semibold">
                             <Phone className="h-5 w-5 mr-2" />
                             Support Contact Settings
                           </CardTitle>
@@ -392,7 +392,7 @@ const WhatsAppSupportConfig = () => {
                     <TabsContent value="keywords">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="flex items-center font-bold">
+                          <CardTitle className="flex items-center font-semibold">
                             <Tags className="h-5 w-5 mr-2" />
                             Support Keywords
                           </CardTitle>
@@ -445,7 +445,7 @@ const WhatsAppSupportConfig = () => {
                     <TabsContent value="escalated">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="flex items-center font-bold">
+                          <CardTitle className="flex items-center font-semibold">
                             <MessageSquare className="h-5 w-5 mr-2" />
                             Escalated Conversations
                           </CardTitle>

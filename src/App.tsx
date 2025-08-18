@@ -2,6 +2,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import Auth from '@/pages/Auth';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import FileManagement from '@/pages/FileManagement';
@@ -139,12 +140,14 @@ function App() {
   return (
     <ErrorBoundary>
       <NetworkErrorBoundary>
-        <AuthProvider>
-          <Router>
-            <AppContent />
-            <Toaster />
-          </Router>
-        </AuthProvider>
+        <TooltipProvider>
+          <AuthProvider>
+            <Router>
+              <AppContent />
+              <Toaster />
+            </Router>
+          </AuthProvider>
+        </TooltipProvider>
       </NetworkErrorBoundary>
     </ErrorBoundary>
   );
