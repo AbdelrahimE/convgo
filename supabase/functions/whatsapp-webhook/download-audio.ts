@@ -1,7 +1,15 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { downloadAudioFile } from "../_shared/audio-download.ts";
-import logDebug from "../_shared/webhook-logger.ts";
+
+// Create a simple logger since we can't use @/utils/logger in edge functions
+const logger = {
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
 
 // Define standard CORS headers
 const corsHeaders = {
@@ -37,7 +45,7 @@ serve(async (req) => {
       );
     }
     
-    await logDebug('DOWNLOAD_AUDIO_PARAMS', 'Download audio parameters received', { 
+    logger.info('Download audio parameters received', { 
       hasUrl: !!url, 
       hasMediaKey: !!mediaKey,
       instance
@@ -59,7 +67,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    await logDebug('DOWNLOAD_AUDIO_ERROR', 'Error processing audio download request', { error });
+    logger.error('Error processing audio download request', { error });
     
     return new Response(
       JSON.stringify({

@@ -1,5 +1,12 @@
 
-import logDebug from "./webhook-logger.ts";
+// Create a simple logger since we can't use @/utils/logger in edge functions
+const logger = {
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
 
 /**
  * Process an audio message by sending it to the voice transcription service
@@ -26,7 +33,7 @@ export async function processAudioMessage(
   try {
     // Check if we have required parameters
     if (!audioDetails || !audioDetails.url || !audioDetails.mediaKey) {
-      await logDebug('AUDIO_PROCESS_MISSING_DATA', 'Missing required audio details', { 
+      logger.error('Missing required audio details', { 
         hasUrl: !!audioDetails?.url, 
         hasMediaKey: !!audioDetails?.mediaKey 
       });
@@ -40,7 +47,7 @@ export async function processAudioMessage(
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     
     if (!supabaseUrl || !supabaseServiceKey) {
-      await logDebug('AUDIO_PROCESS_ERROR', 'Missing required Supabase credentials');
+      logger.error('Missing required Supabase credentials');
       return { 
         success: false,
         error: 'Configuration error: Missing required Supabase credentials' 
@@ -51,7 +58,7 @@ export async function processAudioMessage(
     let preferredLanguage = 'auto'; // Default to auto if we can't fetch the preference
     
     try {
-      await logDebug('AUDIO_FETCH_LANGUAGE_PREF', 'Fetching language preference from database', {
+      logger.info('Fetching language preference from database', {
         instanceName
       });
       
@@ -71,23 +78,23 @@ export async function processAudioMessage(
         // If we found a configuration for this instance, use its language preference
         if (configs && configs.length > 0 && configs[0].default_voice_language) {
           preferredLanguage = configs[0].default_voice_language;
-          await logDebug('AUDIO_LANGUAGE_PREF_FOUND', 'Found user language preference', {
+          logger.info('Found user language preference', {
             language: preferredLanguage,
             instanceName
           });
         } else {
-          await logDebug('AUDIO_LANGUAGE_PREF_NOT_FOUND', 'No language preference found, using auto detection', {
+          logger.info('No language preference found, using auto detection', {
             instanceName
           });
         }
       } else {
-        await logDebug('AUDIO_LANGUAGE_FETCH_ERROR', 'Error fetching language preference', {
+        logger.error('Error fetching language preference', {
           status: fetchLanguageResponse.status,
           error: await fetchLanguageResponse.text()
         });
       }
     } catch (error) {
-      await logDebug('AUDIO_LANGUAGE_FETCH_EXCEPTION', 'Exception when fetching language preference', {
+      logger.error('Exception when fetching language preference', {
         error: error.message,
         instanceName
       });
@@ -97,7 +104,7 @@ export async function processAudioMessage(
     // MODIFIED APPROACH: Skip database lookups and directly call the voice transcription service
     // that contains the proper decryption logic
     
-    await logDebug('AUDIO_TRANSCRIPTION_DIRECT', 'Directly calling transcription service', {
+    logger.info('Directly calling transcription service', {
       audioUrl: audioDetails.url.substring(0, 50) + '...',
       hasMediaKey: !!audioDetails.mediaKey,
       mimeType: audioDetails.mimeType || 'audio/ogg; codecs=opus',
@@ -123,7 +130,7 @@ export async function processAudioMessage(
     
     if (!transcriptionResponse.ok) {
       const errorText = await transcriptionResponse.text();
-      await logDebug('AUDIO_TRANSCRIPTION_ERROR', 'Error response from transcription service', {
+      logger.error('Error response from transcription service', {
         status: transcriptionResponse.status,
         error: errorText.substring(0, 500)
       });
@@ -137,7 +144,7 @@ export async function processAudioMessage(
     const result = await transcriptionResponse.json();
     
     if (result.success && result.transcription) {
-      await logDebug('AUDIO_TRANSCRIPTION_SUCCESS', 'Successfully transcribed audio', {
+      logger.info('Successfully transcribed audio', {
         transcription: result.transcription,
         language: result.language || 'unknown',
         duration: result.duration
@@ -149,7 +156,7 @@ export async function processAudioMessage(
         language: result.language
       };
     } else {
-      await logDebug('AUDIO_TRANSCRIPTION_FAILED', 'Transcription service returned failure', {
+      logger.error('Transcription service returned failure', {
         error: result.error
       });
       
@@ -161,7 +168,7 @@ export async function processAudioMessage(
       };
     }
   } catch (error) {
-    await logDebug('AUDIO_PROCESS_EXCEPTION', 'Exception during audio processing', {
+    logger.error('Exception during audio processing', {
       error: error.message,
       stack: error.stack
     });

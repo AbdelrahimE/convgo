@@ -15,7 +15,6 @@ import { Loader2, Plus, Check, X, RefreshCw, LogOut, Trash2, MessageSquare, Arro
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import logger from '@/utils/logger';
-import { logWebhook } from '@/utils/webhook-logger';
 import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
 import { LanguageAwareTextarea } from '@/components/ui/language-aware-textarea';
 interface WhatsAppInstance {
@@ -442,7 +441,7 @@ const WhatsAppLink = () => {
   }, [user, authLoading]);
   useEffect(() => {
     if (!user) return;
-    logWebhook('Setting up realtime subscription for WhatsApp instances', {
+    logger.info('Setting up realtime subscription for WhatsApp instances', {
       userId: user.id
     });
     const channel = supabase.channel('whatsapp-instances-changes').on('postgres_changes', {

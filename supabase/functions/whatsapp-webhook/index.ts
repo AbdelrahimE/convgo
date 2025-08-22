@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import logDebug from "../_shared/webhook-logger.ts";
 import { calculateSimilarity } from "../_shared/text-similarity.ts";
 import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processing.ts";
 import { downloadAudioFile } from "../_shared/audio-download.ts";
@@ -70,7 +69,7 @@ async function findOrCreateConversation(instanceId: string, userPhone: string) {
           .eq('id', existingConversation.id);
           
         // Log the expiration
-        await logDebug('CONVERSATION_EXPIRED', `Conversation ${existingConversation.id} expired after ${hoursDifference.toFixed(2)} hours of inactivity`);
+        logger.info(`Conversation ${existingConversation.id} expired after ${hoursDifference.toFixed(2)} hours of inactivity`);
         
         // Instead of creating a new conversation right away, check if there's another conversation
         // for this instance and phone in any status
@@ -105,7 +104,7 @@ async function findOrCreateConversation(instanceId: string, userPhone: string) {
             
           if (updateError) throw updateError;
           
-          await logDebug('CONVERSATION_REACTIVATED', `Reactivated conversation ${anyConversation.id} for instance ${instanceId} and phone ${userPhone}`);
+          logger.info(`Reactivated conversation ${anyConversation.id} for instance ${instanceId} and phone ${userPhone}`);
           
           return updatedConversation.id;
         }
@@ -147,7 +146,7 @@ async function findOrCreateConversation(instanceId: string, userPhone: string) {
         
       if (updateError) throw updateError;
       
-      await logDebug('CONVERSATION_UPDATED', `Updated existing conversation ${inactiveConversation.id} to active status`);
+      logger.info(`Updated existing conversation ${inactiveConversation.id} to active status`);
       
       return updatedConversation.id;
     }
@@ -174,12 +173,12 @@ async function findOrCreateConversation(instanceId: string, userPhone: string) {
     if (createError) throw createError;
     
     // Log the creation of a new conversation
-    await logDebug('CONVERSATION_CREATED', `New conversation created for instance ${instanceId} and phone ${userPhone}`);
+    logger.info(`New conversation created for instance ${instanceId} and phone ${userPhone}`);
     
     return newConversation.id;
   } catch (error) {
     logger.error('Error in findOrCreateConversation:', error);
-    await logDebug('CONVERSATION_ERROR', `Error in findOrCreateConversation`, { error });
+    logger.error('Error in findOrCreateConversation:', error);
     throw error;
   }
 }
@@ -214,7 +213,7 @@ async function getRecentConversationHistory(conversationId: string, maxTokens = 
     if (error) throw error;
     
     // Log the conversation history retrieval
-    await logDebug('CONVERSATION_HISTORY', `Retrieved ${data.length} messages from conversation ${conversationId}`, {
+    logger.info(`Retrieved ${data.length} messages from conversation ${conversationId}`, {
       messageCount: data.length,
       maxTokensAllowed: maxTokens,
       estimatedTokensUsed: data.reduce((sum, msg) => sum + Math.ceil(msg.content.length * 0.25), 0)
@@ -233,7 +232,7 @@ const DEFAULT_EVOLUTION_API_URL = 'https://api.botifiy.com';
 // Helper function to save webhook message
 async function saveWebhookMessage(instance: string, event: string, data: any) {
   try {
-    await logDebug('WEBHOOK_SAVE', `Saving webhook message for instance ${instance}, event ${event}`);
+    logger.info(`Saving webhook message for instance ${instance}, event ${event}`);
     
     const { error } = await supabaseAdmin.from('webhook_messages').insert({
       instance,
@@ -241,24 +240,22 @@ async function saveWebhookMessage(instance: string, event: string, data: any) {
       data
     });
     
-    if (error) {
-      await logDebug('WEBHOOK_SAVE_ERROR', 'Error saving webhook message', { error, instance, event });
-      logger.error('Error saving webhook message:', error);
-      return false;
-    }
+          if (error) {
+        logger.error('Error saving webhook message:', { error, instance, event });
+        return false;
+      }
     
     return true;
-  } catch (error) {
-    await logDebug('WEBHOOK_SAVE_EXCEPTION', 'Exception when saving webhook message', { error, instance, event });
-    logger.error('Exception when saving webhook message:', error);
-    return false;
-  }
+      } catch (error) {
+      logger.error('Exception when saving webhook message:', { error, instance, event });
+      return false;
+    }
 }
 
 // Helper function to process message for AI
 async function processMessageForAI(instance: string, messageData: any) {
   try {
-    await logDebug('AI_PROCESS_START', 'Starting AI message processing', { instance });
+    logger.info('Starting AI message processing', { instance });
     
     // Extract key information from the message
     const instanceName = instance;
@@ -271,7 +268,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     const remoteJid = messageData.key?.remoteJid || '';
     const isFromMe = messageData.key?.fromMe || false;
     
-    await logDebug('AI_MESSAGE_DETAILS', 'Extracted message details', { 
+    logger.info('Extracted message details', { 
       instanceName, 
       fromNumber, 
       messageText, 
@@ -282,7 +279,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     // NEW: Check for and process image content
     let imageUrl = null;
     if (messageData.message?.imageMessage) {
-      await logDebug('IMAGE_MESSAGE_DETECTED', 'Detected image message', {
+      logger.info('Detected image message', {
         hasCaption: !!messageData.message.imageMessage.caption,
         mimeType: messageData.message.imageMessage.mimetype || 'Unknown'
       });
@@ -299,7 +296,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       // Process the image to get a viewable URL
       if (rawImageUrl && mediaKey) {
         try {
-          await logDebug('IMAGE_PROCESSING', 'Processing image for AI analysis', {
+          logger.info('Processing image for AI analysis', {
             urlFragment: rawImageUrl.substring(0, 30) + '...',
             hasMediaKey: !!mediaKey
           });
@@ -328,35 +325,35 @@ async function processMessageForAI(instance: string, messageData: any) {
               // This ensures image-only messages will be processed
               if (!messageText && imageUrl) {
                 messageText = "Please analyze this image.";
-                await logDebug('IMAGE_ONLY_MESSAGE', 'Added default text for image-only message', {
+                logger.info('Added default text for image-only message', {
                   defaultText: messageText
                 });
               }
               
-              await logDebug('IMAGE_PROCESSED', 'Successfully processed image for AI analysis', {
+              logger.info('Successfully processed image for AI analysis', {
                 originalUrlFragment: rawImageUrl.substring(0, 30) + '...',
                 processedUrlFragment: result.mediaUrl.substring(0, 30) + '...',
                 mediaType: result.mediaType
               });
             } else {
-              await logDebug('IMAGE_PROCESS_FAILED', 'Image processing returned failure', result);
+              logger.warn('Image processing returned failure', result);
             }
           } else {
             const errorText = await imageProcessResponse.text();
-            await logDebug('IMAGE_PROCESS_ERROR', 'Error response from image processing endpoint', {
+            logger.error('Error response from image processing endpoint', {
               status: imageProcessResponse.status,
               error: errorText
             });
           }
         } catch (error) {
-          await logDebug('IMAGE_PROCESS_EXCEPTION', 'Exception during image processing', {
+          logger.error('Exception during image processing', {
             error: error.message,
             stack: error.stack
           });
           // Continue with just the text if image processing fails
         }
       } else {
-        await logDebug('IMAGE_MISSING_DATA', 'Image message missing required data', {
+        logger.warn('Image message missing required data', {
           hasUrl: !!rawImageUrl,
           hasMediaKey: !!mediaKey
         });
@@ -367,7 +364,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     // 1. Message is from a group chat (contains @g.us)
     // 2. Message is from the bot itself (fromMe is true)
     if (remoteJid.includes('@g.us') || isFromMe) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: Group message or sent by bot', {
+      logger.info('Skipping AI processing: Group message or sent by bot', {
         isGroup: remoteJid.includes('@g.us'),
         isFromMe
       });
@@ -378,7 +375,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey;
     
     if (!evolutionApiKey) {
-      await logDebug('AI_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable not set and no apikey in payload');
+      logger.warn('EVOLUTION_API_KEY environment variable not set and no apikey in payload');
     }
 
     // Check if this is an audio message
@@ -389,7 +386,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     let directResponse = null;
     
     if (isAudioMessage) {
-      await logDebug('AUDIO_MESSAGE_DETECTED', 'Audio message detected', { 
+      logger.info('Audio message detected', { 
         messageType: messageData.messageType,
         hasAudioMessage: !!messageData.message?.audioMessage,
         hasPttMessage: !!messageData.message?.pttMessage
@@ -397,14 +394,14 @@ async function processMessageForAI(instance: string, messageData: any) {
       
       // Extract audio details
       const audioDetails = extractAudioDetails(messageData);
-      await logDebug('AUDIO_DETAILS', 'Extracted audio details', { audioDetails });
+      logger.info('Extracted audio details', { audioDetails });
       
       // Process the audio for transcription
       const transcriptionResult = await processAudioMessage(audioDetails, instanceName, fromNumber, evolutionApiKey);
       
       // Check if we should bypass AI and send direct response
       if (transcriptionResult.bypassAiProcessing && transcriptionResult.directResponse) {
-        await logDebug('AUDIO_DIRECT_RESPONSE', 'Using direct response for disabled voice processing', {
+        logger.info('Using direct response for disabled voice processing', {
           directResponse: transcriptionResult.directResponse
         });
         
@@ -413,7 +410,7 @@ async function processMessageForAI(instance: string, messageData: any) {
 
         // Try to determine the base URL for this instance (reusing existing code logic)
         try {
-          await logDebug('AI_EVOLUTION_URL_CHECK', 'Determining EVOLUTION API URL for direct response', { instanceName });
+          logger.info('Determining EVOLUTION API URL for direct response', { instanceName });
           
           // IMPORTANT: First check if the server_url is available in the current message payload
           if (messageData.server_url) {
@@ -427,7 +424,7 @@ async function processMessageForAI(instance: string, messageData: any) {
               .maybeSingle();
 
             if (instanceError) {
-              await logDebug('DIRECT_RESPONSE_ERROR', 'Failed to get instance data', { error: instanceError });
+              logger.error('Failed to get instance data', { error: instanceError });
               return false;
             }
 
@@ -450,7 +447,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         
           // Send direct response through WhatsApp without AI processing
           if (instanceBaseUrl && fromNumber) {
-            await logDebug('DIRECT_RESPONSE_SENDING', 'Sending direct response to WhatsApp', {
+            logger.info('Sending direct response to WhatsApp', {
               instanceName,
               toNumber: fromNumber,
               baseUrl: instanceBaseUrl,
@@ -474,7 +471,7 @@ async function processMessageForAI(instance: string, messageData: any) {
 
             if (!sendResponse.ok) {
               const errorText = await sendResponse.text();
-              await logDebug('DIRECT_RESPONSE_ERROR', 'Error sending direct response', {
+              logger.error('Error sending direct response', {
                 status: sendResponse.status,
                 error: errorText
               });
@@ -482,11 +479,11 @@ async function processMessageForAI(instance: string, messageData: any) {
             }
 
             const sendResult = await sendResponse.json();
-            await logDebug('DIRECT_RESPONSE_SENT', 'Direct response sent successfully', { sendResult });
+            logger.info('Direct response sent successfully', { sendResult });
             return true;
           }
         } catch (error) {
-          await logDebug('DIRECT_RESPONSE_EXCEPTION', 'Exception sending direct response', { error });
+          logger.error('Exception sending direct response', { error });
           return false;
         }
         
@@ -498,14 +495,14 @@ async function processMessageForAI(instance: string, messageData: any) {
         if (transcriptionResult.transcription) {
           messageText = transcriptionResult.transcription;
           
-          await logDebug('AUDIO_FALLBACK_TRANSCRIPTION', 'Using fallback transcription for failed audio processing', {
+          logger.info('Using fallback transcription for failed audio processing', {
             transcription: messageText
           });
         } else {
           // Complete failure - set generic placeholder
           messageText = "This is a voice message that could not be processed.";
           
-          await logDebug('AUDIO_PROCESSING_FAILED', 'Failed to process audio with no fallback', {
+          logger.error('Failed to process audio with no fallback', {
             error: transcriptionResult.error
           });
         }
@@ -513,7 +510,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         // Successful transcription
         messageText = transcriptionResult.transcription;
         
-        await logDebug('AUDIO_TRANSCRIPTION_USED', 'Successfully transcribed audio message', {
+        logger.info('Successfully transcribed audio message', {
           transcription: messageText?.substring(0, 100) + '...'
         });
       }
@@ -521,7 +518,7 @@ async function processMessageForAI(instance: string, messageData: any) {
 
     // If no message content (text or processed audio), skip
     if (!messageText && !imageUrl) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: No text or image content', { messageData });
+      logger.info('Skipping AI processing: No text or image content', { messageData });
       return false;
     }
 
@@ -533,22 +530,21 @@ async function processMessageForAI(instance: string, messageData: any) {
       .maybeSingle();
 
     if (instanceError || !instanceData) {
-      await logDebug('AI_CONFIG_ERROR', 'Instance not found in database', { 
+      logger.error('Instance not found in database', { 
         instanceName, 
         error: instanceError 
       });
-      logger.error('Error getting instance data:', instanceError);
       return false;
     }
 
     // Find or create conversation
     const conversationId = await findOrCreateConversation(instanceData.id, fromNumber);
-    await logDebug('CONVERSATION_MANAGED', 'Conversation found or created', { conversationId });
+    logger.info('Conversation found or created', { conversationId });
 
     // NEW: Check for duplicate messages before processing
     const isDuplicate = await checkForDuplicateMessage(conversationId, messageText, supabaseAdmin);
     if (isDuplicate) {
-      await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing: Duplicate or similar message detected', {
+      logger.info('Skipping AI processing: Duplicate or similar message detected', {
         conversationId,
         fromNumber,
         messagePreview: messageText?.substring(0, 50) + '...'
@@ -561,16 +557,16 @@ async function processMessageForAI(instance: string, messageData: any) {
     
     // Get recent conversation history with improved token management
     const conversationHistory = await getRecentConversationHistory(conversationId, 800);
-    await logDebug('CONVERSATION_HISTORY', 'Retrieved conversation history', { 
+    logger.info('Retrieved conversation history', { 
       messageCount: conversationHistory.length,
       estimatedTokens: conversationHistory.reduce((sum, msg) => sum + Math.ceil(msg.content.length * 0.25), 0)
     });
 
     // Check if this instance has AI enabled
-    await logDebug('AI_CONFIG_CHECK', 'Checking if AI is enabled for instance', { instanceName });
+    logger.info('Checking if AI is enabled for instance', { instanceName });
     
     const instanceId = instanceData.id;
-    await logDebug('AI_INSTANCE_FOUND', 'Found instance in database', { instanceId, status: instanceData.status });
+    logger.info('Found instance in database', { instanceId, status: instanceData.status });
 
     // Check if AI is enabled for this instance
     const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
@@ -581,17 +577,16 @@ async function processMessageForAI(instance: string, messageData: any) {
       .maybeSingle();
 
     if (aiConfigError || !aiConfig) {
-      await logDebug('AI_DISABLED', 'AI is not enabled for this instance', { 
+      logger.warn('AI is not enabled for this instance', { 
         instanceId, 
         error: aiConfigError 
       });
-      logger.error('AI not enabled for this instance:', aiConfigError || 'No active config found');
       return false;
     }
 
     // REMOVED: maxAIAttempts logic (escalation system removed)
 
-    await logDebug('AI_ENABLED', 'AI is enabled for this instance', { 
+    logger.info('AI is enabled for this instance', { 
       aiConfigId: aiConfig.id,
       temperature: aiConfig.temperature,
       systemPromptPreview: aiConfig.system_prompt.substring(0, 50) + '...'
@@ -604,24 +599,23 @@ async function processMessageForAI(instance: string, messageData: any) {
       .eq('whatsapp_instance_id', instanceId);
 
     if (fileMappingsError) {
-      await logDebug('AI_FILE_MAPPING_ERROR', 'Error getting file mappings', { 
+      logger.error('Error getting file mappings', { 
         instanceId, 
         error: fileMappingsError 
       });
-      logger.error('Error getting file mappings:', fileMappingsError);
       return false;
     }
 
     // Extract file IDs
     const fileIds = fileMappings?.map(mapping => mapping.file_id) || [];
-    await logDebug('AI_FILE_MAPPINGS', 'Retrieved file mappings for instance', { 
+    logger.info('Retrieved file mappings for instance', { 
       instanceId, 
       fileCount: fileIds.length,
       fileIds
     });
 
     if (fileIds.length === 0) {
-      await logDebug('AI_NO_FILES', 'No files mapped to this instance, using empty context', { instanceId });
+      logger.info('No files mapped to this instance, using empty context', { instanceId });
     }
 
     // Initialize instance base URL for sending responses
@@ -629,12 +623,12 @@ async function processMessageForAI(instance: string, messageData: any) {
 
     // Try to determine the base URL for this instance
     try {
-      await logDebug('AI_EVOLUTION_URL_CHECK', 'Attempting to determine EVOLUTION API URL', { instanceId });
+      logger.info('Attempting to determine EVOLUTION API URL', { instanceId });
       
       // IMPORTANT: First check if the server_url is available in the current message payload
       if (messageData.server_url) {
         instanceBaseUrl = messageData.server_url;
-        await logDebug('AI_EVOLUTION_URL_FROM_PAYLOAD', 'Using server_url from payload', { 
+        logger.info('Using server_url from payload', { 
           instanceBaseUrl
         });
       } else {
@@ -645,27 +639,27 @@ async function processMessageForAI(instance: string, messageData: any) {
           .eq('whatsapp_instance_id', instanceId)
           .maybeSingle();
           
-        if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
-          // Extract base URL from webhook URL
-          const url = new URL(webhookConfig.webhook_url);
-          instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-          await logDebug('AI_EVOLUTION_URL_FOUND', 'Extracted base URL from webhook config', { 
-            instanceBaseUrl,
-            webhookUrl: webhookConfig.webhook_url
-          });
-        } else {
-          // If webhook URL doesn't exist, use the default Evolution API URL
-          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-          await logDebug('AI_EVOLUTION_URL_DEFAULT', 'Using default EVOLUTION API URL', { 
-            instanceBaseUrl,
-            webhookError
-          });
-        }
+                  if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
+            // Extract base URL from webhook URL
+            const url = new URL(webhookConfig.webhook_url);
+            instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+            logger.info('Extracted base URL from webhook config', { 
+              instanceBaseUrl,
+              webhookUrl: webhookConfig.webhook_url
+            });
+          } else {
+            // If webhook URL doesn't exist, use the default Evolution API URL
+            instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+            logger.info('Using default EVOLUTION API URL', { 
+              instanceBaseUrl,
+              webhookError
+            });
+          }
       }
     } catch (error) {
       // In case of any error, use the default Evolution API URL
       instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-      await logDebug('AI_EVOLUTION_URL_ERROR', 'Error determining EVOLUTION API URL, using default', { 
+      logger.warn('Error determining EVOLUTION API URL, using default', { 
         instanceBaseUrl,
         error
       });
@@ -679,7 +673,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     const personalitySystemEnabled = aiConfig.use_personality_system && aiConfig.intent_recognition_enabled;
     
     if (personalitySystemEnabled && messageText) {
-      await logDebug('SMART_INTENT_CLASSIFICATION_START', 'Starting smart intent classification', { 
+      logger.info('Starting smart intent classification', { 
         userQuery: messageText,
         instanceId: instanceId,
         systemVersion: 'smart-v1.0'
@@ -710,21 +704,23 @@ async function processMessageForAI(instance: string, messageData: any) {
           // FIX: دعم الحقلين لضمان التوافق
           selectedPersonality = (intentClassification as any)?.selectedPersonality || (intentClassification as any)?.selected_personality;
           
-          await logDebug('SMART_INTENT_CLASSIFICATION_SUCCESS', 'Smart intent classification completed', {
+          logger.info('Smart intent classification completed', {
             intent: (intentClassification as any)?.intent,
             confidence: (intentClassification as any)?.confidence,
             businessType: (intentClassification as any)?.businessContext?.industry,
             communicationStyle: (intentClassification as any)?.businessContext?.communicationStyle,
             hasPersonality: !!selectedPersonality,
+            selectedPersonalityName: (selectedPersonality as any)?.name || 'none',
+            selectedPersonalityId: (selectedPersonality as any)?.id || 'none',
             processingTime: (intentClassification as any)?.processingTimeMs,
             reasoning: (intentClassification as any)?.reasoning
           });
-        } else {
-          const errorText = await intentResponse.text();
-          await logDebug('SMART_INTENT_CLASSIFICATION_ERROR', 'Smart intent classification failed, falling back to enhanced classifier', {
-            status: intentResponse.status,
-            error: errorText
-          });
+                  } else {
+            const errorText = await intentResponse.text();
+            logger.warn('Smart intent classification failed, falling back to enhanced classifier', {
+              status: intentResponse.status,
+              error: errorText
+            });
           
           // Fallback to enhanced classifier
           try {
@@ -747,16 +743,19 @@ async function processMessageForAI(instance: string, messageData: any) {
             if (fallbackResponse.ok) {
               intentClassification = await fallbackResponse.json();
               selectedPersonality = (intentClassification as any)?.selected_personality;
-              await logDebug('FALLBACK_INTENT_CLASSIFICATION_SUCCESS', 'Fallback to enhanced classifier successful');
+              logger.info('Fallback to enhanced classifier successful', {
+                selectedPersonalityName: (selectedPersonality as any)?.name || 'none',
+                selectedPersonalityId: (selectedPersonality as any)?.id || 'none'
+              });
             }
           } catch (fallbackError) {
-            await logDebug('FALLBACK_INTENT_CLASSIFICATION_ERROR', 'All intent classification methods failed', {
+            logger.error('All intent classification methods failed', {
               error: fallbackError.message
             });
           }
         }
       } catch (error) {
-        await logDebug('SMART_INTENT_CLASSIFICATION_EXCEPTION', 'Exception during smart intent classification', {
+        logger.error('Exception during smart intent classification', {
           error: error.message
         });
       }
@@ -769,12 +768,13 @@ async function processMessageForAI(instance: string, messageData: any) {
                        messageText.includes('صباح الخير') ||
                        messageText.includes('مساء الخير');
     
-    await logDebug('AI_CONTEXT_SEARCH', 'Starting semantic search for context', { 
+    logger.info('Starting semantic search for context', { 
       userQuery: messageText,
       hasGreeting,
       fileIds,
       detectedIntent: (intentClassification as any)?.intent || 'none',
-      usingPersonality: !!selectedPersonality
+      usingPersonality: !!selectedPersonality,
+      selectedPersonalityName: (selectedPersonality as any)?.name || 'none'
     });
 
     // Perform simple semantic search - restored to original approach
@@ -794,14 +794,13 @@ async function processMessageForAI(instance: string, messageData: any) {
 
     if (!searchResponse.ok) {
       const errorText = await searchResponse.text();
-      await logDebug('AI_SEARCH_ERROR', 'Semantic search failed', { 
+      logger.error('Semantic search failed', { 
         status: searchResponse.status,
         error: errorText
       });
-      logger.error('Semantic search failed:', errorText);
       
       // Continue with empty context instead of failing
-      await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
+      logger.info('Continuing with empty context due to search failure');
       
       // REMOVED: AI escalation logic (escalation system removed)
       // Continue with AI processing in fallback case
@@ -826,7 +825,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     }
 
     const searchResults = await searchResponse.json();
-    await logDebug('AI_SEARCH_RESULTS', 'Semantic search completed', { 
+    logger.info('Semantic search completed', { 
       resultCount: searchResults.results?.length || 0,
       similarity: searchResults.results?.[0]?.similarity || 0
     });
@@ -866,7 +865,7 @@ async function processMessageForAI(instance: string, messageData: any) {
           `RELEVANT INFORMATION:\n${ragContext}`;
       }
       
-      await logDebug('AI_CONTEXT_ASSEMBLED', 'Context assembled with search results', { 
+      logger.info('Context assembled with search results', { 
         conversationChars: conversationContext.length,
         ragChars: ragContext.length,
         totalChars: context.length,
@@ -877,7 +876,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     } else {
       // Only conversation history is available
       context = conversationContext;
-      await logDebug('AI_CONTEXT_ASSEMBLED', 'Context assembled with only conversation history', { 
+      logger.info('Context assembled with only conversation history', { 
         conversationChars: conversationContext.length,
         estimatedTokens: Math.ceil(conversationContext.length * 0.25)
       });
@@ -888,12 +887,12 @@ async function processMessageForAI(instance: string, messageData: any) {
       ...aiConfig,
       // Override with personality-specific settings if available
       ...((selectedPersonality as any) && {
-        system_prompt: (selectedPersonality as any).system_prompt,
-        temperature: (selectedPersonality as any).temperature,
-        selectedPersonalityId: (selectedPersonality as any).id,
-        selectedPersonalityName: (selectedPersonality as any).name,
-        detectedIntent: (intentClassification as any)?.intent,
-        intentConfidence: (intentClassification as any)?.confidence
+        system_prompt: (selectedPersonality as any)?.system_prompt || aiConfig.system_prompt,
+        temperature: (selectedPersonality as any)?.temperature || aiConfig.temperature,
+        selectedPersonalityId: (selectedPersonality as any)?.id || null,
+        selectedPersonalityName: (selectedPersonality as any)?.name || 'none',
+        detectedIntent: (intentClassification as any)?.intent || null,
+        intentConfidence: (intentClassification as any)?.confidence || null
       }),
       // Add business context for smarter responses
       ...((intentClassification as any)?.businessContext && {
@@ -913,6 +912,15 @@ async function processMessageForAI(instance: string, messageData: any) {
         productInterest: (intentClassification as any).productInterest
       })
     };
+
+    // إضافة logging للتأكد من البيانات
+    logger.info('Smart AI Config created', {
+      hasPersonality: !!selectedPersonality,
+      selectedPersonalityName: (selectedPersonality as any)?.name || 'none',
+      selectedPersonalityId: (selectedPersonality as any)?.id || 'none',
+      systemPrompt: smartAiConfig.system_prompt ? smartAiConfig.system_prompt.substring(0, 100) + '...' : 'undefined',
+      originalSystemPrompt: aiConfig.system_prompt ? aiConfig.system_prompt.substring(0, 100) + '...' : 'undefined'
+    });
 
     // REMOVED: AI escalation logic (escalation system removed)
     // Continue with AI processing
@@ -936,8 +944,7 @@ async function processMessageForAI(instance: string, messageData: any) {
 
     return aiResponseResult;
   } catch (error) {
-    await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
-    logger.error('Error in processMessageForAI:', error);
+    logger.error('Unhandled exception in AI processing', { error });
     return false;
   }
 }
@@ -951,7 +958,7 @@ serve(async (req) => {
   }
 
   // Log the incoming request
-  await logDebug('WEBHOOK_REQUEST', 'WEBHOOK REQUEST RECEIVED', {
+  logger.info('WEBHOOK REQUEST RECEIVED', {
     method: req.method,
     url: req.url,
     headers: Object.fromEntries(req.headers.entries())
@@ -962,7 +969,7 @@ serve(async (req) => {
     const pathParts = url.pathname.split('/').filter(Boolean);
     
     // Log full path analysis for debugging
-    await logDebug('PATH_ANALYSIS', 'Full request path analysis', { 
+    logger.info('Full request path analysis', { 
       fullPath: url.pathname,
       pathParts 
     });
@@ -971,17 +978,17 @@ serve(async (req) => {
     let data;
     try {
       data = await req.json();
-      await logDebug('WEBHOOK_PAYLOAD', 'Webhook payload received', { data });
+      logger.info('Webhook payload received', { data });
       
       // Check if message contains audio
       if (data && hasAudioContent(data)) {
-        await logDebug('AUDIO_CONTENT_DETECTED', 'Audio content detected in webhook payload', {
+        logger.info('Audio content detected in webhook payload', {
           messageType: data.messageType,
           hasAudioMessage: !!data.message?.audioMessage
         });
       }
     } catch (error) {
-      await logDebug('WEBHOOK_PAYLOAD_ERROR', 'Failed to parse webhook payload', { error });
+      logger.error('Failed to parse webhook payload', { error });
       return new Response(
         JSON.stringify({ success: false, error: 'Invalid JSON payload' }),
         { 
@@ -1000,7 +1007,7 @@ serve(async (req) => {
     // Pattern 1: Direct path format
     if (pathParts.length >= 3 && pathParts[0] === 'api') {
       instanceName = pathParts[1];
-      await logDebug('WEBHOOK_PATH_DIRECT', `Direct webhook path detected for instance: ${instanceName}`);
+      logger.info(`Direct webhook path detected for instance: ${instanceName}`);
     }
     // Pattern 2: Supabase prefixed path format
     else if (pathParts.length >= 6 && 
@@ -1009,7 +1016,7 @@ serve(async (req) => {
              pathParts[2] === 'whatsapp-webhook' && 
              pathParts[3] === 'api') {
       instanceName = pathParts[4];
-      await logDebug('WEBHOOK_PATH_SUPABASE', `Supabase prefixed webhook path detected for instance: ${instanceName}`);
+      logger.info(`Supabase prefixed webhook path detected for instance: ${instanceName}`);
     }
     // Pattern 3: Another possible edge function URL format with just the instance in the path
     else if (pathParts.length >= 4 && 
@@ -1018,7 +1025,7 @@ serve(async (req) => {
              pathParts[2] === 'whatsapp-webhook') {
       // Try to extract instance from the next path part
       instanceName = pathParts[3];
-      await logDebug('WEBHOOK_PATH_ALTERNATIVE', `Alternative webhook path detected, using: ${instanceName}`);
+      logger.info(`Alternative webhook path detected, using: ${instanceName}`);
     }
     
     // If instance name is not found in the path, try to extract it from the payload
@@ -1026,20 +1033,20 @@ serve(async (req) => {
     if (!instanceName && data) {
       if (data.instance) {
         instanceName = data.instance;
-        await logDebug('WEBHOOK_INSTANCE_FROM_PAYLOAD', `Extracted instance from payload: ${instanceName}`);
+        logger.info(`Extracted instance from payload: ${instanceName}`);
       } else if (data.instanceId) {
         instanceName = data.instanceId;
-        await logDebug('WEBHOOK_INSTANCE_FROM_PAYLOAD', `Extracted instanceId from payload: ${instanceName}`);
+        logger.info(`Extracted instanceId from payload: ${instanceName}`);
       } else if (data.data && data.data.instance) {
         // Handle nested instance name in data object
         instanceName = data.data.instance;
-        await logDebug('WEBHOOK_INSTANCE_FROM_PAYLOAD', `Extracted instance from nested data: ${instanceName}`);
+        logger.info(`Extracted instance from nested data: ${instanceName}`);
       }
     }
     
     // If we have identified an instance name, process the webhook
     if (instanceName) {
-      await logDebug('WEBHOOK_INSTANCE', `Processing webhook for instance: ${instanceName}`);
+      logger.info(`Processing webhook for instance: ${instanceName}`);
       
       // REMOVED: Support phone number check (escalation system removed)
       
@@ -1052,12 +1059,12 @@ serve(async (req) => {
       if (isConnectionStatusEvent(data)) {
         event = 'connection.update';
         normalizedData = data;
-        await logDebug('WEBHOOK_EVENT_CONNECTION_STATE', `Connection state event detected: ${data.data?.state || data.state}`);
+        logger.info(`Connection state event detected: ${data.data?.state || data.state}`);
         
         // Save the webhook message to the database first
         const saved = await saveWebhookMessage(instanceName, event, normalizedData);
         if (saved) {
-          await logDebug('WEBHOOK_CONNECTION_SAVED', 'Connection state event saved successfully');
+          logger.info('Connection state event saved successfully');
         }
         
         // Process the connection status update
@@ -1079,29 +1086,29 @@ serve(async (req) => {
         // This is the standard format
         event = data.event;
         normalizedData = data.data || data;
-        await logDebug('WEBHOOK_EVENT_STANDARD', `Standard event format detected: ${event}`);
+        logger.info(`Standard event format detected: ${event}`);
       } else if (data.key && data.key.remoteJid) {
         // This is a message format
         event = 'messages.upsert';
         normalizedData = data;
-        await logDebug('WEBHOOK_EVENT_MESSAGE', 'Message event detected');
+        logger.info('Message event detected');
       } else if (data.status) {
         // This is a connection status event
         event = 'connection.update';
         normalizedData = data;
-        await logDebug('WEBHOOK_EVENT_CONNECTION', `Connection event detected: ${data.status}`);
+        logger.info(`Connection event detected: ${data.status}`);
       } else if (data.qrcode) {
         // This is a QR code event
         event = 'qrcode.updated';
         normalizedData = data;
-        await logDebug('WEBHOOK_EVENT_QRCODE', 'QR code event detected');
+        logger.info('QR code event detected');
       }
       
       // Save the webhook message to the database
       const saved = await saveWebhookMessage(instanceName, event, normalizedData);
       
       if (saved) {
-        await logDebug('WEBHOOK_SAVED', 'Webhook message saved successfully');
+        logger.info('Webhook message saved successfully');
       }
       
       // Process voice messages if needed
@@ -1120,13 +1127,13 @@ serve(async (req) => {
             
           if (instanceData) {
             foundInstanceId = instanceData.id;
-            await logDebug('INSTANCE_LOOKUP_SUCCESS', 'Found instance ID for escalation check', { 
+            logger.info('Found instance ID for escalation check', { 
               instanceName, 
               instanceId: foundInstanceId 
             });
           } else {
             // Handle case where instance isn't found without throwing errors
-            await logDebug('INSTANCE_LOOKUP_WARNING', 'Instance not found but continuing processing', { 
+            logger.warn('Instance not found but continuing processing', { 
               instanceName, 
               error: instanceError 
             });
@@ -1137,7 +1144,7 @@ serve(async (req) => {
           let needsTranscription = false;
           
           if (hasAudioContent(normalizedData)) {
-            await logDebug('VOICE_MESSAGE_ESCALATION', 'Detected voice message, will transcribe before escalation check');
+            logger.info('Detected voice message, will transcribe before escalation check');
             
             // Extract audio details
             const audioDetails = extractAudioDetails(normalizedData);
@@ -1151,11 +1158,11 @@ serve(async (req) => {
             
             if (transcriptionResult.success && transcriptionResult.transcription) {
               transcribedText = transcriptionResult.transcription as string;
-              await logDebug('VOICE_TRANSCRIPTION_FOR_ESCALATION', 'Successfully transcribed voice message for escalation check', {
+              logger.info('Successfully transcribed voice message for escalation check', {
                 transcription: transcribedText
               });
             } else {
-              await logDebug('VOICE_TRANSCRIPTION_FAILED_FOR_ESCALATION', 'Failed to transcribe voice message for escalation check', {
+              logger.error('Failed to transcribe voice message for escalation check', {
                 error: transcriptionResult.error
               });
             }
@@ -1163,7 +1170,7 @@ serve(async (req) => {
           
           // REMOVED: Webhook data preparation (no longer needed)
           
-          await logDebug('VOICE_PROCESSING_COMPLETE', 'Voice message processing completed', { 
+          logger.info('Voice message processing completed', { 
             instance: instanceName,
             hasTranscribedText: !!transcribedText
           });
@@ -1174,22 +1181,21 @@ serve(async (req) => {
           // Continue with normal AI processing
         } catch (error) {
           // Log error but continue with AI processing
-          await logDebug('VOICE_PROCESSING_ERROR', 'Error in voice message processing', { 
+          logger.error('Error in voice message processing', { 
             error: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined
           });
-          logger.error('Error in voice processing:', error);
           // Continue with AI processing despite error
         }
       }
       
       // Process for AI if this is a message event
       if (event === 'messages.upsert') {
-        await logDebug('AI_PROCESS_ATTEMPT', 'Attempting to process message for AI response');
+        logger.info('Attempting to process message for AI response');
         if (transcribedText) {
           // If we already transcribed the message for escalation, pass it to AI processing
           normalizedData.transcribedText = transcribedText;
-          await logDebug('AI_USING_TRANSCRIPTION', 'Using already transcribed text for AI processing', {
+          logger.info('Using already transcribed text for AI processing', {
             transcription: transcribedText
           });
         }
@@ -1205,7 +1211,7 @@ serve(async (req) => {
     }
     
     // If no valid instance name could be extracted, log this and return an error
-    await logDebug('WEBHOOK_PATH_ERROR', 'No valid instance name could be extracted from path or payload', { 
+    logger.error('No valid instance name could be extracted from path or payload', { 
       fullPath: url.pathname,
       pathParts,
       hasPayload: !!data,
@@ -1220,12 +1226,10 @@ serve(async (req) => {
       }
     });
   } catch (error) {
-    await logDebug('WEBHOOK_ERROR', 'Error processing webhook', { 
+    logger.error('Error processing webhook', { 
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined
     });
-    
-    logger.error('Error processing webhook:', error);
     
     return new Response(
       JSON.stringify({

@@ -1,5 +1,13 @@
 
-import logDebug from "./webhook-logger.ts";
+
+// Create a simple logger since we can't use @/utils/logger in edge functions
+const logger = {
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
 
 /**
  * Helper function to download audio file from WhatsApp
@@ -19,7 +27,7 @@ export async function downloadAudioFile(
   mimeType?: string
 ): Promise<{ success: boolean; audioUrl?: string; error?: string }> {
   try {
-    await logDebug('AUDIO_DOWNLOAD_START', `Starting audio download request for URL: ${url}`);
+    logger.info(`Starting audio download request for URL: ${url}`);
     
     // Check if we have required parameters
     if (!url) {
@@ -27,7 +35,7 @@ export async function downloadAudioFile(
     }
     
     if (!evolutionApiKey) {
-      await logDebug('AUDIO_DOWNLOAD_ERROR', 'EVOLUTION_API_KEY not available');
+      logger.error('EVOLUTION_API_KEY not available');
       return { 
         success: false, 
         error: 'EVOLUTION API key not available for media download' 
@@ -35,7 +43,7 @@ export async function downloadAudioFile(
     }
     
     // Log whether we have the mediaKey, which is crucial for decryption
-    await logDebug('AUDIO_DOWNLOAD_MEDIA_KEY', `Media key available: ${!!mediaKey}`, { 
+    logger.info(`Media key available: ${!!mediaKey}`, { 
       hasMediaKey: !!mediaKey,
       mimeType: mimeType || 'audio/ogg; codecs=opus'
     });
@@ -43,12 +51,12 @@ export async function downloadAudioFile(
     // For WhatsApp encrypted media, we need the mediaKey
     if (url.includes('mmg.whatsapp.net')) {
       if (!mediaKey) {
-        await logDebug('AUDIO_DOWNLOAD_ERROR', 'Media key not provided for WhatsApp encrypted media');
+        logger.error('Media key not provided for WhatsApp encrypted media');
         return { success: false, error: 'Media key required for WhatsApp audio decryption but was not provided' };
       }
       
       // Use the external decryption service to decrypt WhatsApp media
-      await logDebug('AUDIO_DOWNLOAD_DECRYPTION', 'Calling external decryption service for WhatsApp media');
+      logger.info('Calling external decryption service for WhatsApp media');
       
       const decryptionUrl = 'https://voice.convgo.com/decrypt-media';
       
@@ -68,7 +76,7 @@ export async function downloadAudioFile(
         
         if (!decryptResponse.ok) {
           const errorText = await decryptResponse.text();
-          await logDebug('AUDIO_DOWNLOAD_DECRYPTION_ERROR', `External decryption service error: ${decryptResponse.status}`, { 
+          logger.error(`External decryption service error: ${decryptResponse.status}`, { 
             errorDetails: errorText 
           });
           return { 
@@ -81,7 +89,7 @@ export async function downloadAudioFile(
         const decryptResult = await decryptResponse.json();
         
         if (!decryptResult.success || !decryptResult.mediaUrl) {
-          await logDebug('AUDIO_DOWNLOAD_DECRYPTION_ERROR', 'Invalid response from decryption service', { 
+          logger.error('Invalid response from decryption service', { 
             result: decryptResult 
           });
           return { 
@@ -90,7 +98,7 @@ export async function downloadAudioFile(
           };
         }
         
-        await logDebug('AUDIO_DOWNLOAD_DECRYPTION_SUCCESS', 'Successfully decrypted WhatsApp media', {
+        logger.info('Successfully decrypted WhatsApp media', {
           originalUrl: url.substring(0, 50) + '...',
           decryptedUrl: decryptResult.mediaUrl.substring(0, 50) + '...'
         });
@@ -101,7 +109,7 @@ export async function downloadAudioFile(
           audioUrl: decryptResult.mediaUrl
         };
       } catch (decryptError) {
-        await logDebug('AUDIO_DOWNLOAD_DECRYPTION_ERROR', 'Error calling external decryption service', { 
+        logger.error('Error calling external decryption service', { 
           error: decryptError 
         });
         return { 
@@ -112,14 +120,14 @@ export async function downloadAudioFile(
     } else {
       // For non-WhatsApp URLs, just return the original URL
       // This handles cases where the media is already accessible without decryption
-      await logDebug('AUDIO_DOWNLOAD_STANDARD', 'URL is not a WhatsApp media URL, returning as-is');
+      logger.info('URL is not a WhatsApp media URL, returning as-is');
       return {
         success: true,
         audioUrl: url
       };
     }
   } catch (error) {
-    await logDebug('AUDIO_DOWNLOAD_ERROR', 'Error processing audio file URL', { error });
+    logger.error('Error processing audio file URL', { error });
     return { success: false, error: error.message };
   }
 }

@@ -1,5 +1,4 @@
 
-import logDebug from "./webhook-logger.ts";
 import { storeMessageInConversation } from "./conversation-storage.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -49,14 +48,17 @@ export async function generateAndSendAIResponse(
 
     
     // Generate system prompt
-    await logDebug('AI_SYSTEM_PROMPT', 'Using system prompt from configuration', { 
-      userSystemPrompt: aiConfig.system_prompt
+    logger.info('Using system prompt from configuration', { 
+      userSystemPrompt: aiConfig.system_prompt,
+      hasPersonality: !!aiConfig.selectedPersonalityId,
+      selectedPersonalityName: aiConfig.selectedPersonalityName || 'none',
+      selectedPersonalityId: aiConfig.selectedPersonalityId || 'none'
     });
     
-    const systemPrompt = aiConfig.system_prompt;
+    const systemPrompt = aiConfig.system_prompt || 'You are a helpful AI assistant.';
 
     // Generate AI response with improved token management and include imageUrl
-    await logDebug('AI_RESPONSE_GENERATION', 'Generating AI response with token management', {
+    logger.info('Generating AI response with token management', {
       hasImageUrl: !!imageUrl
     });
     const responseGenResponse = await fetch(`${supabaseUrl}/functions/v1/generate-response`, {
@@ -89,23 +91,22 @@ export async function generateAndSendAIResponse(
 
     if (!responseGenResponse.ok) {
       const errorText = await responseGenResponse.text();
-      await logDebug('AI_RESPONSE_ERROR', 'AI response generation failed', {
+      logger.error('AI response generation failed', {
         status: responseGenResponse.status,
         error: errorText
       });
-      logger.error('AI response generation failed:', errorText);
       return false;
     }
 
     const responseData = await responseGenResponse.json();
-    await logDebug('AI_RESPONSE_GENERATED', 'AI response generated successfully', {
+    logger.info('AI response generated successfully', {
       responsePreview: responseData.answer?.substring(0, 100) + '...',
       tokens: responseData.usage
     });
 
     // Log token usage if available
     if (responseData.tokenUsage) {
-      await logDebug('AI_TOKEN_USAGE', 'Token usage details', responseData.tokenUsage);
+      logger.info('Token usage details', responseData.tokenUsage);
     }
 
     // Store AI response in conversation history
@@ -115,7 +116,7 @@ export async function generateAndSendAIResponse(
 
     // Save interaction to database
     try {
-      await logDebug('AI_SAVING_INTERACTION', 'Saving AI interaction to database');
+      logger.info('Saving AI interaction to database');
       
       const { error: interactionError } = await supabaseAdmin
         .from('whatsapp_ai_interactions')
@@ -157,23 +158,21 @@ export async function generateAndSendAIResponse(
         });
 
       if (interactionError) {
-        await logDebug('AI_INTERACTION_SAVE_ERROR', 'Error saving AI interaction', {
+        logger.error('Error saving AI interaction', {
           error: interactionError
         });
-        logger.error('Error saving AI interaction:', interactionError);
       } else {
-        await logDebug('AI_INTERACTION_SAVED', 'AI interaction saved successfully');
+        logger.info('AI interaction saved successfully');
       }
     } catch (error) {
-      await logDebug('AI_INTERACTION_SAVE_EXCEPTION', 'Exception saving AI interaction', {
+      logger.error('Exception saving AI interaction', {
         error
       });
-      logger.error('Exception saving AI interaction:', error);
     }
 
     // Send response back through WhatsApp
     if (instanceBaseUrl && fromNumber && responseData.answer) {
-      await logDebug('AI_SENDING_RESPONSE', 'Sending AI response to WhatsApp', {
+      logger.info('Sending AI response to WhatsApp', {
         instanceName,
         toNumber: fromNumber,
         baseUrl: instanceBaseUrl
@@ -183,14 +182,13 @@ export async function generateAndSendAIResponse(
       const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey;
       
       if (!evolutionApiKey) {
-        await logDebug('AI_MISSING_API_KEY', 'EVOLUTION_API_KEY environment variable not set and no apikey in payload');
         logger.error('EVOLUTION_API_KEY environment variable not set and no apikey in payload');
         return false;
       }
 
       // Construct the send message URL according to EVOLUTION API format
       const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
-      await logDebug('AI_RESPONSE_URL', 'Constructed send message URL', { sendUrl });
+      logger.info('Constructed send message URL', { sendUrl });
       
       try {
         const sendResponse = await fetch(sendUrl, {
@@ -207,7 +205,7 @@ export async function generateAndSendAIResponse(
 
         if (!sendResponse.ok) {
           const errorText = await sendResponse.text();
-          await logDebug('AI_SEND_RESPONSE_ERROR', 'Error sending WhatsApp message', {
+          logger.error('Error sending WhatsApp message', {
             status: sendResponse.status,
             error: errorText,
             sendUrl,
@@ -220,25 +218,23 @@ export async function generateAndSendAIResponse(
               text: responseData.answer.substring(0, 50) + '...'
             }
           });
-          logger.error('Error sending WhatsApp message:', errorText);
           return false;
         }
 
         const sendResult = await sendResponse.json();
-        await logDebug('AI_RESPONSE_SENT', 'WhatsApp message sent successfully', { sendResult });
+        logger.info('WhatsApp message sent successfully', { sendResult });
         return true;
       } catch (error) {
-        await logDebug('AI_SEND_EXCEPTION', 'Exception sending WhatsApp message', { 
+        logger.error('Exception sending WhatsApp message', { 
           error,
           sendUrl, 
           instanceBaseUrl,
           fromNumber
         });
-        logger.error('Exception sending WhatsApp message:', error);
         return false;
       }
     } else {
-      await logDebug('AI_SEND_MISSING_DATA', 'Missing data for sending WhatsApp message', {
+      logger.warn('Missing data for sending WhatsApp message', {
         hasInstanceBaseUrl: !!instanceBaseUrl,
         hasFromNumber: !!fromNumber,
         hasResponse: !!responseData.answer
@@ -246,7 +242,7 @@ export async function generateAndSendAIResponse(
       return false;
     }
   } catch (error) {
-    await logDebug('AI_GENERATE_SEND_EXCEPTION', 'Exception in generate and send function', { error });
+    logger.error('Exception in generate and send function', { error });
     return false;
   }
 }

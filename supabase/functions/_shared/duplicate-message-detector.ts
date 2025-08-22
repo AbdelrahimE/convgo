@@ -6,36 +6,10 @@ import { calculateSimilarity } from "./text-similarity.ts";
 const logger = {
   log: (...args: any[]) => console.log(...args),
   error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
 };
-
-/**
- * Debug logging function that logs to both console and database
- * @param category The log category (e.g., 'WEBHOOK_SAVE', 'AI_PROCESS_START')
- * @param message The log message
- * @param data Optional data to include with the log
- * @returns Promise<void>
- */
-async function logDebug(category: string, message: string, data?: any): Promise<void> {
-  // Log to console
-  logger.log(`[${category}] ${message}`, data ? JSON.stringify(data) : '');
-  
-  try {
-    // Get Supabase admin client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Log to database
-    await supabaseAdmin.from('webhook_debug_logs').insert({
-      category,
-      message,
-      data: data || null
-    });
-  } catch (error) {
-    // If we can't log to the database, at least log the error to the console
-    logger.error('Failed to log debug info to database:', error);
-  }
-}
 
 /**
  * Check for duplicate messages to prevent processing the same message multiple times
@@ -73,7 +47,7 @@ export async function checkForDuplicateMessage(
       
       // Skip if we're comparing with the exact same message
       if (normalizedContent === normalizedNewContent) {
-        await logDebug('DUPLICATE_MESSAGE_DETECTED', 'Exact duplicate message detected', {
+        logger.info('Exact duplicate message detected', {
           conversationId,
           messagePreview: newMessageContent.substring(0, 50) + '...'
         });
@@ -83,7 +57,7 @@ export async function checkForDuplicateMessage(
       // Check for high similarity
       const similarity = calculateSimilarity(normalizedContent, normalizedNewContent);
       if (similarity > 0.9) {
-        await logDebug('SIMILAR_MESSAGE_DETECTED', 'Highly similar message detected', {
+        logger.info('Highly similar message detected', {
           conversationId,
           messagePreview: newMessageContent.substring(0, 50) + '...',
           similarity
@@ -94,7 +68,7 @@ export async function checkForDuplicateMessage(
     
     return false; // Not a duplicate
   } catch (error) {
-    await logDebug('DUPLICATE_CHECK_ERROR', 'Error checking for duplicate message', { 
+    logger.error('Error checking for duplicate message', { 
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined
     });

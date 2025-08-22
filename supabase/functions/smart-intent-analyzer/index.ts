@@ -3,6 +3,18 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getNextOpenAIKey } from "../_shared/openai-key-rotation.ts";
 
+/**
+ * GPT-5-nano Model Configuration:
+ * 
+ * reasoning_effort values (from lowest to highest token consumption):
+ * - 'low': أقل استهلاك للتوكنز - أسرع استجابة (الحالي)
+ * - 'low': استهلاك منخفض للتوكنز - سرعة جيدة
+ * - 'medium': استهلاك متوسط للتوكنز - توازن بين السرعة والجودة
+ * - 'high': استهلاك عالي للتوكنز - أفضل جودة
+ * 
+ * Note: كل مستوى أعلى يستهلك توكنز أكثر ويستغرق وقتاً أطول
+ */
+
 const logger = {
   log: (...args: any[]) => console.log(...args),
   error: (...args: any[]) => console.error(...args),
@@ -159,22 +171,52 @@ Rules:
 - general: greeting/general question`;
 
     const apiKey = getNextOpenAIKey();
+    
+    // تسجيل تفاصيل الطلب قبل الإرسال
+    const requestPayload = {
+      model: 'gpt-5-nano',
+      messages: [
+        { role: 'system', content: optimizedPrompt },
+        { role: 'user', content: cleanMessage }
+      ],
+      temperature: 1,
+      max_completion_tokens: 3000, // المعيار الجديد لـ GPT-5
+      reasoning_effort: 'low' // أسرع إعداد للـ MVP
+    };
+    
+    logger.info('🚀 GPT-5-nano Request Details:', {
+      model: requestPayload.model,
+      reasoning_effort: requestPayload.reasoning_effort,
+      temperature: requestPayload.temperature,
+      max_completion_tokens: requestPayload.max_completion_tokens,
+      system_prompt_length: optimizedPrompt.length,
+      user_message_length: cleanMessage.length,
+      context_length: recentContext.length,
+      timestamp: new Date().toISOString(),
+      api_key_prefix: apiKey.substring(0, 8) + '...'
+    });
+    
+    const requestStartTime = Date.now();
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: 'gpt-5-nano',
-        messages: [
-          { role: 'system', content: optimizedPrompt },
-          { role: 'user', content: cleanMessage }
-        ],
-        temperature: 1,
-        max_completion_tokens: 300, // المعيار الجديد لـ GPT-5
-        reasoning_effort: 'low' // أسرع إعداد للـ MVP
-      }),
+      body: JSON.stringify(requestPayload),
+    });
+    
+    const requestDuration = Date.now() - requestStartTime;
+    
+    logger.info('⏱️ GPT-5-nano Request Timing:', {
+      request_duration_ms: requestDuration,
+      reasoning_effort: 'low',
+      response_status: response.status,
+      response_ok: response.ok,
+      response_headers: {
+        content_type: response.headers.get('content-type'),
+        content_length: response.headers.get('content-length')
+      }
     });
 
     if (!response.ok) {
@@ -185,24 +227,55 @@ Rules:
 
     const responseData = await response.json();
     
+    // تسجيل تفاصيل الاستجابة من GPT-5-nano
+    logger.info('📥 GPT-5-nano Response Details:', {
+      model_used: responseData.model || 'unknown',
+      choices_count: responseData.choices?.length || 0,
+      usage: responseData.usage || null,
+      finish_reason: responseData.choices?.[0]?.finish_reason || 'unknown',
+      response_id: responseData.id || 'unknown',
+      created: responseData.created || null,
+      object: responseData.object || 'unknown'
+    });
+    
     // التحقق من صحة الاستجابة
     if (!responseData.choices || !responseData.choices[0] || !responseData.choices[0].message) {
+      logger.error('❌ Invalid GPT-5-nano response structure:', {
+        has_choices: !!responseData.choices,
+        choices_length: responseData.choices?.length || 0,
+        response_data_keys: Object.keys(responseData)
+      });
       throw new Error('Invalid OpenAI response structure');
     }
 
     const content = responseData.choices[0].message.content;
     if (!content) {
+      logger.error('❌ Empty content from GPT-5-nano:', {
+        message_object: responseData.choices[0].message,
+        finish_reason: responseData.choices[0].finish_reason
+      });
       throw new Error('Empty response from OpenAI');
     }
 
-    logger.log(`OpenAI response: ${content.substring(0, 100)}...`);
+    logger.info('📝 GPT-5-nano Response Content:', {
+      content_length: content.length,
+      content_preview: content.substring(0, 200) + '...',
+      reasoning_effort_used: 'low',
+      token_usage: responseData.usage
+    });
 
     // معالجة أكثر أماناً للـ JSON
     let result;
     try {
       result = JSON.parse(content.trim());
+      logger.info('✅ JSON parsing successful from GPT-5-nano response');
     } catch (parseError) {
-      logger.error('JSON parsing failed, content:', content);
+      logger.error('❌ JSON parsing failed for GPT-5-nano response:', {
+        error_message: parseError.message,
+        content_sample: content.substring(0, 500),
+        content_length: content.length,
+        reasoning_effort: 'low'
+      });
       throw new Error(`JSON parsing failed: ${parseError.message}`);
     }
 
@@ -224,17 +297,33 @@ Rules:
         ? result.basicEmotionState : 'neutral'
     };
 
-    logger.log(`Intent analysis success: ${validatedResult.intent} (${validatedResult.confidence})`);
+    logger.info('✅ GPT-5-nano Analysis Complete:', {
+      intent: validatedResult.intent,
+      confidence: validatedResult.confidence,
+      emotion_state: validatedResult.basicEmotionState,
+      industry: validatedResult.businessContext.industry,
+      detected_terms_count: validatedResult.businessContext.detectedTerms.length,
+      reasoning_effort_used: 'low',
+      total_processing_time_ms: Date.now() - requestStartTime
+    });
+    
     return validatedResult;
 
   } catch (error) {
-    logger.error('Error in optimized core intent analysis:', error);
+    logger.error('❌ Error in GPT-5-nano analysis:', {
+      error_message: error.message,
+      error_type: error.constructor.name,
+      stack_trace: error.stack,
+      reasoning_effort: 'low',
+      model: 'gpt-5-nano',
+      timestamp: new Date().toISOString()
+    });
     
     // Fallback آمن مع معلومات أكثر تفصيلاً
     return {
       intent: 'general',
       confidence: 0.5,
-      reasoning: `تحليل احتياطي - خطأ: ${error.message}`,
+      reasoning: `تحليل احتياطي - خطأ في GPT-5-nano: ${error.message}`,
       businessContext: {
         industry: 'عام',
         communicationStyle: 'ودي',
@@ -264,15 +353,23 @@ async function getSmartPersonality(
     });
 
     if (error) {
-      logger.error('Error getting contextual personality:', error);
+      logger.error('Error getting contextual personality:', error, {
+        instanceId,
+        intent,
+        businessContext: JSON.stringify(businessContext)
+      });
       
       const { data: fallbackData, error: fallbackError } = await supabaseAdmin.rpc('get_personality_for_intent', {
         p_whatsapp_instance_id: instanceId,
         p_intent_category: intent
       });
 
-      if (fallbackError || !fallbackData) {
-        logger.warn('Fallback personality search failed, using general personality');
+      if (fallbackError || !fallbackData || !Array.isArray(fallbackData) || fallbackData.length === 0) {
+        logger.warn('Fallback personality search failed, using general personality', {
+          fallbackError,
+          fallbackDataType: typeof fallbackData,
+          fallbackDataLength: Array.isArray(fallbackData) ? fallbackData.length : 'not array'
+        });
         
         const { data: generalData, error: generalError } = await supabaseAdmin
           .from('ai_personalities')
@@ -283,25 +380,98 @@ async function getSmartPersonality(
           .single();
 
         if (generalError || !generalData) {
-          logger.error('No personality found at all');
+          logger.error('❌ No personality found at all for instance:', {
+            instanceId,
+            generalError: generalError?.message || generalError,
+            intent
+          });
           return null;
         }
         
-        return generalData;
+        logger.info('✅ Using general personality as last resort:', {
+          personalityId: generalData.id,
+          personalityName: generalData.name
+        });
+        
+        // تحويل أسماء الحقول لتتوافق مع ما يتوقعه الكود
+        return {
+          id: generalData.id,
+          name: generalData.name,
+          system_prompt: generalData.system_prompt,
+          temperature: generalData.temperature
+        };
       }
       
-      return fallbackData;
+      // FIX: معالجة fallback data كـ array أيضاً
+      const fallbackRow = fallbackData[0];
+      logger.info('✅ Using fallback personality:', {
+        personalityId: fallbackRow.personality_id,
+        personalityName: fallbackRow.personality_name
+      });
+      
+      // تحويل أسماء الحقول لتتوافق مع ما يتوقعه الكود
+      return {
+        id: fallbackRow.personality_id,
+        name: fallbackRow.personality_name,
+        system_prompt: fallbackRow.system_prompt,
+        temperature: fallbackRow.temperature
+      };
     }
 
-    if (!data) {
-      logger.warn(`No contextual personality found for intent: ${intent}`);
+    // FIX: معالجة النتيجة كـ array لأن RPC function ترجع RETURNS TABLE
+    logger.debug('RPC result received:', {
+      dataType: typeof data,
+      isArray: Array.isArray(data),
+      dataLength: Array.isArray(data) ? data.length : 'not array',
+      dataContent: data
+    });
+
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      logger.warn(`No contextual personality found for intent: ${intent}`, {
+        instanceId,
+        dataReceived: data,
+        isArray: Array.isArray(data)
+      });
       return null;
     }
 
-    logger.log(`Found contextual personality: ${data.name} for intent: ${intent}`);
-    return data;
+    // استخراج أول صف من النتيجة (RETURNS TABLE يرجع array)
+    const personalityRow = data[0];
+    logger.debug('Extracted personality row:', personalityRow);
+
+    // التحقق من صحة البيانات المطلوبة
+    if (!personalityRow.personality_id || !personalityRow.personality_name || !personalityRow.system_prompt) {
+      logger.error('❌ Invalid personality data structure:', {
+        hasId: !!personalityRow.personality_id,
+        hasName: !!personalityRow.personality_name,
+        hasPrompt: !!personalityRow.system_prompt,
+        rowData: personalityRow
+      });
+      return null;
+    }
+
+    // تحويل أسماء الحقول لتتوافق مع ما يتوقعه الكود
+    const normalizedPersonality = {
+      id: personalityRow.personality_id,
+      name: personalityRow.personality_name,
+      system_prompt: personalityRow.system_prompt,
+      temperature: personalityRow.temperature || 0.7 // قيمة افتراضية
+    };
+
+    logger.log(`✅ Found contextual personality: ${normalizedPersonality.name} for intent: ${intent}`, {
+      personalityId: normalizedPersonality.id,
+      systemPromptLength: normalizedPersonality.system_prompt?.length || 0,
+      temperature: normalizedPersonality.temperature
+    });
+    return normalizedPersonality;
   } catch (error) {
-    logger.error('Exception in getSmartPersonality:', error);
+    logger.error('❌ Exception in getSmartPersonality:', {
+      error: error.message || error,
+      stack: error.stack,
+      instanceId,
+      intent,
+      businessContext: JSON.stringify(businessContext)
+    });
     return null;
   }
 }
@@ -362,6 +532,15 @@ async function smartIntentAnalysisOptimized(
   // 3. الحصول على الشخصية المناسبة (محسن للسرعة)
   const selectedPersonality = await getSmartPersonality(instanceId, coreAnalysis.intent, coreAnalysis.businessContext);
   
+  // إضافة logging للتأكد من البيانات
+  logger.info('Personality selection completed', {
+    intent: coreAnalysis.intent,
+    hasPersonality: !!selectedPersonality,
+    selectedPersonalityName: selectedPersonality?.name || 'none',
+    selectedPersonalityId: selectedPersonality?.id || 'none',
+    systemPrompt: selectedPersonality?.system_prompt ? selectedPersonality.system_prompt.substring(0, 100) + '...' : 'none'
+  });
+  
   return {
     intent: coreAnalysis.intent,
     confidence: coreAnalysis.confidence,
@@ -397,11 +576,26 @@ serve(async (req) => {
       );
     }
 
-    logger.log(`Smart intent analysis (MVP optimized) for: "${message.substring(0, 50)}..."`);
+    logger.info('🎯 Smart Intent Analysis Started:', {
+      message_preview: message.substring(0, 50) + '...',
+      message_length: message.length,
+      instance_id: whatsappInstanceId,
+      has_conversation_history: conversationHistory.length > 0,
+      history_items_count: conversationHistory.length,
+      request_timestamp: new Date().toISOString(),
+      cache_size: intentCache.size
+    });
 
     // فحص الـ Cache أولاً للاستفسارات المتكررة
     const cachedResult = getCachedIntent(message, whatsappInstanceId);
     if (cachedResult) {
+      logger.info('⚡ Cache Hit - Returning cached result:', {
+        cached_intent: cachedResult.intent,
+        cached_confidence: cachedResult.confidence,
+        cache_age_ms: Date.now() - (intentCache.get(`${whatsappInstanceId}:${message.toLowerCase().trim()}`)?.timestamp || 0),
+        processing_time_ms: Date.now() - startTime
+      });
+      
       return new Response(
         JSON.stringify({
           ...cachedResult,
@@ -434,15 +628,29 @@ serve(async (req) => {
       productInterest: analysisResult.productInterest
     };
 
-    logger.log(`Smart intent analysis completed:`, {
+    logger.info('🏁 Smart Intent Analysis Completed Successfully:', {
       intent: result.intent,
       confidence: result.confidence,
       industry: result.businessContext.industry,
-      processingTime: processingTimeMs
+      emotion_state: result.emotionAnalysis?.emotional_state,
+      customer_stage: result.customerJourney?.current_stage,
+      selected_personality: result.selectedPersonality?.name || 'none',
+      personality_id: result.selectedPersonality?.id || 'none',
+      detected_terms_count: result.businessContext.detectedTerms?.length || 0,
+      processing_time_ms: processingTimeMs,
+      gpt5_nano_reasoning_effort: 'low',
+      cache_will_be_saved: true,
+      timestamp: new Date().toISOString()
     });
 
     // حفظ النتيجة في الـ Cache للاستفسارات المستقبلية المشابهة
     setCachedIntent(message, whatsappInstanceId, result);
+    
+    logger.info('💾 Result cached for future requests:', {
+      cache_key_preview: `${whatsappInstanceId}:${message.substring(0, 20)}...`,
+      cache_size_after: intentCache.size,
+      cache_ttl_minutes: CACHE_TTL / 60000
+    });
 
     return new Response(
       JSON.stringify(result),
@@ -450,15 +658,29 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    logger.error('Error in smart intent analysis:', error);
-    
     const processingTimeMs = Date.now() - startTime;
+    
+    logger.error('❌ Critical Error in Smart Intent Analysis:', {
+      error_message: error instanceof Error ? error.message : 'Unknown error',
+      error_type: error instanceof Error ? error.constructor.name : typeof error,
+      error_stack: error instanceof Error ? error.stack : 'No stack trace',
+      processing_time_ms: processingTimeMs,
+      gpt5_nano_model: 'gpt-5-nano',
+      reasoning_effort: 'low',
+      timestamp: new Date().toISOString(),
+      cache_size: intentCache.size
+    });
 
     return new Response(
       JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred',
-        processingTimeMs
+        processingTimeMs,
+        model_info: {
+          model: 'gpt-5-nano',
+          reasoning_effort: 'low'
+        },
+        timestamp: new Date().toISOString()
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

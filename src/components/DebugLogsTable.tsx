@@ -26,59 +26,15 @@ export function DebugLogsTable() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [limit, setLimit] = useState(50);
   
-  // Fetch debug logs from webhook_debug_logs table
-  const { 
-    data: logs, 
-    isLoading, 
-    refetch,
-    isRefetching
-  } = useQuery({
-    queryKey: ['debugLogs', category, limit],
-    queryFn: async () => {
-      let query = supabase
-        .from('webhook_debug_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-      
-      if (category) {
-        query = query.eq('category', category);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) {
-        logger.error('Error fetching debug logs:', error);
-        throw error;
-      }
-      
-      return data as DebugLog[];
-    }
-  });
+  // Debug logging has been moved to console only
+  const logs: DebugLog[] = [];
+  const categories: { category: string }[] = [];
+  const isLoading = false;
+  const isRefetching = false;
   
-  // Fetch unique categories directly from the webhook_debug_logs table
-  const { data: categories } = useQuery({
-    queryKey: ['debugLogCategories'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('webhook_debug_logs')
-        .select('category')
-        .order('category');
-      
-      if (error) {
-        logger.error('Error fetching categories:', error);
-        return [];
-      }
-      
-      // Process the data to get unique categories
-      const uniqueCategories = Array.from(
-        new Set(data.map(item => item.category))
-      ).map(category => ({ category }));
-      
-      return uniqueCategories;
-    },
-    placeholderData: []
-  });
+  const refetch = () => {
+    // No-op since we're not fetching from database anymore
+  };
   
   // Filter logs by search term
   const filteredLogs = logs?.filter(log => {
@@ -194,52 +150,19 @@ export function DebugLogsTable() {
       </CardHeader>
       
       <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="text-center py-8 text-muted-foreground">
+          <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="text-lg mb-2">Debug logging has been moved to console only</p>
+          <p className="text-sm">
+            All debug logs are now displayed in the server console for better performance. 
+            The webhook_debug_logs table has been removed to improve system efficiency.
+          </p>
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-700">
+              <strong>Note:</strong> You can view all debug logs in your Supabase Edge Functions console or server logs.
+            </p>
           </div>
-        ) : filteredLogs && filteredLogs.length > 0 ? (
-          <ScrollArea className="h-[600px] rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[180px]">Timestamp</TableHead>
-                  <TableHead className="w-[150px]">Category</TableHead>
-                  <TableHead>Message</TableHead>
-                  <TableHead className="w-[300px]">Data</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredLogs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="font-mono text-xs">
-                      {format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss.SSS')}
-                    </TableCell>
-                    <TableCell>
-                      <CategoryBadge category={log.category} />
-                    </TableCell>
-                    <TableCell>{log.message}</TableCell>
-                    <TableCell>
-                      {log.data ? (
-                        <div className="max-h-40 overflow-auto text-xs">
-                          <pre className="whitespace-pre-wrap break-words">
-                            {JSON.stringify(log.data, null, 2)}
-                          </pre>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground italic">No data</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            No debug logs found
-          </div>
-        )}
+        </div>
       </CardContent>
     </Card>
   );

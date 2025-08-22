@@ -395,30 +395,7 @@ export type Database = {
           },
         ]
       }
-      webhook_debug_logs: {
-        Row: {
-          category: string
-          created_at: string
-          data: Json | null
-          id: string
-          message: string
-        }
-        Insert: {
-          category: string
-          created_at?: string
-          data?: Json | null
-          id?: string
-          message: string
-        }
-        Update: {
-          category?: string
-          created_at?: string
-          data?: Json | null
-          id?: string
-          message?: string
-        }
-        Relationships: []
-      }
+
       webhook_messages: {
         Row: {
           data: Json
@@ -879,10 +856,7 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      cleanup_webhook_debug_logs: {
-        Args: { retention_days?: number }
-        Returns: undefined
-      }
+
       detect_language_simple: {
         Args: { text_input: string }
         Returns: string

@@ -1,6 +1,14 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import logDebug from "./webhook-logger.ts";
+
+// Create a simple logger since we can't use @/utils/logger in edge functions
+const logger = {
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
 
 // Initialize Supabase admin client (this will be available in edge functions)
 const getSupabaseAdmin = () => {
@@ -21,7 +29,7 @@ export async function processConnectionStatus(instanceName: string, statusData: 
     // The statusData could either be directly the state object or nested in a data property
     const stateData = statusData.data || statusData;
     
-    await logDebug('CONNECTION_STATUS_UPDATE', `Processing connection status update for instance ${instanceName}`, { 
+    logger.info(`Processing connection status update for instance ${instanceName}`, { 
       state: stateData.state, 
       statusReason: stateData.statusReason 
     });
@@ -52,7 +60,7 @@ export async function processConnectionStatus(instanceName: string, statusData: 
       .maybeSingle();
       
     if (instanceError) {
-      await logDebug('CONNECTION_STATUS_ERROR', `Instance not found: ${instanceName}`, { error: instanceError });
+      logger.error(`Instance not found: ${instanceName}`, { error: instanceError });
       return false;
     }
     
@@ -68,7 +76,7 @@ export async function processConnectionStatus(instanceName: string, statusData: 
     }
     
     // Log the status transition
-    await logDebug('CONNECTION_STATUS_TRANSITION', `Instance ${instanceName} status changing from ${instanceData.status} to ${dbStatus}`, {
+    logger.info(`Instance ${instanceName} status changing from ${instanceData.status} to ${dbStatus}`, {
       previousStatus: instanceData.status,
       newStatus: dbStatus,
       statusReason: stateData.statusReason,
@@ -82,15 +90,15 @@ export async function processConnectionStatus(instanceName: string, statusData: 
       .eq('id', instanceData.id);
       
     if (updateError) {
-      await logDebug('CONNECTION_STATUS_UPDATE_ERROR', `Failed to update instance status`, { error: updateError });
+      logger.error(`Failed to update instance status`, { error: updateError });
       return false;
     }
     
-    await logDebug('CONNECTION_STATUS_UPDATED', `Successfully updated status for instance ${instanceName} to ${dbStatus}`);
+    logger.info(`Successfully updated status for instance ${instanceName} to ${dbStatus}`);
     return true;
     
   } catch (error) {
-    await logDebug('CONNECTION_STATUS_EXCEPTION', `Exception processing connection status`, { error, instanceName });
+    logger.error(`Exception processing connection status`, { error, instanceName });
     console.error('Error in processConnectionStatus:', error);
     return false;
   }

@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import WebhookEndpointInfo from '@/components/WebhookEndpointInfo';
-import { DebugLogsTable } from '@/components/DebugLogsTable';
+
 import { CustomerInsightCard } from '@/components/ui/customer-insight-card';
 import { EmotionBadge } from '@/components/ui/emotion-badge';
 import { JourneyStageBadge } from '@/components/ui/journey-stage-badge';
@@ -502,7 +502,29 @@ const WebhookMonitor = () => {
         </TabsContent>
         
         <TabsContent value="debug">
-          <DebugLogsTable />
+          <Card>
+            <CardHeader>
+              <CardTitle>Debug Logs</CardTitle>
+              <CardDescription>
+                Debug logging has been moved to console only for better performance
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8 text-muted-foreground">
+                <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg mb-2">Debug logging has been moved to console only</p>
+                <p className="text-sm">
+                  All debug logs are now displayed in the server console for better performance. 
+                  The webhook_debug_logs table has been removed to improve system efficiency.
+                </p>
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-blue-700">
+                    <strong>Note:</strong> You can view all debug logs in your Supabase Edge Functions console or server logs.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>;
