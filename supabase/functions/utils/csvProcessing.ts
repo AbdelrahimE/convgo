@@ -3,14 +3,8 @@
  * Reduced from 488 lines to ~80 lines while maintaining core functionality
  */
 
-// Create a simple logger since we can't use @/utils/logger in edge functions
-const logger = {
-  log: (...args: any[]) => console.log(...args),
-  error: (...args: any[]) => console.error(...args),
-  info: (...args: any[]) => console.info(...args),
-  warn: (...args: any[]) => console.warn(...args),
-  debug: (...args: any[]) => console.debug(...args),
-};
+import { logger } from '../_shared/logger.ts';
+import { ChunkWithMetadata } from '../_shared/types.ts';
 
 /**
  * Simplified detection if extracted text appears to be in CSV format
@@ -97,7 +91,7 @@ export function createCSVChunkMetadata(
   csvText: string,
   chunks: string[],
   documentId: string
-): Array<{ text: string; metadata: Record<string, any> }> {
+): ChunkWithMetadata[] {
   const lines = csvText.split('\n').filter(line => line.trim().length > 0);
   const headerRow = lines[0];
   const totalRows = lines.length - 1; // Subtract header

@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "react-router-dom";
-import { FolderCog, LogOut, MessageCirclePlus, FileSymlink, BrainCog, AlignJustify, Headset, UserCog, Gauge, ChevronUp, HelpCircle, Crown } from "lucide-react";
+import { FolderCog, LogOut, MessageCirclePlus, FileSymlink, BrainCog, AlignJustify, UserCog, Gauge, ChevronUp, HelpCircle, Crown } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarTrigger } from "@/components/ui/sidebar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -30,10 +30,6 @@ const navigation = [{
   name: 'AI Assistant Settings',
   href: '/whatsapp-ai-config',
   icon: BrainCog
-}, {
-  name: 'Smart Escalation Rules',
-  href: '/whatsapp-support-config',
-  icon: Headset
 }, {
   name: 'Usage Insights',
   href: '/ai-usage',

@@ -1,7 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { handleSupportEscalation, handleSmartEscalation } from "../_shared/escalation-utils.ts";
-import { analyzeEscalationNeed, attemptAISolution } from "../_shared/smart-escalation-analyzer.ts";
 import logDebug from "../_shared/webhook-logger.ts";
 import { calculateSimilarity } from "../_shared/text-similarity.ts";
 import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processing.ts";
@@ -31,32 +29,10 @@ const corsHeaders = {
 // Initialize Supabase client with service role for admin operations
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// NEW FUNCTION: Check if a phone number is registered as a support phone number
-async function isSupportPhoneNumber(instanceName: string): Promise<boolean> {
-  try {
-    // Query the support config table for matching support phone numbers
-    const { data, error } = await supabaseAdmin
-      .from('whatsapp_support_config')
-      .select('support_phone_number')
-      .eq('support_phone_number', instanceName)
-      .maybeSingle();
-    
-    // If there's an error in the query, log it but continue (default to false)
-    if (error) {
-      logger.error('Error checking support phone number:', error);
-      return false;
-    }
-    
-    // Return true if the instance name matches a support phone number
-    return !!data;
-  } catch (error) {
-    // Handle any unexpected errors
-    logger.error('Exception checking support phone number:', error);
-    return false;
-  }
-}
+// REMOVED: Support phone number check function (escalation system removed)
 
 // Helper function to find or create a conversation with improved timeout management and handling of unique constraint
 async function findOrCreateConversation(instanceId: string, userPhone: string) {
@@ -613,6 +589,8 @@ async function processMessageForAI(instance: string, messageData: any) {
       return false;
     }
 
+    // REMOVED: maxAIAttempts logic (escalation system removed)
+
     await logDebug('AI_ENABLED', 'AI is enabled for this instance', { 
       aiConfigId: aiConfig.id,
       temperature: aiConfig.temperature,
@@ -723,23 +701,23 @@ async function processMessageForAI(instance: string, messageData: any) {
             whatsappInstanceId: instanceId,
             userId: aiConfig.user_id,
             conversationHistory: contextualHistory,
-            useCache: false // إيقاف الكاش مؤقتاً للاختبار
+            useCache: true // تفعيل الكاش لتوفير الوقت والتكلفة
           })
         });
 
         if (intentResponse.ok) {
           intentClassification = await intentResponse.json();
           // FIX: دعم الحقلين لضمان التوافق
-          selectedPersonality = intentClassification.selectedPersonality || intentClassification.selected_personality;
+          selectedPersonality = (intentClassification as any)?.selectedPersonality || (intentClassification as any)?.selected_personality;
           
           await logDebug('SMART_INTENT_CLASSIFICATION_SUCCESS', 'Smart intent classification completed', {
-            intent: intentClassification.intent,
-            confidence: intentClassification.confidence,
-            businessType: intentClassification.businessContext?.industry,
-            communicationStyle: intentClassification.businessContext?.communicationStyle,
+            intent: (intentClassification as any)?.intent,
+            confidence: (intentClassification as any)?.confidence,
+            businessType: (intentClassification as any)?.businessContext?.industry,
+            communicationStyle: (intentClassification as any)?.businessContext?.communicationStyle,
             hasPersonality: !!selectedPersonality,
-            processingTime: intentClassification.processingTimeMs,
-            reasoning: intentClassification.reasoning
+            processingTime: (intentClassification as any)?.processingTimeMs,
+            reasoning: (intentClassification as any)?.reasoning
           });
         } else {
           const errorText = await intentResponse.text();
@@ -768,7 +746,7 @@ async function processMessageForAI(instance: string, messageData: any) {
             
             if (fallbackResponse.ok) {
               intentClassification = await fallbackResponse.json();
-              selectedPersonality = intentClassification.selected_personality;
+              selectedPersonality = (intentClassification as any)?.selected_personality;
               await logDebug('FALLBACK_INTENT_CLASSIFICATION_SUCCESS', 'Fallback to enhanced classifier successful');
             }
           } catch (fallbackError) {
@@ -795,7 +773,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       userQuery: messageText,
       hasGreeting,
       fileIds,
-      detectedIntent: intentClassification?.intent || 'none',
+      detectedIntent: (intentClassification as any)?.intent || 'none',
       usingPersonality: !!selectedPersonality
     });
 
@@ -824,7 +802,11 @@ async function processMessageForAI(instance: string, messageData: any) {
       
       // Continue with empty context instead of failing
       await logDebug('AI_SEARCH_FALLBACK', 'Continuing with empty context due to search failure');
-      return await generateAndSendAIResponse(
+      
+      // REMOVED: AI escalation logic (escalation system removed)
+      // Continue with AI processing in fallback case
+
+      const aiResponseResult = await generateAndSendAIResponse(
         messageText, 
         '', 
         instanceName, 
@@ -837,6 +819,10 @@ async function processMessageForAI(instance: string, messageData: any) {
         supabaseServiceKey,
         imageUrl
       );
+
+      // REMOVED: AI attempt recording (escalation system removed)
+
+      return aiResponseResult;
     }
 
     const searchResults = await searchResponse.json();
@@ -901,35 +887,38 @@ async function processMessageForAI(instance: string, messageData: any) {
     const smartAiConfig = {
       ...aiConfig,
       // Override with personality-specific settings if available
-      ...(selectedPersonality && {
-        system_prompt: selectedPersonality.system_prompt,
-        temperature: selectedPersonality.temperature,
-        selectedPersonalityId: selectedPersonality.id,
-        selectedPersonalityName: selectedPersonality.name,
-        detectedIntent: intentClassification?.intent,
-        intentConfidence: intentClassification?.confidence
+      ...((selectedPersonality as any) && {
+        system_prompt: (selectedPersonality as any).system_prompt,
+        temperature: (selectedPersonality as any).temperature,
+        selectedPersonalityId: (selectedPersonality as any).id,
+        selectedPersonalityName: (selectedPersonality as any).name,
+        detectedIntent: (intentClassification as any)?.intent,
+        intentConfidence: (intentClassification as any)?.confidence
       }),
       // Add business context for smarter responses
-      ...(intentClassification?.businessContext && {
-        businessContext: intentClassification.businessContext,
-        detectedIndustry: intentClassification.businessContext.industry,
-        communicationStyle: intentClassification.businessContext.communicationStyle,
-        culturalContext: intentClassification.businessContext.detectedTerms
+      ...((intentClassification as any)?.businessContext && {
+        businessContext: (intentClassification as any).businessContext,
+        detectedIndustry: (intentClassification as any).businessContext.industry,
+        communicationStyle: (intentClassification as any).businessContext.communicationStyle,
+        culturalContext: (intentClassification as any).businessContext.detectedTerms
       }),
       // البيانات المتقدمة الجديدة
-      ...(intentClassification?.emotionAnalysis && {
-        emotionAnalysis: intentClassification.emotionAnalysis
+      ...((intentClassification as any)?.emotionAnalysis && {
+        emotionAnalysis: (intentClassification as any).emotionAnalysis
       }),
-      ...(intentClassification?.customerJourney && {
-        customerJourney: intentClassification.customerJourney
+      ...((intentClassification as any)?.customerJourney && {
+        customerJourney: (intentClassification as any).customerJourney
       }),
-      ...(intentClassification?.productInterest && {
-        productInterest: intentClassification.productInterest
+      ...((intentClassification as any)?.productInterest && {
+        productInterest: (intentClassification as any).productInterest
       })
     };
 
+    // REMOVED: AI escalation logic (escalation system removed)
+    // Continue with AI processing
+
     // Generate and send the response with smart context and personality management
-    return await generateAndSendAIResponse(
+    const aiResponseResult = await generateAndSendAIResponse(
       messageText,
       context,
       instanceName,
@@ -942,6 +931,10 @@ async function processMessageForAI(instance: string, messageData: any) {
       supabaseServiceKey,
       imageUrl
     );
+
+    // REMOVED: AI attempt recording (escalation system removed)
+
+    return aiResponseResult;
   } catch (error) {
     await logDebug('AI_PROCESS_EXCEPTION', 'Unhandled exception in AI processing', { error });
     logger.error('Error in processMessageForAI:', error);
@@ -1002,7 +995,7 @@ serve(async (req) => {
     }
     
     // Try to extract the instance name from the path first (for backward compatibility)
-    let instanceName = null;
+    let instanceName: string | null = null;
     
     // Pattern 1: Direct path format
     if (pathParts.length >= 3 && pathParts[0] === 'api') {
@@ -1048,20 +1041,7 @@ serve(async (req) => {
     if (instanceName) {
       await logDebug('WEBHOOK_INSTANCE', `Processing webhook for instance: ${instanceName}`);
       
-      // NEW CODE: Check if the instance is a support phone number
-      const isSupportNumber = await isSupportPhoneNumber(instanceName);
-      if (isSupportNumber) {
-        await logDebug('SUPPORT_NUMBER_DETECTED', `Ignoring webhook from support phone number: ${instanceName}`);
-        return new Response(JSON.stringify({ 
-          success: true, 
-          message: 'Ignored webhook from support phone number' 
-        }), {
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
-        });
-      }
+      // REMOVED: Support phone number check (escalation system removed)
       
       // Different webhook events have different structures
       // We need to normalize based on the structure
@@ -1124,10 +1104,9 @@ serve(async (req) => {
         await logDebug('WEBHOOK_SAVED', 'Webhook message saved successfully');
       }
       
-      // Process for support escalation if this is a message event
-      let skipAiProcessing = false;
+      // Process voice messages if needed
       let foundInstanceId = null;
-      let transcribedText = null; // Add variable to store transcribed text for voice messages
+      let transcribedText: string | null = null; // Add variable to store transcribed text for voice messages
       
       // Look up the instance ID if this is a message event
       if (event === 'messages.upsert') {
@@ -1171,7 +1150,7 @@ serve(async (req) => {
               normalizedData.key?.remoteJid?.split('@')[0] || '', evolutionApiKey);
             
             if (transcriptionResult.success && transcriptionResult.transcription) {
-              transcribedText = transcriptionResult.transcription;
+              transcribedText = transcriptionResult.transcription as string;
               await logDebug('VOICE_TRANSCRIPTION_FOR_ESCALATION', 'Successfully transcribed voice message for escalation check', {
                 transcription: transcribedText
               });
@@ -1182,314 +1161,30 @@ serve(async (req) => {
             }
           }
           
-          // Prepare webhook data for escalation check
-          const webhookData = {
-            instance: instanceName,
-            event: event,
-            data: normalizedData
-          };
+          // REMOVED: Webhook data preparation (no longer needed)
           
-          await logDebug('SUPPORT_ESCALATION_CHECK', 'Checking message for support escalation', { 
+          await logDebug('VOICE_PROCESSING_COMPLETE', 'Voice message processing completed', { 
             instance: instanceName,
             hasTranscribedText: !!transcribedText
           });
           
-          // Get Supabase URL and API keys from environment
-          const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-          const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
-          const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL') || '';
-          const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || '';
+          // REMOVED: Evolution API settings (no longer needed for escalation)
           
-          // Smart escalation analysis - check if we should use smart escalation first
-          let escalationResult;
-          let shouldSkipAiProcessing = false;
-          let aiAttemptMade = false;
-          let instanceUserId = null; // Initialize instanceUserId
-          
-          try {
-            // Get instance owner for smart escalation
-            if (foundInstanceId) {
-              const { data: instanceOwnerData, error: instanceOwnerError } = await supabaseAdmin
-                .from('whatsapp_instances')
-                .select('user_id')
-                .eq('id', foundInstanceId)
-                .single();
-              
-              if (!instanceOwnerError && instanceOwnerData) {
-                instanceUserId = instanceOwnerData.user_id;
-                await logDebug('INSTANCE_OWNER_FOUND', 'Found instance owner', { instanceUserId });
-              }
-            }
-            
-            // Get the message content for analysis
-            const messageContent = transcribedText || 
-                                 normalizedData.message?.conversation || 
-                                 normalizedData.message?.extendedTextMessage?.text || '';
-            
-            if (messageContent && foundInstanceId) {
-              await logDebug('SMART_ESCALATION_ANALYSIS', 'Starting smart escalation analysis', {
-                instanceId: foundInstanceId,
-                hasMessage: !!messageContent,
-                messageLength: messageContent.length
-              });
-
-              // First, try to get intent analysis if available
-              let intentAnalysis = null;
-              let emotionAnalysis = null;
-              
-              try {
-                const intentResponse = await fetch(`${supabaseUrl}/functions/v1/smart-intent-analyzer`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${supabaseAnonKey}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    message: messageContent,
-                    whatsappInstanceId: foundInstanceId,
-                    userId: instanceUserId || 'unknown',
-                    conversationHistory: []
-                  })
-                });
-
-                if (intentResponse.ok) {
-                  const intentData = await intentResponse.json();
-                  intentAnalysis = {
-                    intent: intentData.intent,
-                    confidence: intentData.confidence
-                  };
-                  emotionAnalysis = intentData.emotionAnalysis;
-                  
-                  await logDebug('INTENT_ANALYSIS_SUCCESS', 'Successfully got intent analysis', {
-                    intent: intentAnalysis.intent,
-                    confidence: intentAnalysis.confidence,
-                    emotion: emotionAnalysis?.primary_emotion
-                  });
-                }
-              } catch (intentError) {
-                await logDebug('INTENT_ANALYSIS_ERROR', 'Failed to get intent analysis', { error: intentError });
-              }
-
-              // Perform smart escalation analysis
-              const smartEscalationResult = await analyzeEscalationNeed(
-                messageContent,
-                [], // conversation history - can be enhanced later
-                intentAnalysis,
-                emotionAnalysis,
-                foundInstanceId,
-                supabaseAdmin
-              );
-
-              await logDebug('SMART_ESCALATION_RESULT', 'Smart escalation analysis completed', {
-                shouldEscalate: smartEscalationResult.shouldEscalate,
-                suggestedAction: smartEscalationResult.suggestedAction,
-                confidence: smartEscalationResult.confidence,
-                reasoning: smartEscalationResult.reasoning,
-                urgencyLevel: smartEscalationResult.urgencyLevel,
-                canSolveWithRAG: smartEscalationResult.canSolveWithRAG
-              });
-
-              // Handle smart escalation decision
-              if (smartEscalationResult.shouldEscalate) {
-                if (smartEscalationResult.suggestedAction === 'solve_with_ai') {
-                  // Try AI solution first
-                  await logDebug('SMART_ESCALATION_AI_ATTEMPT', 'Attempting AI solution before escalation');
-                  
-                  // Get RAG context if available (using same method as main AI processing)
-                  let ragContext = '';
-                  try {
-                    // Get files associated with this instance
-                    const { data: fileMappings, error: fileMappingsError } = await supabaseAdmin
-                      .from('whatsapp_file_mappings')
-                      .select('file_id')
-                      .eq('whatsapp_instance_id', foundInstanceId);
-
-                    if (!fileMappingsError && fileMappings && fileMappings.length > 0) {
-                      const fileIds = fileMappings.map(mapping => mapping.file_id);
-                      
-                      // Use semantic search (same as main AI processing)
-                      const searchResponse = await fetch(`${supabaseUrl}/functions/v1/semantic-search`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${supabaseServiceKey}`
-                        },
-                        body: JSON.stringify({
-                          query: messageContent,
-                          fileIds: fileIds,
-                          limit: 3,
-                          threshold: 0.7
-                        })
-                      });
-
-                      if (searchResponse.ok) {
-                        const searchResults = await searchResponse.json();
-                        if (searchResults.success && searchResults.results && searchResults.results.length > 0) {
-                          ragContext = searchResults.results
-                            .map((result: any) => result.content)
-                            .join('\n\n');
-                        }
-                      }
-                    }
-                  } catch (ragError) {
-                    await logDebug('RAG_CONTEXT_ERROR', 'Failed to get RAG context', { error: ragError });
-                  }
-
-                  const aiAttemptResult = await attemptAISolution(
-                    messageContent,
-                    [],
-                    ragContext,
-                    foundInstanceId,
-                    1
-                  );
-
-                  aiAttemptMade = true;
-
-                  if (aiAttemptResult.success && aiAttemptResult.response) {
-                    // AI solved it, send response and skip escalation
-                    await logDebug('AI_SOLUTION_SUCCESS', 'AI successfully solved the query', {
-                      responseLength: aiAttemptResult.response.length
-                    });
-
-                    // Send AI response directly
-                    // This would be handled by the regular AI processing flow
-                    escalationResult = {
-                      success: true,
-                      action: 'solved_with_ai',
-                      skip_ai_processing: false,
-                      ai_response: aiAttemptResult.response
-                    };
-                  } else {
-                    // AI couldn't solve it, proceed with escalation
-                    await logDebug('AI_SOLUTION_FAILED', 'AI could not solve, proceeding with escalation', {
-                      reasoning: aiAttemptResult.reasoning
-                    });
-                    
-                    escalationResult = await handleSupportEscalation(
-                      webhookData,
-                      supabaseUrl,
-                      supabaseAnonKey,
-                      evolutionApiUrl,
-                      evolutionApiKey,
-                      supabaseServiceKey,
-                      foundInstanceId,
-                      transcribedText
-                    );
-                  }
-                } else if (smartEscalationResult.suggestedAction === 'escalate_immediate' || 
-                          smartEscalationResult.suggestedAction === 'escalate_with_context') {
-                  // Direct smart escalation (immediate or with context)
-                  await logDebug('SMART_ESCALATION_DIRECT', `Smart analysis suggests ${smartEscalationResult.suggestedAction}`);
-                  
-                  escalationResult = await handleSmartEscalation(
-                    webhookData,
-                    smartEscalationResult,
-                    intentAnalysis,
-                    emotionAnalysis,
-                    supabaseUrl,
-                    supabaseAnonKey,
-                    evolutionApiUrl,
-                    evolutionApiKey,
-                    supabaseServiceKey,
-                    foundInstanceId,
-                    transcribedText
-                  );
-                  
-                  await logDebug('SMART_ESCALATION_DIRECT_RESULT', 'Result from smart escalation call', {
-                    success: escalationResult.success,
-                    action: escalationResult.action,
-                    escalation_id: escalationResult.escalation_id,
-                    escalation_type: escalationResult.escalation_type,
-                    error: escalationResult.error
-                  });
-                  
-                  shouldSkipAiProcessing = true;
-                } else {
-                  // Unknown escalation action - fallback to no escalation
-                  await logDebug('SMART_ESCALATION_UNKNOWN_ACTION', `Unknown escalation action: ${smartEscalationResult.suggestedAction}`);
-                  
-                  escalationResult = {
-                    success: true,
-                    action: 'unknown_escalation_action',
-                    skip_ai_processing: false,
-                    reasoning: `Unknown suggested action: ${smartEscalationResult.suggestedAction}`
-                  };
-                }
-              } else {
-                // No escalation needed according to smart analysis
-                await logDebug('SMART_ESCALATION_NOT_NEEDED', 'Smart analysis suggests no escalation needed');
-                
-                escalationResult = {
-                  success: true,
-                  action: 'no_escalation_needed',
-                  skip_ai_processing: false,
-                  reasoning: smartEscalationResult.reasoning
-                };
-              }
-            } else {
-              // No message content or instance ID - skip escalation
-              escalationResult = {
-                success: true,
-                action: 'no_content_or_instance',
-                skip_ai_processing: false,
-                reasoning: 'No message content or instance ID available'
-              };
-            }
-          } catch (smartEscalationError) {
-            await logDebug('SMART_ESCALATION_ERROR', 'Error in smart escalation analysis, skipping escalation', {
-              error: smartEscalationError
-            });
-            
-            // Log error and continue with AI processing
-            escalationResult = {
-              success: true,
-              action: 'smart_escalation_error',
-              skip_ai_processing: false,
-              error: 'Smart escalation analysis failed',
-              reasoning: 'Error in smart escalation analysis'
-            };
-          }
-          
-          await logDebug('SUPPORT_ESCALATION_RESULT', 'Support escalation check result', { 
-            success: escalationResult.success,
-            action: escalationResult.action,
-            escalated: escalationResult.action === 'escalated',
-            skipAi: !!escalationResult.skip_ai_processing || shouldSkipAiProcessing,
-            aiAttemptMade: aiAttemptMade,
-            usedTranscribedText: !!transcribedText
-          });
-          
-          // Set flag to skip AI processing if needed
-          if (escalationResult.skip_ai_processing || shouldSkipAiProcessing) {
-            skipAiProcessing = true;
-            await logDebug('AI_PROCESSING_SKIPPED', 'Skipping AI processing due to escalation decision', {
-              action: escalationResult.action,
-              matchedKeyword: escalationResult.matched_keyword,
-              category: escalationResult.category,
-              smartEscalation: shouldSkipAiProcessing,
-              aiAttemptMade: aiAttemptMade
-            });
-          }
-          
-          // Handle case where AI already provided a response
-          if (escalationResult.ai_response && escalationResult.action === 'solved_with_ai') {
-            await logDebug('AI_RESPONSE_FROM_ESCALATION', 'AI response generated during escalation analysis');
-            // The AI response would be sent through the normal flow
-            skipAiProcessing = false; // Allow AI processing to send the response
-          }
+          // REMOVED: Smart escalation analysis (escalation system removed)
+          // Continue with normal AI processing
         } catch (error) {
           // Log error but continue with AI processing
-          await logDebug('SUPPORT_ESCALATION_ERROR', 'Error checking for support escalation', { 
+          await logDebug('VOICE_PROCESSING_ERROR', 'Error in voice message processing', { 
             error: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined
           });
-          logger.error('Error checking for support escalation:', error);
-          // Continue with AI processing despite escalation error
+          logger.error('Error in voice processing:', error);
+          // Continue with AI processing despite error
         }
       }
       
-      // Process for AI if this is a message event and not escalated
-      if (event === 'messages.upsert' && !skipAiProcessing) {
+      // Process for AI if this is a message event
+      if (event === 'messages.upsert') {
         await logDebug('AI_PROCESS_ATTEMPT', 'Attempting to process message for AI response');
         if (transcribedText) {
           // If we already transcribed the message for escalation, pass it to AI processing

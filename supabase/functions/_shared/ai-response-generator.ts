@@ -2,7 +2,7 @@
 import logDebug from "./webhook-logger.ts";
 import { storeMessageInConversation } from "./conversation-storage.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { detectMessageLanguage, type DetectedLanguage } from "./language-detector.ts";
+
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -46,12 +46,7 @@ export async function generateAndSendAIResponse(
     // Initialize Supabase admin client for database operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Detect message language
-    const detectedLanguage = detectMessageLanguage(query);
-    await logDebug('AI_LANGUAGE_DETECTION', 'Detected message language', { 
-      query: query.substring(0, 50) + '...',
-      detectedLanguage
-    });
+
     
     // Generate system prompt
     await logDebug('AI_SYSTEM_PROMPT', 'Using system prompt from configuration', { 
@@ -79,8 +74,7 @@ export async function generateAndSendAIResponse(
         maxContextTokens: 3000, // Explicit token limit
         imageUrl: imageUrl, // Pass the image URL if available
         userId: aiConfig.user_id || null,
-        // Language detection
-        detectedLanguage: detectedLanguage,
+
         // SMART: Pass business context and personality info for smarter responses
         selectedPersonalityId: aiConfig.selectedPersonalityId || null,
         selectedPersonalityName: aiConfig.selectedPersonalityName || null,

@@ -6,22 +6,29 @@
 
 // Import Papa Parse from a CDN URL that's compatible with Deno
 import Papa from 'https://esm.sh/papaparse@5.4.1';
+import { logger } from '../_shared/logger.ts';
+import { ChunkWithMetadata } from '../_shared/types.ts';
 
-// Create a simple logger since we can't use @/utils/logger in edge functions
-const logger = {
-  log: (...args: any[]) => console.log(...args),
-  error: (...args: any[]) => console.error(...args),
-  info: (...args: any[]) => console.info(...args),
-  warn: (...args: any[]) => console.warn(...args),
-  debug: (...args: any[]) => console.debug(...args),
-};
+// Papa Parse result interface
+interface PapaParseResult {
+  data: Record<string, string>[];
+  errors: unknown[];
+  meta: {
+    delimiter?: string;
+    linebreak?: string;
+    aborted?: boolean;
+    truncated?: boolean;
+    cursor?: number;
+    fields?: string[];
+  };
+}
 
 /**
  * Extracts text from CSV using Papa Parse
  * @param fileContent The raw CSV file content
  * @returns Parsed CSV content with preserved structure
  */
-export function parseCSVContent(fileContent: string): any {
+export function parseCSVContent(fileContent: string): PapaParseResult {
   logger.log('Parsing CSV content with Papa Parse');
   
   try {
@@ -49,7 +56,7 @@ export function parseCSVContent(fileContent: string): any {
  * @param chunkSize Target chunk size (approximate character count per chunk)
  * @returns Array of CSV chunks with headers in each chunk
  */
-export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50000): string[] {
+export function chunkParsedCSV(parsedResult: PapaParseResult, chunkSize: number = 50000): string[] {
   if (!parsedResult.data || parsedResult.data.length === 0) {
     logger.log('No CSV data to chunk');
     return [];
@@ -118,10 +125,10 @@ export function chunkParsedCSV(parsedResult: any, chunkSize: number = 50000): st
  * @returns Array of chunks with enhanced metadata
  */
 export function createParsedCSVChunkMetadata(
-  parsedResult: any,
+  parsedResult: PapaParseResult,
   chunks: string[],
   documentId: string
-): Array<{ text: string; metadata: Record<string, any> }> {
+): ChunkWithMetadata[] {
   const { meta } = parsedResult;
   const headers = meta.fields || [];
   
@@ -143,7 +150,7 @@ export function createParsedCSVChunkMetadata(
     // Extract product names from this chunk
     const productNames = new Set<string>();
     if (productNameCol) {
-      chunkData.data.forEach((row: any) => {
+      chunkData.data.forEach((row: Record<string, string>) => {
         if (row[productNameCol]) {
           productNames.add(row[productNameCol]);
         }

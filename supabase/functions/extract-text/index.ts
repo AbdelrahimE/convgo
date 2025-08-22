@@ -1,28 +1,15 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { logger } from '../_shared/logger.ts';
+import { ChunkingOptions, ChunkWithMetadata, ChunkMetadata } from '../_shared/types.ts';
 import { findTableSections, processTableForChunking, isTableContent } from '../utils/tableProcessing.ts';
 import { isCSVContent, chunkCSVContent, createCSVChunkMetadata } from '../utils/csvProcessing.ts';
 import { parseCSVContent, chunkParsedCSV, createParsedCSVChunkMetadata } from '../utils/csvParseProcessing.ts';
 
-// Create a simple logger since we can't use @/utils/logger in edge functions
-const logger = {
-  log: (...args: any[]) => console.log(...args),
-  error: (...args: any[]) => console.error(...args),
-  info: (...args: any[]) => console.info(...args),
-  warn: (...args: any[]) => console.warn(...args),
-  debug: (...args: any[]) => console.debug(...args),
-};
+// Logger is now imported from shared module for consistency
 
-// Text processing utilities
-interface ChunkingOptions {
-  chunkSize?: number;
-  chunkOverlap?: number;
-  splitBySentence?: boolean;
-  structureAware?: boolean;
-  preserveTables?: boolean;
-  cleanRedundantData?: boolean;
-}
+// ChunkingOptions interface is now imported from shared types
 
 // Default chunking options matching the frontend
 const DEFAULT_CHUNKING_OPTIONS: ChunkingOptions = {
@@ -99,50 +86,7 @@ function getTextDirection(language: string): string {
   return 'ltr';
 }
 
-/**
- * Detects if a text segment appears to be a table
- */
-function isTableContent(text: string): boolean {
-  // Count the number of consecutive lines that have similar patterns of
-  // delimiters like commas, tabs, or multiple spaces
-  const lines = text.split('\n');
-  if (lines.length < 3) return false;
-  
-  // Check for consistent separators like tabs, multiple spaces, or vertical bars
-  const delimiters = [/\t/, /\s{2,}/, /\|/];
-  let consistentFormat = false;
-  
-  for (const delimiter of delimiters) {
-    // Count delimiters in each line
-    const delimiterCounts = lines.map(line => (line.match(delimiter) || []).length);
-    
-    // Check if at least 3 consecutive lines have similar delimiter counts
-    let similarFormatCount = 0;
-    for (let i = 1; i < delimiterCounts.length; i++) {
-      if (Math.abs(delimiterCounts[i] - delimiterCounts[i-1]) <= 1 && delimiterCounts[i] > 0) {
-        similarFormatCount++;
-        if (similarFormatCount >= 2) {
-          consistentFormat = true;
-          break;
-        }
-      } else {
-        similarFormatCount = 0;
-      }
-    }
-    
-    if (consistentFormat) break;
-  }
-  
-  // Also check for content that has number patterns typical in tables
-  const numberPatterns = lines.map(line => (line.match(/\d+(\.\d+)?/) || []).length);
-  const hasConsistentNumbers = numberPatterns.filter(count => count > 0).length >= Math.floor(lines.length * 0.5);
-  
-  // Check for phone numbers, which often appear in tables
-  const phonePattern = /(\+?\d{1,4}[\s-]?)?(\(?\d{1,4}\)?[\s-]?)?\d{3}[\s-]?\d{3}[\s-]?\d{4}/;
-  const hasPhoneNumbers = lines.filter(line => phonePattern.test(line)).length >= 2;
-  
-  return consistentFormat || hasConsistentNumbers || hasPhoneNumbers;
-}
+// isTableContent function is now imported from utils/tableProcessing.ts to avoid duplication
 
 /**
  * Enhanced function to detect structural boundaries in text for improved chunking
@@ -732,8 +676,8 @@ function preprocessText(text: string): string {
     .replace(/\s+/g, ' ')
     // Normalize line breaks
     .replace(/\r\n/g, '\n')
-    // Remove unsafe characters
-    .replace(/[\u0000-\u001F\u007F-\u009F\u2000-\u200F\uFEFF]/g, '')
+    // Remove unsafe control characters (using Unicode categories for safety)
+    .replace(/[\p{Cc}\p{Cf}]/gu, '')
     // Keep parentheses which are common in many languages
     .replace(/[^\p{L}\p{N}\p{P}\p{Z}\p{Sc}\p{Emoji}]/gu, '')
     // Replace multiple punctuation (keep Arabic punctuation like ؟،)
@@ -749,7 +693,7 @@ function createChunkMetadata(
   text: string,
   chunks: string[],
   documentId: string
-): Array<{ text: string; metadata: Record<string, any> }> {
+): ChunkWithMetadata[] {
   // Check if content is CSV first
   if (isCSVContent(text)) {
     logger.log('Creating CSV-specific metadata for chunks');

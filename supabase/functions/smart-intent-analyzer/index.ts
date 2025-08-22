@@ -15,12 +15,40 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+// Cache بسيط في الذاكرة للـ MVP - توفير للاستفسارات المتكررة
+const intentCache = new Map<string, { result: any; timestamp: number }>();
+const CACHE_TTL = 300000; // 5 دقائق
+
+function getCachedIntent(message: string, instanceId: string): any | null {
+  const cacheKey = `${instanceId}:${message.toLowerCase().trim()}`;
+  const cached = intentCache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    logger.log(`Cache hit for message: "${message.substring(0, 30)}..."`);
+    return cached.result;
+  }
+  
+  return null;
+}
+
+function setCachedIntent(message: string, instanceId: string, result: any): void {
+  const cacheKey = `${instanceId}:${message.toLowerCase().trim()}`;
+  intentCache.set(cacheKey, {
+    result: { ...result, cacheHit: true },
+    timestamp: Date.now()
+  });
+  
+  // تنظيف Cache إذا أصبح كبيراً (حد أقصى 100 عنصر)
+  if (intentCache.size > 100) {
+    const oldestKey = intentCache.keys().next().value;
+    intentCache.delete(oldestKey);
+  }
+}
+
 interface SmartIntentRequest {
   message: string;
   whatsappInstanceId: string;
-  userId: string;
   conversationHistory?: string[];
-  useCache?: boolean;
 }
 
 interface SmartIntentResult {
@@ -31,24 +59,19 @@ interface SmartIntentResult {
     industry: string;
     communicationStyle: string;
     detectedTerms: string[];
-  };
-  // FIX: دعم الحقلين للتوافق مع النظام القديم والجديد
-  selectedPersonality?: {
-    id: string;
-    name: string;
-    system_prompt: string;
-    temperature: number;
-  };
-  selected_personality?: {
-    id: string;
-    name: string;
-    system_prompt: string;
-    temperature: number;
+    confidence: number;
   };
   reasoning: string;
+  selectedPersonality: {
+    id: string;
+    name: string;
+    systemPrompt: string;
+    industry: string;
+    intent: string;
+  } | null;
   processingTimeMs: number;
   cacheHit: boolean;
-  // البيانات الجديدة المضافة
+  // البيانات المبسطة للـ MVP
   emotionAnalysis?: {
     primary_emotion: string;
     intensity: number;
@@ -76,119 +99,64 @@ interface SmartIntentResult {
 }
 
 /**
- * الوظيفة الأساسية: تحليل السياق التجاري من المحادثة
- * تفهم طبيعة العمل والمجال من المحادثة بدلاً من الكلمات المحددة مسبقاً
+ * تحليل أساسي محسن للـ MVP - دمج ذكي لتوفير الوقت والأداء
+ * يدمج 3 وظائف رئيسية في استدعاء OpenAI واحد
+ * توفير متوقع: 3-4 ثواني من زمن الاستجابة
  */
-async function analyzeBusinessContext(conversationHistory: string[]): Promise<{
-  industry: string;
-  communicationStyle: string;
-  detectedTerms: string[];
-  confidence: number;
-}> {
-  try {
-    const recentMessages = conversationHistory.slice(-10).join('\n');
-    
-    const contextPrompt = `أنت محلل ذكي لسياق الأعمال. حلل هذه المحادثة وحدد:
-
-المحادثة:
-${recentMessages}
-
-حدد بدقة:
-1. نوع العمل/الصناعة (تقنية، طبية، تجارة، تعليم، خدمات، صناعة، إلخ)
-2. أسلوب التواصل (رسمي، ودي، تقني، بسيط)
-3. المصطلحات المهمة المستخدمة (5-10 مصطلحات)
-4. مستوى الثقة في التحليل (0-1)
-
-اجب في JSON:
-{
-  "industry": "اسم الصناعة",
-  "communicationStyle": "نوع الأسلوب", 
-  "detectedTerms": ["مصطلح1", "مصطلح2", "..."],
-  "confidence": 0.85
-}`;
-
-    const apiKey = getNextOpenAIKey();
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: contextPrompt },
-          { role: 'user', content: `حلل: "${recentMessages}"` }
-        ],
-        temperature: 0.1,
-        max_tokens: 200
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const responseData = await response.json();
-    const result = JSON.parse(responseData.choices[0].message.content);
-
-    return {
-      industry: result.industry || 'عام',
-      communicationStyle: result.communicationStyle || 'ودي',
-      detectedTerms: result.detectedTerms || [],
-      confidence: result.confidence || 0.5
-    };
-  } catch (error) {
-    logger.error('Error analyzing business context:', error);
-    return {
-      industry: 'عام',
-      communicationStyle: 'ودي',
-      detectedTerms: [],
-      confidence: 0.3
-    };
-  }
-}
-
-/**
- * الوظيفة الذكية: فهم النية من المعنى والسياق
- * تحليل ذكي يفهم ما يريده العميل بدلاً من البحث عن كلمات محددة
- */
-async function understandIntentFromMeaning(
+async function analyzeCoreIntentOptimized(
   message: string,
-  businessContext: any
+  conversationHistory: string[]
 ): Promise<{
   intent: string;
   confidence: number;
   reasoning: string;
+  businessContext: {
+    industry: string;
+    communicationStyle: string;
+    detectedTerms: string[];
+    confidence: number;
+  };
+  basicEmotionState: string;
 }> {
   try {
-    const intelligentPrompt = `أنت نظام ذكي لفهم نوايا العملاء في بيئة ${businessContext.industry}.
+    // FIX 1: التحقق من صحة المدخلات
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      logger.warn('Invalid or empty message provided');
+      throw new Error('Invalid message input');
+    }
 
-السياق التجاري:
-- المجال: ${businessContext.industry}
-- أسلوب التواصل: ${businessContext.communicationStyle}
-- المصطلحات المهمة: ${businessContext.detectedTerms.join(', ')}
+    // تنظيف الرسالة وتقليل السياق للتسريع
+    const cleanMessage = message.trim().substring(0, 500); // حد أقصى 500 حرف
+    const recentContext = conversationHistory && conversationHistory.length > 0 
+      ? conversationHistory.slice(-3).join('\n').substring(0, 300) 
+      : 'لا يوجد سياق سابق';
+    
+    // prompt محسن ومبسط لتجنب أخطاء API
+    const optimizedPrompt = `You are a smart intent analyzer. Analyze this Arabic message and return ONLY valid JSON.
 
-الرسالة: "${message}"
+Previous context: ${recentContext}
+Current message: "${cleanMessage}"
 
-حدد النية الحقيقية من هذه الخيارات:
-- sales: يريد شراء أو معلومات عن منتج/خدمة
-- technical: لديه مشكلة تقنية أو يحتاج دعم تقني
-- customer-support: يحتاج مساعدة عامة أو لديه استفسار
-- billing: مشكلة في الفواتير أو الدفع
-- general: تحية أو سؤال عام
-
-فكر في:
-1. ما المطلوب الحقيقي من الرسالة؟
-2. ما السياق الثقافي واللغوي؟
-3. كيف يتواصل العملاء في هذا المجال عادة؟
-
-اجب في JSON:
+Return this exact JSON format:
 {
-  "intent": "النية",
-  "confidence": 0.92,
-  "reasoning": "تفسير مختصر للقرار"
-}`;
+  "intent": "sales|technical|customer-support|billing|general",
+  "confidence": 0.9,
+  "reasoning": "brief reason",
+  "businessContext": {
+    "industry": "sector",
+    "communicationStyle": "style",
+    "detectedTerms": ["term1", "term2"],
+    "confidence": 0.8
+  },
+  "basicEmotionState": "neutral|positive|negative|urgent"
+}
+
+Rules:
+- sales: asking about product/price/purchase
+- technical: technical issue/error
+- customer-support: general inquiry/complaint
+- billing: payment/invoice issue
+- general: greeting/general question`;
 
     const apiKey = getNextOpenAIKey();
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -198,341 +166,83 @@ async function understandIntentFromMeaning(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-nano',
         messages: [
-          { role: 'system', content: intelligentPrompt },
-          { role: 'user', content: `انية: "${message}"` }
+          { role: 'system', content: optimizedPrompt },
+          { role: 'user', content: cleanMessage }
         ],
-        temperature: 0.1,
-        max_tokens: 150
+        temperature: 1,
+        max_completion_tokens: 300, // المعيار الجديد لـ GPT-5
+        reasoning_effort: 'low' // أسرع إعداد للـ MVP
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      const errorData = await response.text();
+      logger.error(`OpenAI API error ${response.status}:`, errorData);
+      throw new Error(`OpenAI API error: ${response.status} - ${errorData}`);
     }
 
     const responseData = await response.json();
-    const result = JSON.parse(responseData.choices[0].message.content);
+    
+    // التحقق من صحة الاستجابة
+    if (!responseData.choices || !responseData.choices[0] || !responseData.choices[0].message) {
+      throw new Error('Invalid OpenAI response structure');
+    }
 
-    return {
-      intent: result.intent || 'general',
-      confidence: Math.min(0.98, result.confidence || 0.6),
-      reasoning: result.reasoning || 'تحليل ذكي للرسالة'
+    const content = responseData.choices[0].message.content;
+    if (!content) {
+      throw new Error('Empty response from OpenAI');
+    }
+
+    logger.log(`OpenAI response: ${content.substring(0, 100)}...`);
+
+    // معالجة أكثر أماناً للـ JSON
+    let result;
+    try {
+      result = JSON.parse(content.trim());
+    } catch (parseError) {
+      logger.error('JSON parsing failed, content:', content);
+      throw new Error(`JSON parsing failed: ${parseError.message}`);
+    }
+
+    // التحقق من صحة البيانات
+    const validatedResult = {
+      intent: (result.intent && ['sales', 'technical', 'customer-support', 'billing', 'general'].includes(result.intent)) 
+        ? result.intent : 'general',
+      confidence: Math.min(0.98, Math.max(0.3, Number(result.confidence) || 0.6)),
+      reasoning: String(result.reasoning || 'تحليل محسن').substring(0, 100),
+      businessContext: {
+        industry: String(result.businessContext?.industry || 'عام').substring(0, 50),
+        communicationStyle: String(result.businessContext?.communicationStyle || 'ودي').substring(0, 50),
+        detectedTerms: Array.isArray(result.businessContext?.detectedTerms) 
+          ? result.businessContext.detectedTerms.slice(0, 5).map(term => String(term).substring(0, 30))
+          : [],
+        confidence: Math.min(0.98, Math.max(0.3, Number(result.businessContext?.confidence) || 0.5))
+      },
+      basicEmotionState: (result.basicEmotionState && ['neutral', 'positive', 'negative', 'urgent'].includes(result.basicEmotionState))
+        ? result.basicEmotionState : 'neutral'
     };
+
+    logger.log(`Intent analysis success: ${validatedResult.intent} (${validatedResult.confidence})`);
+    return validatedResult;
+
   } catch (error) {
-    logger.error('Error understanding intent from meaning:', error);
+    logger.error('Error in optimized core intent analysis:', error);
+    
+    // Fallback آمن مع معلومات أكثر تفصيلاً
     return {
       intent: 'general',
-      confidence: 0.4,
-      reasoning: 'تحليل احتياطي بسبب خطأ في المعالجة'
-    };
-  }
-}
-
-/**
- * تحليل المشاعر المتقدم
- * يحلل المشاعر الأساسية والحالة العاطفية للعميل
- */
-async function analyzeSentiment(
-  message: string,
-  conversationHistory: string[],
-  businessContext: any
-): Promise<{
-  primary_emotion: string;
-  intensity: number;
-  emotional_indicators: string[];
-  sentiment_score: number;
-  emotional_state: string;
-  urgency_detected: boolean;
-}> {
-  try {
-    const recentContext = conversationHistory.slice(-5).join('\n');
-    
-    const sentimentPrompt = `أنت محلل نفسي ومشاعري متخصص. حلل هذه الرسالة والسياق لتحديد المشاعر والحالة العاطفية.
-
-السياق التجاري: ${businessContext.industry}
-أسلوب التواصل: ${businessContext.communicationStyle}
-
-المحادثة السابقة:
-${recentContext}
-
-الرسالة الحالية: "${message}"
-
-حدد بدقة:
-1. المشاعر الأساسية (excited, frustrated, satisfied, neutral, concerned, angry, happy, confused, urgent)
-2. شدة المشاعر (0-1)
-3. المؤشرات العاطفية الموجودة في النص
-4. درجة الإيجابية/السلبية (-1 إلى 1)
-5. الحالة العاطفية بالعربية
-6. هل يوجد استعجال أو إلحاح؟
-
-اجب في JSON:
-{
-  "primary_emotion": "المشاعر الأساسية",
-  "intensity": 0.8,
-  "emotional_indicators": ["مؤشر1", "مؤشر2"],
-  "sentiment_score": 0.5,
-  "emotional_state": "وصف الحالة العاطفية بالعربية",
-  "urgency_detected": false
-}`;
-
-    const apiKey = getNextOpenAIKey();
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+      confidence: 0.5,
+      reasoning: `تحليل احتياطي - خطأ: ${error.message}`,
+      businessContext: {
+        industry: 'عام',
+        communicationStyle: 'ودي',
+        detectedTerms: [],
+        confidence: 0.3
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: sentimentPrompt },
-          { role: 'user', content: `حلل المشاعر: "${message}"` }
-        ],
-        temperature: 0.1,
-        max_tokens: 200
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const responseData = await response.json();
-    const result = JSON.parse(responseData.choices[0].message.content);
-
-    return {
-      primary_emotion: result.primary_emotion || 'neutral',
-      intensity: Math.min(1, Math.max(0, result.intensity || 0.5)),
-      emotional_indicators: result.emotional_indicators || [],
-      sentiment_score: Math.min(1, Math.max(-1, result.sentiment_score || 0)),
-      emotional_state: result.emotional_state || 'حالة عادية',
-      urgency_detected: result.urgency_detected || false
+      basicEmotionState: 'neutral'
     };
-  } catch (error) {
-    logger.error('Error analyzing sentiment:', error);
-    return {
-      primary_emotion: 'neutral',
-      intensity: 0.5,
-      emotional_indicators: [],
-      sentiment_score: 0,
-      emotional_state: 'تعذر تحليل المشاعر',
-      urgency_detected: false
-    };
-  }
-}
-
-/**
- * تحليل مرحلة العميل في رحلة الشراء
- * يحدد أين يقف العميل في مسار التحويل
- */
-async function determineCustomerStage(
-  message: string,
-  conversationHistory: string[],
-  businessContext: any,
-  sentimentAnalysis: any
-): Promise<{
-  current_stage: string;
-  stage_confidence: number;
-  progression_indicators: string[];
-  next_expected_action: string;
-  conversion_probability: number;
-}> {
-  try {
-    const recentContext = conversationHistory.slice(-10).join('\n');
-    
-    const stagePrompt = `أنت محلل رحلة العميل متخصص في ${businessContext.industry}. 
-    
-حلل هذه المحادثة لتحديد مرحلة العميل:
-
-السياق:
-- المجال: ${businessContext.industry}
-- الحالة العاطفية: ${sentimentAnalysis.emotional_state}
-- المشاعر: ${sentimentAnalysis.primary_emotion}
-
-المحادثة:
-${recentContext}
-
-الرسالة الحالية: "${message}"
-
-حدد المرحلة من:
-- awareness: يكتشف المشكلة/الحاجة
-- consideration: يبحث عن الحلول ويقارن
-- decision: قريب من اتخاذ القرار
-- purchase: جاهز للشراء أو يسأل عن التفاصيل النهائية  
-- support: عميل حالي يحتاج مساعدة
-- retention: عميل حالي قد يفكر في الإلغاء
-
-اجب في JSON:
-{
-  "current_stage": "المرحلة",
-  "stage_confidence": 0.85,
-  "progression_indicators": ["مؤشر1", "مؤشر2"],
-  "next_expected_action": "الإجراء المتوقع التالي",
-  "conversion_probability": 0.7
-}`;
-
-    const apiKey = getNextOpenAIKey();
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: stagePrompt },
-          { role: 'user', content: `حلل المرحلة: "${message}"` }
-        ],
-        temperature: 0.1,
-        max_tokens: 180
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const responseData = await response.json();
-    const result = JSON.parse(responseData.choices[0].message.content);
-
-    return {
-      current_stage: result.current_stage || 'awareness',
-      stage_confidence: Math.min(1, Math.max(0, result.stage_confidence || 0.5)),
-      progression_indicators: result.progression_indicators || [],
-      next_expected_action: result.next_expected_action || 'متابعة المحادثة',
-      conversion_probability: Math.min(1, Math.max(0, result.conversion_probability || 0.3))
-    };
-  } catch (error) {
-    logger.error('Error determining customer stage:', error);
-    return {
-      current_stage: 'awareness',
-      stage_confidence: 0.3,
-      progression_indicators: [],
-      next_expected_action: 'متابعة المحادثة',
-      conversion_probability: 0.3
-    };
-  }
-}
-
-/**
- * استخراج المنتج أو الخدمة المطلوبة
- * يحلل النص لفهم ما يريده العميل بالتحديد
- */
-async function extractProductInterest(
-  message: string,
-  conversationHistory: string[],
-  businessContext: any
-): Promise<{
-  requested_item: string | null;
-  category: string | null;
-  specifications: string[];
-  price_range_discussed: boolean;
-  urgency_level: string;
-  decision_factors: string[];
-}> {
-  try {
-    const recentContext = conversationHistory.slice(-8).join('\n');
-    
-    const productPrompt = `أنت محلل منتجات وخدمات متخصص في ${businessContext.industry}.
-
-السياق التجاري:
-- المجال: ${businessContext.industry}
-- المصطلحات: ${businessContext.detectedTerms.join(', ')}
-
-المحادثة:
-${recentContext}
-
-الرسالة الحالية: "${message}"
-
-استخرج:
-1. المنتج/الخدمة المطلوبة (إن وجد)
-2. فئة المنتج
-3. المواصفات أو المتطلبات المذكورة
-4. هل تم مناقشة السعر؟
-5. مستوى الاستعجال (low, medium, high)
-6. العوامل المؤثرة في القرار
-
-اجب في JSON:
-{
-  "requested_item": "اسم المنتج/الخدمة أو null",
-  "category": "فئة المنتج أو null", 
-  "specifications": ["مواصفة1", "مواصفة2"],
-  "price_range_discussed": false,
-  "urgency_level": "medium",
-  "decision_factors": ["عامل1", "عامل2"]
-}`;
-
-    const apiKey = getNextOpenAIKey();
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: productPrompt },
-          { role: 'user', content: `استخرج المنتج: "${message}"` }
-        ],
-        temperature: 0.1,
-        max_tokens: 150
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const responseData = await response.json();
-    const result = JSON.parse(responseData.choices[0].message.content);
-
-    return {
-      requested_item: result.requested_item || null,
-      category: result.category || null,
-      specifications: result.specifications || [],
-      price_range_discussed: result.price_range_discussed || false,
-      urgency_level: result.urgency_level || 'medium',
-      decision_factors: result.decision_factors || []
-    };
-  } catch (error) {
-    logger.error('Error extracting product interest:', error);
-    return {
-      requested_item: null,
-      category: null,
-      specifications: [],
-      price_range_discussed: false,
-      urgency_level: 'low',
-      decision_factors: []
-    };
-  }
-}
-
-/**
- * وظيفة التعلم من النجاح
- * تحفظ الأنماط الناجحة لتحسين الأداء المستقبلي
- */
-async function learnFromSuccess(
-  instanceId: string,
-  message: string,
-  businessContext: any,
-  intent: string,
-  confidence: number
-): Promise<void> {
-  try {
-    await supabaseAdmin.rpc('learn_from_successful_intent', {
-      p_whatsapp_instance_id: instanceId,
-      p_message: message,
-      p_business_context: businessContext,
-      p_intent: intent,
-      p_confidence: confidence,
-      p_timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Error learning from success:', error);
   }
 }
 
@@ -546,8 +256,7 @@ async function getSmartPersonality(
 ): Promise<any> {
   try {
     logger.debug(`Getting personality for intent: ${intent}, instance: ${instanceId}`);
-    
-    // محاولة استخدام الدالة المُصلحة
+
     const { data, error } = await supabaseAdmin.rpc('get_contextual_personality', {
       p_whatsapp_instance_id: instanceId,
       p_intent: intent,
@@ -555,62 +264,54 @@ async function getSmartPersonality(
     });
 
     if (error) {
-      logger.warn('get_contextual_personality failed, using fallback:', error.message);
+      logger.error('Error getting contextual personality:', error);
       
-      // Fallback إلى النظام القديم
       const { data: fallbackData, error: fallbackError } = await supabaseAdmin.rpc('get_personality_for_intent', {
         p_whatsapp_instance_id: instanceId,
-        p_intent_category: intent,
-        p_confidence: 0.8
+        p_intent_category: intent
       });
-      
-      if (fallbackError) {
-        logger.error('Fallback personality function also failed:', fallbackError.message);
-        return null;
-      }
-      
-      const personality = fallbackData?.[0] || null;
-      logger.debug(`Fallback personality found:`, !!personality);
-      return personality;
-    }
 
-    const personality = data?.[0] || null;
-    logger.debug(`Smart personality found:`, !!personality);
-    
-    if (personality) {
-      logger.debug(`Selected personality: ${personality.personality_name} for intent: ${intent}`);
-    } else {
-      logger.warn(`No personality found for intent: ${intent}, instance: ${instanceId}`);
-      
-      // تجربة البحث عن شخصية عامة كآخر محاولة
-      const { data: generalData } = await supabaseAdmin
-        .from('ai_personalities')
-        .select('id as personality_id, name as personality_name, system_prompt, temperature')
-        .eq('whatsapp_instance_id', instanceId)
-        .eq('is_active', true)
-        .or('intent_category.eq.general,intent_category.is.null')
-        .order('usage_count', { ascending: false })
-        .limit(1)
-        .single();
+      if (fallbackError || !fallbackData) {
+        logger.warn('Fallback personality search failed, using general personality');
         
-      if (generalData) {
-        logger.debug(`Using general personality as fallback: ${generalData.personality_name}`);
+        const { data: generalData, error: generalError } = await supabaseAdmin
+          .from('ai_personalities')
+          .select('*')
+          .eq('whatsapp_instance_id', instanceId)
+          .eq('is_active', true)
+          .limit(1)
+          .single();
+
+        if (generalError || !generalData) {
+          logger.error('No personality found at all');
+          return null;
+        }
+        
         return generalData;
       }
+      
+      return fallbackData;
     }
-    
-    return personality;
+
+    if (!data) {
+      logger.warn(`No contextual personality found for intent: ${intent}`);
+      return null;
+    }
+
+    logger.log(`Found contextual personality: ${data.name} for intent: ${intent}`);
+    return data;
   } catch (error) {
-    logger.error('Error getting smart personality:', error);
+    logger.error('Exception in getSmartPersonality:', error);
     return null;
   }
 }
 
 /**
- * النظام الذكي المتكامل - نسخة محسنة
- * يجمع كل الوظائف في تحليل واحد ذكي شامل
+ * النظام الذكي المحسن للـ MVP - سرعة وبساطة
+ * تحسين جذري: من 5 استدعاءات OpenAI إلى 1 فقط!
+ * توفير متوقع: 60-70% من زمن الاستجابة
  */
-async function smartIntentAnalysis(
+async function smartIntentAnalysisOptimized(
   message: string,
   conversationHistory: string[],
   instanceId: string
@@ -625,48 +326,47 @@ async function smartIntentAnalysis(
   productInterest: any;
 }> {
   
-  // 1. فهم السياق التجاري
-  const businessContext = await analyzeBusinessContext(conversationHistory);
+  // 1. التحليل الأساسي المحسن الجديد (استدعاء OpenAI واحد فقط)
+  const coreAnalysis = await analyzeCoreIntentOptimized(message, conversationHistory);
   
-  // 2. فهم النية من المعنى
-  const intentResult = await understandIntentFromMeaning(message, businessContext);
+  // 2. بيانات مبسطة للـ MVP - كافية للوظائف الأساسية
+  const emotionAnalysis = {
+    primary_emotion: coreAnalysis.basicEmotionState === 'positive' ? 'satisfied' : 
+                     coreAnalysis.basicEmotionState === 'negative' ? 'concerned' :
+                     coreAnalysis.basicEmotionState === 'urgent' ? 'urgent' : 'neutral',
+    intensity: 0.5,
+    emotional_indicators: [],
+    sentiment_score: coreAnalysis.basicEmotionState === 'positive' ? 0.7 : 
+                     coreAnalysis.basicEmotionState === 'negative' ? -0.3 : 0,
+    emotional_state: coreAnalysis.basicEmotionState,
+    urgency_detected: coreAnalysis.basicEmotionState === 'urgent'
+  };
   
-  // 3. تحليل المشاعر والحالة العاطفية
-  const emotionAnalysis = await analyzeSentiment(message, conversationHistory, businessContext);
+  const customerJourney = {
+    current_stage: coreAnalysis.intent === 'sales' ? 'consideration' : 'awareness',
+    stage_confidence: 0.6,
+    progression_indicators: [],
+    next_expected_action: 'الرد على الاستفسار',
+    conversion_probability: coreAnalysis.intent === 'sales' ? 0.7 : 0.3
+  };
   
-  // 4. تحديد مرحلة العميل في رحلة الشراء
-  const customerJourney = await determineCustomerStage(
-    message, 
-    conversationHistory, 
-    businessContext, 
-    emotionAnalysis
-  );
+  const productInterest = {
+    requested_item: coreAnalysis.intent === 'sales' ? 'منتج محتمل' : null,
+    category: coreAnalysis.businessContext.industry || null,
+    specifications: coreAnalysis.businessContext.detectedTerms || [],
+    price_range_discussed: message.includes('سعر') || message.includes('تكلفة') || message.includes('ثمن'),
+    urgency_level: coreAnalysis.basicEmotionState === 'urgent' ? 'high' : 'medium',
+    decision_factors: []
+  };
   
-  // 5. استخراج المنتج أو الخدمة المطلوبة
-  const productInterest = await extractProductInterest(message, conversationHistory, businessContext);
-  
-  // 6. الحصول على الشخصية المناسبة (مع مراعاة التحليلات الجديدة)
-  const selectedPersonality = await getSmartPersonality(instanceId, intentResult.intent, businessContext);
-  
-  // 6.1. تحديث عداد استخدام الشخصية إذا تم العثور عليها
-  if (selectedPersonality?.personality_id) {
-    try {
-      await supabaseAdmin.rpc('increment_personality_usage', {
-        p_personality_id: selectedPersonality.personality_id
-      });
-    } catch (error) {
-      logger.error('Error incrementing personality usage:', error);
-    }
-  }
-  
-  // 7. التعلم من هذا التحليل (مع البيانات الجديدة)
-  await learnFromSuccess(instanceId, message, businessContext, intentResult.intent, intentResult.confidence);
+  // 3. الحصول على الشخصية المناسبة (محسن للسرعة)
+  const selectedPersonality = await getSmartPersonality(instanceId, coreAnalysis.intent, coreAnalysis.businessContext);
   
   return {
-    intent: intentResult.intent,
-    confidence: intentResult.confidence,
-    businessContext,
-    reasoning: intentResult.reasoning,
+    intent: coreAnalysis.intent,
+    confidence: coreAnalysis.confidence,
+    businessContext: coreAnalysis.businessContext,
+    reasoning: `${coreAnalysis.reasoning} - معالجة محسنة للـ MVP`,
     selectedPersonality,
     emotionAnalysis,
     customerJourney,
@@ -682,31 +382,37 @@ serve(async (req) => {
   const startTime = Date.now();
 
   try {
-    const { 
-      message, 
-      whatsappInstanceId, 
-      userId, 
-      conversationHistory = [],
-      useCache = true
-    } = await req.json() as SmartIntentRequest;
+    const { message, whatsappInstanceId, conversationHistory = [] } = await req.json() as SmartIntentRequest;
 
-    if (!message || !whatsappInstanceId || !userId) {
+    if (!message || !whatsappInstanceId) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Missing required parameters: message, whatsappInstanceId, userId' 
+        JSON.stringify({
+          success: false,
+          error: 'Message and whatsappInstanceId are required'
         }),
-        { 
+        {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 400
         }
       );
     }
 
-    logger.log(`Smart intent analysis for: "${message.substring(0, 50)}..."`);
+    logger.log(`Smart intent analysis (MVP optimized) for: "${message.substring(0, 50)}..."`);
 
-    // التحليل الذكي المتكامل
-    const analysisResult = await smartIntentAnalysis(
+    // فحص الـ Cache أولاً للاستفسارات المتكررة
+    const cachedResult = getCachedIntent(message, whatsappInstanceId);
+    if (cachedResult) {
+      return new Response(
+        JSON.stringify({
+          ...cachedResult,
+          processingTimeMs: Date.now() - startTime
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // التحليل الذكي المحسن للـ MVP
+    const analysisResult = await smartIntentAnalysisOptimized(
       message,
       conversationHistory,
       whatsappInstanceId
@@ -719,24 +425,10 @@ serve(async (req) => {
       intent: analysisResult.intent,
       confidence: analysisResult.confidence,
       businessContext: analysisResult.businessContext,
-      // FIX: توحيد أسماء الحقول - استخدام selectedPersonality بدلاً من selected_personality
-      selectedPersonality: analysisResult.selectedPersonality ? {
-        id: analysisResult.selectedPersonality.personality_id,
-        name: analysisResult.selectedPersonality.personality_name,
-        system_prompt: analysisResult.selectedPersonality.system_prompt,
-        temperature: analysisResult.selectedPersonality.temperature
-      } : undefined,
-      // إضافة حقول إضافية للتوافق مع النظام القديم
-      selected_personality: analysisResult.selectedPersonality ? {
-        id: analysisResult.selectedPersonality.personality_id,
-        name: analysisResult.selectedPersonality.personality_name,
-        system_prompt: analysisResult.selectedPersonality.system_prompt,
-        temperature: analysisResult.selectedPersonality.temperature
-      } : undefined,
       reasoning: analysisResult.reasoning,
+      selectedPersonality: analysisResult.selectedPersonality,
       processingTimeMs,
       cacheHit: false,
-      // البيانات الجديدة المُطورة
       emotionAnalysis: analysisResult.emotionAnalysis,
       customerJourney: analysisResult.customerJourney,
       productInterest: analysisResult.productInterest
@@ -749,6 +441,9 @@ serve(async (req) => {
       processingTime: processingTimeMs
     });
 
+    // حفظ النتيجة في الـ Cache للاستفسارات المستقبلية المشابهة
+    setCachedIntent(message, whatsappInstanceId, result);
+
     return new Response(
       JSON.stringify(result),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -757,46 +452,15 @@ serve(async (req) => {
   } catch (error) {
     logger.error('Error in smart intent analysis:', error);
     
+    const processingTimeMs = Date.now() - startTime;
+
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        intent: 'general',
-        confidence: 0.1,
-        businessContext: {
-          industry: 'عام',
-          communicationStyle: 'ودي',
-          detectedTerms: []
-        },
-        reasoning: 'حدث خطأ في التحليل',
-        processingTimeMs: Date.now() - startTime,
-        cacheHit: false,
-        // بيانات افتراضية للخطأ
-        emotionAnalysis: {
-          primary_emotion: 'neutral',
-          intensity: 0.5,
-          emotional_indicators: [],
-          sentiment_score: 0,
-          emotional_state: 'تعذر تحليل المشاعر',
-          urgency_detected: false
-        },
-        customerJourney: {
-          current_stage: 'unknown',
-          stage_confidence: 0.1,
-          progression_indicators: [],
-          next_expected_action: 'المحاولة مرة أخرى',
-          conversion_probability: 0.0
-        },
-        productInterest: {
-          requested_item: null,
-          category: null,
-          specifications: [],
-          price_range_discussed: false,
-          urgency_level: 'low',
-          decision_factors: []
-        }
-      } as SmartIntentResult),
-      { 
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        processingTimeMs
+      }),
+      {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500
       }

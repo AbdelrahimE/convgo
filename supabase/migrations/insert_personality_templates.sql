@@ -73,7 +73,7 @@ Always base your recommendations on the business information provided. If pricin
 Goal: Help customers find the right solution while building trust and rapport.',
     0.8,
     'gpt-4o-mini',
-    '["sales", "general"]'::jsonb,
+    '["sales"]'::jsonb,
     true,
     false,
     1,

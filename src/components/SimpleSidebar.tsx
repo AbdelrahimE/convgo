@@ -9,7 +9,6 @@ import {
   MessageCirclePlus, 
   BrainCog, 
   AlignJustify, 
-  Headset, 
   UserCog, 
   Gauge, 
   ChevronUp, 
@@ -50,10 +49,6 @@ const navigation = [{
   name: 'AI Personalities',
   href: '/ai-personalities',
   icon: Users
-}, {
-  name: 'Smart Escalation Rules',
-  href: '/whatsapp-support-config',
-  icon: Headset
 }, {
   name: 'Usage Insights',
   href: '/ai-usage',

@@ -1,48 +1,48 @@
 import { Badge } from "@/components/ui/badge";
 
-// الألوان والرموز للمراحل المختلفة في رحلة العميل
+// Colors and icons for different customer journey stages
 const stageConfig = {
   awareness: { 
     color: "bg-blue-400", 
     emoji: "🔍", 
-    label: "اكتشاف",
-    description: "يكتشف المشكلة أو الحاجة"
+    label: "Awareness",
+    description: "Discovering the problem or need"
   },
   consideration: { 
     color: "bg-yellow-500", 
     emoji: "🤔", 
-    label: "تقييم",
-    description: "يبحث عن الحلول ويقارن"
+    label: "Consideration",
+    description: "Researching and comparing solutions"
   },
   decision: { 
     color: "bg-orange-500", 
     emoji: "⚖️", 
-    label: "قرار",
-    description: "قريب من اتخاذ القرار"
+    label: "Decision",
+    description: "Close to making a decision"
   },
   purchase: { 
     color: "bg-green-500", 
     emoji: "💳", 
-    label: "شراء",
-    description: "جاهز للشراء"
+    label: "Purchase",
+    description: "Ready to buy"
   },
   support: { 
     color: "bg-purple-500", 
     emoji: "🛠️", 
-    label: "دعم",
-    description: "عميل حالي يحتاج مساعدة"
+    label: "Support",
+    description: "Existing customer needing help"
   },
   retention: { 
     color: "bg-red-500", 
     emoji: "⚠️", 
-    label: "استبقاء",
-    description: "قد يفكر في الإلغاء"
+    label: "Retention",
+    description: "May be considering cancellation"
   },
   unknown: { 
     color: "bg-gray-400", 
     emoji: "❓", 
-    label: "غير محدد",
-    description: "المرحلة غير واضحة"
+    label: "Unknown",
+    description: "Stage is unclear"
   }
 };
 
@@ -106,7 +106,7 @@ export function JourneyStageBadge({
           {config.description}
           {conversionProbability && (
             <div className="text-xs opacity-75">
-              احتمالية التحويل: {Math.round(conversionProbability * 100)}%
+              Conversion probability: {Math.round(conversionProbability * 100)}%
             </div>
           )}
           <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-black"></div>

@@ -1,17 +1,17 @@
 import { Badge } from "@/components/ui/badge";
 
-// الألوان والرموز التعبيرية للمشاعر المختلفة
+// Colors and emojis for different emotions
 const emotionConfig = {
-  excited: { color: "bg-green-500", emoji: "🎉", label: "متحمس" },
-  frustrated: { color: "bg-red-500", emoji: "😤", label: "محبط" },
-  satisfied: { color: "bg-blue-500", emoji: "😊", label: "راضٍ" },
-  neutral: { color: "bg-gray-500", emoji: "😐", label: "عادي" },
-  concerned: { color: "bg-yellow-500", emoji: "😟", label: "قلق" },
-  angry: { color: "bg-red-600", emoji: "😡", label: "غاضب" },
-  happy: { color: "bg-green-400", emoji: "😄", label: "سعيد" },
-  confused: { color: "bg-purple-500", emoji: "😕", label: "مرتبك" },
-  urgent: { color: "bg-orange-500", emoji: "⚡", label: "عاجل" },
-  unknown: { color: "bg-gray-400", emoji: "❓", label: "غير محدد" }
+  excited: { color: "bg-green-500", emoji: "🎉", label: "Excited" },
+  frustrated: { color: "bg-red-500", emoji: "😤", label: "Frustrated" },
+  satisfied: { color: "bg-blue-500", emoji: "😊", label: "Satisfied" },
+  neutral: { color: "bg-gray-500", emoji: "😐", label: "Neutral" },
+  concerned: { color: "bg-yellow-500", emoji: "😟", label: "Concerned" },
+  angry: { color: "bg-red-600", emoji: "😡", label: "Angry" },
+  happy: { color: "bg-green-400", emoji: "😄", label: "Happy" },
+  confused: { color: "bg-purple-500", emoji: "😕", label: "Confused" },
+  urgent: { color: "bg-orange-500", emoji: "⚡", label: "Urgent" },
+  unknown: { color: "bg-gray-400", emoji: "❓", label: "Unknown" }
 };
 
 interface EmotionBadgeProps {
@@ -23,7 +23,7 @@ interface EmotionBadgeProps {
 export function EmotionBadge({ emotion, intensity, className = "" }: EmotionBadgeProps) {
   const config = emotionConfig[emotion as keyof typeof emotionConfig] || emotionConfig.unknown;
   
-  // تحديد شدة اللون بناءً على كثافة المشاعر
+  // Determine color intensity based on emotion intensity
   const getIntensityOpacity = (intensity: number = 0.5) => {
     if (intensity > 0.8) return "opacity-100";
     if (intensity > 0.6) return "opacity-90";

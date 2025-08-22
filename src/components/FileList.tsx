@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, Sparkles, Download, Clock, MoreHorizontal, FileSearch, File, Loader2 } from "lucide-react";
+import { Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, Sparkles, Download, Clock, MoreHorizontal, File, Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import { Progress } from "@/components/ui/progress";
 import { Json } from "@/integrations/supabase/types";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
-import { ChunksViewer } from "@/components/ChunksViewer";
 
 import logger from '@/utils/logger';
 // Feature flags to show/hide optional columns
@@ -327,7 +326,6 @@ export function FileList() {
     }
   };
 
-  const [chunksViewerFile, setChunksViewerFile] = useState<FileWithMetadata | null>(null);
 
   // WhatsApp linking state
   const [instances, setInstances] = useState<Array<{ id: string; instance_name: string; status?: string }>>([]);
@@ -409,9 +407,6 @@ export function FileList() {
   };
 
 
-  const handleViewChunks = (file: FileWithMetadata) => {
-    setChunksViewerFile(file);
-  };
 
   // Helper functions
   const getRelativeTime = (dateString: string) => {
@@ -654,10 +649,6 @@ export function FileList() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={() => handleViewChunks(file)}>
-                      <FileSearch className="h-4 w-4 mr-2" />
-                      View Text Chunks
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleDownloadFile(file)}>
                       <Download className="h-4 w-4 mr-2" />
                       Download File
@@ -711,13 +702,6 @@ export function FileList() {
       )}
 
 
-      {/* Chunks Viewer Dialog */}
-      <ChunksViewer
-        fileId={chunksViewerFile?.id || null}
-        fileName={chunksViewerFile?.filename || ""}
-        isOpen={!!chunksViewerFile}
-        onClose={() => setChunksViewerFile(null)}
-      />
     </div>
   );
 }

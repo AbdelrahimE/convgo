@@ -4,6 +4,7 @@
  */
 
 import { getNextOpenAIKey } from "./openai-key-rotation.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const logger = {
   log: (...args: any[]) => console.log(...args),
@@ -12,6 +13,10 @@ const logger = {
   warn: (...args: any[]) => console.warn(...args),
   debug: (...args: any[]) => console.debug(...args),
 };
+
+const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 export interface DialectAnalysis {
   primaryDialect: string;
@@ -36,10 +41,67 @@ export interface CommunicationStyle {
 }
 
 /**
+ * حفظ بيانات اللهجة في قاعدة البيانات
+ */
+async function saveDialectData(
+  whatsappInstanceId: string,
+  dialectAnalysis: DialectAnalysis
+): Promise<void> {
+  try {
+    const { data: existing, error: findError } = await supabaseAdmin
+      .from('dialect_adaptation_data')
+      .select('id, usage_count')
+      .eq('whatsapp_instance_id', whatsappInstanceId)
+      .eq('primary_dialect', dialectAnalysis.primaryDialect)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabaseAdmin
+        .from('dialect_adaptation_data')
+        .update({
+          confidence: dialectAnalysis.confidence,
+          formality_level: dialectAnalysis.formalityLevel,
+          emotional_tone: dialectAnalysis.emotionalTone,
+          cultural_markers: dialectAnalysis.culturalMarkers,
+          language_mix: dialectAnalysis.languageMix,
+          usage_count: existing.usage_count + 1,
+          last_used_at: new Date().toISOString()
+        })
+        .eq('id', existing.id);
+
+      if (error) {
+        logger.error('Error updating dialect data:', error);
+      }
+    } else {
+      const { error } = await supabaseAdmin
+        .from('dialect_adaptation_data')
+        .insert({
+          whatsapp_instance_id: whatsappInstanceId,
+          primary_dialect: dialectAnalysis.primaryDialect,
+          region: dialectAnalysis.region,
+          confidence: dialectAnalysis.confidence,
+          formality_level: dialectAnalysis.formalityLevel,
+          emotional_tone: dialectAnalysis.emotionalTone,
+          cultural_markers: dialectAnalysis.culturalMarkers,
+          language_mix: dialectAnalysis.languageMix,
+          usage_count: 1,
+          last_used_at: new Date().toISOString()
+        });
+
+      if (error) {
+        logger.error('Error inserting dialect data:', error);
+      }
+    }
+  } catch (error) {
+    logger.error('Exception saving dialect data:', error);
+  }
+}
+
+/**
  * التحليل الذكي للهجة والأسلوب اللغوي
  * يفهم اللهجة من السياق والنمط اللغوي بدلاً من كلمات محددة
  */
-export async function analyzeDialectIntelligently(text: string): Promise<DialectAnalysis> {
+export async function analyzeDialectIntelligently(text: string, whatsappInstanceId?: string): Promise<DialectAnalysis> {
   try {
     const dialectPrompt = `أنت خبير لغوي متخصص في اللهجات العربية. حلل هذا النص:
 
@@ -94,7 +156,7 @@ export async function analyzeDialectIntelligently(text: string): Promise<Dialect
     const responseData = await response.json();
     const result = JSON.parse(responseData.choices[0].message.content);
 
-    return {
+    const dialectAnalysis = {
       primaryDialect: result.primaryDialect || 'عربية عامة',
       confidence: result.confidence || 0.5,
       region: result.region || 'غير محدد',
@@ -108,6 +170,12 @@ export async function analyzeDialectIntelligently(text: string): Promise<Dialect
         other: 0
       }
     };
+
+    if (whatsappInstanceId) {
+      await saveDialectData(whatsappInstanceId, dialectAnalysis);
+    }
+
+    return dialectAnalysis;
   } catch (error) {
     logger.error('Error analyzing dialect intelligently:', error);
     

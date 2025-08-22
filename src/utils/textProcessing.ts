@@ -10,6 +10,8 @@ import {
   createCSVChunkMetadata 
 } from '../../supabase/functions/utils/csvProcessing';
 
+import type { ChunkMetadata, ChunkWithMetadata } from '../../supabase/functions/_shared/types';
+
 /**
  * Configuration options for text chunking
  */
@@ -477,9 +479,10 @@ export function preprocessText(text: string): string {
     .replace(/\S+@\S+\.\S+/g, '')
     // Instead of removing non-Latin characters, only remove truly unsafe characters
     // This preserves Arabic, Chinese, Cyrillic, and other scripts
-    .replace(/[\u0000-\u001F\u007F-\u009F\u2000-\u200F\uFEFF]/g, '')
-    // Keep parentheses which are common in many languages
-    .replace(/[^\p{L}\p{N}\p{P}\p{Z}\p{Sc}\p{Emoji}]/gu, '')
+    // Use positive character matching to avoid control character regex issues
+    // This approach is safer and avoids ESLint warnings about control characters
+    .replace(/[^\p{L}\p{N}\p{P}\p{Z}\p{Sc}\p{Emoji}\p{M}]/gu, '') // Keep only letters, numbers, punctuation, spaces, currency, emoji, and marks
+    .replace(/\uFEFF/g, '') // Remove BOM specifically
     // Replace multiple punctuation (keep Arabic punctuation like ؟،)
     .replace(/([.,!?;:؟،])\1+/g, '$1')
     .trim();
@@ -496,7 +499,7 @@ export function createChunkMetadata(
   text: string,
   chunks: string[],
   documentId: string
-): Array<{ text: string; metadata: Record<string, any> }> {
+): ChunkWithMetadata[] {
   return chunks.map((chunk, index) => {
     // Calculate position of chunk in original document
     const position = text.indexOf(chunk);
@@ -509,8 +512,9 @@ export function createChunkMetadata(
         chunk_count: chunks.length,
         position: position >= 0 ? position : undefined,
         character_count: chunk.length,
-        word_count: chunk.split(/\s+/).filter(Boolean).length
-      }
+        word_count: chunk.split(/\s+/).filter(Boolean).length,
+        is_csv: false
+      } as ChunkMetadata
     };
   });
 }

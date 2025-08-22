@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getNextOpenAIKey } from "../_shared/openai-key-rotation.ts";
-import { getLanguageInstruction, type DetectedLanguage } from "../_shared/language-detector.ts";
+
 
 const logger = {
   log: (...args: any[]) => console.log(...args),
@@ -23,8 +23,7 @@ interface GenerateResponseRequest {
   maxContextTokens?: number;
   imageUrl?: string;
   userId?: string;
-  // Language detection field
-  detectedLanguage?: DetectedLanguage;
+
   // Personality system fields
   selectedPersonalityId?: string;
   selectedPersonalityName?: string;
@@ -366,8 +365,7 @@ serve(async (req) => {
       maxContextTokens = MAX_CONTEXT_TOKENS,
       imageUrl,
       userId,
-      // Language detection field
-      detectedLanguage = 'auto',
+
       // Personality system fields
       selectedPersonalityId,
       selectedPersonalityName,
@@ -385,7 +383,7 @@ serve(async (req) => {
       personalityName: selectedPersonalityName,
       detectedIntent,
       intentConfidence,
-      detectedLanguage
+
     });
 
     if (!query && !imageUrl) {
@@ -456,8 +454,7 @@ serve(async (req) => {
 - Use *text* for emphasis instead of **text**`;
     }
     
-    // Add language instruction based on detected language
-    finalSystemPrompt += getLanguageInstruction(detectedLanguage);
+
     
     if (imageUrl) {
       finalSystemPrompt += IMAGE_CONTEXT_ADDITION;

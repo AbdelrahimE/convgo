@@ -15,7 +15,6 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
 import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
-import WhatsAppSupportConfig from '@/pages/WhatsAppSupportConfig';
 import WebhookMonitor from '@/pages/WebhookMonitor';
 import AccountSettings from '@/pages/AccountSettings';
 import AIUsageMonitoring from '@/pages/AIUsageMonitoring';
@@ -92,14 +91,6 @@ function AppContent() {
                     element={
                       <ProtectedRoute>
                         <AIPersonalities />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/whatsapp-support-config"
-                    element={
-                      <ProtectedRoute>
-                        <WhatsAppSupportConfig />
                       </ProtectedRoute>
                     }
                   />
