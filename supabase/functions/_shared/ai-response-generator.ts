@@ -137,6 +137,8 @@ export async function generateAndSendAIResponse(
             personality_name: aiConfig.selectedPersonalityName || null,
             detected_intent: aiConfig.detectedIntent || null,
             intent_confidence: aiConfig.intentConfidence || null,
+            response_quality: aiConfig.responseQuality || null, // NEW: Store response quality
+            quality_reasoning: aiConfig.qualityReasoning || null, // NEW: Store quality reasoning
             personality_system_used: !!aiConfig.selectedPersonalityId,
             image_processed: !!imageUrl,
             timestamp: new Date().toISOString(),
@@ -147,9 +149,10 @@ export async function generateAndSendAIResponse(
             business_context: aiConfig.businessContext || null,
             // معرف المحادثة للتتبع المتقدم
             conversation_id: conversationId,
-            // مؤشرات الجودة
+            // مؤشرات الجودة المحسنة
             analysis_quality: {
               intent_confidence: aiConfig.intentConfidence || 0,
+              response_quality: aiConfig.responseQuality || 0, // NEW: Add response quality score
               emotion_intensity: aiConfig.emotionAnalysis?.intensity || 0,
               stage_confidence: aiConfig.customerJourney?.stage_confidence || 0,
               conversion_probability: aiConfig.customerJourney?.conversion_probability || 0
@@ -163,6 +166,37 @@ export async function generateAndSendAIResponse(
         });
       } else {
         logger.info('AI interaction saved successfully');
+        
+        // تحديث عداد استخدام الشخصية إذا تم اختيار شخصية
+        if (aiConfig.selectedPersonalityId) {
+          try {
+            logger.info('Updating personality usage count', {
+              personalityId: aiConfig.selectedPersonalityId,
+              personalityName: aiConfig.selectedPersonalityName
+            });
+            
+            const { error: usageError } = await supabaseAdmin.rpc('update_personality_usage', {
+              p_personality_id: aiConfig.selectedPersonalityId
+            });
+            
+            if (usageError) {
+              logger.error('Error updating personality usage count', {
+                error: usageError,
+                personalityId: aiConfig.selectedPersonalityId
+              });
+            } else {
+              logger.info('Successfully updated personality usage count', {
+                personalityId: aiConfig.selectedPersonalityId,
+                personalityName: aiConfig.selectedPersonalityName
+              });
+            }
+          } catch (error) {
+            logger.error('Exception updating personality usage count', {
+              error,
+              personalityId: aiConfig.selectedPersonalityId
+            });
+          }
+        }
       }
     } catch (error) {
       logger.error('Exception saving AI interaction', {

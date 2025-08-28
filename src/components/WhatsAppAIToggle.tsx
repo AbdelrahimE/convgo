@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -113,12 +112,12 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
 
   // Render detailed toggle version (used in AI Configuration page)
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <div>
+      <div className="pb-3">
         <div className="flex justify-between items-center">
           <div className="flex items-center">
             <Zap className="h-5 w-5 mr-2 text-amber-500" />
-            <CardTitle className="text-xl font-semibold">AI Auto-Response Status</CardTitle>
+            <h3 className="text-lg font-semibold">AI Auto-Response Status</h3>
           </div>
           <Switch
             id={`ai-toggle-${instanceId}`}
@@ -128,29 +127,26 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
             className="data-[state=checked]:bg-green-500"
           />
         </div>
-        <CardDescription>
-          Enable or disable AI responses for incoming WhatsApp messages
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="pt-0">
+      </div>
+      <div className="pt-0">
         {isLoading ? (
           <div className="flex items-center py-2">
             <Loader2 className="h-4 w-4 animate-spin mr-2" />
             <span className="text-sm text-muted-foreground">Loading status...</span>
           </div>
         ) : isEnabled ? (
-          <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-md p-3">
+          <div className="bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-200 dark:border-green-900 p-3">
             <p className="text-sm font-medium text-green-700 dark:text-green-400">
-              AI responses are enabled
+              AI Assistant is Enabled
             </p>
             <p className="text-xs text-green-600 dark:text-green-500 mt-1">
               This WhatsApp number will automatically respond to incoming messages using AI
             </p>
           </div>
         ) : (
-          <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-md p-3">
+          <div className="bg-gray-50 dark:bg-gray-900/20 rounded-xl border border-gray-200 dark:border-gray-800 p-3">
             <p className="text-sm font-medium text-gray-700 dark:text-gray-400">
-              AI responses are disabled
+              AI Assistant is Disabled
             </p>
             <p className="text-xs text-gray-600 dark:text-gray-500 mt-1">
               This WhatsApp number will not automatically respond to messages
@@ -158,7 +154,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
           </div>
         )}
         {instanceStatus && !isInstanceConnected && (
-          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-3 mt-3">
+          <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-900 p-3 mt-3">
             <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
               WhatsApp connection required
             </p>
@@ -167,8 +163,8 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
             </p>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 };
 

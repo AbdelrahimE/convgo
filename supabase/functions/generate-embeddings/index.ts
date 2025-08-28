@@ -98,7 +98,8 @@ serve(async (req) => {
     let processedCount = 0;
     let errorCount = 0;
     
-    const batchSize = 20;
+    // Optimized batch size for better throughput while respecting rate limits
+    const batchSize = 50;
     const totalBatches = Math.ceil(chunks.length / batchSize);
     
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -170,8 +171,9 @@ serve(async (req) => {
       
       await Promise.all(batchPromises);
       
+      // Reduced delay between batches for faster processing
       if (batchIndex < totalBatches - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
     }
 

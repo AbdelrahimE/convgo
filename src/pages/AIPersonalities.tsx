@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -12,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
   Edit, 
@@ -25,7 +24,9 @@ import {
   MessageSquare,
   Loader2,
   Palette,
-  FileText
+  FileText,
+  Bot,
+  Cog
 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import logger from '@/utils/logger';
@@ -51,7 +52,6 @@ interface Personality {
   voice_message_default_response: string;
   default_voice_language: string;
   usage_count: number;
-  performance_rating: number;
   created_at: string;
   updated_at: string;
   template_category?: string;
@@ -66,7 +66,123 @@ interface PersonalityTemplate {
   intent_categories: string[];
 }
 
-const AIPersonalities = () => {
+// Memoized PersonalityCard component
+const PersonalityCard = React.memo<{
+  personality: Personality;
+  onEdit: (personality: Personality) => void;
+  onDelete: (personalityId: string) => void;
+  intentCategoriesMap: Map<string, string>;
+}>(({ personality, onEdit, onDelete, intentCategoriesMap }) => (
+  <Card className={`h-full w-full flex flex-col ${personality.is_default ? 'ring-2 ring-blue-500' : ''} border-slate-200 dark:border-slate-700`}>
+    <CardHeader className="pb-3">
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            {personality.name}
+            {personality.is_default && (
+              <Star className="h-4 w-4 text-yellow-500 fill-current" />
+            )}
+          </CardTitle>
+          <CardDescription className="text-sm">
+            {personality.description}
+          </CardDescription>
+        </div>
+      </div>
+      
+      {/* Intent Categories */}
+      <div className="flex flex-wrap gap-1 mt-2">
+        {personality.intent_categories.map(category => (
+          <Badge key={category} variant="secondary" className="text-xs">
+            {intentCategoriesMap.get(category) || category}
+          </Badge>
+        ))}
+      </div>
+    </CardHeader>
+    
+    <CardContent className="pt-0 flex-grow flex flex-col">
+      <div className="flex-grow">
+        {/* Usage Statistics */}
+        <div className="text-sm text-muted-foreground mb-4">
+          <div>Used: {personality.usage_count} times</div>
+        </div>
+        
+        {/* Status */}
+        <div className="flex items-center justify-between mb-4">
+          <Badge variant={personality.is_active ? "default" : "secondary"}>
+            {personality.is_active ? 'Active' : 'Inactive'}
+          </Badge>
+          <span className="text-sm text-muted-foreground">
+            Priority: {personality.priority}
+          </span>
+        </div>
+      </div>
+      
+      {/* Actions - Fixed at Bottom */}
+      <div className="flex gap-2 mt-auto">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onEdit(personality)}
+          className="flex-1"
+        >
+          <Edit className="h-4 w-4 mr-1" />
+          Edit
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onDelete(personality.id)}
+          disabled={personality.is_default}
+          className="text-red-600 hover:text-red-700"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </CardContent>
+  </Card>
+));
+
+// Memoized TemplateCard component
+const TemplateCard = React.memo<{
+  template: PersonalityTemplate;
+  onClone: (templateId: string) => void;
+  intentCategoriesMap: Map<string, string>;
+  isLoading: boolean;
+}>(({ template, onClone, intentCategoriesMap, isLoading }) => (
+  <Card className="h-full w-full flex flex-col border-slate-200 dark:border-slate-700">
+    <CardHeader className="flex-grow">
+      <CardTitle className="text-lg font-semibold flex items-center gap-2">
+        <Bot className="h-5 w-5 text-blue-600" />
+        {template.name}
+      </CardTitle>
+      <CardDescription>
+        {template.description}
+      </CardDescription>
+      
+      {/* Intent Categories */}
+      <div className="flex flex-wrap gap-1 mt-2">
+        {template.intent_categories.map(category => (
+          <Badge key={category} variant="outline" className="text-xs">
+            {intentCategoriesMap.get(category) || category}
+          </Badge>
+        ))}
+      </div>
+    </CardHeader>
+    
+    <CardContent className="mt-auto">
+      <Button
+        onClick={() => onClone(template.id)}
+        disabled={isLoading}
+        className="w-full bg-blue-600 hover:bg-blue-700"
+      >
+        <Copy className="h-4 w-4 mr-2" />
+        Add This Personality
+      </Button>
+    </CardContent>
+  </Card>
+));
+
+const AIPersonalities = React.memo(() => {
   const { user } = useAuth();
   const isMobile = useIsMobile();
   
@@ -76,7 +192,12 @@ const AIPersonalities = () => {
   const [personalities, setPersonalities] = useState<Personality[]>([]);
   const [templates, setTemplates] = useState<PersonalityTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingPersonalities, setIsLoadingPersonalities] = useState(false);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [isLoadingInstances, setIsLoadingInstances] = useState(true);
+  const [initialPageLoading, setInitialPageLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('personalities');
+  const [usageAnalytics, setUsageAnalytics] = useState<Record<string, number>>({});
   
   // Dialog states
   const [isPersonalityDialogOpen, setIsPersonalityDialogOpen] = useState(false);
@@ -99,37 +220,30 @@ const AIPersonalities = () => {
     default_voice_language: 'en'
   });
 
-  // Available intent categories
-  const intentCategories = [
+  // Available intent categories - optimized as array and Map
+  const intentCategories = useMemo(() => [
     { key: 'customer-support', label: 'Customer Support' },
     { key: 'sales', label: 'Sales Inquiries' },
     { key: 'technical', label: 'Technical Support' },
     { key: 'billing', label: 'Billing & Payments' },
     { key: 'general', label: 'General Information' }
-  ];
+  ], []);
+  
+  // Create lookup Map for O(1) category label access
+  const intentCategoriesMap = useMemo(() => 
+    new Map(intentCategories.map(c => [c.key, c.label])),
+    [intentCategories]
+  );
 
-  // Load data on component mount
-  useEffect(() => {
-    if (user) {
-      loadWhatsAppInstances();
-      loadTemplates();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (selectedInstance) {
-      loadPersonalities();
-    }
-  }, [selectedInstance]);
-
-  // Load WhatsApp instances
-  const loadWhatsAppInstances = async () => {
+  // Load WhatsApp instances - memoized
+  const loadWhatsAppInstances = useCallback(async () => {
     try {
       setIsLoading(true);
       const { data, error } = await supabase
         .from('whatsapp_instances')
         .select('id, instance_name, status')
-        .eq('user_id', user?.id);
+        .eq('user_id', user?.id)
+        .eq('status', 'Connected');
       
       if (error) throw error;
       setInstances(data || []);
@@ -143,10 +257,10 @@ const AIPersonalities = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  // Load personalities for selected instance
-  const loadPersonalities = async () => {
+  // Load personalities for selected instance - memoized
+  const loadPersonalities = useCallback(async () => {
     if (!selectedInstance) return;
     
     try {
@@ -162,16 +276,55 @@ const AIPersonalities = () => {
       if (!data.success) throw new Error(data.error);
       
       setPersonalities(data.personalities || []);
+      
+      // Load usage analytics from actual interactions
+      // We'll call loadUsageAnalytics separately to avoid circular dependency
     } catch (error) {
       logger.error('Error loading personalities:', error);
       toast.error('Failed to load personalities');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedInstance]);
+  
+  // Load usage analytics from whatsapp_ai_interactions - memoized
+  const loadUsageAnalytics = useCallback(async () => {
+    if (!selectedInstance) return;
+    
+    try {
+      logger.info('Loading personality usage analytics', { instanceId: selectedInstance });
+      
+      const { data, error } = await supabase.rpc('get_personality_usage_analytics', {
+        p_whatsapp_instance_id: selectedInstance
+      });
+      
+      if (error) {
+        logger.error('Error loading usage analytics:', error);
+        return;
+      }
+      
+      // Convert to a map for easy lookup
+      const analyticsMap: Record<string, number> = {};
+      if (data && Array.isArray(data)) {
+        data.forEach((stat: any) => {
+          if (stat.personality_id) {
+            analyticsMap[stat.personality_id] = parseInt(stat.usage_count) || 0;
+          }
+        });
+      }
+      
+      setUsageAnalytics(analyticsMap);
+      logger.info('Usage analytics loaded', { 
+        personalityCount: Object.keys(analyticsMap).length,
+        analytics: analyticsMap 
+      });
+    } catch (error) {
+      logger.error('Exception loading usage analytics:', error);
+    }
+  }, [selectedInstance]);
 
-  // Load personality templates
-  const loadTemplates = async () => {
+  // Load personality templates - memoized
+  const loadTemplates = useCallback(async () => {
     try {
       const { data, error } = await supabase.functions.invoke('manage-personalities', {
         body: { action: 'get_templates' }
@@ -185,10 +338,58 @@ const AIPersonalities = () => {
       logger.error('Error loading templates:', error);
       toast.error('Failed to load personality templates');
     }
-  };
+  }, []);
 
-  // Create or update personality
-  const savePersonality = async () => {
+  // Reset form - memoized (moved before functions that depend on it)
+  const resetForm = useCallback(() => {
+    setPersonalityForm({
+      name: '',
+      description: '',
+      system_prompt: '',
+      temperature: 0.7,
+      model: 'gpt-4o-mini',
+      intent_categories: [],
+      is_active: true,
+      is_default: false,
+      priority: 1,
+      process_voice_messages: true,
+      voice_message_default_response: '',
+      default_voice_language: 'en'
+    });
+  }, []);
+
+  // Open edit dialog - memoized
+  const openEditDialog = useCallback((personality: Personality) => {
+    setEditingPersonality(personality);
+    setPersonalityForm({
+      name: personality.name,
+      description: personality.description,
+      system_prompt: personality.system_prompt,
+      temperature: personality.temperature,
+      model: personality.model,
+      intent_categories: personality.intent_categories,
+      is_active: personality.is_active,
+      is_default: personality.is_default,
+      priority: personality.priority,
+      process_voice_messages: personality.process_voice_messages,
+      voice_message_default_response: personality.voice_message_default_response,
+      default_voice_language: personality.default_voice_language
+    });
+    setIsPersonalityDialogOpen(true);
+  }, []);
+
+  // Handle intent category checkbox change
+  const handleIntentCategoryChange = useCallback((categoryKey: string, checked: boolean) => {
+    setPersonalityForm(prev => ({
+      ...prev,
+      intent_categories: checked 
+        ? [...prev.intent_categories, categoryKey]
+        : prev.intent_categories.filter(c => c !== categoryKey)
+    }));
+  }, []);
+
+  // Create or update personality - memoized (now resetForm is defined above)
+  const savePersonality = useCallback(async () => {
     if (!selectedInstance) return;
     
     try {
@@ -223,10 +424,10 @@ const AIPersonalities = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedInstance, editingPersonality, personalityForm, loadPersonalities, resetForm]);
 
-  // Delete personality
-  const deletePersonality = async (personalityId: string) => {
+  // Delete personality - memoized
+  const deletePersonality = useCallback(async (personalityId: string) => {
     try {
       setIsLoading(true);
       
@@ -248,10 +449,10 @@ const AIPersonalities = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [loadPersonalities]);
 
-  // Clone template personality
-  const cloneTemplate = async (templateId: string) => {
+  // Clone template personality - memoized
+  const cloneTemplate = useCallback(async (templateId: string) => {
     if (!selectedInstance) return;
     
     try {
@@ -277,198 +478,178 @@ const AIPersonalities = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedInstance, loadPersonalities]);
 
-  // Reset form
-  const resetForm = () => {
-    setPersonalityForm({
-      name: '',
-      description: '',
-      system_prompt: '',
-      temperature: 0.7,
-      model: 'gpt-4o-mini',
-      intent_categories: [],
-      is_active: true,
-      is_default: false,
-      priority: 1,
-      process_voice_messages: true,
-      voice_message_default_response: '',
-      default_voice_language: 'en'
-    });
-  };
-
-  // Open edit dialog
-  const openEditDialog = (personality: Personality) => {
-    setEditingPersonality(personality);
-    setPersonalityForm({
-      name: personality.name,
-      description: personality.description,
-      system_prompt: personality.system_prompt,
-      temperature: personality.temperature,
-      model: personality.model,
-      intent_categories: personality.intent_categories,
-      is_active: personality.is_active,
-      is_default: personality.is_default,
-      priority: personality.priority,
-      process_voice_messages: personality.process_voice_messages,
-      voice_message_default_response: personality.voice_message_default_response,
-      default_voice_language: personality.default_voice_language
-    });
-    setIsPersonalityDialogOpen(true);
-  };
-
-  // Open create dialog
-  const openCreateDialog = () => {
+  // Open create dialog - memoized (now resetForm is defined above)
+  const openCreateDialog = useCallback(() => {
     setEditingPersonality(null);
     resetForm();
     setIsPersonalityDialogOpen(true);
-  };
+  }, [resetForm]);
+
+  // Load data on component mount - now all functions are defined
+  useEffect(() => {
+    if (user) {
+      loadWhatsAppInstances();
+      loadTemplates();
+    }
+    // Set initial page loading to false after a short delay
+    const timer = setTimeout(() => {
+      setInitialPageLoading(false);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [user, loadWhatsAppInstances, loadTemplates]);
+
+  useEffect(() => {
+    if (selectedInstance) {
+      loadPersonalities();
+      loadUsageAnalytics();
+    }
+  }, [selectedInstance, loadPersonalities, loadUsageAnalytics]);
+
+  // Show initial loading state
+  if (initialPageLoading) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-white dark:bg-slate-900">
+        <div className="flex flex-col items-center space-y-4">
+          {/* Modern animated loader with gradient */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-20 w-20 rounded-full border-4 border-blue-100 dark:border-blue-900"></div>
+            </div>
+            <div className="relative flex items-center justify-center">
+              <div className="h-20 w-20 animate-spin rounded-full border-4 border-transparent border-t-blue-600 dark:border-t-blue-400"></div>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Users className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+          
+          {/* Loading text with animation */}
+          <div className="text-center space-y-2">
+            <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Loading AI Personalities
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Please wait while we prepare your personality settings...
+            </p>
+          </div>
+          
+          {/* Loading dots animation */}
+          <div className="flex space-x-1">
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }} 
-      animate={{ opacity: 1, y: 0 }} 
-      transition={{ duration: 0.3 }}
-      className="container mx-auto px-4 py-8 max-w-7xl"
-    >
-      <div className="space-y-8">
-        <motion.h1 
-          initial={{ opacity: 0, x: -20 }} 
-          animate={{ opacity: 1, x: 0 }} 
-          transition={{ delay: 0.2 }}
-          className="text-2xl font-semibold text-left md:text-3xl lg:text-4xl"
-        >
-          AI Personalities
-        </motion.h1>
+    <div className="w-full min-h-screen bg-white dark:bg-slate-900">
+      {/* Header Section */}
+      <div className="bg-white dark:bg-slate-900">
+        <div className="px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
+                  AI Personalities
+                </h1>
+                <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
+                  Create and customize AI personalities for different types of customer inquiries
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6">
         
-        {/* Instance Selection */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-semibold">Choose WhatsApp Number</CardTitle>
-            <CardDescription>
-              Select the WhatsApp number to manage AI personalities for
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Select value={selectedInstance} onValueChange={setSelectedInstance}>
+        {/* WhatsApp Instance Selection */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="p-4">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Cog className="h-5 w-5" />
+                Choose WhatsApp Number
+              </h2>
+            </div>
+
+            <Select
+              value={selectedInstance}
+              onValueChange={(value) => setSelectedInstance(value)}
+              disabled={isLoading || instances.length === 0}
+            >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a WhatsApp instance" />
+                <SelectValue placeholder="Select WhatsApp number" />
               </SelectTrigger>
               <SelectContent>
-                {instances.map(instance => (
-                  <SelectItem key={instance.id} value={instance.id}>
-                    {instance.instance_name} ({instance.status})
+                {instances.length === 0 ? (
+                  <SelectItem value="none">
+                    No connected WhatsApp numbers available
                   </SelectItem>
-                ))}
+                ) : (
+                  instances.map((instance) => (
+                    <SelectItem key={instance.id} value={instance.id}>
+                      <div className="flex items-center justify-between w-full gap-x-2">
+                        <span>{instance.instance_name}</span>
+                        <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
+                          Connected
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {selectedInstance && (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="personalities">My Personalities</TabsTrigger>
-              <TabsTrigger value="templates">Add From Templates</TabsTrigger>
-            </TabsList>
-            
-            {/* Personalities Management Tab */}
-            <TabsContent value="personalities" className="space-y-6 mt-6">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="text-xl font-semibold">Manage AI Personalities</h2>
-                  <p className="text-muted-foreground">Create and customize AI personalities for different types of customer inquiries</p>
-                </div>
-                <Button onClick={openCreateDialog} className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Personality
-                </Button>
-              </div>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="p-4">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsTrigger value="personalities">My Personalities</TabsTrigger>
+                  <TabsTrigger value="templates">Add From Templates</TabsTrigger>
+                </TabsList>
+                
+                {/* Personalities Management Tab */}
+                <TabsContent value="personalities" className="space-y-6 mt-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                    <div className="flex items-center gap-2 mb-0">
+                      <Users className="h-5 w-5 text-blue-600" />
+                      <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Manage AI Personalities</h2>
+                    </div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">Create and customize AI personalities for different types of customer inquiries</p>
+                    </div>
+                    <Button onClick={openCreateDialog} className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Personality
+                    </Button>
+                  </div>
 
-              {/* Personalities Grid */}
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <AnimatePresence>
-                  {personalities.map((personality, index) => (
-                    <motion.div
-                      key={personality.id}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <Card className={`h-full ${personality.is_default ? 'ring-2 ring-blue-500' : ''}`}>
-                        <CardHeader className="pb-3">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                                {personality.name}
-                                {personality.is_default && (
-                                  <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                                )}
-                              </CardTitle>
-                              <CardDescription className="text-sm">
-                                {personality.description}
-                              </CardDescription>
-                            </div>
-                          </div>
-                          
-                          {/* Intent Categories */}
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {personality.intent_categories.map(category => (
-                              <Badge key={category} variant="secondary" className="text-xs">
-                                {intentCategories.find(c => c.key === category)?.label || category}
-                              </Badge>
-                            ))}
-                          </div>
-                        </CardHeader>
-                        
-                        <CardContent className="pt-0">
-                          {/* Usage Statistics */}
-                          <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground mb-4">
-                            <div>Used: {personality.usage_count} times</div>
-                            <div>Rating: {personality.performance_rating}/10</div>
-                          </div>
-                          
-                          {/* Status */}
-                          <div className="flex items-center justify-between mb-4">
-                            <Badge variant={personality.is_active ? "default" : "secondary"}>
-                              {personality.is_active ? 'Active' : 'Inactive'}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              Priority: {personality.priority}
-                            </span>
-                          </div>
-                          
-                          {/* Actions */}
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openEditDialog(personality)}
-                              className="flex-1"
-                            >
-                              <Edit className="h-4 w-4 mr-1" />
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => deletePersonality(personality.id)}
-                              disabled={personality.is_default}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
+                  {/* Personalities Grid */}
+                  <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                    {personalities.map((personality) => (
+                      <div key={personality.id} className="flex">
+                        <PersonalityCard
+                          personality={personality}
+                          onEdit={openEditDialog}
+                          onDelete={deletePersonality}
+                          intentCategoriesMap={intentCategoriesMap}
+                        />
+                      </div>
+                    ))}
+                  </div>
 
-              {personalities.length === 0 && !isLoading && (
-                <Card>
+                  {personalities.length === 0 && !isLoading && (
+                    <Card className="border-slate-200 dark:border-slate-700">
                   <CardContent className="pt-6">
                     <div className="text-center space-y-4">
                       <Brain className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -490,69 +671,45 @@ const AIPersonalities = () => {
                       </div>
                     </div>
                   </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-            
-            {/* Templates Tab */}
-            <TabsContent value="templates" className="space-y-6 mt-6">
-              <div>
-                <h2 className="text-xl font-semibold">Personality Templates</h2>
-                <p className="text-muted-foreground">Choose from pre-built personalities designed for common business scenarios</p>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {templates.map((template, index) => (
-                  <motion.div
-                    key={template.id}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
-                    <Card className="h-full">
-                      <CardHeader>
-                        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                          <Palette className="h-5 w-5 text-blue-500" />
-                          {template.name}
-                        </CardTitle>
-                        <CardDescription>
-                          {template.description}
-                        </CardDescription>
-                        
-                        {/* Intent Categories */}
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {template.intent_categories.map(category => (
-                            <Badge key={category} variant="outline" className="text-xs">
-                              {intentCategories.find(c => c.key === category)?.label || category}
-                            </Badge>
-                          ))}
-                        </div>
-                      </CardHeader>
-                      
-                      <CardContent>
-                        <Button
-                          onClick={() => cloneTemplate(template.id)}
-                          disabled={isLoading}
-                          className="w-full bg-green-600 hover:bg-green-700"
-                        >
-                          <Copy className="h-4 w-4 mr-2" />
-                          Add This Personality
-                        </Button>
-                      </CardContent>
                     </Card>
-                  </motion.div>
-                ))}
-              </div>
-            </TabsContent>
-          </Tabs>
+                  )}
+                </TabsContent>
+                
+                {/* Templates Tab */}
+                <TabsContent value="templates" className="space-y-6 mt-6">
+                  <div>
+                    <div className="flex items-center gap-2 mb-0">
+                      <Bot className="h-5 w-5 text-blue-600" />
+                      <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Personality Templates</h2>
+                    </div>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Choose from pre-built personalities designed for common business scenarios</p>
+                  </div>
+
+                  <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                    {templates.map((template) => (
+                      <div key={template.id} className="flex">
+                        <TemplateCard
+                          template={template}
+                          onClone={cloneTemplate}
+                          intentCategoriesMap={intentCategoriesMap}
+                          isLoading={isLoading}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          </div>
         )}
       </div>
 
       {/* Create/Edit Personality Dialog */}
       <Dialog open={isPersonalityDialogOpen} onOpenChange={setIsPersonalityDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-sm sm:max-w-md lg:max-w-xl max-h-[90vh] overflow-y-auto py-6 px-6 border-none">
           <DialogHeader>
             <DialogTitle>
+              
               {editingPersonality ? 'Edit' : 'Create'} AI Personality
             </DialogTitle>
             <DialogDescription>
@@ -597,19 +754,7 @@ const AIPersonalities = () => {
                       type="checkbox"
                       id={category.key}
                       checked={personalityForm.intent_categories.includes(category.key)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setPersonalityForm({
-                            ...personalityForm,
-                            intent_categories: [...personalityForm.intent_categories, category.key]
-                          });
-                        } else {
-                          setPersonalityForm({
-                            ...personalityForm,
-                            intent_categories: personalityForm.intent_categories.filter(c => c !== category.key)
-                          });
-                        }
-                      }}
+                      onChange={(e) => handleIntentCategoryChange(category.key, e.target.checked)}
                       className="rounded border-gray-300"
                     />
                     <Label htmlFor={category.key} className="text-sm">
@@ -712,8 +857,8 @@ const AIPersonalities = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </motion.div>
+    </div>
   );
-};
+});
 
 export default AIPersonalities;

@@ -15,7 +15,6 @@ create table public.ai_personalities (
   voice_message_default_response text null,
   default_voice_language character varying(10) null default 'en'::character varying,
   usage_count integer null default 0,
-  performance_rating numeric(3, 2) null default 5.0,
   is_template boolean null default false,
   template_category character varying(50) null,
   created_at timestamp with time zone null default CURRENT_TIMESTAMP,

@@ -21,7 +21,7 @@ export default {
 		extend: {
 			fontFamily: {
 				sans: ['"Poppins"', 'system-ui', 'sans-serif'],
-				arabic: ['Tajawal', 'Arial', 'sans-serif'],
+				arabic: ['"IBM Plex Sans Arabic"', 'Arial', 'sans-serif'],
 			},
 			colors: {
 				border: 'hsl(var(--border))',

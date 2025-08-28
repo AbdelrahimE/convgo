@@ -16,6 +16,11 @@ const logger = {
 };
 
 interface GenerateSystemPromptRequest {
+  businessType: string;
+  languages: string[];
+  arabicDialect?: string;
+  tone: string;
+  specialInstructions?: string;
   description: string;
 }
 
@@ -52,7 +57,7 @@ serve(async (req) => {
   }
 
   try {
-    const { description } = await req.json() as GenerateSystemPromptRequest;
+    const { businessType, languages, arabicDialect, tone, specialInstructions, description } = await req.json() as GenerateSystemPromptRequest;
     
     // Get user ID from the request
     const authHeader = req.headers.get('Authorization');
@@ -101,11 +106,11 @@ serve(async (req) => {
       promptGenerationsUsed: profile.monthly_prompt_generations_used 
     });
 
-    if (!description) {
+    if (!description || !businessType || !languages.length || !tone) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Description is required' 
+          error: 'Business type, languages, tone, and description are required' 
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -148,22 +153,39 @@ serve(async (req) => {
         messages: [
           { 
             role: 'system', 
-            content: `You are a WhatsApp prompt engineering expert. Your task is to convert a user's description of what they want their WhatsApp AI assistant to do into a powerful, effective system prompt.
-            
-The system prompt should:
-1. Be clear, concise, and focused on the specific task
-2. Define the assistant's role, tone, and constraints
-3. Include necessary instructions or guidelines
-4. Be optimized for WhatsApp interactions (which are typically brief)
-5. Help the AI understand the context and purpose of the conversation
+            content: `You are an expert WhatsApp AI prompt engineer specializing in creating highly effective, customized system prompts for business WhatsApp AI assistants.
 
-Create a system prompt that is formatted as a complete, ready-to-use prompt with no preamble, explanations, or meta-commentary.`
+Your task is to create a comprehensive, powerful system prompt based on the provided business information and requirements.
+
+The system prompt MUST include:
+1. Clear role definition based on business type
+2. Language and dialect specifications
+3. Appropriate tone and personality
+4. Essential security and boundary rules
+5. Specific business context and guidelines
+6. WhatsApp interaction optimization (brief, effective responses)
+
+Essential security rules to ALWAYS include:
+- Only answer questions related to the business/service
+- Politely decline off-topic questions
+- Never provide information outside your knowledge base
+- Maintain professional boundaries
+
+Create a complete, production-ready system prompt with no preamble, explanations, or meta-commentary. The prompt should be in the appropriate language(s) specified.`
           },
           { 
             role: 'user', 
-            content: `Convert this description into an effective system prompt for a WhatsApp AI assistant:
-            
-${description}`
+            content: `Create a WhatsApp AI system prompt with these specifications:
+
+BUSINESS TYPE: ${businessType}
+LANGUAGES: ${languages.join(', ')}
+${arabicDialect ? `ARABIC DIALECT: ${arabicDialect}` : ''}
+TONE: ${tone}
+${specialInstructions ? `SPECIAL INSTRUCTIONS: ${specialInstructions}` : ''}
+
+MAIN PURPOSE: ${description}
+
+Generate a comprehensive system prompt that incorporates all these elements and creates a powerful, secure AI assistant optimized for WhatsApp business interactions.`
           }
         ],
         temperature: 1.0,

@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
-import { Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, Sparkles, Download, Clock, MoreHorizontal, File, Loader2 } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, Sparkles, Download, Clock, MoreHorizontal, File, Loader2, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,60 +15,30 @@ import { Progress } from "@/components/ui/progress";
 import { Json } from "@/integrations/supabase/types";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFilesQuery, useFilesCountQuery, useDeleteFileMutation, FileWithMetadata, parseEmbeddingStatus } from "@/hooks/use-files-query";
+import { useQueryClient } from "@tanstack/react-query";
 
 import logger from '@/utils/logger';
 // Feature flags to show/hide optional columns
 const SHOW_SIZE_COLUMN = false;
 const SHOW_LANGUAGE_COLUMN = false;
-interface File {
-  id: string;
-  filename: string;
-  original_name: string;
-  mime_type: string;
-  size_bytes: number;
-  path: string;
-  profile_id: string;
-  created_at: string;
-  updated_at: string;
-}
 const MAX_FILE_NAME_LENGTH = 30;
-interface FileWithMetadata {
-  id: string;
-  filename: string;
-  original_name: string;
-  mime_type: string;
-  size_bytes: number;
-  path: string;
-  profile_id: string;
-  created_at: string;
-  updated_at: string;
 
-  embedding_status?: EmbeddingStatusDetails;
-  primary_language?: string;
-  language_confidence?: any;
-  language_detection_status?: any;
-  detected_languages?: string[];
-  text_extraction_status?: any;
-  text_content?: string;
+interface FileListProps {
+  searchTerm?: string;
 }
-const parseEmbeddingStatus = (jsonData: Json | null): EmbeddingStatusDetails | undefined => {
-  if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) {
-    return undefined;
-  }
-  const statusObj = jsonData as Record<string, any>;
-  return {
-    status: statusObj.status as EmbeddingStatus || 'pending',
-    started_at: typeof statusObj.started_at === 'string' ? statusObj.started_at : undefined,
-    completed_at: typeof statusObj.completed_at === 'string' ? statusObj.completed_at : undefined,
-    success_count: typeof statusObj.success_count === 'number' ? statusObj.success_count : undefined,
-    error_count: typeof statusObj.error_count === 'number' ? statusObj.error_count : undefined,
-    last_updated: typeof statusObj.last_updated === 'string' ? statusObj.last_updated : undefined,
-    error: typeof statusObj.error === 'string' ? statusObj.error : undefined
-  };
-};
-export function FileList() {
-  const [files, setFiles] = useState<FileWithMetadata[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+
+export function FileList({ searchTerm = '' }: FileListProps) {
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize] = useState(20); // Fixed page size for now
+  const isMobile = useIsMobile();
+  
+  // Use React Query for optimized data fetching and caching with pagination
+  const { data: files = [], isLoading, error, refetch } = useFilesQuery(currentPage, pageSize);
+  const { data: totalCount = 0 } = useFilesCountQuery();
+  const deleteFileMutation = useDeleteFileMutation();
+  const queryClient = useQueryClient();
   const {
     toast
   } = useToast();
@@ -77,14 +49,23 @@ export function FileList() {
   } = useDocumentEmbeddings();
   const { user } = useAuth();
   const [processingFileId, setProcessingFileId] = useState<string | null>(null);
-  const [filteredFiles, setFilteredFiles] = useState<FileWithMetadata[]>([]);
-
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  // Use derived state for filteredFiles to avoid infinite loops
+  const filteredFiles = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return files;
+    }
+    
+    const searchLower = searchTerm.toLowerCase();
+    return files.filter(file => 
+      file.filename.toLowerCase().includes(searchLower) ||
+      file.original_name.toLowerCase().includes(searchLower)
+    );
+  }, [files, searchTerm]);
   
-  // Initial data fetch
-  useEffect(() => {
-    fetchFiles();
-  }, [refreshTrigger]);
+  // Memoized file IDs to prevent unnecessary WhatsApp mapping reloads
+  const fileIds = useMemo(() => {
+    return files.map(f => f.id);
+  }, [files]);
 
   // Real-time subscription for files table
   useEffect(() => {
@@ -120,8 +101,20 @@ export function FileList() {
           embedding_status: parseEmbeddingStatus(newFile.embedding_status)
         };
 
-        setFiles(prevFiles => [fileWithMetadata, ...prevFiles]);
-        setFilteredFiles(prevFiles => [fileWithMetadata, ...prevFiles]);
+        // Update React Query cache with optimistic update for INSERT
+        // New files should always appear on page 0 (most recent), not current viewing page
+        queryClient.setQueryData(['files', user.id, 0, pageSize], (oldData: FileWithMetadata[] | undefined) => {
+          const currentFiles = oldData || [];
+          return [fileWithMetadata, ...currentFiles];
+        });
+        
+        // If user is not on page 0, also invalidate all other pages to maintain consistency
+        if (currentPage !== 0) {
+          queryClient.invalidateQueries({ queryKey: ['files', user.id] });
+        }
+        
+        // Invalidate count query to get updated total
+        queryClient.invalidateQueries({ queryKey: ['files-count', user.id] });
         
         toast({
           title: "File Added",
@@ -136,8 +129,21 @@ export function FileList() {
       }, (payload) => {
         logger.log('Received real-time UPDATE for file:', payload);
         const updatedFile = payload.new as any; // Raw database row
+        const oldFile = payload.old as any; // Previous row state
         
-        // Update the file in the state
+        // Only process updates for fields that actually matter for the UI
+        const relevantFieldsChanged = 
+          oldFile.embedding_status !== updatedFile.embedding_status ||
+          oldFile.text_extraction_status !== updatedFile.text_extraction_status ||
+          oldFile.language_detection_status !== updatedFile.language_detection_status ||
+          oldFile.primary_language !== updatedFile.primary_language;
+        
+        // Skip update if no relevant fields changed
+        if (!relevantFieldsChanged) {
+          return;
+        }
+        
+        // Create optimized update object with only necessary fields
         const fileWithMetadata: FileWithMetadata = {
           ...updatedFile,
           primary_language: updatedFile.primary_language || 'unknown',
@@ -152,16 +158,13 @@ export function FileList() {
           embedding_status: parseEmbeddingStatus(updatedFile.embedding_status)
         };
 
-        setFiles(prevFiles => 
-          prevFiles.map(file => 
+        // Update React Query cache with optimistic update for UPDATE
+        queryClient.setQueryData(['files', user.id, currentPage, pageSize], (oldData: FileWithMetadata[] | undefined) => {
+          const currentFiles = oldData || [];
+          return currentFiles.map(file => 
             file.id === updatedFile.id ? fileWithMetadata : file
-          )
-        );
-        setFilteredFiles(prevFiles => 
-          prevFiles.map(file => 
-            file.id === updatedFile.id ? fileWithMetadata : file
-          )
-        );
+          );
+        });
       })
       .on('postgres_changes', {
         event: 'DELETE',
@@ -172,12 +175,10 @@ export function FileList() {
         logger.log('Received real-time DELETE for file:', payload);
         const deletedFile = payload.old as any; // Raw database row
         
-        setFiles(prevFiles => 
-          prevFiles.filter(file => file.id !== deletedFile.id)
-        );
-        setFilteredFiles(prevFiles => 
-          prevFiles.filter(file => file.id !== deletedFile.id)
-        );
+        // For DELETE events, invalidate all pages since the file could be on any page
+        // This ensures consistent state across all cached pages
+        queryClient.invalidateQueries({ queryKey: ['files', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['files-count', user.id] });
       })
       .subscribe((status) => {
         logger.log(`Supabase files channel status: ${status}`);
@@ -191,78 +192,18 @@ export function FileList() {
       logger.log('Cleaning up files real-time subscription');
       supabase.removeChannel(channel);
     };
-  }, [user, toast]);
-  const fetchFiles = async () => {
-    setIsLoading(true);
-    try {
-      const {
-        data: filesData,
-        error: filesError
-      } = await supabase.from('files').select('*').order('created_at', {
-        ascending: false
-      });
-      if (filesError) {
-        logger.error("Error fetching files:", filesError);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to load files. Please try again."
-        });
-        setIsLoading(false);
-        return;
-      }
-      const filesWithMetadata: FileWithMetadata[] = filesData.map(file => {
-        const embeddingStatus = parseEmbeddingStatus(file.embedding_status);
-        return {
-          ...file,
-          primary_language: file.primary_language || 'unknown',
-          language_confidence: file.language_confidence || {},
-          detected_languages: file.detected_languages || [],
-          language_detection_status: file.language_detection_status || {
-            status: 'pending'
-          },
-          text_extraction_status: file.text_extraction_status || {
-            status: 'pending'
-          },
-          embedding_status: embeddingStatus
-        };
-      });
-      setFiles(filesWithMetadata);
-      setFilteredFiles(filesWithMetadata);
-    } catch (error) {
-      logger.error("Error in fetchFiles:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "An unexpected error occurred while loading files."
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [user, toast, currentPage, pageSize, queryClient]);
+  // Optimized delete function using React Query mutation
   const deleteFile = async (fileId: string) => {
     try {
-      const {
-        error
-      } = await supabase.from('files').delete().eq('id', fileId);
-      if (error) {
-        logger.error("Error deleting file:", error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to delete file. Please try again."
-        });
-      } else {
-        setFiles(files.filter(file => file.id !== fileId));
-        toast({
-          title: "Success",
-          description: "File deleted successfully."
-        });
-      }
-    } catch (error) {
-      logger.error("Error deleting file:", error);
+      await deleteFileMutation.mutateAsync(fileId);
       toast({
-        variant: "destructive",
+        title: "Success",
+        description: "File deleted successfully."
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive", 
         title: "Error",
         description: "Failed to delete file. Please try again."
       });
@@ -284,7 +225,8 @@ export function FileList() {
     setProcessingFileId(fileId);
     const success = await generateEmbeddings(fileId);
     if (success) {
-      fetchFiles();
+      // Use React Query refetch for optimized data refresh
+      refetch();
     }
     setProcessingFileId(null);
   };
@@ -352,9 +294,8 @@ export function FileList() {
   // Load existing mappings for currently loaded files
   useEffect(() => {
     const loadMappings = async () => {
-      if (files.length === 0 || !user) return;
+      if (fileIds.length === 0 || !user) return;
       try {
-        const fileIds = files.map(f => f.id);
         const { data, error } = await supabase
           .from('whatsapp_file_mappings')
           .select('file_id, whatsapp_instance_id')
@@ -362,7 +303,7 @@ export function FileList() {
           .eq('user_id', user.id);
         if (error) throw error;
         const map: Record<string, string | null> = {};
-        for (const f of files) map[f.id] = null;
+        for (const id of fileIds) map[id] = null;
         (data || []).forEach(m => {
           map[m.file_id as string] = m.whatsapp_instance_id as string;
         });
@@ -372,7 +313,7 @@ export function FileList() {
       }
     };
     loadMappings();
-  }, [files, user]);
+  }, [fileIds, user]);
 
   const handleLinkChange = async (fileId: string, instanceId: string | null) => {
     if (!user) return;
@@ -408,8 +349,8 @@ export function FileList() {
 
 
 
-  // Helper functions
-  const getRelativeTime = (dateString: string) => {
+  // Memoized helper functions for performance
+  const getRelativeTime = useCallback((dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -419,9 +360,9 @@ export function FileList() {
     if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
     if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
     return 'Just now';
-  };
+  }, []);
 
-  const formatFileSize = (sizeInBytes: number) => {
+  const formatFileSize = useCallback((sizeInBytes: number) => {
     if (sizeInBytes < 1024) {
       return `${sizeInBytes} B`;
     } else if (sizeInBytes < 1024 * 1024) {
@@ -429,9 +370,9 @@ export function FileList() {
     } else {
       return `${(sizeInBytes / (1024 * 1024)).toFixed(2)} MB`;
     }
-  };
+  }, []);
 
-  const renderEmbeddingStatus = (file: FileWithMetadata) => {
+  const renderEmbeddingStatus = useCallback((file: FileWithMetadata) => {
     if (!file.embedding_status) {
       return <Badge variant="outline" className="flex items-center gap-1 text-xs">
           <Sparkles className="h-3 w-3" />
@@ -467,9 +408,9 @@ export function FileList() {
         <Sparkles className="h-3 w-3" />
         <span>Generate</span>
       </Badge>;
-  };
+  }, [isGenerating, processingFileId]);
 
-  const renderLanguageInfo = (file: FileWithMetadata) => {
+  const renderLanguageInfo = useCallback((file: FileWithMetadata) => {
     if (!file.detected_languages || file.detected_languages.length === 0) {
       return <div className="flex items-center text-xs text-slate-500">
           <Languages className="h-3 w-3 mr-1" />
@@ -501,8 +442,131 @@ export function FileList() {
             </div>
           </TooltipContent>
         </Tooltip>;
-  };
+  }, []);
 
+  // Mobile card layout for files
+  const renderFilesCards = (filesToRender: FileWithMetadata[]) => (
+    <div className="space-y-4">
+      {filesToRender.map((file) => (
+        <Card key={file.id} className="overflow-hidden border-slate-200 dark:border-slate-700">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                <div className="flex-shrink-0">
+                  {getFileIcon(file.mime_type)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate cursor-help">
+                        {file.filename}
+                      </p>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{file.filename}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                    <span className="sr-only">More actions</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => handleDownloadFile(file)}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download File
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleGenerateEmbeddings(file.id)} disabled={isGenerating && processingFileId === file.id}>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    {file.embedding_status?.status === 'complete' ? 'Regenerate' : 'Generate'} Embeddings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => deleteFile(file.id)} className="text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete File
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-0">
+            {/* Status Row */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Status</span>
+              <div className="flex items-center space-x-2">
+                {renderEmbeddingStatus(file)}
+                {(file.embedding_status?.status === 'processing' || isGenerating && processingFileId === file.id) && (
+                  <div className="flex items-center space-x-2">
+                    <Progress value={progress} className="h-1 w-16" />
+                    <span className="text-xs text-slate-500">{progress}%</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* WhatsApp Instance Row */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">WhatsApp Instance</span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={!!isLinking[file.id]} 
+                onClick={() => {
+                  const currentId = fileIdToInstanceId[file.id] ?? null;
+                  const idx = currentId ? instances.findIndex(i => i.id === currentId) : -1;
+                  const nextId = idx === -1 ? (instances[0]?.id || null) : (instances[idx + 1]?.id ?? null);
+                  handleLinkChange(file.id, nextId);
+                }}
+                className="text-xs"
+              >
+                {isLinking[file.id] ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />Saving
+                  </>
+                ) : (
+                  fileIdToInstanceId[file.id] ? (instances.find(i => i.id === fileIdToInstanceId[file.id])?.instance_name || 'Linked') : 'Unlinked'
+                )}
+              </Button>
+            </div>
+            
+            {/* Upload Date Row */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Uploaded</span>
+              <div className="flex items-center space-x-1 text-xs text-slate-600 dark:text-slate-400">
+                <Clock className="h-3 w-3" />
+                <span>{getRelativeTime(file.created_at)}</span>
+              </div>
+            </div>
+            
+            {/* Language Info (if available) */}
+            {SHOW_LANGUAGE_COLUMN && file.detected_languages && file.detected_languages.length > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Language</span>
+                {renderLanguageInfo(file)}
+              </div>
+            )}
+            
+            {/* File Size (if shown) */}
+            {SHOW_SIZE_COLUMN && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Size</span>
+                <span className="text-xs text-slate-600 dark:text-slate-400">
+                  {formatFileSize(file.size_bytes)}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
 
   const renderFilesTable = (filesToRender: FileWithMetadata[], showHeader = true) => (
       <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -673,13 +737,36 @@ export function FileList() {
 
   return (
     <div className="space-y-6">
-      {/* Loading State */}
+      {/* Modern Loading State */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" />
-            <span className="text-slate-600 dark:text-slate-400">Loading files...</span>
+        <div className="flex items-center justify-center py-12">
+          <div className="flex flex-col items-center space-y-3">
+            {/* Modern animated loader */}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-full border-2 border-blue-100 dark:border-blue-900"></div>
+              </div>
+              <div className="relative flex items-center justify-center">
+                <div className="h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-blue-600 dark:border-t-blue-400"></div>
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loader2 className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-pulse" />
+              </div>
+            </div>
+            {/* Loading text */}
+            <p className="text-sm text-slate-600 dark:text-slate-400">Loading your files...</p>
           </div>
+        </div>
+      ) : filteredFiles.length === 0 && searchTerm.trim() ? (
+        /* No Search Results */
+        <div className="text-center py-8">
+          <div className="mx-auto w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+            <Search className="w-8 h-8 text-slate-400" />
+          </div>
+          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">No files found</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+            No files match your search for "{searchTerm}". Try adjusting your search terms.
+          </p>
         </div>
       ) : files.length === 0 ? (
         /* Empty State */
@@ -689,15 +776,71 @@ export function FileList() {
           </div>
           <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">No files uploaded yet</h3>
           <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-            Upload your first document to get started with AI-powered analysis and content processing.
+            Upload your first document to get started.
           </p>
         </div>
       ) : (
         <>
           {/* All Files Section */}
           <div>
-            {renderFilesTable(files)}
+            {isMobile ? renderFilesCards(filteredFiles) : renderFilesTable(filteredFiles)}
           </div>
+          
+          {/* Pagination Controls */}
+          {(searchTerm.trim() ? filteredFiles.length > pageSize : totalCount > pageSize) && (
+            <div className="flex items-center justify-between px-2 py-3 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                <span>
+                  {searchTerm.trim() ? 
+                    `Showing ${filteredFiles.length} of ${totalCount} files (filtered)` :
+                    `Showing ${currentPage * pageSize + 1} to ${Math.min((currentPage + 1) * pageSize, totalCount)} of ${totalCount} files`
+                  }
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                  disabled={currentPage === 0}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.ceil(totalCount / pageSize) }, (_, i) => (
+                    <Button
+                      key={i}
+                      variant={currentPage === i ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(i)}
+                      className="w-8 h-8 p-0"
+                      disabled={Math.ceil(totalCount / pageSize) > 10 && Math.abs(currentPage - i) > 2 && i !== 0 && i !== Math.ceil(totalCount / pageSize) - 1}
+                      style={{
+                        display: Math.ceil(totalCount / pageSize) > 10 && Math.abs(currentPage - i) > 2 && i !== 0 && i !== Math.ceil(totalCount / pageSize) - 1 ? 'none' : 'flex'
+                      }}
+                    >
+                      {i + 1}
+                    </Button>
+                  ))}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalCount / pageSize) - 1, p + 1))}
+                  disabled={currentPage >= Math.ceil(totalCount / pageSize) - 1}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </>
       )}
 

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
+import { parseEmbeddingStatus } from './use-files-query';
 import logger from '@/utils/logger';
 
 export type EmbeddingStatus = 'pending' | 'processing' | 'complete' | 'error' | 'partial';
@@ -17,24 +18,6 @@ export interface EmbeddingStatusDetails {
   error?: string;
 }
 
-// Helper function to safely convert JSON to EmbeddingStatusDetails
-const parseEmbeddingStatus = (jsonData: Json | null): EmbeddingStatusDetails => {
-  if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) {
-    return { status: 'pending' };
-  }
-  
-  const statusObj = jsonData as Record<string, any>;
-  
-  return {
-    status: (statusObj.status as EmbeddingStatus) || 'pending',
-    started_at: typeof statusObj.started_at === 'string' ? statusObj.started_at : undefined,
-    completed_at: typeof statusObj.completed_at === 'string' ? statusObj.completed_at : undefined, 
-    success_count: typeof statusObj.success_count === 'number' ? statusObj.success_count : undefined,
-    error_count: typeof statusObj.error_count === 'number' ? statusObj.error_count : undefined,
-    last_updated: typeof statusObj.last_updated === 'string' ? statusObj.last_updated : undefined,
-    error: typeof statusObj.error === 'string' ? statusObj.error : undefined
-  };
-};
 
 export function useDocumentEmbeddings() {
   const [isGenerating, setIsGenerating] = useState(false);

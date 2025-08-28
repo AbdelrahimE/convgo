@@ -2,9 +2,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { FileUploader } from "@/components/FileUploader";
 import { FileList } from "@/components/FileList";
-import { motion } from "framer-motion";
-import { useEffect } from "react";
-import { Files, Upload, Filter, MoreHorizontal, Search } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Files, Filter, MoreHorizontal, Search, FolderUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -13,31 +12,68 @@ import logger from '@/utils/logger';
 
 export default function FileManagement() {
   const {
-    user
+    user,
+    loading: authLoading
   } = useAuth();
   const isMobile = useIsMobile();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [initialLoading, setInitialLoading] = useState(true);
   
   useEffect(() => {
     logger.log('FileManagement mounted, current user:', user);
+    // Simulate initial loading for smooth transition
+    const timer = setTimeout(() => {
+      setInitialLoading(false);
+    }, 500);
+    return () => clearTimeout(timer);
   }, [user]);
 
+  // Modern loading state similar to WhatsApp Instances
+  if (authLoading || initialLoading) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-white dark:bg-slate-900">
+        <div className="flex flex-col items-center space-y-4">
+          {/* Modern animated loader with gradient */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-20 w-20 rounded-full border-4 border-blue-100 dark:border-blue-900"></div>
+            </div>
+            <div className="relative flex items-center justify-center">
+              <div className="h-20 w-20 animate-spin rounded-full border-4 border-transparent border-t-blue-600 dark:border-t-blue-400"></div>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Files className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+          
+          {/* Loading text with animation */}
+          <div className="text-center space-y-2">
+            <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Loading File Management
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Please wait while we prepare your documents...
+            </p>
+          </div>
+          
+          {/* Loading dots animation */}
+          <div className="flex space-x-1">
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }} 
-      animate={{ opacity: 1, y: 0 }} 
-      transition={{ duration: 0.3 }}
-      className="w-full min-h-screen bg-white dark:bg-slate-900"
-    >
+    <div className="w-full min-h-screen bg-white dark:bg-slate-900">
       {/* Header Section */}
       <div className="bg-white dark:bg-slate-900">
         <div className="px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <motion.div 
-              initial={{ opacity: 0, x: -20 }} 
-              animate={{ opacity: 1, x: 0 }} 
-              transition={{ delay: 0.1 }}
-              className="flex items-center space-x-3"
-            >
+            <div className="flex items-center space-x-3">
               <div>
                 <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
                   File Management
@@ -46,7 +82,7 @@ export default function FileManagement() {
                   Upload, process, and manage your documents with AI-powered text analysis
                 </p>
               </div>
-            </motion.div>
+            </div>
           </div>
         </div>
       </div>
@@ -55,35 +91,25 @@ export default function FileManagement() {
       <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6">
         
         {/* Upload Section */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ delay: 0.3 }}
-          className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm"
-        >
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="p-4">
             <div className="flex items-center space-x-2 mb-4">
-              <Upload className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-              <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
+              <FolderUp className="w-5 h-5 text-slate-900 dark:text-slate-100" />
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                 Upload Documents
               </h2>
             </div>
             <FileUploader />
           </div>
-        </motion.div>
+        </div>
 
         {/* Files Section */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ delay: 0.4 }}
-          className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm"
-        >
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
-                <Files className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-                <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
+                <Files className="w-5 h-5 text-slate-900 dark:text-slate-100" />
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                   Your Documents
                 </h2>
               </div>
@@ -94,16 +120,18 @@ export default function FileManagement() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
                     placeholder="Search files..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 w-64 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                   />
                 </div>
               </div>
             </div>
             
-            <FileList />
+            <FileList searchTerm={searchTerm} />
           </div>
-        </motion.div>
+        </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

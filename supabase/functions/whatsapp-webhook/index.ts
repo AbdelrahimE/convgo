@@ -9,6 +9,8 @@ import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts
 import { checkForDuplicateMessage } from "../_shared/duplicate-message-detector.ts";
 import { processAudioMessage } from "../_shared/audio-processor.ts";
 import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
+import { handleMessageWithBuffering } from "../_shared/buffering-handler.ts";
+import { getRecentConversationHistory } from "../_shared/conversation-history.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -31,7 +33,163 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// REMOVED: Support phone number check function (escalation system removed)
+// Helper function to check if conversation is escalated
+async function isConversationEscalated(instanceId: string, phoneNumber: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('escalated_conversations')
+      .select('id')
+      .eq('instance_id', instanceId)
+      .eq('whatsapp_number', phoneNumber)
+      .is('resolved_at', null)
+      .single();
+
+    return !error && !!data;
+  } catch (error) {
+    logger.error('Error checking escalation status:', error);
+    return false;
+  }
+}
+
+// Helper function to check if message needs escalation
+async function checkEscalationNeeded(
+  message: string, 
+  phoneNumber: string,
+  instanceId: string,
+  conversationId: string,
+  aiResponseConfidence?: number
+): Promise<{ needsEscalation: boolean; reason: string }> {
+  try {
+    // Get instance configuration
+    const { data: instance, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('escalation_enabled, escalation_threshold, escalation_keywords')
+      .eq('id', instanceId)
+      .single();
+
+    if (instanceError || !instance?.escalation_enabled) {
+      return { needsEscalation: false, reason: '' };
+    }
+
+    // 1. Check for direct escalation keywords
+    const keywords = instance.escalation_keywords || [
+      'human support', 'speak to someone', 'agent', 'representative',
+      'talk to person', 'customer service', 'help me', 'support team'
+    ];
+    
+    const lowerMessage = message.toLowerCase();
+    const hasEscalationKeyword = keywords.some(keyword => 
+      lowerMessage.includes(keyword.toLowerCase())
+    );
+    
+    if (hasEscalationKeyword) {
+      logger.info('Escalation needed: User requested human support', { phoneNumber });
+      return { needsEscalation: true, reason: 'user_request' };
+    }
+
+    // 2. Check AI confidence patterns using interaction history
+    // Get recent AI interactions to check for low confidence patterns
+    const { data: interactions, error: interactionError } = await supabaseAdmin
+      .from('whatsapp_ai_interactions')
+      .select('metadata, created_at, user_message')
+      .eq('whatsapp_instance_id', instanceId)
+      .eq('user_phone', phoneNumber)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (!interactionError && interactions && interactions.length > 0) {
+      // Check for repeated questions (from user messages)
+      const userMessages = interactions.map(i => i.user_message);
+      const uniqueMessages = new Set(userMessages.map(m => m.toLowerCase()));
+      
+      if (userMessages.length >= 3 && uniqueMessages.size === 1) {
+        logger.info('Escalation needed: Repeated question detected', { phoneNumber });
+        return { needsEscalation: true, reason: 'repeated_question' };
+      }
+
+      // Check for low response quality on multiple AI responses
+      const lowQualityCount = interactions.filter(i => {
+        const responseQuality = i.metadata?.response_quality;
+        return responseQuality && parseFloat(responseQuality) < 0.4;
+      }).length;
+      
+      if (lowQualityCount >= instance.escalation_threshold) {
+        logger.info('Escalation needed: Low response quality threshold exceeded', { 
+          phoneNumber, 
+          lowQualityCount, 
+          threshold: instance.escalation_threshold 
+        });
+        return { needsEscalation: true, reason: 'low_confidence' };
+      }
+    }
+
+    // 3. Check for sensitive topics
+    const sensitiveKeywords = [
+      'complaint', 'legal', 'lawyer', 'refund', 'compensation',
+      'issue', 'problem', 'dispute', 'billing', 'charge'
+    ];
+    
+    const hasSensitiveTopic = sensitiveKeywords.some(keyword => 
+      lowerMessage.includes(keyword)
+    );
+    
+    if (hasSensitiveTopic) {
+      logger.info('Escalation needed: Sensitive topic detected', { phoneNumber });
+      return { needsEscalation: true, reason: 'sensitive_topic' };
+    }
+
+    return { needsEscalation: false, reason: '' };
+  } catch (error) {
+    logger.error('Error checking escalation need:', error);
+    return { needsEscalation: false, reason: '' };
+  }
+}
+
+// Helper function to handle escalation
+async function handleEscalation(
+  phoneNumber: string,
+  instanceId: string,
+  reason: string,
+  conversationHistory: any[]
+): Promise<string> {
+  try {
+    // Get instance configuration for escalation messages
+    const { data: instance, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('escalation_message, instance_name')
+      .eq('id', instanceId)
+      .single();
+
+    if (instanceError) {
+      logger.error('Error getting instance config for escalation:', instanceError);
+      return 'Your conversation has been transferred to our specialized support team.';
+    }
+
+    // Send escalation notification
+    const notificationResponse = await fetch(`${supabaseUrl}/functions/v1/send-escalation-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify({
+        customerNumber: phoneNumber,
+        instanceId,
+        escalationReason: reason,
+        conversationContext: conversationHistory.slice(-10) // Last 10 messages
+      })
+    });
+
+    if (!notificationResponse.ok) {
+      logger.error('Failed to send escalation notification');
+    }
+
+    return instance.escalation_message || 'Your conversation has been transferred to our specialized support team. One of our representatives will contact you shortly.';
+  } catch (error) {
+    logger.error('Error handling escalation:', error);
+    return 'Your conversation has been transferred to our specialized support team.';
+  }
+}
 
 // Helper function to find or create a conversation with improved timeout management and handling of unique constraint
 async function findOrCreateConversation(instanceId: string, userPhone: string) {
@@ -183,48 +341,6 @@ async function findOrCreateConversation(instanceId: string, userPhone: string) {
   }
 }
 
-// Helper function to get recent conversation history with improved token consideration
-async function getRecentConversationHistory(conversationId: string, maxTokens = 1000) {
-  try {
-    // Get message count first to determine how many to fetch
-    const { data: countData, error: countError } = await supabaseAdmin
-      .from('whatsapp_conversation_messages')
-      .select('id', { count: 'exact' })
-      .eq('conversation_id', conversationId);
-    
-    if (countError) throw countError;
-    
-    // Calculate how many messages to fetch (estimate 50 tokens per message on average)
-    // This is a simple heuristic - adjust based on your actual message sizes
-    const messageCount = countData || 0;
-    const estimatedMessagesToFetch = Math.min(Math.floor(maxTokens / 50), messageCount, 10);
-    
-    // Always include at least 3 messages if available
-    const messagesToFetch = Math.max(estimatedMessagesToFetch, Math.min(3, messageCount));
-    
-    // Fetch the messages
-    const { data, error } = await supabaseAdmin
-      .from('whatsapp_conversation_messages')
-      .select('role, content, timestamp')
-      .eq('conversation_id', conversationId)
-      .order('timestamp', { ascending: false })
-      .limit(messagesToFetch);
-
-    if (error) throw error;
-    
-    // Log the conversation history retrieval
-    logger.info(`Retrieved ${data.length} messages from conversation ${conversationId}`, {
-      messageCount: data.length,
-      maxTokensAllowed: maxTokens,
-      estimatedTokensUsed: data.reduce((sum, msg) => sum + Math.ceil(msg.content.length * 0.25), 0)
-    });
-    
-    return data.reverse();
-  } catch (error) {
-    logger.error('Error in getRecentConversationHistory:', error);
-    return [];
-  }
-}
 
 // Default API URL - Set to the correct Evolution API URL
 const DEFAULT_EVOLUTION_API_URL = 'https://api.botifiy.com';
@@ -525,7 +641,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     // Get instance ID from instance name
     const { data: instanceData, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
-      .select('id, status')
+      .select('id, status, escalation_enabled, escalated_conversation_message')
       .eq('instance_name', instanceName)
       .maybeSingle();
 
@@ -535,6 +651,136 @@ async function processMessageForAI(instance: string, messageData: any) {
         error: instanceError 
       });
       return false;
+    }
+
+    // Initialize instance base URL for sending responses (moved up for escalation handling)
+    let instanceBaseUrl = '';
+
+    // Try to determine the base URL for this instance
+    try {
+      logger.info('Attempting to determine EVOLUTION API URL', { instanceId: instanceData.id });
+      
+      // IMPORTANT: First check if the server_url is available in the current message payload
+      if (messageData.server_url) {
+        instanceBaseUrl = messageData.server_url;
+        logger.info('Using server_url from payload', { 
+          instanceBaseUrl
+        });
+      } else {
+        // If not available in the payload, try to get it from webhook config
+        const { data: webhookConfig, error: webhookError } = await supabaseAdmin
+          .from('whatsapp_webhook_config')
+          .select('webhook_url')
+          .eq('whatsapp_instance_id', instanceData.id)
+          .maybeSingle();
+          
+        if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
+          // Extract base URL from webhook URL
+          const url = new URL(webhookConfig.webhook_url);
+          instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+          logger.info('Extracted base URL from webhook config', { 
+            instanceBaseUrl,
+            webhookUrl: webhookConfig.webhook_url
+          });
+        } else {
+          // If webhook URL doesn't exist, use the default Evolution API URL
+          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+          logger.info('Using default EVOLUTION API URL', { 
+            instanceBaseUrl,
+            webhookError
+          });
+        }
+      }
+    } catch (error) {
+      // In case of any error, use the default Evolution API URL
+      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+      logger.warn('Error determining EVOLUTION API URL, using default', { 
+        instanceBaseUrl,
+        error
+      });
+    }
+
+    // Check if conversation is already escalated
+    if (instanceData.escalation_enabled) {
+      const isEscalated = await isConversationEscalated(instanceData.id, fromNumber);
+      if (isEscalated) {
+        logger.info('Conversation is escalated, sending escalated message', { fromNumber });
+        
+        // Send escalated conversation message
+        const escalatedMessage = instanceData.escalated_conversation_message || 
+          'Your conversation is under review by our support team. We will contact you soon.';
+        
+        // Check if we already sent this message recently (within last 5 minutes)
+        const { data: recentMessages } = await supabaseAdmin
+          .from('whatsapp_messages')
+          .select('content, created_at')
+          .eq('conversation_id', await findOrCreateConversation(instanceData.id, fromNumber))
+          .eq('sender_type', 'assistant')
+          .eq('content', escalatedMessage)
+          .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
+          .limit(1);
+
+        if (!recentMessages || recentMessages.length === 0) {
+          // Send the escalated message only if not sent recently
+          if (instanceBaseUrl) {
+            const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+            
+            logger.info('Sending escalated conversation message', {
+              sendUrl,
+              fromNumber,
+              escalatedMessage: escalatedMessage.substring(0, 100) + '...'
+            });
+            
+            try {
+              const response = await fetch(sendUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey
+                },
+                body: JSON.stringify({
+                  number: fromNumber,
+                  text: escalatedMessage
+                })
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                logger.error('Failed to send escalated conversation message', {
+                  status: response.status,
+                  statusText: response.statusText,
+                  error: errorText,
+                  sendUrl
+                });
+              } else {
+                const responseData = await response.json();
+                logger.info('Successfully sent escalated conversation message', {
+                  fromNumber,
+                  responseData
+                });
+              }
+            } catch (error) {
+              logger.error('Exception sending escalated conversation message', {
+                error: error.message || error,
+                sendUrl,
+                fromNumber
+              });
+            }
+          } else {
+            logger.error('Cannot send escalated message: instanceBaseUrl is empty', {
+              instanceName,
+              fromNumber,
+              escalatedMessage: escalatedMessage.substring(0, 50) + '...'
+            });
+          }
+          
+          // Store the message regardless of send success
+          const conversationId = await findOrCreateConversation(instanceData.id, fromNumber);
+          await storeMessageInConversation(conversationId, 'assistant', escalatedMessage, null, supabaseAdmin);
+        }
+        
+        return false; // Don't process with AI
+      }
     }
 
     // Find or create conversation
@@ -556,7 +802,7 @@ async function processMessageForAI(instance: string, messageData: any) {
     await storeMessageInConversation(conversationId, 'user', messageText, messageData.key?.id, supabaseAdmin);
     
     // Get recent conversation history with improved token management
-    const conversationHistory = await getRecentConversationHistory(conversationId, 800);
+    const conversationHistory = await getRecentConversationHistory(conversationId, 800, supabaseAdmin);
     logger.info('Retrieved conversation history', { 
       messageCount: conversationHistory.length,
       estimatedTokens: conversationHistory.reduce((sum, msg) => sum + Math.ceil(msg.content.length * 0.25), 0)
@@ -618,59 +864,14 @@ async function processMessageForAI(instance: string, messageData: any) {
       logger.info('No files mapped to this instance, using empty context', { instanceId });
     }
 
-    // Initialize instance base URL for sending responses
-    let instanceBaseUrl = '';
-
-    // Try to determine the base URL for this instance
-    try {
-      logger.info('Attempting to determine EVOLUTION API URL', { instanceId });
-      
-      // IMPORTANT: First check if the server_url is available in the current message payload
-      if (messageData.server_url) {
-        instanceBaseUrl = messageData.server_url;
-        logger.info('Using server_url from payload', { 
-          instanceBaseUrl
-        });
-      } else {
-        // If not available in the payload, try to get it from webhook config
-        const { data: webhookConfig, error: webhookError } = await supabaseAdmin
-          .from('whatsapp_webhook_config')
-          .select('webhook_url')
-          .eq('whatsapp_instance_id', instanceId)
-          .maybeSingle();
-          
-                  if (!webhookError && webhookConfig && webhookConfig.webhook_url) {
-            // Extract base URL from webhook URL
-            const url = new URL(webhookConfig.webhook_url);
-            instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-            logger.info('Extracted base URL from webhook config', { 
-              instanceBaseUrl,
-              webhookUrl: webhookConfig.webhook_url
-            });
-          } else {
-            // If webhook URL doesn't exist, use the default Evolution API URL
-            instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-            logger.info('Using default EVOLUTION API URL', { 
-              instanceBaseUrl,
-              webhookError
-            });
-          }
-      }
-    } catch (error) {
-      // In case of any error, use the default Evolution API URL
-      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
-      logger.warn('Error determining EVOLUTION API URL, using default', { 
-        instanceBaseUrl,
-        error
-      });
-    }
 
     // SMART: Smart Intent Classification with 99% Accuracy
     let intentClassification = null;
     let selectedPersonality = null;
     
     // Check if personality system is enabled for this instance
-    const personalitySystemEnabled = aiConfig.use_personality_system && aiConfig.intent_recognition_enabled;
+    // Note: Intent Recognition is permanently enabled, so we only check use_personality_system
+    const personalitySystemEnabled = aiConfig.use_personality_system;
     
     if (personalitySystemEnabled && messageText) {
       logger.info('Starting smart intent classification', { 
@@ -695,13 +896,13 @@ async function processMessageForAI(instance: string, messageData: any) {
             whatsappInstanceId: instanceId,
             userId: aiConfig.user_id,
             conversationHistory: contextualHistory,
-            useCache: true // تفعيل الكاش لتوفير الوقت والتكلفة
+            useCache: true // Enable caching to save time and cost
           })
         });
 
         if (intentResponse.ok) {
           intentClassification = await intentResponse.json();
-          // FIX: دعم الحقلين لضمان التوافق
+          // FIX: Support both fields for compatibility
           selectedPersonality = (intentClassification as any)?.selectedPersonality || (intentClassification as any)?.selected_personality;
           
           logger.info('Smart intent classification completed', {
@@ -762,11 +963,11 @@ async function processMessageForAI(instance: string, messageData: any) {
     }
 
     // Simple greeting detection for better context handling
-    const hasGreeting = messageText.includes('السلام عليكم') || 
-                       messageText.includes('أهلا') || 
-                       messageText.includes('مرحبا') ||
-                       messageText.includes('صباح الخير') ||
-                       messageText.includes('مساء الخير');
+    const hasGreeting = messageText.toLowerCase().includes('hello') || 
+                       messageText.toLowerCase().includes('hi') || 
+                       messageText.toLowerCase().includes('good morning') ||
+                       messageText.toLowerCase().includes('good afternoon') ||
+                       messageText.toLowerCase().includes('good evening');
     
     logger.info('Starting semantic search for context', { 
       userQuery: messageText,
@@ -802,9 +1003,49 @@ async function processMessageForAI(instance: string, messageData: any) {
       // Continue with empty context instead of failing
       logger.info('Continuing with empty context due to search failure');
       
-      // REMOVED: AI escalation logic (escalation system removed)
-      // Continue with AI processing in fallback case
+      // Check if escalation is needed in fallback case
+      const escalationCheck = await checkEscalationNeeded(
+        messageText,
+        fromNumber,
+        instanceData.id,
+        conversationId
+      );
 
+      if (escalationCheck.needsEscalation) {
+        logger.info('Escalation triggered in fallback case', { 
+          reason: escalationCheck.reason,
+          phoneNumber: fromNumber 
+        });
+        
+        // Handle escalation
+        const escalationMessage = await handleEscalation(
+          fromNumber,
+          instanceData.id,
+          escalationCheck.reason,
+          conversationHistory
+        );
+
+        // Send escalation message to user
+        const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+        await fetch(sendUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey
+          },
+          body: JSON.stringify({
+            number: fromNumber,
+            text: escalationMessage
+          })
+        });
+
+        // Store the escalation message
+        await storeMessageInConversation(conversationId, 'assistant', escalationMessage, null, supabaseAdmin);
+        
+        return true;
+      }
+
+      // Continue with AI processing in fallback case
       const aiResponseResult = await generateAndSendAIResponse(
         messageText, 
         '', 
@@ -818,8 +1059,6 @@ async function processMessageForAI(instance: string, messageData: any) {
         supabaseServiceKey,
         imageUrl
       );
-
-      // REMOVED: AI attempt recording (escalation system removed)
 
       return aiResponseResult;
     }
@@ -901,7 +1140,7 @@ async function processMessageForAI(instance: string, messageData: any) {
         communicationStyle: (intentClassification as any).businessContext.communicationStyle,
         culturalContext: (intentClassification as any).businessContext.detectedTerms
       }),
-      // البيانات المتقدمة الجديدة
+      // Advanced new data
       ...((intentClassification as any)?.emotionAnalysis && {
         emotionAnalysis: (intentClassification as any).emotionAnalysis
       }),
@@ -913,7 +1152,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       })
     };
 
-    // إضافة logging للتأكد من البيانات
+    // Add logging to verify data
     logger.info('Smart AI Config created', {
       hasPersonality: !!selectedPersonality,
       selectedPersonalityName: (selectedPersonality as any)?.name || 'none',
@@ -922,9 +1161,149 @@ async function processMessageForAI(instance: string, messageData: any) {
       originalSystemPrompt: aiConfig.system_prompt ? aiConfig.system_prompt.substring(0, 100) + '...' : 'undefined'
     });
 
-    // REMOVED: AI escalation logic (escalation system removed)
-    // Continue with AI processing
+    // ===== NEW: Adaptive Response Quality Assessment =====
+    logger.info('Starting adaptive response quality assessment', {
+      hasSearchResults: !!searchResults?.success,
+      hasBusinessContext: !!(intentClassification as any)?.businessContext,
+      detectedIndustry: (intentClassification as any)?.businessContext?.industry,
+      searchSimilarity: searchResults?.results?.[0]?.similarity || 0
+    });
 
+    let shouldEscalateByQuality = false;
+    let qualityReasoning = '';
+    let responseQuality = 1.0; // default high quality
+
+    try {
+      const qualityResponse = await fetch(`${supabaseUrl}/functions/v1/assess-response-quality`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`
+        },
+        body: JSON.stringify({
+          message: messageText,
+          intentData: {
+            intent: (intentClassification as any)?.intent,
+            confidence: (intentClassification as any)?.confidence,
+            reasoning: (intentClassification as any)?.reasoning
+          },
+          businessContext: (intentClassification as any)?.businessContext,
+          searchResults: searchResults,
+          languageDetection: {
+            primaryLanguage: messageData?.detectedLanguage || 'ar'
+          },
+          fileIds: fileIds,
+          instanceId: instanceId
+        })
+      });
+
+      if (qualityResponse.ok) {
+        const qualityData = await qualityResponse.json();
+        shouldEscalateByQuality = qualityData.shouldEscalate;
+        responseQuality = qualityData.responseQuality;
+        qualityReasoning = qualityData.reasoning;
+        
+        logger.info('✅ Adaptive quality assessment completed', {
+          responseQuality: qualityData.responseQuality,
+          shouldEscalate: qualityData.shouldEscalate,
+          reasoning: qualityData.reasoning,
+          assessmentType: qualityData.assessmentType,
+          adaptiveFactors: qualityData.adaptiveFactors
+        });
+      } else {
+        const errorText = await qualityResponse.text();
+        logger.warn('⚠️ Quality assessment failed, using conservative approach', {
+          status: qualityResponse.status,
+          error: errorText
+        });
+        // Conservative: if assessment fails, don't escalate by quality
+      }
+    } catch (error) {
+      logger.error('❌ Exception in quality assessment, using conservative approach', {
+        error: error.message || error
+      });
+    }
+
+    // Check if immediate escalation is needed based on quality assessment
+    if (shouldEscalateByQuality) {
+      logger.info('🚨 Immediate escalation triggered by quality assessment', { 
+        responseQuality,
+        reasoning: qualityReasoning,
+        phoneNumber: fromNumber 
+      });
+      
+      // Handle escalation
+      const escalationMessage = await handleEscalation(
+        fromNumber,
+        instanceData.id,
+        'low_confidence',
+        conversationHistory
+      );
+
+      // Send escalation message to user
+      const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+      await fetch(sendUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey
+        },
+        body: JSON.stringify({
+          number: fromNumber,
+          text: escalationMessage
+        })
+      });
+
+      // Store the escalation message
+      await storeMessageInConversation(conversationId, 'assistant', escalationMessage, null, supabaseAdmin);
+      
+      return true;
+    }
+
+    // Check if escalation is needed by other factors (keywords, history, etc.)
+    const escalationCheck = await checkEscalationNeeded(
+      messageText,
+      fromNumber,
+      instanceData.id,
+      conversationId,
+      responseQuality  // Pass the actual response quality for historical tracking
+    );
+
+    if (escalationCheck.needsEscalation) {
+      logger.info('Escalation triggered before AI processing', { 
+        reason: escalationCheck.reason,
+        phoneNumber: fromNumber 
+      });
+      
+      // Handle escalation
+      const escalationMessage = await handleEscalation(
+        fromNumber,
+        instanceData.id,
+        escalationCheck.reason,
+        conversationHistory
+      );
+
+      // Send escalation message to user
+      const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+      await fetch(sendUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey
+        },
+        body: JSON.stringify({
+          number: fromNumber,
+          text: escalationMessage
+        })
+      });
+
+      // Store the escalation message
+      await storeMessageInConversation(conversationId, 'assistant', escalationMessage, null, supabaseAdmin);
+      
+      return true;
+    }
+
+    // Continue with AI processing
     // Generate and send the response with smart context and personality management
     const aiResponseResult = await generateAndSendAIResponse(
       messageText,
@@ -932,7 +1311,7 @@ async function processMessageForAI(instance: string, messageData: any) {
       instanceName,
       fromNumber,
       instanceBaseUrl,
-      smartAiConfig,
+      { ...smartAiConfig, responseQuality, qualityReasoning }, // Add quality assessment data
       messageData,
       conversationId,
       supabaseUrl,
@@ -940,7 +1319,8 @@ async function processMessageForAI(instance: string, messageData: any) {
       imageUrl
     );
 
-    // REMOVED: AI attempt recording (escalation system removed)
+    // After AI response, check if confidence was low and might need escalation
+    // This is handled within generateAndSendAIResponse if confidence tracking is enabled
 
     return aiResponseResult;
   } catch (error) {
@@ -1199,7 +1579,22 @@ serve(async (req) => {
             transcription: transcribedText
           });
         }
-        await processMessageForAI(instanceName, normalizedData);
+        // NEW: Use buffering system with fallback to immediate processing
+        const bufferingResult = await handleMessageWithBuffering(
+          instanceName,
+          normalizedData,
+          processMessageForAI, // Pass original function as fallback
+          supabaseAdmin,
+          supabaseUrl,
+          supabaseServiceKey
+        );
+        
+        logger.info('Message processing completed', {
+          instanceName,
+          usedBuffering: bufferingResult.usedBuffering,
+          success: bufferingResult.success,
+          reason: bufferingResult.reason
+        });
       }
       
       return new Response(JSON.stringify({ success: true }), {

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.window"],
+    "strict": true
+  },
+  "imports": {
+    "https://deno.land/x/base64/": "https://deno.land/x/base64@v0.2.1/"
+  },
+  "lint": {
+    "include": ["./"],
+    "exclude": ["_shared/"]
+  },
+  "fmt": {
+    "include": ["./"],
+    "exclude": ["_shared/"]
+  }
+}

@@ -1,5 +1,6 @@
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -19,10 +20,23 @@ import WebhookMonitor from '@/pages/WebhookMonitor';
 import AccountSettings from '@/pages/AccountSettings';
 import AIUsageMonitoring from '@/pages/AIUsageMonitoring';
 import AIPersonalities from '@/pages/AIPersonalities';
+import EscalationManagement from '@/pages/EscalationManagement';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 
 import './App.css';
+
+// Create QueryClient instance with optimized settings
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 function AppContent() {
   const location = useLocation();
@@ -118,6 +132,14 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
+                  <Route
+                    path="/escalation-management"
+                    element={
+                      <ProtectedRoute>
+                        <EscalationManagement />
+                      </ProtectedRoute>
+                    }
+                  />
                 </Routes>
               </NetworkErrorBoundary>
             </ErrorBoundary>
@@ -131,14 +153,16 @@ function App() {
   return (
     <ErrorBoundary>
       <NetworkErrorBoundary>
-        <TooltipProvider>
-          <AuthProvider>
-            <Router>
-              <AppContent />
-              <Toaster />
-            </Router>
-          </AuthProvider>
-        </TooltipProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <AuthProvider>
+              <Router>
+                <AppContent />
+                <Toaster />
+              </Router>
+            </AuthProvider>
+          </TooltipProvider>
+        </QueryClientProvider>
       </NetworkErrorBoundary>
     </ErrorBoundary>
   );

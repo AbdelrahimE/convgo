@@ -59,7 +59,7 @@ async function listPersonalities(userId: string, whatsappInstanceId: string) {
         id, name, description, system_prompt, temperature, model,
         intent_categories, is_active, is_default, priority,
         process_voice_messages, voice_message_default_response, 
-        default_voice_language, usage_count, performance_rating,
+        default_voice_language, usage_count,
         created_at, updated_at
       `)
       .eq('user_id', userId)

@@ -46,7 +46,7 @@
 .direction-rtl {
   direction: rtl;
   text-align: right;
-  font-family: 'Tajawal', Arial, sans-serif;
+  font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
 }
 
 .direction-ltr {
@@ -57,11 +57,15 @@
 
 /* Auto language detection classes */
 .lang-ar {
-  font-family: 'Tajawal', Arial, sans-serif;
+  font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
 }
 
 .lang-en {
   font-family: 'Poppins', system-ui, sans-serif;
+}
+
+.font-arabic {
+  font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
 }
 
 /* Ensure icons maintain their original dimensions */

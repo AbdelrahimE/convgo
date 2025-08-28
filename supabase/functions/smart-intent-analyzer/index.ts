@@ -336,19 +336,25 @@ Rules:
 }
 
 /**
- * الحصول على الشخصية المناسبة بذكاء - نسخة محسنة
+ * الحصول على الشخصية المناسبة بذكاء - نسخة محسنة مع threshold ثابت للـ MVP
  */
 async function getSmartPersonality(
   instanceId: string,
   intent: string,
-  businessContext: any
+  businessContext: any,
+  intentConfidence: number = 0.5  // Add confidence parameter
 ): Promise<any> {
+  // Fixed optimized threshold for MVP - no user control needed
+  const OPTIMIZED_CONFIDENCE_THRESHOLD = 0.7;
   try {
     logger.debug(`Getting personality for intent: ${intent}, instance: ${instanceId}`);
 
+    logger.info(`Using intent confidence: ${intentConfidence} with threshold: ${OPTIMIZED_CONFIDENCE_THRESHOLD}`);
+    
     const { data, error } = await supabaseAdmin.rpc('get_contextual_personality', {
       p_whatsapp_instance_id: instanceId,
       p_intent: intent,
+      p_intent_confidence: intentConfidence, // Pass the actual confidence
       p_business_context: businessContext
     });
 
@@ -529,8 +535,8 @@ async function smartIntentAnalysisOptimized(
     decision_factors: []
   };
   
-  // 3. الحصول على الشخصية المناسبة (محسن للسرعة)
-  const selectedPersonality = await getSmartPersonality(instanceId, coreAnalysis.intent, coreAnalysis.businessContext);
+  // 3. الحصول على الشخصية المناسبة (محسن للسرعة) مع تمرير الثقة الفعلية
+  const selectedPersonality = await getSmartPersonality(instanceId, coreAnalysis.intent, coreAnalysis.businessContext, coreAnalysis.confidence);
   
   // إضافة logging للتأكد من البيانات
   logger.info('Personality selection completed', {

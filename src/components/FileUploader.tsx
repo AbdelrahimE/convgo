@@ -1,11 +1,10 @@
 import { useState, useRef } from "react";
-import { Upload, AlertCircle, ChevronDown, ChevronUp, Settings, RefreshCw } from "lucide-react";
+import { Upload, AlertCircle, ChevronDown, ChevronUp, RefreshCw, Cog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Progress } from "@/components/ui/progress";
-import { motion } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { Slider } from "@/components/ui/slider";
@@ -13,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useDocumentEmbeddings } from "@/hooks/use-document-embeddings";
+import { useQueryClient } from "@tanstack/react-query";
 import logger from '@/utils/logger';
 
 interface RetryState {
@@ -47,6 +47,7 @@ export function FileUploader() {
   const {
     generateEmbeddings
   } = useDocumentEmbeddings();
+  const queryClient = useQueryClient();
   const ALLOWED_FILE_TYPES = ['application/pdf', 'text/plain', 'text/csv'];
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
   const [retryState, setRetryState] = useState<RetryState>({
@@ -186,6 +187,12 @@ export function FileUploader() {
       if (fileData) {
         await triggerTextExtraction(fileData.id);
       }
+      
+      // Fallback cache invalidation to ensure file appears in UI
+      // This acts as backup if real-time subscriptions fail
+      queryClient.invalidateQueries({ queryKey: ['files', user.id] });
+      queryClient.invalidateQueries({ queryKey: ['files-count', user.id] });
+      
       resetRetryState();
       toast({
         title: "Success",
@@ -265,12 +272,10 @@ export function FileUploader() {
   return (
     <div className="space-y-4">
       {/* Upload Area */}
-      <motion.div 
-        whileHover={{ scale: dragActive ? 1 : 1.01 }} 
-        transition={{ duration: 0.2 }}
+      <div 
         className={`relative flex flex-col items-center justify-center w-full h-36 overflow-hidden border-2 border-dashed rounded-xl transition-all duration-200 ${
           dragActive 
-            ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 scale-102' 
+            ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' 
             : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-400 bg-slate-50/50 dark:bg-slate-800/50'
         }`} 
         onDragOver={handleDragOver} 
@@ -311,15 +316,11 @@ export function FileUploader() {
         </label>
 
         {isLoading && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            className="absolute bottom-0 left-0 w-full px-6 pb-4"
-          >
+          <div className="absolute bottom-0 left-0 w-full px-6 pb-4">
             <Progress value={uploadProgress} className="h-2 bg-slate-200 dark:bg-slate-700" />
-          </motion.div>
+          </div>
         )}
-      </motion.div>
+      </div>
 
       {/* Advanced Settings */}
       <Collapsible open={showAdvancedSettings} onOpenChange={setShowAdvancedSettings}>
@@ -327,8 +328,8 @@ export function FileUploader() {
           <CollapsibleTrigger asChild>
             <div className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer rounded-t-lg">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                  <Settings className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                  <Cog className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">

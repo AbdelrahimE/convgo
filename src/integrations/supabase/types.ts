@@ -27,7 +27,6 @@ export type Database = {
           voice_message_default_response: string | null
           default_voice_language: string
           usage_count: number
-          performance_rating: number
           is_template: boolean
           template_category: string | null
           created_at: string
@@ -50,7 +49,6 @@ export type Database = {
           voice_message_default_response?: string | null
           default_voice_language?: string
           usage_count?: number
-          performance_rating?: number
           is_template?: boolean
           template_category?: string | null
           created_at?: string
@@ -73,7 +71,6 @@ export type Database = {
           voice_message_default_response?: string | null
           default_voice_language?: string
           usage_count?: number
-          performance_rating?: number
           is_template?: boolean
           template_category?: string | null
           created_at?: string
@@ -714,6 +711,11 @@ export type Database = {
           status: string
           updated_at: string
           user_id: string
+          escalation_enabled: boolean
+          escalation_threshold: number
+          escalation_message: string
+          escalated_conversation_message: string
+          escalation_keywords: string[]
         }
         Insert: {
           created_at?: string
@@ -725,6 +727,11 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id: string
+          escalation_enabled?: boolean
+          escalation_threshold?: number
+          escalation_message?: string
+          escalated_conversation_message?: string
+          escalation_keywords?: string[]
         }
         Update: {
           created_at?: string
@@ -736,6 +743,11 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string
+          escalation_enabled?: boolean
+          escalation_threshold?: number
+          escalation_message?: string
+          escalated_conversation_message?: string
+          escalation_keywords?: string[]
         }
         Relationships: []
       }
@@ -832,6 +844,92 @@ export type Database = {
           },
         ]
       }
+      escalated_conversations: {
+        Row: {
+          id: string
+          whatsapp_number: string
+          instance_id: string
+          escalated_at: string
+          reason: string
+          conversation_context: Json
+          resolved_at: string | null
+          resolved_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          whatsapp_number: string
+          instance_id: string
+          escalated_at?: string
+          reason?: string
+          conversation_context?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          whatsapp_number?: string
+          instance_id?: string
+          escalated_at?: string
+          reason?: string
+          conversation_context?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalated_conversations_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escalated_conversations_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      support_team_numbers: {
+        Row: {
+          id: string
+          user_id: string
+          whatsapp_number: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string
+          whatsapp_number: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          whatsapp_number?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_team_numbers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -860,6 +958,27 @@ export type Database = {
       detect_language_simple: {
         Args: { text_input: string }
         Returns: string
+      }
+      is_conversation_escalated: {
+        Args: { p_phone_number: string; p_instance_id: string }
+        Returns: boolean
+      }
+      escalate_conversation: {
+        Args: { 
+          p_phone_number: string
+          p_instance_id: string
+          p_reason: string
+          p_context?: Json
+        }
+        Returns: string
+      }
+      resolve_escalation: {
+        Args: { 
+          p_phone_number: string
+          p_instance_id: string
+          p_resolved_by: string
+        }
+        Returns: boolean
       }
       halfvec_avg: {
         Args: { "": number[] }

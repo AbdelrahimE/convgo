@@ -6,7 +6,7 @@ import { Link, useLocation } from "react-router-dom";
 import { 
   FolderCog, 
   LogOut, 
-  MessageCirclePlus, 
+  QrCode, 
   BrainCog, 
   AlignJustify, 
   UserCog, 
@@ -15,7 +15,9 @@ import {
   HelpCircle, 
   Crown,
   X,
-  Users
+  Users,
+  Headset,
+  Settings
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -25,6 +27,7 @@ import { LogoWithText } from "./Logo";
 import { ScrollArea } from "./ui/scroll-area";
 import logger from '@/utils/logger';
 import { useEffect, useImperativeHandle, useState, forwardRef } from 'react';
+import { Badge } from './ui/badge';
 export type SimpleSidebarHandle = {
   open: () => void;
   close: () => void;
@@ -36,7 +39,7 @@ const FULL_NAME_MAX_LENGTH = 25;
 const navigation = [{
   name: 'WhatsApp Numbers',
   href: '/whatsapp',
-  icon: MessageCirclePlus
+  icon: QrCode
 }, {
   name: 'Files Management',
   href: '/files',
@@ -49,6 +52,11 @@ const navigation = [{
   name: 'AI Personalities',
   href: '/ai-personalities',
   icon: Users
+}, {
+  name: 'Escalation Management',
+  href: '/escalation-management',
+  icon: Headset,
+  badge: 'escalated'
 }, {
   name: 'Usage Insights',
   href: '/ai-usage',
@@ -66,6 +74,49 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrollLockY, setScrollLockY] = useState<number | null>(null);
+  const [escalatedCount, setEscalatedCount] = useState(0);
+
+  // Fetch escalated conversations count
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchEscalatedCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('escalated_conversations')
+          .select('*', { count: 'exact', head: true })
+          .is('resolved_at', null);
+
+        if (!error && count !== null) {
+          setEscalatedCount(count);
+        }
+      } catch (error) {
+        logger.error('Error fetching escalated count:', error);
+      }
+    };
+
+    fetchEscalatedCount();
+    
+    // Set up real-time subscription for escalated conversations
+    const channel = supabase
+      .channel('escalated-conversations-count')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'escalated_conversations'
+        },
+        () => {
+          fetchEscalatedCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   useImperativeHandle(ref, () => ({
     open: () => setMobileOpen(true),
@@ -143,7 +194,7 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
 
       {/* Navigation */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <ScrollArea className="h-full px-3 py-3">
+        <ScrollArea className="h-full px-2 py-2">
           <nav className="space-y-2">
             {navigation.map((item) => {
               const isActive = location.pathname === item.href;
@@ -153,10 +204,10 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
                   to={item.href}
                   onClick={closeMobile}
                   className={cn(
-                    "relative flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-xl overflow-hidden transition-all duration-200",
+                    "relative flex items-center gap-2 px-3 py-3 text-sm font-normal rounded-lg overflow-hidden transition-all duration-200",
                     "hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950/50 dark:hover:text-blue-300",
                     isActive 
-                      ? "glass-active rounded-xl text-blue-700 font-normal dark:text-blue-300" 
+                      ? "glass-active rounded-lg text-blue-700 font-normal dark:text-blue-300" 
                       : "text-slate-900 font-normal dark:text-slate-100"
                   )}
                 >
@@ -166,6 +217,14 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
                     isActive ? "text-blue-700 dark:text-blue-300" : "text-slate-900 dark:text-slate-100"
                   )} />
                   <span className="truncate">{item.name}</span>
+                  {item.badge === 'escalated' && escalatedCount > 0 && (
+                    <Badge 
+                      variant="destructive" 
+                      className="ml-auto animate-pulse"
+                    >
+                      {escalatedCount}
+                    </Badge>
+                  )}
                   {isActive && (
                     <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-700" />
                   )}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,9 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, Plus, Check, X, RefreshCw, LogOut, Trash2, MessageSquare, ArrowRight, Bot, Send, PhoneOff, RotateCcw, Settings, Wifi, QrCode } from "lucide-react";
+import { Loader2, Plus, Check, X, LogOut, Trash2, MessageSquare, ArrowRight, Bot, Send, RotateCcw, Settings, Wifi, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
 import logger from '@/utils/logger';
 import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
 import { LanguageAwareTextarea } from '@/components/ui/language-aware-textarea';
@@ -28,31 +27,31 @@ interface WhatsAppInstance {
 }
 const statusConfig = {
   Connected: {
-    color: "text-green-500 bg-green-50 dark:bg-green-950/50",
-    icon: Check,
+    color: "text-white bg-green-500 dark:bg-green-950/50",
+    icon: null,
     animation: "",
     label: "Connected"
   },
   Disconnected: {
-    color: "text-red-500 bg-red-50 dark:bg-red-950/50",
-    icon: X,
+    color: "text-white bg-red-500 dark:bg-red-950/50",
+    icon: null,
     animation: "",
     label: "Disconnected"
   },
   Connecting: {
-    color: "text-yellow-500 bg-yellow-50 dark:bg-yellow-950/50",
+    color: "text-white bg-yellow-500 dark:bg-yellow-950/50",
     icon: Loader2,
     animation: "animate-spin",
     label: "Connecting"
   },
   Created: {
-    color: "text-yellow-500 bg-yellow-50 dark:bg-yellow-950/50",
+    color: "text-white bg-yellow-500 dark:bg-yellow-950/50",
     icon: Loader2,
     animation: "animate-spin",
     label: "Connecting"
   }
 };
-const StatusBadge = ({
+const StatusBadge = React.memo(({
   status
 }: {
   status: string;
@@ -60,11 +59,11 @@ const StatusBadge = ({
   const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Disconnected;
   const Icon = config.icon;
   return <div className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium", config.color, status === "Connecting" && "animate-pulse")}>
-      <Icon className={cn("w-4 h-4 mr-1.5", config.animation)} />
+      {Icon && <Icon className={cn("w-4 h-4 mr-1.5", config.animation)} />}
       {config.label}
     </div>;
-};
-const InstanceActions = ({
+});
+const InstanceActions = React.memo(({
   instance,
   isLoading,
   onLogout,
@@ -159,7 +158,7 @@ const InstanceActions = ({
         </AlertDialog>
       </div>
     </TooltipProvider>;
-};
+});
 const EmptyState = ({
   onCreateClick
 }: {
@@ -213,7 +212,7 @@ const EmptyState = ({
                 </div>)}
             </div>
 
-            <Button onClick={onCreateClick} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl">
+            <Button onClick={onCreateClick} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg">
               <Plus className="mr-2 h-4 w-4" />
               Create Your First Instance
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -244,15 +243,7 @@ const CallRejectionForm = ({
     if (remainingChars <= 10) return "text-amber-500";
     return "text-muted-foreground";
   };
-  return <motion.div initial={{
-    opacity: 0,
-    y: 20
-  }} animate={{
-    opacity: 1,
-    y: 0
-  }} transition={{
-    delay: 0.3
-  }}>
+  return <div>
       <Card className="mb-6 md:mb-8">
         <CardHeader className="space-y-1">
           <CardTitle className="text-xl md:text-2xl font-semibold">Call Rejection Settings</CardTitle>
@@ -289,7 +280,7 @@ const CallRejectionForm = ({
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button type="submit" disabled={isLoading || !message.trim() || isOverLimit} size="lg" className="w-full sm:flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl">
+              <Button type="submit" disabled={isLoading || !message.trim() || isOverLimit} size="lg" className="w-full sm:flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg">
                 {isLoading ? <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Saving...
@@ -298,7 +289,7 @@ const CallRejectionForm = ({
                     Enable Call Rejection
                   </>}
               </Button>
-              <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:flex-1 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:hover:from-gray-600 dark:hover:to-gray-700 border-0 text-gray-700 dark:text-gray-200 rounded-xl" size="lg">
+              <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:flex-1 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:hover:from-gray-600 dark:hover:to-gray-700 border-0 text-gray-700 dark:text-gray-200 rounded-lg" size="lg">
                 <X className="mr-2 h-4 w-4" />
                 Cancel
               </Button>
@@ -306,7 +297,7 @@ const CallRejectionForm = ({
           </form>
         </CardContent>
       </Card>
-    </motion.div>;
+    </div>;
 };
 const QRCodeDialog = ({
   instance,
@@ -366,7 +357,7 @@ const QRCodeDialog = ({
   );
 };
 
-const CallRejectionToggle = ({
+const CallRejectionToggle = React.memo(({
   instance,
   onSettings,
   onToggle,
@@ -396,7 +387,7 @@ const CallRejectionToggle = ({
           </TooltipContent>
         </Tooltip>}
     </div>;
-};
+});
 const WhatsAppLink = () => {
   const {
     user,
@@ -418,7 +409,7 @@ const WhatsAppLink = () => {
   const [proxyPassword, setProxyPassword] = useState('');
   const [openQrInstanceId, setOpenQrInstanceId] = useState<string | null>(null);
 
-  const formatQrCodeDataUrl = (qrCodeData: string) => {
+  const formatQrCodeDataUrl = useCallback((qrCodeData: string) => {
     if (!qrCodeData) return '';
     try {
       if (qrCodeData.startsWith('data:image/')) {
@@ -430,7 +421,7 @@ const WhatsAppLink = () => {
       logger.error('Error formatting QR code:', error);
       return '';
     }
-  };
+  }, []);
   useEffect(() => {
     if (!authLoading && user) {
       fetchInstances();
@@ -453,11 +444,32 @@ const WhatsAppLink = () => {
       logger.log('Received real-time update for WhatsApp instance:', payload);
       const previousInstance = payload.old as WhatsAppInstance;
       const updatedInstance = payload.new as WhatsAppInstance;
-      setInstances(prevInstances => prevInstances.map(instance => instance.id === updatedInstance.id ? {
-        ...instance,
-        ...updatedInstance,
-        qr_code: instance.qr_code  // Preserve local qr_code data
-      } : instance));
+      
+      // Only update if meaningful fields have changed
+      const meaningfulFieldsChanged = 
+        previousInstance.status !== updatedInstance.status ||
+        previousInstance.last_connected !== updatedInstance.last_connected ||
+        previousInstance.reject_calls !== updatedInstance.reject_calls ||
+        previousInstance.reject_calls_message !== updatedInstance.reject_calls_message;
+      
+      if (!meaningfulFieldsChanged) {
+        logger.log('No meaningful changes detected, skipping state update');
+        return;
+      }
+      
+      setInstances(prevInstances => {
+        const instanceIndex = prevInstances.findIndex(instance => instance.id === updatedInstance.id);
+        if (instanceIndex === -1) return prevInstances;
+        
+        const newInstances = [...prevInstances];
+        newInstances[instanceIndex] = {
+          ...newInstances[instanceIndex],
+          ...updatedInstance,
+          qr_code: newInstances[instanceIndex].qr_code  // Preserve local qr_code data
+        };
+        return newInstances;
+      });
+      
       if (previousInstance && updatedInstance.status === 'Connected' && previousInstance.status !== 'Connected') {
         const instanceName = updatedInstance.instance_name;
         toast.success(`WhatsApp instance ${instanceName} connected successfully`);
@@ -502,7 +514,7 @@ const WhatsAppLink = () => {
       setInitialLoading(false);
     }
   };
-  const handleCheckStatus = async (instanceId: string, instanceName: string) => {
+  const handleCheckStatus = useCallback(async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
       logger.log(`Checking status for instance: ${instanceName}`);
@@ -519,7 +531,24 @@ const WhatsAppLink = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // Debounce status checks to prevent excessive API calls
+  const debouncedHandleCheckStatus = useMemo(() => {
+    const debounce = (func: Function, wait: number) => {
+      let timeout: NodeJS.Timeout;
+      return function executedFunction(...args: any[]) {
+        const later = () => {
+          clearTimeout(timeout);
+          func.apply(null, args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    };
+    
+    return debounce(handleCheckStatus, 1000); // 1 second debounce
+  }, [handleCheckStatus]);
 
   const checkInstanceStatus = async (name: string) => {
     try {
@@ -549,12 +578,19 @@ const WhatsAppLink = () => {
         await supabase.from('whatsapp_instances').update(updateData).eq('instance_name', name);
         
         // Update local state
-        setInstances(prev => prev.map(instance => instance.instance_name === name ? {
-          ...instance,
-          status: updatedStatus,
-          qr_code: updatedStatus === 'Connected' ? undefined : instance.qr_code,
-          last_connected: updatedStatus === 'Connected' ? new Date().toISOString() : instance.last_connected
-        } : instance));
+        setInstances(prev => {
+          const instanceIndex = prev.findIndex(instance => instance.instance_name === name);
+          if (instanceIndex === -1) return prev;
+          
+          const newInstances = [...prev];
+          newInstances[instanceIndex] = {
+            ...newInstances[instanceIndex],
+            status: updatedStatus,
+            qr_code: updatedStatus === 'Connected' ? undefined : newInstances[instanceIndex].qr_code,
+            last_connected: updatedStatus === 'Connected' ? new Date().toISOString() : newInstances[instanceIndex].last_connected
+          };
+          return newInstances;
+        });
         
         return updatedStatus === 'Connected';
       }
@@ -628,7 +664,7 @@ const WhatsAppLink = () => {
       setIsLoading(false);
     }
   };
-  const handleDelete = async (instanceId: string, instanceName: string) => {
+  const handleDelete = useCallback(async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
       const {
@@ -649,8 +685,8 @@ const WhatsAppLink = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-  const handleLogout = async (instanceId: string, instanceName: string) => {
+  }, []);
+  const handleLogout = useCallback(async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
       const {
@@ -666,11 +702,18 @@ const WhatsAppLink = () => {
         status: 'Disconnected',
         last_connected: null
       }).eq('id', instanceId);
-      setInstances(prev => prev.map(instance => instance.id === instanceId ? {
-        ...instance,
-        status: 'Disconnected',
-        last_connected: null
-      } : instance));
+      setInstances(prev => {
+        const instanceIndex = prev.findIndex(instance => instance.id === instanceId);
+        if (instanceIndex === -1) return prev;
+        
+        const newInstances = [...prev];
+        newInstances[instanceIndex] = {
+          ...newInstances[instanceIndex],
+          status: 'Disconnected',
+          last_connected: null
+        };
+        return newInstances;
+      });
       toast.success('WhatsApp instance logged out successfully');
     } catch (error) {
       logger.error('Error logging out WhatsApp instance:', error);
@@ -678,8 +721,8 @@ const WhatsAppLink = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-  const handleReconnect = async (instanceId: string, instanceName: string) => {
+  }, []);
+  const handleReconnect = useCallback(async (instanceId: string, instanceName: string) => {
     try {
       setIsLoading(true);
       const {
@@ -688,10 +731,17 @@ const WhatsAppLink = () => {
         status: 'Connecting'
       }).eq('id', instanceId);
       if (updateError) throw updateError;
-      setInstances(prev => prev.map(instance => instance.id === instanceId ? {
-        ...instance,
-        status: 'Connecting'
-      } : instance));
+      setInstances(prev => {
+        const instanceIndex = prev.findIndex(instance => instance.id === instanceId);
+        if (instanceIndex === -1) return prev;
+        
+        const newInstances = [...prev];
+        newInstances[instanceIndex] = {
+          ...newInstances[instanceIndex],
+          status: 'Connecting'
+        };
+        return newInstances;
+      });
       const {
         data,
         error
@@ -707,11 +757,18 @@ const WhatsAppLink = () => {
       if (!qrCodeData) {
         throw new Error('No QR code received from server');
       }
-      setInstances(prev => prev.map(instance => instance.id === instanceId ? {
-        ...instance,
-        status: 'Connecting',
-        qr_code: qrCodeData
-      } : instance));
+      setInstances(prev => {
+        const instanceIndex = prev.findIndex(instance => instance.id === instanceId);
+        if (instanceIndex === -1) return prev;
+        
+        const newInstances = [...prev];
+        newInstances[instanceIndex] = {
+          ...newInstances[instanceIndex],
+          status: 'Connecting',
+          qr_code: qrCodeData
+        };
+        return newInstances;
+      });
       setOpenQrInstanceId(instanceId);
       toast.success('Scan the QR code to reconnect your WhatsApp instance');
     } catch (error: any) {
@@ -720,19 +777,26 @@ const WhatsAppLink = () => {
       await supabase.from('whatsapp_instances').update({
         status: 'Disconnected'
       }).eq('id', instanceId);
-      setInstances(prev => prev.map(instance => instance.id === instanceId ? {
-        ...instance,
-        status: 'Disconnected'
-      } : instance));
+      setInstances(prev => {
+        const instanceIndex = prev.findIndex(instance => instance.id === instanceId);
+        if (instanceIndex === -1) return prev;
+        
+        const newInstances = [...prev];
+        newInstances[instanceIndex] = {
+          ...newInstances[instanceIndex],
+          status: 'Disconnected'
+        };
+        return newInstances;
+      });
     } finally {
       setIsLoading(false);
     }
-  };
-  const handleCallRejectionToggle = (instance: WhatsAppInstance) => {
+  }, []);
+  const handleCallRejectionToggle = useCallback((instance: WhatsAppInstance) => {
     setSelectedInstanceForCallSettings(instance);
     setShowCallRejectionForm(true);
-  };
-  const updateCallRejectionSettings = async (instanceId: string, instanceName: string, enable: boolean, message?: string) => {
+  }, []);
+  const updateCallRejectionSettings = useCallback(async (instanceId: string, instanceName: string, enable: boolean, message?: string) => {
     try {
       setIsLoading(true);
       const {
@@ -751,11 +815,18 @@ const WhatsAppLink = () => {
         reject_calls: enable,
         reject_calls_message: message || ''
       }).eq('id', instanceId);
-      setInstances(prevInstances => prevInstances.map(instance => instance.id === instanceId ? {
-        ...instance,
-        reject_calls: enable,
-        reject_calls_message: message || instance.reject_calls_message
-      } : instance));
+      setInstances(prevInstances => {
+        const instanceIndex = prevInstances.findIndex(instance => instance.id === instanceId);
+        if (instanceIndex === -1) return prevInstances;
+        
+        const newInstances = [...prevInstances];
+        newInstances[instanceIndex] = {
+          ...newInstances[instanceIndex],
+          reject_calls: enable,
+          reject_calls_message: message || newInstances[instanceIndex].reject_calls_message
+        };
+        return newInstances;
+      });
       toast.success(`Call rejection ${enable ? 'enabled' : 'disabled'} for ${instanceName}`);
       if (showCallRejectionForm) {
         setShowCallRejectionForm(false);
@@ -767,15 +838,16 @@ const WhatsAppLink = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-  const handleCallRejectionSave = async (message: string) => {
+  }, [showCallRejectionForm]);
+  const handleCallRejectionSave = useCallback(async (message: string) => {
     if (!selectedInstanceForCallSettings) return;
     await updateCallRejectionSettings(selectedInstanceForCallSettings.id, selectedInstanceForCallSettings.instance_name, true, message);
-  };
-  const handleCallRejectionCancel = () => {
+  }, [selectedInstanceForCallSettings, updateCallRejectionSettings]);
+  
+  const handleCallRejectionCancel = useCallback(() => {
     setShowCallRejectionForm(false);
     setSelectedInstanceForCallSettings(null);
-  };
+  }, []);
   const disableCallRejection = async (instanceId: string, instanceName: string) => {
     await updateCallRejectionSettings(instanceId, instanceName, false);
   };
@@ -809,16 +881,41 @@ const WhatsAppLink = () => {
     return null;
   };
   if (authLoading || initialLoading) {
-    return <div className="container mx-auto max-w-5xl py-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-center space-x-2">
-              <Loader2 className="h-6 w-6 animate-spin" />
-              <p>Loading...</p>
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-white dark:bg-slate-900">
+        <div className="flex flex-col items-center space-y-4">
+          {/* Modern animated loader with gradient */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-20 w-20 rounded-full border-4 border-blue-100 dark:border-blue-900"></div>
             </div>
-          </CardContent>
-        </Card>
-      </div>;
+            <div className="relative flex items-center justify-center">
+              <div className="h-20 w-20 animate-spin rounded-full border-4 border-transparent border-t-blue-600 dark:border-t-blue-400"></div>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <MessageSquare className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+          
+          {/* Loading text with animation */}
+          <div className="text-center space-y-2">
+            <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Loading WhatsApp Instances
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Please wait while we fetch your data...
+            </p>
+          </div>
+          
+          {/* Loading dots animation */}
+          <div className="flex space-x-1">
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+        </div>
+      </div>
+    );
   }
   if (!user) {
     return <div className="container mx-auto max-w-5xl py-8">
@@ -832,57 +929,25 @@ const WhatsAppLink = () => {
       </div>;
   }
   return <TooltipProvider>
-    <motion.div initial={{
-    opacity: 0,
-    y: 20
-  }} animate={{
-    opacity: 1,
-    y: 0
-  }} transition={{
-    duration: 0.3
-  }} className="w-full min-h-screen bg-white dark:bg-slate-900">
+    <div className="w-full min-h-screen bg-white dark:bg-slate-900">
       {/* Header Section */}
       <div className="bg-white dark:bg-slate-900">
         <div className="px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="flex-1">
-              <motion.h1 initial={{
-                opacity: 0,
-                x: -20
-              }} animate={{
-                opacity: 1,
-                x: 0
-              }} transition={{
-                delay: 0.2
-              }} className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
+              <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
                 WhatsApp Instances
-              </motion.h1>
-              <motion.p initial={{
-                opacity: 0,
-                x: -20
-              }} animate={{
-                opacity: 1,
-                x: 0
-              }} transition={{
-                delay: 0.25
-              }} className="mt-1 text-sm md:text-base text-slate-600 dark:text-slate-400">
+              </h1>
+              <p className="mt-1 text-sm md:text-base text-slate-600 dark:text-slate-400">
                 {instances.length} of {instanceLimit} instances used
-              </motion.p>
+              </p>
             </div>
-            <motion.div initial={{
-              opacity: 0,
-              y: -20
-            }} animate={{
-              opacity: 1,
-              y: 0
-            }} transition={{
-              delay: 0.3
-            }} className="flex-shrink-0">
-              <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold rounded-xl">
+            <div className="flex-shrink-0">
+              <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold rounded-lg">
                 <Plus className="mr-2 h-4 w-4" />
                 New Instance
               </Button>
-            </motion.div>
+            </div>
           </div>
         </div>
       </div>
@@ -890,16 +955,8 @@ const WhatsAppLink = () => {
       {/* Main Content */}
       <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6">
 
-        {showCreateForm && <motion.div initial={{
-        opacity: 0,
-        y: 20
-      }} animate={{
-        opacity: 1,
-        y: 0
-      }} transition={{
-        delay: 0.3
-      }}>
-            <Card className="mb-0 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+        {showCreateForm && <div>
+            <Card className="mb-0 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
               <CardContent className="p-6">
                 <div className="space-y-4">
                   <div>
@@ -984,7 +1041,7 @@ const WhatsAppLink = () => {
                   setProxyPort('');
                   setProxyUsername('');
                   setProxyPassword('');
-                }} className="w-full sm:w-auto bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:hover:from-gray-600 dark:hover:to-gray-700 border-0 text-gray-700 dark:text-gray-200 rounded-xl" size="lg">
+                }} className="w-full sm:w-auto bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:hover:from-gray-600 dark:hover:to-gray-700 border-0 text-gray-700 dark:text-gray-200 rounded-lg" size="lg">
                       <X className="mr-2 h-4 w-4" />
                       Cancel
                     </Button>
@@ -993,13 +1050,13 @@ const WhatsAppLink = () => {
                         type="button"
                         variant="outline"
                         onClick={() => setShowProxyFields(!showProxyFields)}
-                        className="w-full sm:w-auto bg-gradient-to-r from-blue-100 to-blue-200 hover:from-blue-200 hover:to-blue-300 dark:from-blue-900 dark:to-blue-800 dark:hover:from-blue-800 dark:hover:to-blue-700 border-0 text-blue-700 dark:text-blue-200 rounded-xl"
+                        className="w-full sm:w-auto bg-gradient-to-r from-blue-100 to-blue-200 hover:from-blue-200 hover:to-blue-300 dark:from-blue-900 dark:to-blue-800 dark:hover:from-blue-800 dark:hover:to-blue-700 border-0 text-blue-700 dark:text-blue-200 rounded-lg"
                         size="lg"
                       >
-                        <Settings className="mr-2 h-4 w-4" />
+                        <Settings className="mr-0 h-4 w-4" />
                         {showProxyFields ? 'Hide Proxy' : 'Add Proxy'}
                       </Button>
-                      <Button type="submit" disabled={isLoading || !isValidName || !instanceName || (showProxyFields && (!proxyHost || !proxyPort))} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl">
+                      <Button type="submit" disabled={isLoading || !isValidName || !instanceName || (showProxyFields && (!proxyHost || !proxyPort))} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg">
                         {isLoading ? <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             Creating...
@@ -1014,21 +1071,13 @@ const WhatsAppLink = () => {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>}
+          </div>}
 
         {showCallRejectionForm && selectedInstanceForCallSettings && <CallRejectionForm instance={selectedInstanceForCallSettings} onCancel={handleCallRejectionCancel} onSave={handleCallRejectionSave} isLoading={isLoading} />}
 
-        {instances.length > 0 ? <motion.div initial={{
-        opacity: 0,
-        y: 20
-      }} animate={{
-        opacity: 1,
-        y: 0
-      }} transition={{
-        delay: 0.4
-      }}>
+        {instances.length > 0 ? <div>
             {/* Desktop Table View - Hidden on Mobile */}
-            <Card className="hidden md:block rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <Card className="hidden md:block rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -1064,7 +1113,7 @@ const WhatsAppLink = () => {
                             onReconnect={() => handleReconnect(instance.id, instance.instance_name)} 
                             onDelete={() => handleDelete(instance.id, instance.instance_name)} 
                             onToggleCallRejection={() => handleCallRejectionToggle(instance)} 
-                            onCheckStatus={() => handleCheckStatus(instance.id, instance.instance_name)} 
+                            onCheckStatus={() => debouncedHandleCheckStatus(instance.id, instance.instance_name)} 
                             formatQrCodeDataUrl={formatQrCodeDataUrl}
                             isQrOpen={openQrInstanceId === instance.id}
                             onQrOpenChange={(open) => setOpenQrInstanceId(open ? instance.id : null)}
@@ -1079,17 +1128,13 @@ const WhatsAppLink = () => {
             {/* Mobile Card View - Shown on Mobile Only */}
             <div className="md:hidden space-y-4">
               {instances.map(instance => (
-                <Card key={instance.id} className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <Card key={instance.id} className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
                   <CardContent className="p-4">
-                    {/* Instance Name at Top */}
-                    <div className="mb-3">
+                    {/* Instance Name and Status in Same Row */}
+                    <div className="mb-4 flex items-center justify-between">
                       <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                         {instance.instance_name}
                       </h3>
-                    </div>
-
-                    {/* Status Badge Prominently Displayed */}
-                    <div className="mb-4">
                       <StatusBadge status={instance.status} />
                     </div>
 
@@ -1127,7 +1172,7 @@ const WhatsAppLink = () => {
                         onReconnect={() => handleReconnect(instance.id, instance.instance_name)} 
                         onDelete={() => handleDelete(instance.id, instance.instance_name)} 
                         onToggleCallRejection={() => handleCallRejectionToggle(instance)} 
-                        onCheckStatus={() => handleCheckStatus(instance.id, instance.instance_name)} 
+                        onCheckStatus={() => debouncedHandleCheckStatus(instance.id, instance.instance_name)} 
                         formatQrCodeDataUrl={formatQrCodeDataUrl}
                         isQrOpen={openQrInstanceId === instance.id}
                         onQrOpenChange={(open) => setOpenQrInstanceId(open ? instance.id : null)}
@@ -1137,9 +1182,9 @@ const WhatsAppLink = () => {
                 </Card>
               ))}
             </div>
-          </motion.div> : <EmptyState onCreateClick={() => setShowCreateForm(true)} />}
+          </div> : <EmptyState onCreateClick={() => setShowCreateForm(true)} />}
       </div>
-    </motion.div>
+    </div>
   </TooltipProvider>;
 };
 export default WhatsAppLink;

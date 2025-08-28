@@ -30,8 +30,7 @@ CREATE TABLE public.ai_personalities (
     default_voice_language VARCHAR(10) DEFAULT 'en',
     
     -- Metadata and analytics
-    usage_count INTEGER DEFAULT 0, -- Track how often this personality is used
-    performance_rating DECIMAL(3,2) DEFAULT 5.0, -- User can rate personality performance
+    usage_count INTEGER DEFAULT 0, -- Track how often this personality is usede
     
     -- Template and customization
     is_template BOOLEAN DEFAULT false, -- System-provided templates
@@ -92,4 +91,3 @@ CREATE TRIGGER update_ai_personalities_updated_at
 COMMENT ON TABLE public.ai_personalities IS 'Stores multiple AI personalities per WhatsApp instance for intelligent response switching';
 COMMENT ON COLUMN public.ai_personalities.intent_categories IS 'JSON array of intent categories this personality handles, e.g., ["customer-support", "billing", "technical"]';
 COMMENT ON COLUMN public.ai_personalities.priority IS 'Higher priority personalities are preferred when multiple personalities handle the same intent';
-COMMENT ON COLUMN public.ai_personalities.performance_rating IS 'User-assigned rating for personality effectiveness (1-10 scale)';
