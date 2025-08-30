@@ -206,7 +206,7 @@ export default function AccountSettings() {
         x: 0
       }} transition={{
         delay: 0.2
-      }} className="text-2xl text-left md:text-3xl font-extrabold lg:text-4xl">
+      }} className="text-2xl text-left md:text-3xl font-semibold lg:text-4xl">
           Account Settings
         </motion.h1>
         
@@ -222,7 +222,7 @@ export default function AccountSettings() {
         }}>
             <Card className="w-full">
               <CardHeader>
-                <CardTitle className="font-bold text-left">Profile Information</CardTitle>
+                <CardTitle className="font-semibold text-left">Profile Information</CardTitle>
                 <CardDescription>Update your account profile details</CardDescription>
               </CardHeader>
               <form onSubmit={handleSubmit}>
@@ -288,7 +288,7 @@ export default function AccountSettings() {
         }}>
             <Card className="w-full">
               <CardHeader>
-                <CardTitle className="text-left font-bold">Password</CardTitle>
+                <CardTitle className="text-left font-semibold">Password</CardTitle>
                 <CardDescription>Update your password securely</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

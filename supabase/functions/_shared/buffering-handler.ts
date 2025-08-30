@@ -487,11 +487,13 @@ export async function handleMessageWithBuffering(
     // 1. Group messages
     // 2. Messages from bot itself
     // 3. Messages without text content
-    if (remoteJid.includes('@g.us') || isFromMe || !messageText || !userPhone) {
+    // 4. Messages with images (to ensure proper image processing)
+    if (remoteJid.includes('@g.us') || isFromMe || !messageText || !userPhone || messageData.message?.imageMessage) {
       logger.info('Skipping buffering - fallback to integrated processing', {
         reason: remoteJid.includes('@g.us') ? 'group message' : 
                 isFromMe ? 'message from bot' : 
-                !messageText ? 'no text content' : 'no user phone'
+                !messageText ? 'no text content' : 
+                !userPhone ? 'no user phone' : 'image message'
       });
       
       // Use integrated function instead of original fallback
