@@ -101,12 +101,23 @@ export async function generateAndSendAIResponse(
     const responseData = await responseGenResponse.json();
     logger.info('AI response generated successfully', {
       responsePreview: responseData.answer?.substring(0, 100) + '...',
-      tokens: responseData.usage
+      tokens: responseData.usage,
+      fromCache: responseData.cacheInfo?.fromCache || false,
+      cacheMatchType: responseData.cacheInfo?.matchType || 'none'
     });
 
     // Log token usage if available
     if (responseData.tokenUsage) {
       logger.info('Token usage details', responseData.tokenUsage);
+    }
+    
+    // Log cache information if available
+    if (responseData.cacheInfo?.fromCache) {
+      logger.info('[CACHE HIT] Response served from cache', {
+        matchType: responseData.cacheInfo.matchType,
+        confidence: responseData.cacheInfo.confidence,
+        responseTime: responseData.cacheInfo.responseTime
+      });
     }
 
     // Store AI response in conversation history

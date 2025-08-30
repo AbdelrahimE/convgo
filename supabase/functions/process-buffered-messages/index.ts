@@ -513,90 +513,94 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
     }
 
     // ESCALATION CHECK: Check if the message needs escalation to human support
-    logger.info('Checking if message needs escalation', {
-      message: combinedMessage.substring(0, 100),
-      phoneNumber: userPhone,
-      instanceId: instanceData.id
-    });
-
-    const escalationCheck = await checkEscalationNeeded(
-      combinedMessage,
-      userPhone,
-      instanceData.id,
-      conversationId
-    );
-
-    if (escalationCheck.needsEscalation) {
-      logger.info('Message needs escalation - bypassing AI and handling escalation', {
-        reason: escalationCheck.reason,
-        phoneNumber: userPhone
+    if (instanceData.escalation_enabled) {
+      logger.info('Checking if message needs escalation', {
+        message: combinedMessage.substring(0, 100),
+        phoneNumber: userPhone,
+        instanceId: instanceData.id
       });
 
-      // Handle escalation and get escalation message
-      const escalationMessage = await handleEscalation(
+      const escalationCheck = await checkEscalationNeeded(
+        combinedMessage,
         userPhone,
         instanceData.id,
-        escalationCheck.reason,
-        conversationHistory
+        conversationId
       );
 
-      // Store the escalation response
-      await storeMessageInConversation(conversationId, 'assistant', escalationMessage, `escalation_${Date.now()}`, supabaseAdmin);
-
-      // Send escalation message to user via WhatsApp
-      const sendMessageUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
-      const sendMessagePayload = {
-        number: userPhone,
-        text: escalationMessage  // Use same format as AI responses for consistency
-      };
-      
-      logger.info('Sending escalation message to customer', {
-        sendMessageUrl,
-        userPhone,
-        messagePreview: escalationMessage.substring(0, 50) + '...'
-      });
-
-      try {
-        const response = await fetch(sendMessageUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': Deno.env.get('EVOLUTION_API_KEY') || ''
-          },
-          body: JSON.stringify(sendMessagePayload)
+      if (escalationCheck.needsEscalation) {
+        logger.info('Message needs escalation - bypassing AI and handling escalation', {
+          reason: escalationCheck.reason,
+          phoneNumber: userPhone
         });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          logger.error('Failed to send escalation message to customer', {
-            status: response.status,
-            statusText: response.statusText,
-            errorText,
-            sendUrl: sendMessageUrl,
-            requestPayload: sendMessagePayload
+        // Handle escalation and get escalation message
+        const escalationMessage = await handleEscalation(
+          userPhone,
+          instanceData.id,
+          escalationCheck.reason,
+          conversationHistory
+        );
+
+        // Store the escalation response
+        await storeMessageInConversation(conversationId, 'assistant', escalationMessage, `escalation_${Date.now()}`, supabaseAdmin);
+
+        // Send escalation message to user via WhatsApp
+        const sendMessageUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+        const sendMessagePayload = {
+          number: userPhone,
+          text: escalationMessage  // Use same format as AI responses for consistency
+        };
+        
+        logger.info('Sending escalation message to customer', {
+          sendMessageUrl,
+          userPhone,
+          messagePreview: escalationMessage.substring(0, 50) + '...'
+        });
+
+        try {
+          const response = await fetch(sendMessageUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': Deno.env.get('EVOLUTION_API_KEY') || ''
+            },
+            body: JSON.stringify(sendMessagePayload)
           });
-        } else {
-          const responseData = await response.json();
-          logger.info('✅ Escalation message sent successfully to customer', {
-            userPhone,
-            responseData,
-            messagePreview: escalationMessage.substring(0, 50) + '...'
-          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            logger.error('Failed to send escalation message to customer', {
+              status: response.status,
+              statusText: response.statusText,
+              errorText,
+              sendUrl: sendMessageUrl,
+              requestPayload: sendMessagePayload
+            });
+          } else {
+            const responseData = await response.json();
+            logger.info('✅ Escalation message sent successfully to customer', {
+              userPhone,
+              responseData,
+              messagePreview: escalationMessage.substring(0, 50) + '...'
+            });
+          }
+        } catch (error) {
+          logger.error('Error sending escalation message:', error);
         }
-      } catch (error) {
-        logger.error('Error sending escalation message:', error);
+
+        // Mark buffer as processed and return
+        await markBufferAsProcessed(instanceName, userPhone);
+
+        logger.info('Escalation handled successfully', {
+          instanceName,
+          userPhone,
+          reason: escalationCheck.reason
+        });
+
+        return true; // Escalation handled successfully
       }
-
-      // Mark buffer as processed and return
-      await markBufferAsProcessed(instanceName, userPhone);
-
-      logger.info('Escalation handled successfully', {
-        instanceName,
-        userPhone,
-        reason: escalationCheck.reason
-      });
-
-      return true; // Escalation handled successfully
+    } else {
+      logger.info('Escalation disabled, skipping escalation check for buffered messages');
     }
 
     // Get files for RAG
@@ -807,170 +811,175 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
     // instanceBaseUrl is now defined earlier for escalation use
 
     // ===== NEW: Adaptive Response Quality Assessment =====
-    logger.info('Starting adaptive response quality assessment', {
-      hasSearchResults: !!searchResults?.success,
-      hasBusinessContext: !!(intentClassification as any)?.businessContext,
-      detectedIndustry: (intentClassification as any)?.businessContext?.industry,
-      searchSimilarity: searchResults?.results?.[0]?.similarity || 0
-    });
-
     let shouldEscalateByQuality = false;
     let qualityReasoning = '';
     let responseQuality = 1.0; // default high quality
 
-    try {
-      const qualityResponse = await fetch(`${supabaseUrl}/functions/v1/assess-response-quality`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseServiceKey}`
-        },
-        body: JSON.stringify({
-          message: combinedMessage,
-          intentData: {
-            intent: (intentClassification as any)?.intent,
-            confidence: (intentClassification as any)?.confidence,
-            reasoning: (intentClassification as any)?.reasoning
-          },
-          businessContext: (intentClassification as any)?.businessContext,
-          searchResults: searchResults,
-          languageDetection: {
-            primaryLanguage: 'ar' // Default to Arabic for this system
-          },
-          fileIds: fileIds,
-          instanceId: instanceData.id
-        })
-      });
-
-      if (qualityResponse.ok) {
-        const qualityData = await qualityResponse.json();
-        shouldEscalateByQuality = qualityData.shouldEscalate;
-        responseQuality = qualityData.responseQuality;
-        qualityReasoning = qualityData.reasoning;
-        
-        logger.info('✅ Adaptive quality assessment completed', {
-          responseQuality: qualityData.responseQuality,
-          shouldEscalate: qualityData.shouldEscalate,
-          reasoning: qualityData.reasoning,
-          assessmentType: qualityData.assessmentType,
-          adaptiveFactors: qualityData.adaptiveFactors
-        });
-      } else {
-        const errorText = await qualityResponse.text();
-        logger.warn('⚠️ Quality assessment failed, using conservative approach', {
-          status: qualityResponse.status,
-          error: errorText
-        });
-        // Conservative: if assessment fails, don't escalate by quality
-      }
-    } catch (error) {
-      logger.error('❌ Exception in quality assessment, using conservative approach', {
-        error: error.message || error
-      });
-    }
-
-    // Check if immediate escalation is needed based on quality assessment
-    if (shouldEscalateByQuality) {
-      logger.info('🚨 Immediate escalation triggered by quality assessment', { 
-        responseQuality,
-        reasoning: qualityReasoning,
-        phoneNumber: userPhone 
-      });
-      
-      // Handle escalation with detailed logging
-      logger.info('🚨 STARTING ESCALATION PROCESS', {
-        trigger: 'quality_assessment',
-        userPhone,
-        instanceId: instanceData.id,
-        responseQuality,
-        qualityReasoning,
-        conversationLength: conversationHistory.length
-      });
-
-      const escalationMessage = await handleEscalation(
-        userPhone,
-        instanceData.id,
-        'low_confidence',
-        conversationHistory
-      );
-
-      logger.info('🚨 ESCALATION PROCESS COMPLETED', {
-        escalationMessage: escalationMessage.substring(0, 100) + '...',
-        escalationMessageLength: escalationMessage.length
-      });
-
-      // Send escalation message to user with detailed logging
-      const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
-      
-      logger.info('📤 SENDING ESCALATION MESSAGE TO CUSTOMER', {
-        sendUrl,
-        userPhone,
-        escalationMessagePreview: escalationMessage.substring(0, 100) + '...',
-        instanceName,
-        instanceBaseUrl
+    // Only perform quality assessment if escalation is enabled
+    if (instanceData.escalation_enabled) {
+      logger.info('Starting adaptive response quality assessment', {
+        hasSearchResults: !!searchResults?.success,
+        hasBusinessContext: !!(intentClassification as any)?.businessContext,
+        detectedIndustry: (intentClassification as any)?.businessContext?.industry,
+        searchSimilarity: searchResults?.results?.[0]?.similarity || 0
       });
 
       try {
-        const customerResponse = await fetch(sendUrl, {
+        const qualityResponse = await fetch(`${supabaseUrl}/functions/v1/assess-response-quality`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': Deno.env.get('EVOLUTION_API_KEY') || ''
+            'Authorization': `Bearer ${supabaseServiceKey}`
           },
           body: JSON.stringify({
-            number: userPhone,
-            text: escalationMessage
+            message: combinedMessage,
+            intentData: {
+              intent: (intentClassification as any)?.intent,
+              confidence: (intentClassification as any)?.confidence,
+              reasoning: (intentClassification as any)?.reasoning
+            },
+            businessContext: (intentClassification as any)?.businessContext,
+            searchResults: searchResults,
+            languageDetection: {
+              primaryLanguage: 'ar' // Default to Arabic for this system
+            },
+            fileIds: fileIds,
+            instanceId: instanceData.id
           })
         });
 
-        if (customerResponse.ok) {
-          const customerResponseData = await customerResponse.json();
-          logger.info('✅ ESCALATION MESSAGE SENT TO CUSTOMER SUCCESSFULLY', {
-            userPhone,
-            responseData: customerResponseData,
-            escalationMessageLength: escalationMessage.length
+        if (qualityResponse.ok) {
+          const qualityData = await qualityResponse.json();
+          shouldEscalateByQuality = qualityData.shouldEscalate;
+          responseQuality = qualityData.responseQuality;
+          qualityReasoning = qualityData.reasoning;
+          
+          logger.info('✅ Adaptive quality assessment completed', {
+            responseQuality: qualityData.responseQuality,
+            shouldEscalate: qualityData.shouldEscalate,
+            reasoning: qualityData.reasoning,
+            assessmentType: qualityData.assessmentType,
+            adaptiveFactors: qualityData.adaptiveFactors
           });
         } else {
-          const customerErrorText = await customerResponse.text();
-          logger.error('❌ FAILED TO SEND ESCALATION MESSAGE TO CUSTOMER', {
-            status: customerResponse.status,
-            statusText: customerResponse.statusText,
-            error: customerErrorText,
+          const errorText = await qualityResponse.text();
+          logger.warn('⚠️ Quality assessment failed, using conservative approach', {
+            status: qualityResponse.status,
+            error: errorText
+          });
+          // Conservative: if assessment fails, don't escalate by quality
+        }
+      } catch (error) {
+        logger.error('❌ Exception in quality assessment, using conservative approach', {
+          error: error.message || error
+        });
+      }
+
+      // Check if immediate escalation is needed based on quality assessment
+      if (shouldEscalateByQuality) {
+        logger.info('🚨 Immediate escalation triggered by quality assessment', { 
+          responseQuality,
+          reasoning: qualityReasoning,
+          phoneNumber: userPhone 
+        });
+        
+        // Handle escalation with detailed logging
+        logger.info('🚨 STARTING ESCALATION PROCESS', {
+          trigger: 'quality_assessment',
+          userPhone,
+          instanceId: instanceData.id,
+          responseQuality,
+          qualityReasoning,
+          conversationLength: conversationHistory.length
+        });
+
+        const escalationMessage = await handleEscalation(
+          userPhone,
+          instanceData.id,
+          'low_confidence',
+          conversationHistory
+        );
+
+        logger.info('🚨 ESCALATION PROCESS COMPLETED', {
+          escalationMessage: escalationMessage.substring(0, 100) + '...',
+          escalationMessageLength: escalationMessage.length
+        });
+
+        // Send escalation message to user with detailed logging
+        const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+        
+        logger.info('📤 SENDING ESCALATION MESSAGE TO CUSTOMER', {
+          sendUrl,
+          userPhone,
+          escalationMessagePreview: escalationMessage.substring(0, 100) + '...',
+          instanceName,
+          instanceBaseUrl
+        });
+
+        try {
+          const customerResponse = await fetch(sendUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': Deno.env.get('EVOLUTION_API_KEY') || ''
+            },
+            body: JSON.stringify({
+              number: userPhone,
+              text: escalationMessage
+            })
+          });
+
+          if (customerResponse.ok) {
+            const customerResponseData = await customerResponse.json();
+            logger.info('✅ ESCALATION MESSAGE SENT TO CUSTOMER SUCCESSFULLY', {
+              userPhone,
+              responseData: customerResponseData,
+              escalationMessageLength: escalationMessage.length
+            });
+          } else {
+            const customerErrorText = await customerResponse.text();
+            logger.error('❌ FAILED TO SEND ESCALATION MESSAGE TO CUSTOMER', {
+              status: customerResponse.status,
+              statusText: customerResponse.statusText,
+              error: customerErrorText,
+              sendUrl,
+              userPhone
+            });
+          }
+        } catch (customerError) {
+          logger.error('🚨 EXCEPTION SENDING ESCALATION MESSAGE TO CUSTOMER', {
+            error: customerError.message || customerError,
             sendUrl,
             userPhone
           });
         }
-      } catch (customerError) {
-        logger.error('🚨 EXCEPTION SENDING ESCALATION MESSAGE TO CUSTOMER', {
-          error: customerError.message || customerError,
-          sendUrl,
-          userPhone
-        });
-      }
 
-      // Store the escalation message with logging
-      logger.info('💾 STORING ESCALATION MESSAGE IN CONVERSATION', {
-        conversationId,
-        messageLength: escalationMessage.length,
-        messagePreview: escalationMessage.substring(0, 50) + '...'
-      });
+        // Store the escalation message with logging
+        logger.info('💾 STORING ESCALATION MESSAGE IN CONVERSATION', {
+          conversationId,
+          messageLength: escalationMessage.length,
+          messagePreview: escalationMessage.substring(0, 50) + '...'
+        });
 
-      try {
-        await storeMessageInConversation(conversationId, 'assistant', escalationMessage, null, supabaseAdmin);
-        logger.info('✅ ESCALATION MESSAGE STORED IN CONVERSATION SUCCESSFULLY', {
-          conversationId
-        });
-      } catch (storeError) {
-        logger.error('❌ FAILED TO STORE ESCALATION MESSAGE IN CONVERSATION', {
-          error: storeError.message || storeError,
-          conversationId
-        });
+        try {
+          await storeMessageInConversation(conversationId, 'assistant', escalationMessage, null, supabaseAdmin);
+          logger.info('✅ ESCALATION MESSAGE STORED IN CONVERSATION SUCCESSFULLY', {
+            conversationId
+          });
+        } catch (storeError) {
+          logger.error('❌ FAILED TO STORE ESCALATION MESSAGE IN CONVERSATION', {
+            error: storeError.message || storeError,
+            conversationId
+          });
+        }
+        
+        // Mark buffer as processed
+        await markBufferAsProcessed(instanceName, userPhone);
+        
+        return true;
       }
-      
-      // Mark buffer as processed
-      await markBufferAsProcessed(instanceName, userPhone);
-      
-      return true;
+    } else {
+      logger.info('Escalation disabled, skipping quality assessment for buffered messages');
     }
 
     // ENHANCED: Pass comprehensive analysis data to response generator

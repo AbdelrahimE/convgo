@@ -11,8 +11,10 @@ const logger = {
 
 // Buffer configuration
 const BUFFER_DELAY_MS = 8000; // 8 seconds
-const BUFFER_TTL_SECONDS = 15; // 15 seconds total TTL as safety
-const TIMER_TTL_SECONDS = 10; // 10 seconds for timer keys
+const BUFFER_TTL_SECONDS = 60; // 60 seconds total TTL for better safety margin
+const TIMER_TTL_SECONDS = 30; // 30 seconds for timer keys
+const PROCESSED_BUFFER_TTL = 300; // 5 minutes for processed buffers (debugging)
+const GRACE_PERIOD_MS = 2000; // 2 seconds grace period after window
 
 // Interfaces for buffer data
 interface BufferedMessage {
@@ -29,6 +31,7 @@ interface MessageBuffer {
   firstMessageAt: string;
   lastMessageAt: string;
   processed: boolean;
+  processedAt?: string; // Optional: timestamp when buffer was processed
 }
 
 interface ProcessingTimer {
@@ -88,6 +91,9 @@ export async function addMessageToBuffer(
   messageId: string,
   messageData: any
 ): Promise<{ success: boolean; bufferCreated: boolean; fallbackToImmediate: boolean }> {
+  const lockKey = `lock:buffer:${instanceName}:${userPhone}`;
+  let lockAcquired = false;
+  
   try {
     const bufferKey = getBufferKey(instanceName, userPhone);
     const timestamp = new Date().toISOString();
@@ -99,6 +105,36 @@ export async function addMessageToBuffer(
       bufferKey
     });
 
+    // Try to acquire lock with retry logic
+    const maxLockRetries = 3;
+    for (let i = 0; i < maxLockRetries; i++) {
+      lockAcquired = await acquireLock(lockKey, 3000); // 3 second lock timeout
+      
+      if (lockAcquired) {
+        logger.debug('Lock acquired on attempt', { attempt: i + 1, lockKey });
+        break;
+      }
+      
+      if (i < maxLockRetries - 1) {
+        // Wait a bit before retrying
+        const waitTime = 50 * (i + 1); // Progressive backoff: 50ms, 100ms, 150ms
+        logger.debug('Failed to acquire lock, retrying', { 
+          attempt: i + 1, 
+          waitTime,
+          lockKey 
+        });
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+
+    // If we couldn't get the lock after retries, still try to proceed but log warning
+    if (!lockAcquired) {
+      logger.warn('Could not acquire lock after retries, proceeding without lock', { 
+        lockKey,
+        maxRetries: maxLockRetries 
+      });
+    }
+
     // Create new message object
     const newMessage: BufferedMessage = {
       text: messageText,
@@ -108,7 +144,7 @@ export async function addMessageToBuffer(
     };
 
     // Try to get existing buffer
-    const existingBuffer = await safeRedisCommand(
+    let existingBuffer = await safeRedisCommand(
       async (client) => {
         const data = await client.get(bufferKey);
         return safeParseRedisData<MessageBuffer>(data);
@@ -118,6 +154,38 @@ export async function addMessageToBuffer(
 
     let buffer: MessageBuffer;
     let bufferCreated = false;
+
+    // Check if we need to handle race condition near window end
+    if (existingBuffer && !existingBuffer.processed) {
+      // Calculate buffer age
+      const bufferAge = Date.now() - new Date(existingBuffer.firstMessageAt).getTime();
+      
+      // If buffer is near the end of the window (between 7.5 and 8.5 seconds)
+      if (bufferAge >= 7500 && bufferAge <= (BUFFER_DELAY_MS + 500)) {
+        logger.info('Buffer near processing window, applying grace period', {
+          bufferAge,
+          bufferKey,
+          gracePeriod: GRACE_PERIOD_MS
+        });
+        
+        // Wait for a short grace period
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Re-check the buffer state
+        existingBuffer = await safeRedisCommand(
+          async (client) => {
+            const data = await client.get(bufferKey);
+            return safeParseRedisData<MessageBuffer>(data);
+          },
+          null
+        );
+        
+        if (existingBuffer?.processed) {
+          logger.info('Buffer was processed during grace period, will create new buffer');
+          existingBuffer = null; // Force new buffer creation
+        }
+      }
+    }
 
     if (existingBuffer && !existingBuffer.processed) {
       // Add to existing buffer
@@ -133,7 +201,7 @@ export async function addMessageToBuffer(
         timespan: new Date(timestamp).getTime() - new Date(existingBuffer.firstMessageAt).getTime()
       });
     } else {
-      // Create new buffer
+      // Create new buffer (either doesn't exist or was processed)
       buffer = {
         instanceName,
         userPhone,
@@ -144,7 +212,10 @@ export async function addMessageToBuffer(
       };
       
       bufferCreated = true;
-      logger.info('Created new message buffer', { bufferKey });
+      logger.info('Created new message buffer', { 
+        bufferKey,
+        reason: existingBuffer?.processed ? 'previous buffer processed' : 'no existing buffer'
+      });
     }
 
     // Store the updated buffer
@@ -165,6 +236,16 @@ export async function addMessageToBuffer(
   } catch (error) {
     logger.error('Error adding message to buffer:', error);
     return { success: false, bufferCreated: false, fallbackToImmediate: true };
+  } finally {
+    // Always release the lock if we acquired it
+    if (lockAcquired) {
+      const released = await releaseLock(lockKey);
+      if (released) {
+        logger.debug('Lock released successfully', { lockKey });
+      } else {
+        logger.warn('Failed to release lock', { lockKey });
+      }
+    }
   }
 }
 
@@ -278,6 +359,9 @@ export async function markBufferAsProcessed(
   instanceName: string,
   userPhone: string
 ): Promise<boolean> {
+  const lockKey = `lock:buffer:${instanceName}:${userPhone}`;
+  let lockAcquired = false;
+  
   try {
     const bufferKey = getBufferKey(instanceName, userPhone);
     const timerKey = getTimerKey(instanceName, userPhone);
@@ -286,6 +370,18 @@ export async function markBufferAsProcessed(
       bufferKey,
       timerKey
     });
+    
+    // Try to acquire lock
+    lockAcquired = await acquireLock(lockKey, 3000);
+    if (!lockAcquired) {
+      // Try once more after a short wait
+      await new Promise(resolve => setTimeout(resolve, 100));
+      lockAcquired = await acquireLock(lockKey, 3000);
+      
+      if (!lockAcquired) {
+        logger.warn('Could not acquire lock for marking buffer as processed, proceeding anyway', { lockKey });
+      }
+    }
 
     // Mark buffer as processed and clean up timer
     await safeRedisCommand(
@@ -296,7 +392,8 @@ export async function markBufferAsProcessed(
           const buffer = safeParseRedisData<MessageBuffer>(bufferData);
           if (buffer) {
             buffer.processed = true;
-            await client.setex(bufferKey, 30, buffer); // Keep for 30 seconds for debugging
+            buffer.processedAt = new Date().toISOString(); // Track when it was processed
+            await client.setex(bufferKey, PROCESSED_BUFFER_TTL, buffer); // Keep for 5 minutes for debugging
           }
         }
         
@@ -312,6 +409,16 @@ export async function markBufferAsProcessed(
   } catch (error) {
     logger.error('Error marking buffer as processed:', error);
     return false;
+  } finally {
+    // Always release the lock if we acquired it
+    if (lockAcquired) {
+      const released = await releaseLock(lockKey);
+      if (released) {
+        logger.debug('Lock released after marking buffer as processed', { lockKey });
+      } else {
+        logger.warn('Failed to release lock after marking buffer', { lockKey });
+      }
+    }
   }
 }
 
@@ -335,27 +442,78 @@ export async function isBufferingAvailable(): Promise<boolean> {
 }
 
 /**
- * Schedule delayed processing via HTTP call
+ * Save processing status to Redis for tracking
+ */
+async function saveProcessingStatus(
+  instanceName: string,
+  userPhone: string,
+  status: 'success' | 'failed' | 'retrying',
+  metadata?: any
+): Promise<void> {
+  try {
+    const statusKey = `processing_status:${instanceName}:${userPhone}`;
+    await safeRedisCommand(
+      async (client) => {
+        await client.setex(statusKey, 3600, JSON.stringify({
+          status,
+          timestamp: new Date().toISOString(),
+          metadata: metadata || {}
+        }));
+        return true;
+      },
+      false
+    );
+    
+    logger.debug('Processing status saved', { 
+      instanceName, 
+      userPhone, 
+      status,
+      statusKey 
+    });
+  } catch (error) {
+    logger.error('Failed to save processing status', { 
+      error, 
+      instanceName, 
+      userPhone, 
+      status 
+    });
+  }
+}
+
+/**
+ * Schedule delayed processing via HTTP call with retry mechanism
  */
 export async function scheduleDelayedProcessingViaHTTP(
   instanceName: string,
   userPhone: string,
   supabaseUrl: string,
-  supabaseServiceKey: string
+  supabaseServiceKey: string,
+  retryCount: number = 0  // New optional parameter with default value
 ): Promise<boolean> {
   try {
+    const maxRetries = 3;
+    const retryDelay = retryCount > 0 ? 1000 * Math.pow(2, retryCount - 1) : 0; // Exponential backoff: 0, 1s, 2s, 4s
+    
     logger.info('Scheduling delayed processing via HTTP', {
       instanceName,
       userPhone,
-      delayMs: BUFFER_DELAY_MS
+      delayMs: BUFFER_DELAY_MS,
+      retryCount,
+      retryDelay,
+      attempt: retryCount + 1,
+      maxRetries: maxRetries + 1
     });
 
     // Use setTimeout to delay the HTTP call
+    const totalDelay = retryCount === 0 ? BUFFER_DELAY_MS : retryDelay;
+    
     setTimeout(async () => {
       try {
         logger.info('Executing delayed processing HTTP call', {
           instanceName,
-          userPhone
+          userPhone,
+          attempt: retryCount + 1,
+          maxRetries: maxRetries + 1
         });
 
         const response = await fetch(`${supabaseUrl}/functions/v1/process-buffered-messages`, {
@@ -372,28 +530,114 @@ export async function scheduleDelayedProcessingViaHTTP(
 
         if (response.ok) {
           const result = await response.json();
-          logger.info('Delayed processing completed successfully', {
+          logger.info('✅ Delayed processing completed successfully', {
             instanceName,
             userPhone,
-            result
+            result,
+            attempt: retryCount + 1
+          });
+          
+          // Save success status
+          await saveProcessingStatus(instanceName, userPhone, 'success', {
+            attempt: retryCount + 1,
+            responseData: result
           });
         } else {
           const errorText = await response.text();
-          logger.error('Delayed processing failed', {
+          logger.error('❌ Delayed processing failed', {
             instanceName,
             userPhone,
             status: response.status,
-            error: errorText
+            error: errorText,
+            attempt: retryCount + 1
           });
+          
+          // Handle retry logic
+          if (retryCount < maxRetries) {
+            logger.info('🔄 Scheduling retry for delayed processing', {
+              instanceName,
+              userPhone,
+              nextAttempt: retryCount + 2,
+              maxRetries: maxRetries + 1,
+              nextDelayMs: 1000 * Math.pow(2, retryCount)
+            });
+            
+            // Save retrying status
+            await saveProcessingStatus(instanceName, userPhone, 'retrying', {
+              attempt: retryCount + 1,
+              nextAttempt: retryCount + 2,
+              error: errorText
+            });
+            
+            // Schedule retry with exponential backoff
+            scheduleDelayedProcessingViaHTTP(
+              instanceName,
+              userPhone,
+              supabaseUrl,
+              supabaseServiceKey,
+              retryCount + 1
+            );
+          } else {
+            logger.error('❌ Max retries reached, giving up', {
+              instanceName,
+              userPhone,
+              totalAttempts: retryCount + 1
+            });
+            
+            // Save failed status
+            await saveProcessingStatus(instanceName, userPhone, 'failed', {
+              totalAttempts: retryCount + 1,
+              finalError: errorText
+            });
+          }
         }
       } catch (error) {
         logger.error('Exception in delayed processing HTTP call', {
           instanceName,
           userPhone,
-          error
+          error: error instanceof Error ? error.message : error,
+          attempt: retryCount + 1
         });
+        
+        // Retry on exception
+        if (retryCount < maxRetries) {
+          logger.info('🔄 Scheduling retry after exception', {
+            instanceName,
+            userPhone,
+            nextAttempt: retryCount + 2,
+            nextDelayMs: 1000 * Math.pow(2, retryCount)
+          });
+          
+          // Save retrying status
+          await saveProcessingStatus(instanceName, userPhone, 'retrying', {
+            attempt: retryCount + 1,
+            nextAttempt: retryCount + 2,
+            error: error instanceof Error ? error.message : String(error)
+          });
+          
+          // Schedule retry
+          scheduleDelayedProcessingViaHTTP(
+            instanceName,
+            userPhone,
+            supabaseUrl,
+            supabaseServiceKey,
+            retryCount + 1
+          );
+        } else {
+          logger.error('❌ Max retries reached after exception', {
+            instanceName,
+            userPhone,
+            totalAttempts: retryCount + 1
+          });
+          
+          // Save failed status
+          await saveProcessingStatus(instanceName, userPhone, 'failed', {
+            totalAttempts: retryCount + 1,
+            finalError: error instanceof Error ? error.message : String(error)
+          });
+        }
       }
-    }, BUFFER_DELAY_MS);
+    }, totalDelay);
 
     return true;
   } catch (error) {
@@ -440,4 +684,61 @@ export function combineBufferedMessages(messages: BufferedMessage[]): string {
   });
 
   return combinedText;
+}
+
+/**
+ * Acquire a distributed lock using Redis
+ * Uses SET with NX (only set if not exists) and PX (expire time in milliseconds)
+ */
+async function acquireLock(lockKey: string, timeoutMs: number = 2000): Promise<boolean> {
+  try {
+    const result = await safeRedisCommand(
+      async (client) => {
+        // Try to set the lock with NX (only if not exists) and PX (expire in milliseconds)
+        // Using Upstash Redis syntax
+        const lockId = `${Date.now()}_${Math.random()}`;
+        const response = await client.set(lockKey, lockId, {
+          nx: true,  // Only set if not exists
+          px: timeoutMs  // Expire after timeout milliseconds
+        });
+        return response === 'OK';
+      },
+      false
+    );
+    
+    if (result) {
+      logger.debug('Lock acquired successfully', { lockKey, timeoutMs });
+    } else {
+      logger.debug('Failed to acquire lock (already exists)', { lockKey });
+    }
+    
+    return result;
+  } catch (error) {
+    logger.error('Error acquiring lock:', { lockKey, error });
+    return false;
+  }
+}
+
+/**
+ * Release a distributed lock
+ */
+async function releaseLock(lockKey: string): Promise<boolean> {
+  try {
+    const result = await safeRedisCommand(
+      async (client) => {
+        const deleted = await client.del(lockKey);
+        return deleted === 1;
+      },
+      false
+    );
+    
+    if (result) {
+      logger.debug('Lock released successfully', { lockKey });
+    }
+    
+    return result;
+  } catch (error) {
+    logger.error('Error releasing lock:', { lockKey, error });
+    return false;
+  }
 }

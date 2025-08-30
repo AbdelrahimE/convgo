@@ -11,6 +11,7 @@ import { processAudioMessage } from "../_shared/audio-processor.ts";
 import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
 import { handleMessageWithBuffering } from "../_shared/buffering-handler.ts";
 import { getRecentConversationHistory } from "../_shared/conversation-history.ts";
+import { globalParallelProcessor } from "../_shared/parallel-webhook-processor.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -32,6 +33,10 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+// Configuration for parallel processing
+const ENABLE_PARALLEL_PROCESSING = Deno.env.get('ENABLE_PARALLEL_PROCESSING') === 'true' || false;
+const PARALLEL_PROCESSING_DEBUG = Deno.env.get('PARALLEL_PROCESSING_DEBUG') === 'true' || false;
 
 // Helper function to check if conversation is escalated
 async function isConversationEscalated(instanceId: string, phoneNumber: string): Promise<boolean> {
@@ -1003,46 +1008,51 @@ async function processMessageForAI(instance: string, messageData: any) {
       // Continue with empty context instead of failing
       logger.info('Continuing with empty context due to search failure');
       
-      // Check if escalation is needed in fallback case
-      const escalationCheck = await checkEscalationNeeded(
-        messageText,
-        fromNumber,
-        instanceData.id,
-        conversationId
-      );
-
-      if (escalationCheck.needsEscalation) {
-        logger.info('Escalation triggered in fallback case', { 
-          reason: escalationCheck.reason,
-          phoneNumber: fromNumber 
-        });
-        
-        // Handle escalation
-        const escalationMessage = await handleEscalation(
+      // Check if escalation is enabled before checking if escalation is needed
+      if (instanceData.escalation_enabled) {
+        // Check if escalation is needed in fallback case
+        const escalationCheck = await checkEscalationNeeded(
+          messageText,
           fromNumber,
           instanceData.id,
-          escalationCheck.reason,
-          conversationHistory
+          conversationId
         );
 
-        // Send escalation message to user
-        const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
-        await fetch(sendUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey
-          },
-          body: JSON.stringify({
-            number: fromNumber,
-            text: escalationMessage
-          })
-        });
+        if (escalationCheck.needsEscalation) {
+          logger.info('Escalation triggered in fallback case', { 
+            reason: escalationCheck.reason,
+            phoneNumber: fromNumber 
+          });
+          
+          // Handle escalation
+          const escalationMessage = await handleEscalation(
+            fromNumber,
+            instanceData.id,
+            escalationCheck.reason,
+            conversationHistory
+          );
 
-        // Store the escalation message
-        await storeMessageInConversation(conversationId, 'assistant', escalationMessage, null, supabaseAdmin);
-        
-        return true;
+          // Send escalation message to user
+          const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+          await fetch(sendUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey
+            },
+            body: JSON.stringify({
+              number: fromNumber,
+              text: escalationMessage
+            })
+          });
+
+          // Store the escalation message
+          await storeMessageInConversation(conversationId, 'assistant', escalationMessage, null, supabaseAdmin);
+          
+          return true;
+        }
+      } else {
+        logger.info('Escalation disabled, skipping escalation check in fallback case');
       }
 
       // Continue with AI processing in fallback case
@@ -1162,145 +1172,154 @@ async function processMessageForAI(instance: string, messageData: any) {
     });
 
     // ===== NEW: Adaptive Response Quality Assessment =====
-    logger.info('Starting adaptive response quality assessment', {
-      hasSearchResults: !!searchResults?.success,
-      hasBusinessContext: !!(intentClassification as any)?.businessContext,
-      detectedIndustry: (intentClassification as any)?.businessContext?.industry,
-      searchSimilarity: searchResults?.results?.[0]?.similarity || 0
-    });
-
     let shouldEscalateByQuality = false;
     let qualityReasoning = '';
     let responseQuality = 1.0; // default high quality
 
-    try {
-      const qualityResponse = await fetch(`${supabaseUrl}/functions/v1/assess-response-quality`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseServiceKey}`
-        },
-        body: JSON.stringify({
-          message: messageText,
-          intentData: {
-            intent: (intentClassification as any)?.intent,
-            confidence: (intentClassification as any)?.confidence,
-            reasoning: (intentClassification as any)?.reasoning
-          },
-          businessContext: (intentClassification as any)?.businessContext,
-          searchResults: searchResults,
-          languageDetection: {
-            primaryLanguage: messageData?.detectedLanguage || 'ar'
-          },
-          fileIds: fileIds,
-          instanceId: instanceId
-        })
+    // Only perform quality assessment if escalation is enabled
+    if (instanceData.escalation_enabled) {
+      logger.info('Starting adaptive response quality assessment', {
+        hasSearchResults: !!searchResults?.success,
+        hasBusinessContext: !!(intentClassification as any)?.businessContext,
+        detectedIndustry: (intentClassification as any)?.businessContext?.industry,
+        searchSimilarity: searchResults?.results?.[0]?.similarity || 0
       });
 
-      if (qualityResponse.ok) {
-        const qualityData = await qualityResponse.json();
-        shouldEscalateByQuality = qualityData.shouldEscalate;
-        responseQuality = qualityData.responseQuality;
-        qualityReasoning = qualityData.reasoning;
-        
-        logger.info('✅ Adaptive quality assessment completed', {
-          responseQuality: qualityData.responseQuality,
-          shouldEscalate: qualityData.shouldEscalate,
-          reasoning: qualityData.reasoning,
-          assessmentType: qualityData.assessmentType,
-          adaptiveFactors: qualityData.adaptiveFactors
+      try {
+        const qualityResponse = await fetch(`${supabaseUrl}/functions/v1/assess-response-quality`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`
+          },
+          body: JSON.stringify({
+            message: messageText,
+            intentData: {
+              intent: (intentClassification as any)?.intent,
+              confidence: (intentClassification as any)?.confidence,
+              reasoning: (intentClassification as any)?.reasoning
+            },
+            businessContext: (intentClassification as any)?.businessContext,
+            searchResults: searchResults,
+            languageDetection: {
+              primaryLanguage: messageData?.detectedLanguage || 'ar'
+            },
+            fileIds: fileIds,
+            instanceId: instanceId
+          })
         });
-      } else {
-        const errorText = await qualityResponse.text();
-        logger.warn('⚠️ Quality assessment failed, using conservative approach', {
-          status: qualityResponse.status,
-          error: errorText
+
+        if (qualityResponse.ok) {
+          const qualityData = await qualityResponse.json();
+          shouldEscalateByQuality = qualityData.shouldEscalate;
+          responseQuality = qualityData.responseQuality;
+          qualityReasoning = qualityData.reasoning;
+          
+          logger.info('✅ Adaptive quality assessment completed', {
+            responseQuality: qualityData.responseQuality,
+            shouldEscalate: qualityData.shouldEscalate,
+            reasoning: qualityData.reasoning,
+            assessmentType: qualityData.assessmentType,
+            adaptiveFactors: qualityData.adaptiveFactors
+          });
+        } else {
+          const errorText = await qualityResponse.text();
+          logger.warn('⚠️ Quality assessment failed, using conservative approach', {
+            status: qualityResponse.status,
+            error: errorText
+          });
+          // Conservative: if assessment fails, don't escalate by quality
+        }
+      } catch (error) {
+        logger.error('❌ Exception in quality assessment, using conservative approach', {
+          error: error.message || error
         });
-        // Conservative: if assessment fails, don't escalate by quality
       }
-    } catch (error) {
-      logger.error('❌ Exception in quality assessment, using conservative approach', {
-        error: error.message || error
-      });
-    }
 
-    // Check if immediate escalation is needed based on quality assessment
-    if (shouldEscalateByQuality) {
-      logger.info('🚨 Immediate escalation triggered by quality assessment', { 
-        responseQuality,
-        reasoning: qualityReasoning,
-        phoneNumber: fromNumber 
-      });
-      
-      // Handle escalation
-      const escalationMessage = await handleEscalation(
-        fromNumber,
-        instanceData.id,
-        'low_confidence',
-        conversationHistory
-      );
+      // Check if immediate escalation is needed based on quality assessment
+      if (shouldEscalateByQuality) {
+        logger.info('🚨 Immediate escalation triggered by quality assessment', { 
+          responseQuality,
+          reasoning: qualityReasoning,
+          phoneNumber: fromNumber 
+        });
+        
+        // Handle escalation
+        const escalationMessage = await handleEscalation(
+          fromNumber,
+          instanceData.id,
+          'low_confidence',
+          conversationHistory
+        );
 
-      // Send escalation message to user
-      const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
-      await fetch(sendUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey
-        },
-        body: JSON.stringify({
-          number: fromNumber,
-          text: escalationMessage
-        })
-      });
+        // Send escalation message to user
+        const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+        await fetch(sendUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey
+          },
+          body: JSON.stringify({
+            number: fromNumber,
+            text: escalationMessage
+          })
+        });
 
-      // Store the escalation message
-      await storeMessageInConversation(conversationId, 'assistant', escalationMessage, null, supabaseAdmin);
-      
-      return true;
+        // Store the escalation message
+        await storeMessageInConversation(conversationId, 'assistant', escalationMessage, null, supabaseAdmin);
+        
+        return true;
+      }
+    } else {
+      logger.info('Escalation disabled, skipping quality assessment');
     }
 
     // Check if escalation is needed by other factors (keywords, history, etc.)
-    const escalationCheck = await checkEscalationNeeded(
-      messageText,
-      fromNumber,
-      instanceData.id,
-      conversationId,
-      responseQuality  // Pass the actual response quality for historical tracking
-    );
-
-    if (escalationCheck.needsEscalation) {
-      logger.info('Escalation triggered before AI processing', { 
-        reason: escalationCheck.reason,
-        phoneNumber: fromNumber 
-      });
-      
-      // Handle escalation
-      const escalationMessage = await handleEscalation(
+    if (instanceData.escalation_enabled) {
+      const escalationCheck = await checkEscalationNeeded(
+        messageText,
         fromNumber,
         instanceData.id,
-        escalationCheck.reason,
-        conversationHistory
+        conversationId,
+        responseQuality  // Pass the actual response quality for historical tracking
       );
 
-      // Send escalation message to user
-      const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
-      await fetch(sendUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey
-        },
-        body: JSON.stringify({
-          number: fromNumber,
-          text: escalationMessage
-        })
-      });
+      if (escalationCheck.needsEscalation) {
+        logger.info('Escalation triggered before AI processing', { 
+          reason: escalationCheck.reason,
+          phoneNumber: fromNumber 
+        });
+        
+        // Handle escalation
+        const escalationMessage = await handleEscalation(
+          fromNumber,
+          instanceData.id,
+          escalationCheck.reason,
+          conversationHistory
+        );
 
-      // Store the escalation message
-      await storeMessageInConversation(conversationId, 'assistant', escalationMessage, null, supabaseAdmin);
-      
-      return true;
+        // Send escalation message to user
+        const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+        await fetch(sendUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': Deno.env.get('EVOLUTION_API_KEY') || messageData.apikey
+          },
+          body: JSON.stringify({
+            number: fromNumber,
+            text: escalationMessage
+          })
+        });
+
+        // Store the escalation message
+        await storeMessageInConversation(conversationId, 'assistant', escalationMessage, null, supabaseAdmin);
+        
+        return true;
+      }
+    } else {
+      logger.info('Escalation disabled, proceeding with AI processing without escalation checks');
     }
 
     // Continue with AI processing
@@ -1579,22 +1598,79 @@ serve(async (req) => {
             transcription: transcribedText
           });
         }
-        // NEW: Use buffering system with fallback to immediate processing
-        const bufferingResult = await handleMessageWithBuffering(
-          instanceName,
-          normalizedData,
-          processMessageForAI, // Pass original function as fallback
-          supabaseAdmin,
-          supabaseUrl,
-          supabaseServiceKey
-        );
+
+        // Extract user phone for parallel processing
+        const userPhone = normalizedData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
         
-        logger.info('Message processing completed', {
-          instanceName,
-          usedBuffering: bufferingResult.usedBuffering,
-          success: bufferingResult.success,
-          reason: bufferingResult.reason
-        });
+        // NEW: Use parallel processing system if enabled
+        if (ENABLE_PARALLEL_PROCESSING) {
+          if (PARALLEL_PROCESSING_DEBUG) {
+            logger.info('🚀 Using parallel processing system', {
+              instanceName,
+              userPhone,
+              event,
+              stats: globalParallelProcessor.getStats()
+            });
+          }
+
+          // Define the processing function for parallel system
+          const messageProcessingFunction = async () => {
+            return await handleMessageWithBuffering(
+              instanceName,
+              normalizedData,
+              processMessageForAI,
+              supabaseAdmin,
+              supabaseUrl,
+              supabaseServiceKey
+            );
+          };
+
+          // Process with parallel system
+          const parallelResult = await globalParallelProcessor.processWebhook(
+            instanceName,
+            event,
+            normalizedData,
+            messageProcessingFunction,
+            {
+              userPhone,
+              priority: 1 // High priority for messages
+            }
+          );
+
+          if (PARALLEL_PROCESSING_DEBUG) {
+            logger.info('🚀 Parallel processing result', {
+              success: parallelResult.success,
+              usedParallel: parallelResult.usedParallel,
+              message: parallelResult.message,
+              stats: globalParallelProcessor.getStats()
+            });
+          }
+
+          logger.info('Message processing completed (parallel)', {
+            instanceName,
+            userPhone,
+            success: parallelResult.success,
+            usedParallel: parallelResult.usedParallel,
+            message: parallelResult.message
+          });
+        } else {
+          // FALLBACK: Use original buffering system
+          const bufferingResult = await handleMessageWithBuffering(
+            instanceName,
+            normalizedData,
+            processMessageForAI, // Pass original function as fallback
+            supabaseAdmin,
+            supabaseUrl,
+            supabaseServiceKey
+          );
+          
+          logger.info('Message processing completed (fallback)', {
+            instanceName,
+            usedBuffering: bufferingResult.usedBuffering,
+            success: bufferingResult.success,
+            reason: bufferingResult.reason
+          });
+        }
       }
       
       return new Response(JSON.stringify({ success: true }), {

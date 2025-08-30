@@ -261,6 +261,10 @@ async function storeResponseInConversation(conversationId: string, responseText:
   }
 }
 
+/**
+ * Check and update AI usage limits using stored procedure
+ * Ensures atomic operation to prevent race conditions
+ */
 async function checkAndUpdateUserLimit(userId: string, increment: boolean = false): Promise<{
   allowed: boolean;
   limit: number;
@@ -280,62 +284,46 @@ async function checkAndUpdateUserLimit(userId: string, increment: boolean = fals
   }
 
   try {
-    logger.log(`Checking AI usage limits for user: ${userId}, increment: ${increment}`);
-    
-    const { data: profile, error } = await supabaseAdmin
-      .from('profiles')
-      .select('monthly_ai_response_limit, monthly_ai_responses_used, last_responses_reset_date')
-      .eq('id', userId)
-      .single();
+    // Use stored procedure for atomic operation
+    const { data, error } = await supabaseAdmin.rpc('check_and_update_ai_usage', {
+      p_user_id: userId,
+      p_increment: increment
+    });
 
-    if (error || !profile) {
-      logger.error('Error fetching user profile for AI limits:', error || 'Profile not found');
+    if (error) {
+      logger.error('Stored procedure failed:', error);
+      // Return safe defaults on error
       return { 
         allowed: true, 
         limit: 0, 
         used: 0, 
         resetsOn: null,
-        errorMessage: 'Error fetching user profile' 
+        errorMessage: 'Error checking limits' 
       };
     }
 
-    const limit = profile.monthly_ai_response_limit;
-    const used = profile.monthly_ai_responses_used;
-    const resetsOn = profile.last_responses_reset_date;
-    
-    const allowed = used < limit;
-    logger.log(`User ${userId} has used ${used}/${limit} AI responses`);
-
-    if (increment && allowed) {
-      logger.log(`Incrementing AI usage count for user ${userId} from ${used} to ${used + 1}`);
+    if (data) {
+      logger.log(`AI usage check complete: ${data.used}/${data.limit}, allowed: ${data.allowed}`);
       
-      const { error: updateError } = await supabaseAdmin
-        .from('profiles')
-        .update({ monthly_ai_responses_used: used + 1 })
-        .eq('id', userId);
-
-      if (updateError) {
-        logger.error('Error updating AI usage count:', updateError);
-      } else {
-        logger.log(`Updated AI usage count for user ${userId}: ${used + 1}/${limit}`);
-      }
-    } else if (!allowed) {
-      logger.warn(`User ${userId} has reached their monthly AI response limit (${used}/${limit})`);
-    } else if (!increment) {
-      logger.log(`Not incrementing counter for user ${userId} (check only)`);
+      // Return data from stored procedure with same structure
+      return {
+        allowed: data.allowed,
+        limit: data.limit,
+        used: data.used,
+        resetsOn: data.resetsOn,
+        errorMessage: data.errorMessage || (!data.allowed ? `Monthly AI response limit reached (${data.used}/${data.limit})` : undefined)
+      };
     }
-
-    const currentDate = new Date(resetsOn || new Date());
-    const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-    const nextResetDate = nextMonth.toISOString();
-
-    return {
-      allowed,
-      limit,
-      used: increment && allowed ? used + 1 : used,
-      resetsOn: nextResetDate,
-      errorMessage: !allowed ? `Monthly AI response limit reached (${used}/${limit})` : undefined
+    
+    // Should not reach here, but handle as error case
+    return { 
+      allowed: true, 
+      limit: 0, 
+      used: 0, 
+      resetsOn: null,
+      errorMessage: 'Unexpected response from stored procedure' 
     };
+    
   } catch (error) {
     logger.error('Unexpected error checking user AI limits:', error);
     return { 
@@ -382,8 +370,7 @@ serve(async (req) => {
       hasPersonality: !!selectedPersonalityId,
       personalityName: selectedPersonalityName,
       detectedIntent,
-      intentConfidence,
-
+      intentConfidence
     });
 
     if (!query && !imageUrl) {
@@ -481,6 +468,7 @@ serve(async (req) => {
       `Context:\n${finalContext}\n\nQuestion: ${query || "Please describe this image"}` : 
       `Question: ${query || "Please describe this image"}`;
 
+    // Make OpenAI API call
     const messages = [
       { role: 'system', content: finalSystemPrompt },
     ];
@@ -554,8 +542,8 @@ serve(async (req) => {
         usage: responseData.usage,
         tokenUsage: {
           context: tokenCounts,
-          completion: responseData.usage.completion_tokens,
-          total: responseData.usage.total_tokens
+          completion: responseData.usage?.completion_tokens || 0,
+          total: responseData.usage?.total_tokens || 0
         },
         aiUsage: usageDetails,
         conversationId: conversationId,

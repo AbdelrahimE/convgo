@@ -386,7 +386,7 @@ export default function EscalationManagement() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <h1 className="text-3xl font-bold mb-6">Escalation Management</h1>
+      <h1 className="text-3xl font-semibold mb-6">Escalation Management</h1>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
