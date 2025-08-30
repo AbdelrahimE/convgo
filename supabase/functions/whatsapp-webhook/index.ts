@@ -11,7 +11,6 @@ import { processAudioMessage } from "../_shared/audio-processor.ts";
 import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
 import { handleMessageWithBuffering } from "../_shared/buffering-handler.ts";
 import { getRecentConversationHistory } from "../_shared/conversation-history.ts";
-import { globalParallelProcessor } from "../_shared/parallel-webhook-processor.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -34,9 +33,6 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// Configuration for parallel processing
-const ENABLE_PARALLEL_PROCESSING = Deno.env.get('ENABLE_PARALLEL_PROCESSING') === 'true' || false;
-const PARALLEL_PROCESSING_DEBUG = Deno.env.get('PARALLEL_PROCESSING_DEBUG') === 'true' || false;
 
 // Helper function to check if conversation is escalated
 async function isConversationEscalated(instanceId: string, phoneNumber: string): Promise<boolean> {
@@ -374,6 +370,7 @@ async function saveWebhookMessage(instance: string, event: string, data: any) {
 }
 
 // Helper function to process message for AI
+// @deprecated This function will be removed in Phase 3 - its logic will be integrated into buffering-handler.ts
 async function processMessageForAI(instance: string, messageData: any) {
   try {
     logger.info('Starting AI message processing', { instance });
@@ -1599,78 +1596,25 @@ serve(async (req) => {
           });
         }
 
-        // Extract user phone for parallel processing
+        // Extract user phone for processing
         const userPhone = normalizedData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
         
-        // NEW: Use parallel processing system if enabled
-        if (ENABLE_PARALLEL_PROCESSING) {
-          if (PARALLEL_PROCESSING_DEBUG) {
-            logger.info('🚀 Using parallel processing system', {
-              instanceName,
-              userPhone,
-              event,
-              stats: globalParallelProcessor.getStats()
-            });
-          }
-
-          // Define the processing function for parallel system
-          const messageProcessingFunction = async () => {
-            return await handleMessageWithBuffering(
-              instanceName,
-              normalizedData,
-              processMessageForAI,
-              supabaseAdmin,
-              supabaseUrl,
-              supabaseServiceKey
-            );
-          };
-
-          // Process with parallel system
-          const parallelResult = await globalParallelProcessor.processWebhook(
-            instanceName,
-            event,
-            normalizedData,
-            messageProcessingFunction,
-            {
-              userPhone,
-              priority: 1 // High priority for messages
-            }
-          );
-
-          if (PARALLEL_PROCESSING_DEBUG) {
-            logger.info('🚀 Parallel processing result', {
-              success: parallelResult.success,
-              usedParallel: parallelResult.usedParallel,
-              message: parallelResult.message,
-              stats: globalParallelProcessor.getStats()
-            });
-          }
-
-          logger.info('Message processing completed (parallel)', {
-            instanceName,
-            userPhone,
-            success: parallelResult.success,
-            usedParallel: parallelResult.usedParallel,
-            message: parallelResult.message
-          });
-        } else {
-          // FALLBACK: Use original buffering system
-          const bufferingResult = await handleMessageWithBuffering(
-            instanceName,
-            normalizedData,
-            processMessageForAI, // Pass original function as fallback
-            supabaseAdmin,
-            supabaseUrl,
-            supabaseServiceKey
-          );
-          
-          logger.info('Message processing completed (fallback)', {
-            instanceName,
-            usedBuffering: bufferingResult.usedBuffering,
-            success: bufferingResult.success,
-            reason: bufferingResult.reason
-          });
-        }
+        // Process message using buffering system
+        const bufferingResult = await handleMessageWithBuffering(
+          instanceName,
+          normalizedData,
+          processMessageForAI, // Pass original function as fallback
+          supabaseAdmin,
+          supabaseUrl,
+          supabaseServiceKey
+        );
+        
+        logger.info('Message processing completed', {
+          instanceName,
+          usedBuffering: bufferingResult.usedBuffering,
+          success: bufferingResult.success,
+          reason: bufferingResult.reason
+        });
       }
       
       return new Response(JSON.stringify({ success: true }), {

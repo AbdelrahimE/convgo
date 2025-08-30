@@ -11,23 +11,14 @@ const logger = {
 };
 
 /**
- * Check if message buffering is enabled globally and for specific instance
+ * Check if message buffering is enabled for specific instance
+ * Buffering is enabled by default - only checks if Redis is available and AI is configured
  */
 export async function isBufferingEnabledForInstance(
   instanceId: string,
   supabaseAdmin: ReturnType<typeof createClient>
 ): Promise<{ enabled: boolean; reason: string }> {
   try {
-    // First check global environment variable
-    const globalBufferingEnabled = Deno.env.get('ENABLE_MESSAGE_BUFFERING') === 'true';
-    
-    if (!globalBufferingEnabled) {
-      return { 
-        enabled: false, 
-        reason: 'Global message buffering disabled (ENABLE_MESSAGE_BUFFERING != true)' 
-      };
-    }
-
     // Check if Redis is available
     const redisAvailable = await isBufferingAvailable();
     if (!redisAvailable) {
@@ -37,16 +28,16 @@ export async function isBufferingEnabledForInstance(
       };
     }
 
-    // Check per-instance configuration
+    // Check if AI is configured and active for this instance
     const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
       .from('whatsapp_ai_config')
-      .select('enable_message_buffering, is_active')
+      .select('is_active')
       .eq('whatsapp_instance_id', instanceId)
       .eq('is_active', true)
       .maybeSingle();
 
     if (aiConfigError) {
-      logger.error('Error checking instance buffering config:', aiConfigError);
+      logger.error('Error checking instance AI config:', aiConfigError);
       return { 
         enabled: false, 
         reason: 'Error checking instance configuration' 
@@ -60,17 +51,8 @@ export async function isBufferingEnabledForInstance(
       };
     }
 
-    if (!aiConfig.enable_message_buffering) {
-      return { 
-        enabled: false, 
-        reason: 'Message buffering disabled for this instance' 
-      };
-    }
-
     logger.info('Message buffering enabled for instance', {
       instanceId,
-      globalEnabled: globalBufferingEnabled,
-      instanceEnabled: aiConfig.enable_message_buffering,
       redisAvailable
     });
 
@@ -86,6 +68,7 @@ export async function isBufferingEnabledForInstance(
 
 /**
  * Simple helper to check if buffering should be used
+ * Returns true if Redis is available and AI is configured for the instance
  */
 export async function shouldUseBuffering(
   instanceName: string,
