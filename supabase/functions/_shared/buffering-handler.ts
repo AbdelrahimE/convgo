@@ -27,7 +27,7 @@ const logger = {
 };
 
 // Default Evolution API URL fallback
-const DEFAULT_EVOLUTION_API_URL = 'https://api.evolutionapi.com';
+const DEFAULT_EVOLUTION_API_URL = 'https://api.botifiy.com';
 
 // Helper function to check if conversation is escalated
 async function isConversationEscalated(instanceId: string, phoneNumber: string, supabaseAdmin: ReturnType<typeof createClient>): Promise<boolean> {
@@ -111,8 +111,8 @@ async function findOrCreateConversation(instanceId: string, phoneNumber: string,
     const { data: existingConversation, error: findError } = await supabaseAdmin
       .from('whatsapp_conversations')
       .select('id')
-      .eq('whatsapp_instance_id', instanceId)
-      .eq('participant_phone', phoneNumber)
+      .eq('instance_id', instanceId)
+      .eq('user_phone', phoneNumber)
       .maybeSingle();
 
     if (findError) {
@@ -127,8 +127,8 @@ async function findOrCreateConversation(instanceId: string, phoneNumber: string,
     const { data: newConversation, error: createError } = await supabaseAdmin
       .from('whatsapp_conversations')
       .insert({
-        whatsapp_instance_id: instanceId,
-        participant_phone: phoneNumber,
+        instance_id: instanceId,
+        user_phone: phoneNumber,
         status: 'active'
       })
       .select('id')
@@ -399,28 +399,52 @@ async function processMessageForAIIntegrated(
       }
     }
 
-    // Generate AI response using existing function
+    // Generate instanceBaseUrl for WhatsApp API calls
+    let instanceBaseUrl = '';
+    if (messageData.server_url) {
+      instanceBaseUrl = messageData.server_url;
+    } else {
+      // Try to get from webhook config
+      const { data: webhookConfig } = await supabaseAdmin
+        .from('whatsapp_webhook_config')
+        .select('webhook_url')
+        .eq('whatsapp_instance_id', instanceData.id)
+        .maybeSingle();
+        
+      if (webhookConfig?.webhook_url) {
+        const url = new URL(webhookConfig.webhook_url);
+        instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+      } else {
+        instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || DEFAULT_EVOLUTION_API_URL;
+      }
+    }
+
+    // Generate AI response using existing function with correct parameter order
+    const contextString = conversationHistory.map(msg => {
+      const role = msg.role === 'user' ? 'User' : 'Assistant';
+      return `${role}: ${msg.content}`;
+    }).join('\n');
+
     const aiResult = await generateAndSendAIResponse(
-      conversationId,
-      messageText,
-      conversationHistory,
-      aiConfig,
-      instanceName,
-      fromNumber,
-      messageData,
-      supabaseAdmin,
-      fileIds,
-      imageUrl, // Pass processed image URL
-      intentClassification, // Pass intent classification results
-      selectedPersonality  // Pass selected personality
+      messageText,           // 1. query: string
+      contextString,         // 2. context: string
+      instanceName,          // 3. instanceName: string
+      fromNumber,            // 4. fromNumber: string
+      instanceBaseUrl,       // 5. instanceBaseUrl: string
+      aiConfig,              // 6. aiConfig: any
+      messageData,           // 7. messageData: any
+      conversationId,        // 8. conversationId: string
+      supabaseUrl,           // 9. supabaseUrl: string
+      supabaseServiceKey,    // 10. supabaseServiceKey: string
+      imageUrl               // 11. imageUrl?: string | null
     );
 
     logger.info('Integrated AI processing completed', { 
       instanceName, 
-      success: aiResult.success 
+      success: aiResult 
     });
     
-    return aiResult.success;
+    return aiResult;
   } catch (error) {
     logger.error('Exception in integrated AI processing', { error });
     return false;
