@@ -56,6 +56,7 @@ This is a React + TypeScript application for WhatsApp AI conversation management
 - TypeScript types auto-generated in `src/integrations/supabase/types.ts`
 - Database includes tables for files, document embeddings, WhatsApp data
 - Edge functions handle AI processing, webhook management, language detection
+- Unified message processing via buffering system with Redis for improved performance and reliability
 
 **Component Architecture:**
 - Uses shadcn/ui design system with Radix UI primitives
@@ -69,6 +70,7 @@ This is a React + TypeScript application for WhatsApp AI conversation management
 - Multi-language support with automatic language detection
 - Real-time monitoring of AI usage and webhook events
 - Audio processing and voice transcription capabilities
+- Unified buffering system for message processing with Redis-based message queuing
 
 ### Build Configuration:
 - Vite with React SWC plugin for fast builds
