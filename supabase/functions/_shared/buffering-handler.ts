@@ -47,7 +47,7 @@ async function isConversationEscalated(instanceId: string, phoneNumber: string, 
   }
 }
 
-// Helper function to check if message needs escalation
+// Helper function to check if message needs escalation (simplified - keywords only)
 async function checkEscalationNeeded(
   message: string, 
   phoneNumber: string,
@@ -57,22 +57,26 @@ async function checkEscalationNeeded(
   aiResponseConfidence?: number
 ): Promise<{ needsEscalation: boolean; reason: string }> {
   try {
-    // Get instance configuration
+    // Simplified query - only get escalation keywords
     const { data: instance, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
-      .select('escalation_enabled, escalation_threshold, escalation_keywords')
+      .select('escalation_enabled, escalation_keywords')
       .eq('id', instanceId)
       .single();
 
+    // If escalation is disabled or error, return false
     if (instanceError || !instance?.escalation_enabled) {
       return { needsEscalation: false, reason: '' };
     }
 
-    // Check for direct escalation keywords
-    const keywords = instance.escalation_keywords || [
-      'human support', 'speak to someone', 'agent', 'representative',
-      'talk to person', 'customer service', 'help me', 'support team'
-    ];
+    // Check for escalation keywords only - NO default keywords
+    const keywords = instance.escalation_keywords || [];
+    
+    // If no keywords are configured, no escalation
+    if (!keywords || keywords.length === 0) {
+      logger.info('No escalation keywords configured for instance', { instanceId, phoneNumber });
+      return { needsEscalation: false, reason: '' };
+    }
     
     const lowerMessage = message.toLowerCase();
     const hasEscalationKeyword = keywords.some(keyword => 
@@ -80,23 +84,16 @@ async function checkEscalationNeeded(
     );
     
     if (hasEscalationKeyword) {
+      const matchedKeyword = keywords.find(k => lowerMessage.includes(k.toLowerCase()));
+      logger.info('Escalation needed: User requested human support via keyword', { 
+        phoneNumber,
+        matchedKeyword,
+        configuredKeywords: keywords
+      });
       return { needsEscalation: true, reason: 'user_request' };
     }
 
-    // Check for sensitive topics
-    const sensitiveKeywords = [
-      'complaint', 'legal', 'lawyer', 'refund', 'compensation',
-      'issue', 'problem', 'dispute', 'billing', 'charge'
-    ];
-    
-    const hasSensitiveTopic = sensitiveKeywords.some(keyword => 
-      lowerMessage.includes(keyword)
-    );
-    
-    if (hasSensitiveTopic) {
-      return { needsEscalation: true, reason: 'sensitive_topic' };
-    }
-
+    // No escalation needed
     return { needsEscalation: false, reason: '' };
   } catch (error) {
     logger.error('Error checking escalation need:', error);

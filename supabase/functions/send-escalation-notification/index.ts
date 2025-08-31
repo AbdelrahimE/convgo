@@ -111,10 +111,10 @@ serve(async (req) => {
     // Format the notification message
     const notificationMessage = `🚨 *Alert: New Escalated Conversation*
 
-📱 Customer Number: ${customerNumber}
-🔗 Direct Reply: ${customerWhatsAppLink}
-📝 Escalation Reason: ${getReasonInEnglish(escalationReason)}
-⏰ Time: ${new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' })}
+Customer Number: ${customerNumber}
+Direct Reply: ${customerWhatsAppLink}
+Escalation Reason: ${getReasonInEnglish(escalationReason)}
+Time: ${new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' })}
 
 Please handle this conversation as soon as possible.`
 
@@ -324,12 +324,6 @@ Please handle this conversation as soon as possible.`
 })
 
 function getReasonInEnglish(reason: string): string {
-  const reasons: { [key: string]: string } = {
-    'user_request': 'Customer Request',
-    'ai_failure': 'AI System Failure',
-    'sensitive_topic': 'Sensitive Topic Detected',
-    'low_confidence': 'Low Confidence Response',
-    'repeated_question': 'Repeated Question Pattern'
-  }
-  return reasons[reason] || reason
+  // Simplified - only one reason now (keyword-based)
+  return 'Customer Requested Human Support (Keyword Match)'
 }

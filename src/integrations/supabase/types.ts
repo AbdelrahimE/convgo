@@ -712,7 +712,6 @@ export type Database = {
           updated_at: string
           user_id: string
           escalation_enabled: boolean
-          escalation_threshold: number
           escalation_message: string
           escalated_conversation_message: string
           escalation_keywords: string[]
@@ -728,7 +727,6 @@ export type Database = {
           updated_at?: string
           user_id: string
           escalation_enabled?: boolean
-          escalation_threshold?: number
           escalation_message?: string
           escalated_conversation_message?: string
           escalation_keywords?: string[]
@@ -744,7 +742,6 @@ export type Database = {
           updated_at?: string
           user_id?: string
           escalation_enabled?: boolean
-          escalation_threshold?: number
           escalation_message?: string
           escalated_conversation_message?: string
           escalation_keywords?: string[]

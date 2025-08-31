@@ -33,7 +33,6 @@ interface InstanceSettings {
   id: string
   instance_name: string
   escalation_enabled: boolean
-  escalation_threshold: number
   escalation_message: string
   escalated_conversation_message: string
   escalation_keywords: string[]
@@ -78,7 +77,6 @@ export default function EscalationManagement() {
   
   // Local editing states (not saved until Save button is clicked)
   const [localSettings, setLocalSettings] = useState<{
-    escalation_threshold: number
     escalation_message: string
     escalated_conversation_message: string
     escalation_keywords: string[]
@@ -119,7 +117,6 @@ export default function EscalationManagement() {
     const currentInstance = instances.find(i => i.id === selectedInstance)
     if (currentInstance) {
       setLocalSettings({
-        escalation_threshold: currentInstance.escalation_threshold,
         escalation_message: currentInstance.escalation_message,
         escalated_conversation_message: currentInstance.escalated_conversation_message,
         escalation_keywords: currentInstance.escalation_keywords || []
@@ -148,7 +145,7 @@ export default function EscalationManagement() {
     try {
       const { data, error } = await supabase
         .from('whatsapp_instances')
-        .select('id, instance_name, escalation_enabled, escalation_threshold, escalation_message, escalated_conversation_message, escalation_keywords')
+        .select('id, instance_name, escalation_enabled, escalation_message, escalated_conversation_message, escalation_keywords')
         .eq('user_id', user?.id)
 
       if (error) throw error
@@ -230,7 +227,6 @@ export default function EscalationManagement() {
       const { error } = await supabase
         .from('whatsapp_instances')
         .update({
-          escalation_threshold: localSettings.escalation_threshold,
           escalation_message: localSettings.escalation_message,
           escalated_conversation_message: localSettings.escalated_conversation_message,
           escalation_keywords: localSettings.escalation_keywords
@@ -363,15 +359,8 @@ export default function EscalationManagement() {
   }
 
   const getReasonBadge = (reason: string) => {
-    const reasons: { [key: string]: { label: string; color: string } } = {
-      'user_request': { label: 'User Request', color: 'bg-blue-100 text-blue-800' },
-      'ai_failure': { label: 'AI Failure', color: 'bg-red-100 text-red-800' },
-      'sensitive_topic': { label: 'Sensitive Topic', color: 'bg-orange-100 text-orange-800' },
-      'low_confidence': { label: 'Low Confidence', color: 'bg-yellow-100 text-yellow-800' },
-      'repeated_question': { label: 'Repeated Question', color: 'bg-purple-100 text-purple-800' }
-    }
-    const { label, color } = reasons[reason] || { label: reason, color: 'bg-gray-100 text-gray-800' }
-    return <Badge className={color}>{label}</Badge>
+    // Simplified - only show user request (keywords)
+    return <Badge className="bg-blue-100 text-blue-800">Keyword Triggered</Badge>
   }
 
   const openWhatsApp = (phoneNumber: string) => {
@@ -704,20 +693,6 @@ export default function EscalationManagement() {
                       />
                     </div>
 
-                    <div>
-                      <Label>Attempts Before Escalation</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        max="10"
-                        value={localSettings?.escalation_threshold || currentInstance.escalation_threshold}
-                        onChange={(e) => updateLocalSettings('escalation_threshold', parseInt(e.target.value))}
-                        className="mt-1"
-                      />
-                      <p className="text-sm text-gray-500 mt-1">
-                        Number of times AI fails before escalation
-                      </p>
-                    </div>
 
                     <div>
                       <Label>Escalation Message</Label>

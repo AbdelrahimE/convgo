@@ -64,41 +64,28 @@ async function checkEscalationNeeded(
   try {
     const escalationTimer = measureTime('Webhook escalation check');
     
-    // Prepare parallel queries for escalation checking
-    const instanceConfigPromise = supabaseAdmin
+    // Simplified query - only get escalation keywords
+    const { data: instance, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
-      .select('escalation_enabled, escalation_threshold, escalation_keywords')
+      .select('escalation_enabled, escalation_keywords')
       .eq('id', instanceId)
       .single();
     
-    const interactionsPromise = supabaseAdmin
-      .from('whatsapp_ai_interactions')
-      .select('metadata, created_at, user_message')
-      .eq('whatsapp_instance_id', instanceId)
-      .eq('user_phone', phoneNumber)
-      .order('created_at', { ascending: false })
-      .limit(5);
-    
-    // Execute queries in parallel
-    const [instanceResult, interactionsResult] = await executeParallel(
-      [instanceConfigPromise, interactionsPromise],
-      ['Instance Config', 'AI Interactions']
-    );
-    
     escalationTimer.end();
-    
-    const { data: instance, error: instanceError } = instanceResult;
-    const { data: interactions, error: interactionError } = interactionsResult;
 
+    // If escalation is disabled or error, return false
     if (instanceError || !instance?.escalation_enabled) {
       return { needsEscalation: false, reason: '' };
     }
 
-    // 1. Check for direct escalation keywords
-    const keywords = instance.escalation_keywords || [
-      'human support', 'speak to someone', 'agent', 'representative',
-      'talk to person', 'customer service', 'help me', 'support team'
-    ];
+    // Check for escalation keywords only - NO default keywords
+    const keywords = instance.escalation_keywords || [];
+    
+    // If no keywords are configured, no escalation
+    if (!keywords || keywords.length === 0) {
+      logger.info('No escalation keywords configured for instance', { instanceId, phoneNumber });
+      return { needsEscalation: false, reason: '' };
+    }
     
     const lowerMessage = message.toLowerCase();
     const hasEscalationKeyword = keywords.some(keyword => 
@@ -106,53 +93,16 @@ async function checkEscalationNeeded(
     );
     
     if (hasEscalationKeyword) {
-      logger.info('Escalation needed: User requested human support', { phoneNumber });
+      const matchedKeyword = keywords.find(k => lowerMessage.includes(k.toLowerCase()));
+      logger.info('Escalation needed: User requested human support via keyword', { 
+        phoneNumber,
+        matchedKeyword,
+        configuredKeywords: keywords
+      });
       return { needsEscalation: true, reason: 'user_request' };
     }
 
-    // 2. Check AI confidence patterns using interaction history
-    // Already fetched in parallel above
-    if (!interactionError && interactions && interactions.length > 0) {
-      // Check for repeated questions (from user messages)
-      const userMessages = interactions.map(i => i.user_message);
-      const uniqueMessages = new Set(userMessages.map(m => m.toLowerCase()));
-      
-      if (userMessages.length >= 3 && uniqueMessages.size === 1) {
-        logger.info('Escalation needed: Repeated question detected', { phoneNumber });
-        return { needsEscalation: true, reason: 'repeated_question' };
-      }
-
-      // Check for low response quality on multiple AI responses
-      const lowQualityCount = interactions.filter(i => {
-        const responseQuality = i.metadata?.response_quality;
-        return responseQuality && parseFloat(responseQuality) < 0.4;
-      }).length;
-      
-      if (lowQualityCount >= instance.escalation_threshold) {
-        logger.info('Escalation needed: Low response quality threshold exceeded', { 
-          phoneNumber, 
-          lowQualityCount, 
-          threshold: instance.escalation_threshold 
-        });
-        return { needsEscalation: true, reason: 'low_confidence' };
-      }
-    }
-
-    // 3. Check for sensitive topics
-    const sensitiveKeywords = [
-      'complaint', 'legal', 'lawyer', 'refund', 'compensation',
-      'issue', 'problem', 'dispute', 'billing', 'charge'
-    ];
-    
-    const hasSensitiveTopic = sensitiveKeywords.some(keyword => 
-      lowerMessage.includes(keyword)
-    );
-    
-    if (hasSensitiveTopic) {
-      logger.info('Escalation needed: Sensitive topic detected', { phoneNumber });
-      return { needsEscalation: true, reason: 'sensitive_topic' };
-    }
-
+    // No escalation needed
     return { needsEscalation: false, reason: '' };
   } catch (error) {
     logger.error('Error checking escalation need:', error);
