@@ -107,8 +107,15 @@ async function getConversationHistory(conversationId: string, maxTokens: number 
     let historyText = '';
     let currentTokens = 0;
 
-    for (const message of messages.reverse()) {
-      const formattedMsg = `${message.role.toUpperCase()}: ${message.content}\n\n`;
+    for (let i = 0; i < messages.reverse().length; i++) {
+      const message = messages[i];
+      
+      // إضافة تصنيف للرسائل الأخيرة لتوضيح الترتيب
+      const isLastMessage = i === messages.length - 1;
+      const isSecondLast = i === messages.length - 2;
+      const prefix = isLastMessage ? '[LAST MESSAGE] ' : isSecondLast ? '[PREVIOUS] ' : '';
+      
+      const formattedMsg = `${prefix}${message.role.toUpperCase()}: ${message.content}\n\n`;
       const msgTokens = estimateTokens(formattedMsg);
 
       if (currentTokens + msgTokens > maxTokens) {
@@ -464,9 +471,13 @@ serve(async (req) => {
     
     logger.log(`Token allocation - Conversation: ${tokenCounts.conversation}, RAG: ${tokenCounts.rag}, Total: ${tokenCounts.total}`);
 
+    // إضافة متغير للتحقق من طول الرسالة
+    const isShortMessage = query && query.length <= 30;
+
+    // إذا كانت الرسالة قصيرة، نضيف تنبيه بسيط للذكاء الاصطناعي
     const userMessage = finalContext ? 
-      `Context:\n${finalContext}\n\nQuestion: ${query || "Please describe this image"}` : 
-      `Question: ${query || "Please describe this image"}`;
+      `${isShortMessage ? 'Note: This might be a direct response to the last message in the conversation.\n\n' : ''}Context:\n${finalContext}\n\nCurrent message: ${query || "Please describe this image"}` : 
+      `${isShortMessage ? 'Note: This might be a direct response to a previous question.\n\n' : ''}Message: ${query || "Please describe this image"}`;
 
     // Make OpenAI API call
     const messages = [
