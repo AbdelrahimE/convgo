@@ -67,6 +67,8 @@ interface SmartIntentResult {
   success: boolean;
   intent: string;
   confidence: number;
+  needsHumanSupport: boolean;
+  humanSupportReason: string | null;
   businessContext: {
     industry: string;
     communicationStyle: string;
@@ -121,6 +123,8 @@ async function analyzeCoreIntentOptimized(
 ): Promise<{
   intent: string;
   confidence: number;
+  needsHumanSupport: boolean;
+  humanSupportReason: string | null;
   reasoning: string;
   businessContext: {
     industry: string;
@@ -143,7 +147,7 @@ async function analyzeCoreIntentOptimized(
       ? conversationHistory.slice(-3).join('\n').substring(0, 300) 
       : 'لا يوجد سياق سابق';
     
-    // prompt محسن ومبسط لتجنب أخطاء API
+    // prompt محسن ومبسط مع اكتشاف نية التصعيد الذكي
     const optimizedPrompt = `You are a smart intent analyzer. Analyze this Arabic message and return ONLY valid JSON.
 
 Previous context: ${recentContext}
@@ -154,6 +158,8 @@ Return this exact JSON format:
   "intent": "sales|technical|customer-support|billing|general",
   "confidence": 0.9,
   "reasoning": "brief reason",
+  "needsHumanSupport": false,
+  "humanSupportReason": null,
   "businessContext": {
     "industry": "sector",
     "communicationStyle": "style",
@@ -168,7 +174,16 @@ Rules:
 - technical: technical issue/error
 - customer-support: general inquiry/complaint
 - billing: payment/invoice issue
-- general: greeting/general question`;
+- general: greeting/general question
+
+HUMAN SUPPORT DETECTION (needsHumanSupport):
+Set needsHumanSupport=true if user wants to:
+- Talk to human/agent/representative ("أريد أكلم شخص", "محتاج حد يساعدني", "ممكن أكلم المدير")
+- Complain about AI/bot ("الروبوت مش فاهم", "الذكاء مش شغال", "عاوز أكلم بني آدم")
+- Express frustration with automation ("مش عارف أتعامل مع النظام", "محتاج مساعدة حقيقية")
+- Request escalation indirectly ("الموضوع معقد", "محتاج حد متخصص", "مش لاقي حل")
+
+Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_needed"`;
 
     const apiKey = getNextOpenAIKey();
     
@@ -279,12 +294,15 @@ Rules:
       throw new Error(`JSON parsing failed: ${parseError.message}`);
     }
 
-    // التحقق من صحة البيانات
+    // التحقق من صحة البيانات مع إضافة اكتشاف التصعيد الذكي
     const validatedResult = {
       intent: (result.intent && ['sales', 'technical', 'customer-support', 'billing', 'general'].includes(result.intent)) 
         ? result.intent : 'general',
       confidence: Math.min(0.98, Math.max(0.3, Number(result.confidence) || 0.6)),
       reasoning: String(result.reasoning || 'تحليل محسن').substring(0, 100),
+      needsHumanSupport: Boolean(result.needsHumanSupport),
+      humanSupportReason: (result.humanSupportReason && ['direct_request', 'ai_frustration', 'complexity', 'escalation_needed'].includes(result.humanSupportReason))
+        ? result.humanSupportReason : null,
       businessContext: {
         industry: String(result.businessContext?.industry || 'عام').substring(0, 50),
         communicationStyle: String(result.businessContext?.communicationStyle || 'ودي').substring(0, 50),
@@ -300,6 +318,8 @@ Rules:
     logger.info('✅ GPT-5-nano Analysis Complete:', {
       intent: validatedResult.intent,
       confidence: validatedResult.confidence,
+      needsHumanSupport: validatedResult.needsHumanSupport,
+      humanSupportReason: validatedResult.humanSupportReason,
       emotion_state: validatedResult.basicEmotionState,
       industry: validatedResult.businessContext.industry,
       detected_terms_count: validatedResult.businessContext.detectedTerms.length,
@@ -323,6 +343,8 @@ Rules:
     return {
       intent: 'general',
       confidence: 0.5,
+      needsHumanSupport: false,
+      humanSupportReason: null,
       reasoning: `تحليل احتياطي - خطأ في GPT-5-nano: ${error.message}`,
       businessContext: {
         industry: 'عام',
@@ -494,6 +516,8 @@ async function smartIntentAnalysisOptimized(
 ): Promise<{
   intent: string;
   confidence: number;
+  needsHumanSupport: boolean;
+  humanSupportReason: string | null;
   businessContext: any;
   reasoning: string;
   selectedPersonality: any;
@@ -550,6 +574,8 @@ async function smartIntentAnalysisOptimized(
   return {
     intent: coreAnalysis.intent,
     confidence: coreAnalysis.confidence,
+    needsHumanSupport: coreAnalysis.needsHumanSupport,
+    humanSupportReason: coreAnalysis.humanSupportReason,
     businessContext: coreAnalysis.businessContext,
     reasoning: `${coreAnalysis.reasoning} - معالجة محسنة للـ MVP`,
     selectedPersonality,
@@ -624,6 +650,8 @@ serve(async (req) => {
       success: true,
       intent: analysisResult.intent,
       confidence: analysisResult.confidence,
+      needsHumanSupport: analysisResult.needsHumanSupport,
+      humanSupportReason: analysisResult.humanSupportReason,
       businessContext: analysisResult.businessContext,
       reasoning: analysisResult.reasoning,
       selectedPersonality: analysisResult.selectedPersonality,
@@ -637,6 +665,8 @@ serve(async (req) => {
     logger.info('🏁 Smart Intent Analysis Completed Successfully:', {
       intent: result.intent,
       confidence: result.confidence,
+      needsHumanSupport: result.needsHumanSupport,
+      humanSupportReason: result.humanSupportReason,
       industry: result.businessContext.industry,
       emotion_state: result.emotionAnalysis?.emotional_state,
       customer_stage: result.customerJourney?.current_stage,

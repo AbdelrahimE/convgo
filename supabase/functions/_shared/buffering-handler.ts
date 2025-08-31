@@ -47,17 +47,18 @@ async function isConversationEscalated(instanceId: string, phoneNumber: string, 
   }
 }
 
-// Helper function to check if message needs escalation (simplified - keywords only)
+// Helper function to check if message needs escalation (enhanced with AI intent detection)
 async function checkEscalationNeeded(
   message: string, 
   phoneNumber: string,
   instanceId: string,
   conversationId: string,
   supabaseAdmin: ReturnType<typeof createClient>,
-  aiResponseConfidence?: number
+  aiResponseConfidence?: number,
+  intentAnalysis?: any
 ): Promise<{ needsEscalation: boolean; reason: string }> {
   try {
-    // Simplified query - only get escalation keywords
+    // Get instance escalation configuration
     const { data: instance, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
       .select('escalation_enabled, escalation_keywords')
@@ -69,31 +70,46 @@ async function checkEscalationNeeded(
       return { needsEscalation: false, reason: '' };
     }
 
-    // Check for escalation keywords only - NO default keywords
-    const keywords = instance.escalation_keywords || [];
-    
-    // If no keywords are configured, no escalation
-    if (!keywords || keywords.length === 0) {
-      logger.info('No escalation keywords configured for instance', { instanceId, phoneNumber });
-      return { needsEscalation: false, reason: '' };
-    }
-    
-    const lowerMessage = message.toLowerCase();
-    const hasEscalationKeyword = keywords.some(keyword => 
-      lowerMessage.includes(keyword.toLowerCase())
-    );
-    
-    if (hasEscalationKeyword) {
-      const matchedKeyword = keywords.find(k => lowerMessage.includes(k.toLowerCase()));
-      logger.info('Escalation needed: User requested human support via keyword', { 
+    // 🧠 SMART ESCALATION: Check AI intent analysis first (if available)
+    if (intentAnalysis?.needsHumanSupport) {
+      logger.info('🚨 Smart escalation detected: AI identified human support need', { 
         phoneNumber,
-        matchedKeyword,
-        configuredKeywords: keywords
+        humanSupportReason: intentAnalysis.humanSupportReason,
+        intent: intentAnalysis.intent,
+        confidence: intentAnalysis.confidence,
+        detectedReason: intentAnalysis.humanSupportReason
       });
-      return { needsEscalation: true, reason: 'user_request' };
+      return { needsEscalation: true, reason: 'ai_detected_intent' };
     }
 
-    // No escalation needed
+    // 🔑 KEYWORD FALLBACK: Check escalation keywords as backup
+    const keywords = instance.escalation_keywords || [];
+    
+    if (keywords && keywords.length > 0) {
+      const lowerMessage = message.toLowerCase();
+      const hasEscalationKeyword = keywords.some(keyword => 
+        lowerMessage.includes(keyword.toLowerCase())
+      );
+      
+      if (hasEscalationKeyword) {
+        const matchedKeyword = keywords.find(k => lowerMessage.includes(k.toLowerCase()));
+        logger.info('Escalation needed: User requested human support via keyword', { 
+          phoneNumber,
+          matchedKeyword,
+          configuredKeywords: keywords
+        });
+        return { needsEscalation: true, reason: 'user_request' };
+      }
+    }
+
+    // No escalation needed from either method
+    logger.debug('No escalation needed', {
+      phoneNumber,
+      smartAnalysisResult: intentAnalysis?.needsHumanSupport || false,
+      keywordMatches: false,
+      configuredKeywords: keywords?.length || 0
+    });
+    
     return { needsEscalation: false, reason: '' };
   } catch (error) {
     logger.error('Error checking escalation need:', error);
@@ -393,6 +409,75 @@ async function processMessageForAIIntegrated(
         }
       } catch (error) {
         logger.warn('Exception during intent classification', { error: error.message });
+      }
+    }
+
+    // 🧠 SMART ESCALATION CHECK: Check if message needs escalation after intent analysis
+    if (instanceData.escalation_enabled) {
+      logger.info('🔍 Checking if message needs escalation (integrated processing)', {
+        messageText: messageText.substring(0, 100),
+        fromNumber,
+        instanceId: instanceData.id,
+        hasIntentAnalysis: !!intentClassification,
+        needsHumanSupport: (intentClassification as any)?.needsHumanSupport || false
+      });
+
+      const escalationCheck = await checkEscalationNeeded(
+        messageText,
+        fromNumber,
+        instanceData.id,
+        conversationId,
+        undefined, // aiResponseConfidence - not needed here
+        intentClassification // Pass intent analysis for smart detection
+      );
+
+      if (escalationCheck.needsEscalation) {
+        logger.info('🚨 Message needs escalation - bypassing AI in integrated processing', {
+          reason: escalationCheck.reason,
+          fromNumber,
+          detectionMethod: escalationCheck.reason === 'ai_detected_intent' ? 'Smart AI Detection' : 'Keyword Matching'
+        });
+
+        // Handle escalation
+        const escalationMessage = instanceData.escalated_conversation_message || 
+          'Your conversation has been transferred to our specialized support team. One of our representatives will contact you shortly.';
+
+        // Store escalation message
+        await storeMessageInConversation(conversationId, 'assistant', escalationMessage, `escalation_${Date.now()}`, supabaseAdmin);
+
+        // Send escalation notification
+        try {
+          const notificationResponse = await fetch(`${supabaseUrl}/functions/v1/send-escalation-notification`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`
+            },
+            body: JSON.stringify({
+              customerNumber: fromNumber,
+              instanceId: instanceData.id,
+              escalationReason: escalationCheck.reason,
+              conversationContext: conversationHistory.slice(-10)
+            })
+          });
+
+          if (!notificationResponse.ok) {
+            logger.error('Failed to send escalation notification in integrated processing');
+          } else {
+            logger.info('✅ Escalation notification sent successfully');
+          }
+        } catch (error) {
+          logger.error('Error sending escalation notification:', error);
+        }
+
+        logger.info('✅ Smart escalation handled in integrated processing', {
+          instanceName,
+          fromNumber,
+          reason: escalationCheck.reason,
+          detectionMethod: escalationCheck.reason === 'ai_detected_intent' ? 'Smart AI Detection' : 'Keyword Matching'
+        });
+
+        return true; // Escalation handled, skip AI processing
       }
     }
 

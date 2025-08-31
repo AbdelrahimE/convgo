@@ -34,18 +34,19 @@ async function isConversationEscalated(instanceId: string, phoneNumber: string):
   }
 }
 
-// Helper function to check if message needs escalation (imported from webhook logic)
+// Helper function to check if message needs escalation (enhanced with AI intent detection)
 async function checkEscalationNeeded(
   message: string, 
   phoneNumber: string,
   instanceId: string,
   conversationId: string,
-  aiResponseConfidence?: number
+  aiResponseConfidence?: number,
+  intentAnalysis?: any
 ): Promise<{ needsEscalation: boolean; reason: string }> {
   try {
-    const escalationTimer = measureTime('Simplified escalation check');
+    const escalationTimer = measureTime('Smart escalation check');
     
-    // Simplified query - only get escalation keywords
+    // Get instance escalation configuration
     const { data: instance, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
       .select('escalation_enabled, escalation_keywords')
@@ -59,31 +60,46 @@ async function checkEscalationNeeded(
       return { needsEscalation: false, reason: '' };
     }
 
-    // Check for escalation keywords only - NO default keywords
-    const keywords = instance.escalation_keywords || [];
-    
-    // If no keywords are configured, no escalation
-    if (!keywords || keywords.length === 0) {
-      logger.info('No escalation keywords configured for instance', { instanceId, phoneNumber });
-      return { needsEscalation: false, reason: '' };
-    }
-    
-    const lowerMessage = message.toLowerCase();
-    const hasEscalationKeyword = keywords.some(keyword => 
-      lowerMessage.includes(keyword.toLowerCase()) || message.includes(keyword)
-    );
-    
-    if (hasEscalationKeyword) {
-      const matchedKeyword = keywords.find(k => lowerMessage.includes(k.toLowerCase()) || message.includes(k));
-      logger.info('Escalation needed: User requested human support via keyword', { 
+    // 🧠 SMART ESCALATION: Check AI intent analysis first (if available)
+    if (intentAnalysis?.needsHumanSupport) {
+      logger.info('🚨 Smart escalation detected: AI identified human support need', { 
         phoneNumber,
-        matchedKeyword,
-        configuredKeywords: keywords
+        humanSupportReason: intentAnalysis.humanSupportReason,
+        intent: intentAnalysis.intent,
+        confidence: intentAnalysis.confidence,
+        detectedReason: intentAnalysis.humanSupportReason
       });
-      return { needsEscalation: true, reason: 'user_request' };
+      return { needsEscalation: true, reason: 'ai_detected_intent' };
     }
 
-    // No escalation needed
+    // 🔑 KEYWORD FALLBACK: Check escalation keywords as backup
+    const keywords = instance.escalation_keywords || [];
+    
+    if (keywords && keywords.length > 0) {
+      const lowerMessage = message.toLowerCase();
+      const hasEscalationKeyword = keywords.some(keyword => 
+        lowerMessage.includes(keyword.toLowerCase()) || message.includes(keyword)
+      );
+      
+      if (hasEscalationKeyword) {
+        const matchedKeyword = keywords.find(k => lowerMessage.includes(k.toLowerCase()) || message.includes(k));
+        logger.info('Escalation needed: User requested human support via keyword', { 
+          phoneNumber,
+          matchedKeyword,
+          configuredKeywords: keywords
+        });
+        return { needsEscalation: true, reason: 'user_request' };
+      }
+    }
+
+    // No escalation needed from either method
+    logger.debug('No escalation needed', {
+      phoneNumber,
+      smartAnalysisResult: intentAnalysis?.needsHumanSupport || false,
+      keywordMatches: false,
+      configuredKeywords: keywords?.length || 0
+    });
+    
     return { needsEscalation: false, reason: '' };
   } catch (error) {
     logger.error('Error checking escalation need:', error);
@@ -496,96 +512,7 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
       }
     }
 
-    // ESCALATION CHECK: Check if the message needs escalation to human support
-    if (instanceData.escalation_enabled) {
-      logger.info('Checking if message needs escalation', {
-        message: combinedMessage.substring(0, 100),
-        phoneNumber: userPhone,
-        instanceId: instanceData.id
-      });
-
-      const escalationCheck = await checkEscalationNeeded(
-        combinedMessage,
-        userPhone,
-        instanceData.id,
-        conversationId
-      );
-
-      if (escalationCheck.needsEscalation) {
-        logger.info('Message needs escalation - bypassing AI and handling escalation', {
-          reason: escalationCheck.reason,
-          phoneNumber: userPhone
-        });
-
-        // Handle escalation and get escalation message
-        const escalationMessage = await handleEscalation(
-          userPhone,
-          instanceData.id,
-          escalationCheck.reason,
-          conversationHistory
-        );
-
-        // Store the escalation response
-        await storeMessageInConversation(conversationId, 'assistant', escalationMessage, `escalation_${Date.now()}`, supabaseAdmin);
-
-        // Send escalation message to user via WhatsApp
-        const sendMessageUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
-        const sendMessagePayload = {
-          number: userPhone,
-          text: escalationMessage  // Use same format as AI responses for consistency
-        };
-        
-        logger.info('Sending escalation message to customer', {
-          sendMessageUrl,
-          userPhone,
-          messagePreview: escalationMessage.substring(0, 50) + '...'
-        });
-
-        try {
-          const response = await fetch(sendMessageUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': Deno.env.get('EVOLUTION_API_KEY') || ''
-            },
-            body: JSON.stringify(sendMessagePayload)
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            logger.error('Failed to send escalation message to customer', {
-              status: response.status,
-              statusText: response.statusText,
-              errorText,
-              sendUrl: sendMessageUrl,
-              requestPayload: sendMessagePayload
-            });
-          } else {
-            const responseData = await response.json();
-            logger.info('✅ Escalation message sent successfully to customer', {
-              userPhone,
-              responseData,
-              messagePreview: escalationMessage.substring(0, 50) + '...'
-            });
-          }
-        } catch (error) {
-          logger.error('Error sending escalation message:', error);
-        }
-
-        // Mark buffer as processed and return
-        await markBufferAsProcessed(instanceName, userPhone);
-
-        logger.info('Escalation handled successfully', {
-          instanceName,
-          userPhone,
-          reason: escalationCheck.reason
-        });
-
-        return true; // Escalation handled successfully
-      }
-    } else {
-      logger.info('Escalation disabled, skipping escalation check for buffered messages');
-    }
+    // Note: Smart escalation check moved after intent analysis to avoid reference error
 
     // Get files for RAG
     const { data: fileMappings } = await supabaseAdmin
@@ -690,6 +617,104 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
           error: error.message
         });
       }
+    }
+
+    // 🧠 SMART ESCALATION CHECK: Check after intent analysis for intelligent detection
+    if (instanceData.escalation_enabled) {
+      logger.info('🔍 Checking if message needs escalation (with smart analysis)', {
+        message: combinedMessage.substring(0, 100),
+        phoneNumber: userPhone,
+        instanceId: instanceData.id,
+        hasIntentAnalysis: !!intentClassification,
+        needsHumanSupport: (intentClassification as any)?.needsHumanSupport || false
+      });
+
+      const escalationCheck = await checkEscalationNeeded(
+        combinedMessage,
+        userPhone,
+        instanceData.id,
+        conversationId,
+        undefined, // aiResponseConfidence - not needed here
+        intentClassification // Pass intent analysis for smart detection
+      );
+
+      if (escalationCheck.needsEscalation) {
+        logger.info('🚨 Message needs escalation - bypassing AI and handling escalation', {
+          reason: escalationCheck.reason,
+          phoneNumber: userPhone,
+          detectionMethod: escalationCheck.reason === 'ai_detected_intent' ? 'Smart AI Detection' : 'Keyword Matching'
+        });
+
+        // Handle escalation and get escalation message
+        const escalationMessage = await handleEscalation(
+          userPhone,
+          instanceData.id,
+          escalationCheck.reason,
+          conversationHistory
+        );
+
+        // Store the escalation response
+        await storeMessageInConversation(conversationId, 'assistant', escalationMessage, `escalation_${Date.now()}`, supabaseAdmin);
+
+        // Send escalation message to user via WhatsApp
+        const sendMessageUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+        const sendMessagePayload = {
+          number: userPhone,
+          text: escalationMessage
+        };
+        
+        logger.info('📤 Sending escalation message to customer', {
+          sendMessageUrl,
+          userPhone,
+          messagePreview: escalationMessage.substring(0, 50) + '...',
+          escalationReason: escalationCheck.reason
+        });
+
+        try {
+          const response = await fetch(sendMessageUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': Deno.env.get('EVOLUTION_API_KEY') || ''
+            },
+            body: JSON.stringify(sendMessagePayload)
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            logger.error('❌ Failed to send escalation message to customer', {
+              status: response.status,
+              statusText: response.statusText,
+              errorText,
+              sendUrl: sendMessageUrl,
+              requestPayload: sendMessagePayload
+            });
+          } else {
+            const responseData = await response.json();
+            logger.info('✅ Escalation message sent successfully to customer', {
+              userPhone,
+              responseData,
+              messagePreview: escalationMessage.substring(0, 50) + '...'
+            });
+          }
+        } catch (error) {
+          logger.error('❌ Error sending escalation message:', error);
+        }
+
+        // Mark buffer as processed and return
+        await markBufferAsProcessed(instanceName, userPhone);
+
+        logger.info('✅ Smart escalation handled successfully', {
+          instanceName,
+          userPhone,
+          reason: escalationCheck.reason,
+          detectionMethod: escalationCheck.reason === 'ai_detected_intent' ? 'Smart AI Detection' : 'Keyword Matching'
+        });
+
+        return true; // Escalation handled successfully
+      }
+    } else {
+      logger.info('Escalation disabled, skipping smart escalation check for buffered messages');
     }
 
     // Simple greeting detection for better context handling

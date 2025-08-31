@@ -324,6 +324,13 @@ Please handle this conversation as soon as possible.`
 })
 
 function getReasonInEnglish(reason: string): string {
-  // Simplified - only one reason now (keyword-based)
-  return 'Customer Requested Human Support (Keyword Match)'
+  // Enhanced - support both keyword and AI-detected escalation
+  switch (reason) {
+    case 'user_request':
+      return 'Customer Requested Human Support (Keyword Match)'
+    case 'ai_detected_intent':
+      return 'AI Detected Human Support Need (Smart Detection)'
+    default:
+      return 'Customer Requested Human Support'
+  }
 }

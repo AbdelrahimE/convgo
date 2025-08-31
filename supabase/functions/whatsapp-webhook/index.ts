@@ -53,18 +53,19 @@ async function isConversationEscalated(instanceId: string, phoneNumber: string):
   }
 }
 
-// Helper function to check if message needs escalation
+// Helper function to check if message needs escalation (enhanced with AI intent detection)
 async function checkEscalationNeeded(
   message: string, 
   phoneNumber: string,
   instanceId: string,
   conversationId: string,
-  aiResponseConfidence?: number
+  aiResponseConfidence?: number,
+  intentAnalysis?: any
 ): Promise<{ needsEscalation: boolean; reason: string }> {
   try {
-    const escalationTimer = measureTime('Webhook escalation check');
+    const escalationTimer = measureTime('Smart webhook escalation check');
     
-    // Simplified query - only get escalation keywords
+    // Get instance escalation configuration
     const { data: instance, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
       .select('escalation_enabled, escalation_keywords')
@@ -78,31 +79,46 @@ async function checkEscalationNeeded(
       return { needsEscalation: false, reason: '' };
     }
 
-    // Check for escalation keywords only - NO default keywords
-    const keywords = instance.escalation_keywords || [];
-    
-    // If no keywords are configured, no escalation
-    if (!keywords || keywords.length === 0) {
-      logger.info('No escalation keywords configured for instance', { instanceId, phoneNumber });
-      return { needsEscalation: false, reason: '' };
-    }
-    
-    const lowerMessage = message.toLowerCase();
-    const hasEscalationKeyword = keywords.some(keyword => 
-      lowerMessage.includes(keyword.toLowerCase())
-    );
-    
-    if (hasEscalationKeyword) {
-      const matchedKeyword = keywords.find(k => lowerMessage.includes(k.toLowerCase()));
-      logger.info('Escalation needed: User requested human support via keyword', { 
+    // 🧠 SMART ESCALATION: Check AI intent analysis first (if available)
+    if (intentAnalysis?.needsHumanSupport) {
+      logger.info('🚨 Smart escalation detected: AI identified human support need', { 
         phoneNumber,
-        matchedKeyword,
-        configuredKeywords: keywords
+        humanSupportReason: intentAnalysis.humanSupportReason,
+        intent: intentAnalysis.intent,
+        confidence: intentAnalysis.confidence,
+        detectedReason: intentAnalysis.humanSupportReason
       });
-      return { needsEscalation: true, reason: 'user_request' };
+      return { needsEscalation: true, reason: 'ai_detected_intent' };
     }
 
-    // No escalation needed
+    // 🔑 KEYWORD FALLBACK: Check escalation keywords as backup
+    const keywords = instance.escalation_keywords || [];
+    
+    if (keywords && keywords.length > 0) {
+      const lowerMessage = message.toLowerCase();
+      const hasEscalationKeyword = keywords.some(keyword => 
+        lowerMessage.includes(keyword.toLowerCase())
+      );
+      
+      if (hasEscalationKeyword) {
+        const matchedKeyword = keywords.find(k => lowerMessage.includes(k.toLowerCase()));
+        logger.info('Escalation needed: User requested human support via keyword', { 
+          phoneNumber,
+          matchedKeyword,
+          configuredKeywords: keywords
+        });
+        return { needsEscalation: true, reason: 'user_request' };
+      }
+    }
+
+    // No escalation needed from either method
+    logger.debug('No escalation needed', {
+      phoneNumber,
+      smartAnalysisResult: intentAnalysis?.needsHumanSupport || false,
+      keywordMatches: false,
+      configuredKeywords: keywords?.length || 0
+    });
+    
     return { needsEscalation: false, reason: '' };
   } catch (error) {
     logger.error('Error checking escalation need:', error);
