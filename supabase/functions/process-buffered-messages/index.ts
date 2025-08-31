@@ -13,6 +13,9 @@ import { storeMessageInConversation } from '../_shared/conversation-storage.ts';
 import { checkForDuplicateMessage } from '../_shared/duplicate-message-detector.ts';
 import { getRecentConversationHistory } from '../_shared/conversation-history.ts';
 
+// Import parallel processing utilities
+import { executeParallel, executeSafeParallel, measureTime } from '../_shared/parallel-queries.ts';
+
 // Helper function to check if conversation is currently escalated
 async function isConversationEscalated(instanceId: string, phoneNumber: string): Promise<boolean> {
   try {
@@ -40,12 +43,28 @@ async function checkEscalationNeeded(
   aiResponseConfidence?: number
 ): Promise<{ needsEscalation: boolean; reason: string }> {
   try {
-    // Get instance configuration
-    const { data: instance, error: instanceError } = await supabaseAdmin
-      .from('whatsapp_instances')
-      .select('escalation_enabled, escalation_threshold, escalation_keywords')
-      .eq('id', instanceId)
-      .single();
+    const escalationTimer = measureTime('Escalation check with parallel queries');
+    
+    // Execute instance config and AI interactions queries in parallel
+    const [instanceResult, interactionsResult] = await executeParallel([
+      supabaseAdmin
+        .from('whatsapp_instances')
+        .select('escalation_enabled, escalation_threshold, escalation_keywords')
+        .eq('id', instanceId)
+        .single(),
+      supabaseAdmin
+        .from('whatsapp_ai_interactions')
+        .select('metadata, created_at, user_message')
+        .eq('whatsapp_instance_id', instanceId)
+        .eq('user_phone', phoneNumber)
+        .order('created_at', { ascending: false })
+        .limit(5)
+    ], ['Instance Config', 'AI Interactions']);
+    
+    escalationTimer.end();
+    
+    const { data: instance, error: instanceError } = instanceResult;
+    const { data: interactions, error: interactionError } = interactionsResult;
 
     if (instanceError || !instance?.escalation_enabled) {
       return { needsEscalation: false, reason: '' };
@@ -71,14 +90,7 @@ async function checkEscalationNeeded(
     }
 
     // 2. Check AI confidence patterns using interaction history
-    // Get recent AI interactions to check for low confidence patterns
-    const { data: interactions, error: interactionError } = await supabaseAdmin
-      .from('whatsapp_ai_interactions')
-      .select('metadata, created_at, user_message')
-      .eq('whatsapp_instance_id', instanceId)
-      .eq('user_phone', phoneNumber)
-      .order('created_at', { ascending: false })
-      .limit(5);
+    // Process the AI interactions we fetched in parallel
 
     if (!interactionError && interactions && interactions.length > 0) {
       // Check for repeated questions (from user messages)
@@ -386,8 +398,38 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
       preview: combinedMessage.substring(0, 100) + '...'
     });
 
-    // Check for duplicates using the combined message
-    const isDuplicate = await checkForDuplicateMessage(conversationId, combinedMessage, supabaseAdmin);
+    // Phase 1: Execute initial checks and data fetching in parallel
+    const parallelTimer = measureTime('Initial parallel queries');
+    
+    // Prepare parallel queries
+    const duplicateCheckPromise = checkForDuplicateMessage(conversationId, combinedMessage, supabaseAdmin);
+    const conversationHistoryPromise = getRecentConversationHistory(conversationId, 800, supabaseAdmin);
+    
+    // Webhook config query (only if needed)
+    const latestMessageData = buffer.messages[buffer.messages.length - 1]?.messageData;
+    const webhookConfigPromise = !latestMessageData?.server_url
+      ? supabaseAdmin
+          .from('whatsapp_webhook_config')
+          .select('webhook_url')
+          .eq('whatsapp_instance_id', instanceData.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null });
+    
+    // Escalation check (only if enabled)
+    const escalationCheckPromise = instanceData.escalation_enabled
+      ? isConversationEscalated(instanceData.id, userPhone)
+      : Promise.resolve(false);
+    
+    // Execute all queries in parallel with safe defaults
+    const [isDuplicate, conversationHistory, webhookConfigResult, isEscalated] = await executeSafeParallel(
+      [duplicateCheckPromise, conversationHistoryPromise, webhookConfigPromise, escalationCheckPromise],
+      [false, [], { data: null, error: null }, false],
+      ['Duplicate Check', 'Conversation History', 'Webhook Config', 'Escalation Check']
+    );
+    
+    parallelTimer.end();
+    
+    // Process duplicate check result
     if (isDuplicate) {
       logger.info('Skipping: Combined message is duplicate');
       await markBufferAsProcessed(instanceName, userPhone);
@@ -397,8 +439,7 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
     // Store the combined user message
     await storeMessageInConversation(conversationId, 'user', combinedMessage, `buffered_${Date.now()}`, supabaseAdmin);
 
-    // Get recent conversation history with improved token management (moved here for escalation handling)
-    const conversationHistory = await getRecentConversationHistory(conversationId, 800, supabaseAdmin);
+    // Log conversation history info
     logger.info('Retrieved conversation history', { 
       messageCount: conversationHistory.length,
       estimatedTokens: conversationHistory.reduce((sum, msg) => sum + Math.ceil(msg.content.length * 0.25), 0)
@@ -406,16 +447,11 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
 
     // Determine instance base URL early (needed for escalation message sending)
     let instanceBaseUrl = '';
-    const latestMessageData = buffer.messages[buffer.messages.length - 1]?.messageData;
     
     if (latestMessageData?.server_url) {
       instanceBaseUrl = latestMessageData.server_url;
     } else {
-      const { data: webhookConfig } = await supabaseAdmin
-        .from('whatsapp_webhook_config')
-        .select('webhook_url')
-        .eq('whatsapp_instance_id', instanceData.id)
-        .maybeSingle();
+      const { data: webhookConfig } = webhookConfigResult;
         
       if (webhookConfig?.webhook_url) {
         const url = new URL(webhookConfig.webhook_url);
@@ -427,7 +463,6 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
 
     // Check if conversation is already escalated (before checking for new escalation)
     if (instanceData.escalation_enabled) {
-      const isEscalated = await isConversationEscalated(instanceData.id, userPhone);
       if (isEscalated) {
         logger.info('Conversation is already escalated, sending escalated conversation message', { 
           userPhone,
@@ -439,6 +474,7 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
           'Your conversation is under review by our support team. We will contact you soon.';
         
         // Check if we already sent this message recently (within last 5 minutes)
+        // Note: This query is kept sequential as it depends on escalatedMessage value
         const { data: recentMessages } = await supabaseAdmin
           .from('whatsapp_messages')
           .select('content, created_at')

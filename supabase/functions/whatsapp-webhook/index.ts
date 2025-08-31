@@ -11,6 +11,7 @@ import { processAudioMessage } from "../_shared/audio-processor.ts";
 import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
 import { handleMessageWithBuffering } from "../_shared/buffering-handler.ts";
 import { getRecentConversationHistory } from "../_shared/conversation-history.ts";
+import { executeParallel, executeSafeParallel, measureTime } from "../_shared/parallel-queries.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
@@ -61,12 +62,33 @@ async function checkEscalationNeeded(
   aiResponseConfidence?: number
 ): Promise<{ needsEscalation: boolean; reason: string }> {
   try {
-    // Get instance configuration
-    const { data: instance, error: instanceError } = await supabaseAdmin
+    const escalationTimer = measureTime('Webhook escalation check');
+    
+    // Prepare parallel queries for escalation checking
+    const instanceConfigPromise = supabaseAdmin
       .from('whatsapp_instances')
       .select('escalation_enabled, escalation_threshold, escalation_keywords')
       .eq('id', instanceId)
       .single();
+    
+    const interactionsPromise = supabaseAdmin
+      .from('whatsapp_ai_interactions')
+      .select('metadata, created_at, user_message')
+      .eq('whatsapp_instance_id', instanceId)
+      .eq('user_phone', phoneNumber)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    
+    // Execute queries in parallel
+    const [instanceResult, interactionsResult] = await executeParallel(
+      [instanceConfigPromise, interactionsPromise],
+      ['Instance Config', 'AI Interactions']
+    );
+    
+    escalationTimer.end();
+    
+    const { data: instance, error: instanceError } = instanceResult;
+    const { data: interactions, error: interactionError } = interactionsResult;
 
     if (instanceError || !instance?.escalation_enabled) {
       return { needsEscalation: false, reason: '' };
@@ -89,15 +111,7 @@ async function checkEscalationNeeded(
     }
 
     // 2. Check AI confidence patterns using interaction history
-    // Get recent AI interactions to check for low confidence patterns
-    const { data: interactions, error: interactionError } = await supabaseAdmin
-      .from('whatsapp_ai_interactions')
-      .select('metadata, created_at, user_message')
-      .eq('whatsapp_instance_id', instanceId)
-      .eq('user_phone', phoneNumber)
-      .order('created_at', { ascending: false })
-      .limit(5);
-
+    // Already fetched in parallel above
     if (!interactionError && interactions && interactions.length > 0) {
       // Check for repeated questions (from user messages)
       const userMessages = interactions.map(i => i.user_message);
