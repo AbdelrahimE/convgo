@@ -382,8 +382,20 @@ export default function EscalationManagement() {
   const activeConversationsCount = stats.active
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <h1 className="text-3xl font-semibold mb-6">Escalation Management</h1>
+    <div className="w-full min-h-screen bg-white dark:bg-slate-900">
+      {/* Header Section */}
+      <div className="bg-white dark:bg-slate-900">
+        <div className="px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex-1">
+            <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
+              Escalation Management
+            </h1>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6">
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
@@ -432,11 +444,11 @@ export default function EscalationManagement() {
 
           {/* Statistics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
+            <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-500">Active Conversations</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Active Conversations</p>
                     <p className="text-2xl font-bold text-red-600">{stats.active}</p>
                   </div>
                   <AlertTriangle className="h-8 w-8 text-red-200" />
@@ -444,11 +456,11 @@ export default function EscalationManagement() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-500">Resolved Today</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Resolved Today</p>
                     <p className="text-2xl font-bold text-green-600">{stats.resolved}</p>
                   </div>
                   <CheckCircle className="h-8 w-8 text-green-200" />
@@ -456,11 +468,11 @@ export default function EscalationManagement() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-500">Avg Resolution Time</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Avg Resolution Time</p>
                     <p className="text-2xl font-bold">{stats.avgResolutionTime} min</p>
                   </div>
                   <Clock className="h-8 w-8 text-blue-200" />
@@ -468,11 +480,11 @@ export default function EscalationManagement() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-500">Total Escalations</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Total Escalations</p>
                     <p className="text-2xl font-bold">{stats.total}</p>
                   </div>
                   <MessageCircle className="h-8 w-8 text-purple-200" />
@@ -482,7 +494,7 @@ export default function EscalationManagement() {
           </div>
 
           {/* Conversations List */}
-          <Card>
+          <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <CardHeader>
               <CardTitle>Escalated Conversations List</CardTitle>
               <CardDescription>
@@ -493,53 +505,53 @@ export default function EscalationManagement() {
               {loading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="mt-2 text-gray-500">Loading...</p>
+                  <p className="mt-2 text-slate-600 dark:text-slate-400">Loading...</p>
                 </div>
               ) : conversations.length === 0 ? (
                 <div className="text-center py-8">
-                  <AlertTriangle className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                  <p className="text-gray-500">No escalated conversations {filter !== 'all' ? `(${filter === 'active' ? 'active' : 'resolved'})` : ''}</p>
+                  <AlertTriangle className="h-12 w-12 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
+                  <p className="text-slate-600 dark:text-slate-400">No escalated conversations {filter !== 'all' ? `(${filter === 'active' ? 'active' : 'resolved'})` : ''}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {conversations.map((conv) => (
                     <div
                       key={conv.id}
-                      className={`border rounded-lg p-4 ${conv.resolved_at ? 'bg-gray-50' : 'bg-yellow-50'}`}
+                      className={`border border-slate-200 dark:border-slate-700 rounded-lg p-4 ${conv.resolved_at ? 'bg-slate-50 dark:bg-slate-800' : 'bg-yellow-50 dark:bg-yellow-900/20'}`}
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
-                            <Phone className="h-4 w-4 text-gray-500" />
-                            <span className="font-medium">{conv.whatsapp_number}</span>
+                            <Phone className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                            <span className="font-medium text-slate-900 dark:text-slate-100">{conv.whatsapp_number}</span>
                             {getReasonBadge(conv.reason)}
                             {conv.resolved_at && (
-                              <Badge className="bg-green-100 text-green-800">
+                              <Badge className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
                                 <CheckCircle className="h-3 w-3 mr-1" />
                                 Resolved
                               </Badge>
                             )}
                           </div>
                           
-                          <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
                             <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
+                              <Calendar className="h-3 w-3 text-slate-500 dark:text-slate-400" />
                               {format(new Date(conv.escalated_at), 'dd/MM/yyyy HH:mm')}
                             </div>
                             <div className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
+                              <Clock className="h-3 w-3 text-slate-500 dark:text-slate-400" />
                               {formatDistanceToNow(new Date(conv.escalated_at), { addSuffix: true })}
                             </div>
                             {conv.instance?.instance_name && (
                               <div className="flex items-center gap-1">
-                                <User className="h-3 w-3" />
+                                <User className="h-3 w-3 text-slate-500 dark:text-slate-400" />
                                 {conv.instance.instance_name}
                               </div>
                             )}
                           </div>
 
                           {conv.resolved_at && (
-                            <div className="mt-2 text-sm text-green-600">
+                            <div className="mt-2 text-sm text-green-600 dark:text-green-400">
                               Resolved at: {format(new Date(conv.resolved_at), 'dd/MM/yyyy HH:mm')}
                             </div>
                           )}
@@ -589,7 +601,7 @@ export default function EscalationManagement() {
         {/* Settings Tab Content */}
         <TabsContent value="settings" className="space-y-6 mt-6">
           {/* Support Team Numbers Section */}
-          <Card>
+          <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Phone className="h-5 w-5" />
@@ -614,23 +626,23 @@ export default function EscalationManagement() {
               </div>
 
               {supportNumbers.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Phone className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No support numbers added</p>
-                  <p className="text-sm mt-1">Add support team numbers to receive escalation notifications</p>
+                <div className="text-center py-8 text-slate-600 dark:text-slate-400">
+                  <Phone className="h-12 w-12 mx-auto mb-2 opacity-50 text-slate-400 dark:text-slate-500" />
+                  <p className="text-slate-600 dark:text-slate-400">No support numbers added</p>
+                  <p className="text-sm mt-1 text-slate-500 dark:text-slate-500">Add support team numbers to receive escalation notifications</p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {supportNumbers.map((number) => (
                     <div
                       key={number.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg"
                     >
                       <div className="flex items-center gap-3">
-                        <Phone className="h-4 w-4 text-gray-500" />
-                        <span className="font-medium">{number.whatsapp_number}</span>
+                        <Phone className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                        <span className="font-medium text-slate-900 dark:text-slate-100">{number.whatsapp_number}</span>
                         {!number.is_active && (
-                          <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                          <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded">
                             Disabled
                           </span>
                         )}
@@ -658,7 +670,7 @@ export default function EscalationManagement() {
 
           {/* Instance Settings Section */}
           {instances.length > 0 && (
-            <Card>
+            <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Cog className="h-5 w-5" />
@@ -690,7 +702,7 @@ export default function EscalationManagement() {
                   <>
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Enable Escalation System</Label>
+                        <Label className="text-base font-semibold">Enable Escalation System</Label>
                         <p className="text-sm text-gray-500">
                           Enable or disable automatic escalation to human support
                         </p>
@@ -703,10 +715,10 @@ export default function EscalationManagement() {
 
                     {/* Escalation Detection Methods */}
                     {currentInstance.escalation_enabled && (
-                      <div className="space-y-4 border rounded-lg p-4 bg-gray-50">
+                      <div className="space-y-4 border border-blue-300 rounded-lg p-4 bg-blue-50">
                         <div className="space-y-0.5">
-                          <Label className="text-base font-semibold">Escalation Detection Methods</Label>
-                          <p className="text-sm text-gray-500">
+                          <Label className="text-base text-blue-900 font-medium">Escalation Detection Methods</Label>
+                          <p className="text-sm text-blue-600">
                             Configure how escalations are detected
                           </p>
                         </div>
@@ -714,10 +726,10 @@ export default function EscalationManagement() {
                         {/* Smart AI Detection */}
                         <div className="flex items-center justify-between">
                           <div className="space-y-0.5">
-                            <Label className="flex items-center gap-2">
-                              🧠 Smart AI Detection
+                            <Label className="flex items-center gap-2 text-blue-900">
+                              Smart AI Detection
                             </Label>
-                            <p className="text-sm text-gray-500">
+                            <p className="text-sm text-blue-600">
                               Automatically detect when customers need human support using AI intent analysis
                             </p>
                           </div>
@@ -732,10 +744,10 @@ export default function EscalationManagement() {
                         {/* Keyword Detection */}
                         <div className="flex items-center justify-between">
                           <div className="space-y-0.5">
-                            <Label className="flex items-center gap-2">
-                              🔑 Keyword Detection
+                            <Label className="flex items-center gap-2 text-blue-900">
+                              Keyword Detection
                             </Label>
-                            <p className="text-sm text-gray-500">
+                            <p className="text-sm text-blue-600">
                               Trigger escalation based on specific keywords in customer messages
                             </p>
                           </div>
@@ -746,6 +758,24 @@ export default function EscalationManagement() {
                             }
                           />
                         </div>
+                      </div>
+                    )}
+
+                    {/* Escalation Keywords - only show if keyword escalation is enabled */}
+                    {currentInstance.keyword_escalation_enabled && (
+                      <div>
+                        <Label>Escalation Keywords</Label>
+                        <TagInput
+                          value={localSettings?.escalation_keywords || currentInstance.escalation_keywords || []}
+                          onChange={(keywords) => updateLocalSettings('escalation_keywords', keywords)}
+                          placeholder="Type a keyword and press Enter to add"
+                          className="mt-1"
+                          disabled={loading}
+                          maxTags={30}
+                        />
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                          Keywords that trigger immediate escalation to human support. Press Enter to add each keyword as a tag.
+                        </p>
                       </div>
                     )}
 
@@ -779,24 +809,6 @@ export default function EscalationManagement() {
                       </p>
                     </div>
 
-                    {/* Escalation Keywords - only show if keyword escalation is enabled */}
-                    {currentInstance.keyword_escalation_enabled && (
-                      <div>
-                        <Label>Escalation Keywords</Label>
-                        <TagInput
-                          value={localSettings?.escalation_keywords || currentInstance.escalation_keywords || []}
-                          onChange={(keywords) => updateLocalSettings('escalation_keywords', keywords)}
-                          placeholder="Type a keyword and press Enter to add"
-                          className="mt-1"
-                          disabled={loading}
-                          maxTags={30}
-                        />
-                        <p className="text-sm text-gray-500 mt-1">
-                          Keywords that trigger immediate escalation to human support. Press Enter to add each keyword as a tag.
-                        </p>
-                      </div>
-                    )}
-
                     {/* Save Settings Button */}
                     <div className="flex justify-end pt-0">
                       <Button 
@@ -814,6 +826,7 @@ export default function EscalationManagement() {
           )}
         </TabsContent>
       </Tabs>
+      </div>
 
       {/* Context Dialog */}
       <Dialog open={showContext} onOpenChange={setShowContext}>
@@ -826,26 +839,26 @@ export default function EscalationManagement() {
           </DialogHeader>
           {selectedConversation && (
             <div className="space-y-4">
-              <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <span className="text-gray-500">Number:</span>{' '}
-                    <span className="font-medium">{selectedConversation.whatsapp_number}</span>
+                    <span className="text-slate-600 dark:text-slate-400">Number:</span>{' '}
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{selectedConversation.whatsapp_number}</span>
                   </div>
                   <div>
-                    <span className="text-gray-500">Reason:</span>{' '}
+                    <span className="text-slate-600 dark:text-slate-400">Reason:</span>{' '}
                     {getReasonBadge(selectedConversation.reason)}
                   </div>
                   <div>
-                    <span className="text-gray-500">Escalated At:</span>{' '}
-                    <span className="font-medium">
+                    <span className="text-slate-600 dark:text-slate-400">Escalated At:</span>{' '}
+                    <span className="font-medium text-slate-900 dark:text-slate-100">
                       {format(new Date(selectedConversation.escalated_at), 'dd/MM/yyyy HH:mm')}
                     </span>
                   </div>
                   {selectedConversation.resolved_at && (
                     <div>
-                      <span className="text-gray-500">Resolved At:</span>{' '}
-                      <span className="font-medium">
+                      <span className="text-slate-600 dark:text-slate-400">Resolved At:</span>{' '}
+                      <span className="font-medium text-slate-900 dark:text-slate-100">
                         {format(new Date(selectedConversation.resolved_at), 'dd/MM/yyyy HH:mm')}
                       </span>
                     </div>
@@ -862,16 +875,16 @@ export default function EscalationManagement() {
                         key={idx}
                         className={`p-2 rounded-lg ${
                           msg.from === 'user'
-                            ? 'bg-blue-100 ml-auto max-w-[70%]'
-                            : 'bg-gray-100 mr-auto max-w-[70%]'
+                            ? 'bg-blue-100 dark:bg-blue-900 ml-auto max-w-[70%]'
+                            : 'bg-slate-100 dark:bg-slate-700 mr-auto max-w-[70%]'
                         }`}
                       >
-                        <p className="text-sm font-medium mb-1">
+                        <p className="text-sm font-medium mb-1 text-slate-900 dark:text-slate-100">
                           {msg.from === 'user' ? 'Customer' : 'AI Assistant'}
                         </p>
-                        <p className="text-sm">{msg.message}</p>
+                        <p className="text-sm text-slate-800 dark:text-slate-200">{msg.message}</p>
                         {msg.timestamp && (
-                          <p className="text-xs text-gray-500 mt-1">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                             {format(new Date(msg.timestamp), 'HH:mm')}
                           </p>
                         )}
@@ -879,7 +892,7 @@ export default function EscalationManagement() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-gray-500 text-center py-4">No conversation context available</p>
+                  <p className="text-slate-600 dark:text-slate-400 text-center py-4">No conversation context available</p>
                 )}
               </div>
 

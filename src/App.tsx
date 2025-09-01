@@ -77,7 +77,7 @@ function AppContent() {
                     }
                   />
                   <Route
-                    path="/files"
+                    path="/knowledge-base"
                     element={
                       <ProtectedRoute>
                         <FileManagement />

@@ -41,8 +41,8 @@ const navigation = [{
   href: '/whatsapp',
   icon: QrCode
 }, {
-  name: 'Files Management',
-  href: '/files',
+  name: 'AI Knowledge Base',
+  href: '/knowledge-base',
   icon: FolderCog
 }, {
   name: 'AI Assistant Settings',
@@ -53,7 +53,7 @@ const navigation = [{
   href: '/ai-personalities',
   icon: Users
 }, {
-  name: 'Escalation Management',
+  name: 'Smart Escalation',
   href: '/escalation-management',
   icon: Headset,
   badge: 'escalated'
