@@ -715,6 +715,8 @@ export type Database = {
           escalation_message: string
           escalated_conversation_message: string
           escalation_keywords: string[]
+          smart_escalation_enabled: boolean
+          keyword_escalation_enabled: boolean
         }
         Insert: {
           created_at?: string
@@ -730,6 +732,8 @@ export type Database = {
           escalation_message?: string
           escalated_conversation_message?: string
           escalation_keywords?: string[]
+          smart_escalation_enabled?: boolean
+          keyword_escalation_enabled?: boolean
         }
         Update: {
           created_at?: string
@@ -745,6 +749,8 @@ export type Database = {
           escalation_message?: string
           escalated_conversation_message?: string
           escalation_keywords?: string[]
+          smart_escalation_enabled?: boolean
+          keyword_escalation_enabled?: boolean
         }
         Relationships: []
       }

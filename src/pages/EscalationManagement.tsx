@@ -36,6 +36,8 @@ interface InstanceSettings {
   escalation_message: string
   escalated_conversation_message: string
   escalation_keywords: string[]
+  smart_escalation_enabled: boolean
+  keyword_escalation_enabled: boolean
 }
 
 // Interfaces for Conversations Tab
@@ -66,7 +68,7 @@ interface Stats {
 
 export default function EscalationManagement() {
   const { user } = useAuth()
-  const [activeTab, setActiveTab] = useState('conversations')
+  const [activeTab, setActiveTab] = useState('settings')
   const [loading, setLoading] = useState(false)
   
   // States for Settings Tab
@@ -145,7 +147,7 @@ export default function EscalationManagement() {
     try {
       const { data, error } = await supabase
         .from('whatsapp_instances')
-        .select('id, instance_name, escalation_enabled, escalation_message, escalated_conversation_message, escalation_keywords')
+        .select('id, instance_name, escalation_enabled, escalation_message, escalated_conversation_message, escalation_keywords, smart_escalation_enabled, keyword_escalation_enabled')
         .eq('user_id', user?.id)
 
       if (error) throw error
@@ -359,8 +361,14 @@ export default function EscalationManagement() {
   }
 
   const getReasonBadge = (reason: string) => {
-    // Simplified - only show user request (keywords)
-    return <Badge className="bg-blue-100 text-blue-800">Keyword Triggered</Badge>
+    switch (reason) {
+      case 'ai_detected_intent':
+        return <Badge className="bg-purple-100 text-purple-800">🧠 Smart AI Detection</Badge>
+      case 'user_request':
+        return <Badge className="bg-blue-100 text-blue-800">🔑 Keyword Triggered</Badge>
+      default:
+        return <Badge className="bg-gray-100 text-gray-800">Unknown Reason</Badge>
+    }
   }
 
   const openWhatsApp = (phoneNumber: string) => {
@@ -693,6 +701,53 @@ export default function EscalationManagement() {
                       />
                     </div>
 
+                    {/* Escalation Detection Methods */}
+                    {currentInstance.escalation_enabled && (
+                      <div className="space-y-4 border rounded-lg p-4 bg-gray-50">
+                        <div className="space-y-0.5">
+                          <Label className="text-base font-semibold">Escalation Detection Methods</Label>
+                          <p className="text-sm text-gray-500">
+                            Configure how escalations are detected
+                          </p>
+                        </div>
+                        
+                        {/* Smart AI Detection */}
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label className="flex items-center gap-2">
+                              🧠 Smart AI Detection
+                            </Label>
+                            <p className="text-sm text-gray-500">
+                              Automatically detect when customers need human support using AI intent analysis
+                            </p>
+                          </div>
+                          <Switch
+                            checked={currentInstance.smart_escalation_enabled}
+                            onCheckedChange={(checked) => 
+                              updateInstanceSettings('smart_escalation_enabled', checked)
+                            }
+                          />
+                        </div>
+                        
+                        {/* Keyword Detection */}
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label className="flex items-center gap-2">
+                              🔑 Keyword Detection
+                            </Label>
+                            <p className="text-sm text-gray-500">
+                              Trigger escalation based on specific keywords in customer messages
+                            </p>
+                          </div>
+                          <Switch
+                            checked={currentInstance.keyword_escalation_enabled}
+                            onCheckedChange={(checked) => 
+                              updateInstanceSettings('keyword_escalation_enabled', checked)
+                            }
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     <div>
                       <Label>Escalation Message</Label>
@@ -724,20 +779,23 @@ export default function EscalationManagement() {
                       </p>
                     </div>
 
-                    <div>
-                      <Label>Escalation Keywords</Label>
-                      <TagInput
-                        value={localSettings?.escalation_keywords || currentInstance.escalation_keywords || []}
-                        onChange={(keywords) => updateLocalSettings('escalation_keywords', keywords)}
-                        placeholder="Type a keyword and press Enter to add"
-                        className="mt-1"
-                        disabled={loading}
-                        maxTags={30}
-                      />
-                      <p className="text-sm text-gray-500 mt-1">
-                        Keywords that trigger immediate escalation to human support. Press Enter to add each keyword as a tag.
-                      </p>
-                    </div>
+                    {/* Escalation Keywords - only show if keyword escalation is enabled */}
+                    {currentInstance.keyword_escalation_enabled && (
+                      <div>
+                        <Label>Escalation Keywords</Label>
+                        <TagInput
+                          value={localSettings?.escalation_keywords || currentInstance.escalation_keywords || []}
+                          onChange={(keywords) => updateLocalSettings('escalation_keywords', keywords)}
+                          placeholder="Type a keyword and press Enter to add"
+                          className="mt-1"
+                          disabled={loading}
+                          maxTags={30}
+                        />
+                        <p className="text-sm text-gray-500 mt-1">
+                          Keywords that trigger immediate escalation to human support. Press Enter to add each keyword as a tag.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Save Settings Button */}
                     <div className="flex justify-end pt-0">
