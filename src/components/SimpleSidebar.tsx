@@ -27,7 +27,6 @@ import { LogoWithText } from "./Logo";
 import { ScrollArea } from "./ui/scroll-area";
 import logger from '@/utils/logger';
 import { useEffect, useImperativeHandle, useState, forwardRef } from 'react';
-import { Badge } from './ui/badge';
 export type SimpleSidebarHandle = {
   open: () => void;
   close: () => void;
@@ -218,12 +217,10 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
                   )} />
                   <span className="truncate">{item.name}</span>
                   {item.badge === 'escalated' && escalatedCount > 0 && (
-                    <Badge 
-                      variant="destructive" 
-                      className="ml-auto animate-pulse"
-                    >
-                      {escalatedCount}
-                    </Badge>
+                    <div className="relative ml-auto">
+                      <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                      <div className="absolute inset-0 w-3 h-3 bg-red-500 rounded-full animate-ping opacity-75" />
+                    </div>
                   )}
                   {isActive && (
                     <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-700" />

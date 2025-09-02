@@ -14,10 +14,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { 
-  Trash2, Plus, Phone, Cog, MessageCircle, AlertCircle, 
+  Trash2, Plus, Headset, Cog, MessageCircle, AlertCircle, 
   AlertTriangle, CheckCircle, Clock, User, Calendar, Eye, 
-  ExternalLink, 
-  Headset
+  ExternalLink
 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
@@ -375,11 +374,11 @@ export default function EscalationManagement() {
   const getReasonBadge = (reason: string) => {
     switch (reason) {
       case 'ai_detected_intent':
-        return <Badge className="bg-purple-100 hover:bg-purple-200 text-purple-800">Smart AI Detection</Badge>
+        return <Badge className="bg-purple-100 hover:bg-purple-200 text-purple-800 font-medium">Smart AI Detection</Badge>
       case 'user_request':
-        return <Badge className="bg-blue-100 hover:bg-blue-200 text-blue-800">Keyword Triggered</Badge>
+        return <Badge className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-medium">Keyword Triggered</Badge>
       default:
-        return <Badge className="bg-gray-100 hover:bg-gray-200 text-gray-800">Unknown Reason</Badge>
+        return <Badge className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium">Unknown Reason</Badge>
     }
   }
 
@@ -597,12 +596,12 @@ export default function EscalationManagement() {
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3 flex-1">
                           <div className="p-1 rounded-md bg-slate-100 dark:bg-slate-800">
-                            <Phone className="h-3 w-3 text-slate-600 dark:text-slate-400" />
+                            <Headset className="h-4 w-4 text-slate-600 dark:text-slate-400" />
                           </div>
                           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{conv.whatsapp_number}</span>
                           {getReasonBadge(conv.reason)}
                           {conv.resolved_at && (
-                            <Badge className="bg-green-100 hover:bg-green-200 dark:bg-green-900/50 dark:hover:bg-green-900 text-green-800 dark:text-green-200">
+                            <Badge className="bg-green-100 hover:bg-green-200 dark:bg-green-900/50 dark:hover:bg-green-900 text-green-800 dark:text-green-200 font-medium">
                               <CheckCircle className="h-3 w-3 mr-1" />
                               Resolved
                             </Badge>
@@ -611,18 +610,12 @@ export default function EscalationManagement() {
                           <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 ml-2">
                             <div className="flex items-center gap-1">
                               <Calendar className="h-3 w-3 text-slate-400 dark:text-slate-500" />
-                              <span className="font-medium">{format(new Date(conv.escalated_at), 'dd/MM/yyyy h:mm a')}</span>
+                              <span className="font-normal">{format(new Date(conv.escalated_at), 'dd/MM/yyyy h:mm a')}</span>
                             </div>
-                            {conv.instance?.instance_name && (
-                              <div className="flex items-center gap-1">
-                                <User className="h-3 w-3 text-slate-400 dark:text-slate-500" />
-                                <span className="font-medium">{conv.instance.instance_name}</span>
-                              </div>
-                            )}
                           </div>
 
                           {conv.resolved_at && (
-                            <div className="text-xs font-medium text-green-600 dark:text-green-400 ml-2">
+                            <div className="text-xs font-normal text-green-600 dark:text-green-400 ml-2">
                               Resolved: {format(new Date(conv.resolved_at), 'dd/MM/yyyy h:mm a')}
                             </div>
                           )}
@@ -679,7 +672,7 @@ export default function EscalationManagement() {
             <div className="p-4">
               <div className="mb-4">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <Phone className="h-5 w-5" />
+                  <Headset className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   Support Team Numbers
                 </h2>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
@@ -702,7 +695,7 @@ export default function EscalationManagement() {
 
               {supportNumbers.length === 0 ? (
                 <div className="text-center py-8 text-slate-600 dark:text-slate-400">
-                  <Phone className="h-12 w-12 mx-auto mb-2 opacity-50 text-slate-400 dark:text-slate-500" />
+                  <Headset className="h-12 w-12 mx-auto mb-2 opacity-50 text-slate-400 dark:text-slate-500" />
                   <p className="text-slate-600 dark:text-slate-400">No support numbers added</p>
                   <p className="text-sm mt-1 text-slate-500 dark:text-slate-500">Add support team numbers to receive escalation notifications</p>
                 </div>
@@ -711,13 +704,13 @@ export default function EscalationManagement() {
                   {supportNumbers.map((number) => (
                     <div
                       key={number.id}
-                      className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg"
+                      className="flex items-center justify-between p-2 py-1 bg-blue-50 dark:bg-blue-800 rounded-lg border border-blue-200 dark:border-blue-800"
                     >
-                      <div className="flex items-center gap-3">
-                        <Phone className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                        <span className="font-medium text-slate-900 dark:text-slate-100">{number.whatsapp_number}</span>
+                      <div className="flex items-center gap-2">
+                        <User className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+                        <span className="font-medium text-blue-900 dark:text-blue-100">{number.whatsapp_number}</span>
                         {!number.is_active && (
-                          <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded">
+                          <span className="text-xs font-medium bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded-lg">
                             Disabled
                           </span>
                         )}
@@ -731,7 +724,7 @@ export default function EscalationManagement() {
                           variant="ghost"
                           size="sm"
                           onClick={() => deleteNumber(number.id)}
-                          className="text-red-500 hover:text-red-700"
+                          className="text-red-500 hover:text-red-700 hover:bg-red-100"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -750,7 +743,7 @@ export default function EscalationManagement() {
               <div className="p-4">
                 <div className="mb-4">
                   <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <Cog className="h-5 w-5" />
+                    <Cog className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                     Escalation Settings
                   </h2>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
@@ -901,22 +894,22 @@ export default function EscalationManagement() {
               <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <span className="text-slate-600 dark:text-slate-400">Number:</span>{' '}
+                    <span className="text-slate-600 font-medium dark:text-slate-400">Number:</span>{' '}
                     <span className="font-medium text-slate-900 dark:text-slate-100">{selectedConversation.whatsapp_number}</span>
                   </div>
                   <div>
-                    <span className="text-slate-600 dark:text-slate-400">Reason:</span>{' '}
+                    <span className="text-slate-600 font-medium dark:text-slate-400">Reason:</span>{' '}
                     {getReasonBadge(selectedConversation.reason)}
                   </div>
                   <div>
-                    <span className="text-slate-600 dark:text-slate-400">Escalated At:</span>{' '}
+                    <span className="text-slate-600 font-medium dark:text-slate-400">Escalated At:</span>{' '}
                     <span className="font-medium text-slate-900 dark:text-slate-100">
                       {format(new Date(selectedConversation.escalated_at), 'dd/MM/yyyy h:mm a')}
                     </span>
                   </div>
                   {selectedConversation.resolved_at && (
                     <div>
-                      <span className="text-slate-600 dark:text-slate-400">Resolved At:</span>{' '}
+                      <span className="text-slate-600 font-medium dark:text-slate-400">Resolved At:</span>{' '}
                       <span className="font-medium text-slate-900 dark:text-slate-100">
                         {format(new Date(selectedConversation.resolved_at), 'dd/MM/yyyy h:mm a')}
                       </span>
