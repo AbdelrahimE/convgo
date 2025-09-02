@@ -363,11 +363,11 @@ export default function EscalationManagement() {
   const getReasonBadge = (reason: string) => {
     switch (reason) {
       case 'ai_detected_intent':
-        return <Badge className="bg-purple-100 text-purple-800">🧠 Smart AI Detection</Badge>
+        return <Badge className="bg-purple-100 hover:bg-purple-200 text-purple-800">Smart AI Detection</Badge>
       case 'user_request':
-        return <Badge className="bg-blue-100 text-blue-800">🔑 Keyword Triggered</Badge>
+        return <Badge className="bg-blue-100 hover:bg-blue-200 text-blue-800">Keyword Triggered</Badge>
       default:
-        return <Badge className="bg-gray-100 text-gray-800">Unknown Reason</Badge>
+        return <Badge className="bg-gray-100 hover:bg-gray-200 text-gray-800">Unknown Reason</Badge>
     }
   }
 
@@ -390,6 +390,9 @@ export default function EscalationManagement() {
             <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
               Escalation Management
             </h1>
+            <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
+              Manage escalated conversations and resolve them when needed
+            </p>
           </div>
         </div>
       </div>
@@ -398,19 +401,14 @@ export default function EscalationManagement() {
       <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6">
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-        <TabsTrigger value="settings">
+        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+          <TabsTrigger value="settings">
             <Cog className="h-5 w-5 mr-2" />
             Settings
           </TabsTrigger>
-          <TabsTrigger value="conversations" className="relative">
+          <TabsTrigger value="conversations">
             <MessageCircle className="h-5 w-5 mr-2"/>
             Conversations
-            {activeConversationsCount > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {activeConversationsCount}
-              </Badge>
-            )}
           </TabsTrigger>
         </TabsList>
 
@@ -443,51 +441,75 @@ export default function EscalationManagement() {
           </div>
 
           {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Active Conversations Card */}
+            <Card className="rounded-lg bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/50 dark:to-red-900/30 border-red-200/50 dark:border-red-800/50 transition-colors duration-200">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">Active Conversations</p>
-                    <p className="text-2xl font-bold text-red-600">{stats.active}</p>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-red-900 dark:text-red-100 mb-2">Active Conversations</h3>
+                    <div className="space-y-1">
+                      <p className="text-2xl font-semibold text-red-700 dark:text-red-300">{stats.active}</p>
+                      <p className="text-xs font-normal text-red-600/70 dark:text-red-400/70">Require Attention</p>
+                    </div>
                   </div>
-                  <AlertTriangle className="h-8 w-8 text-red-200" />
+                  <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/50">
+                    <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardContent className="pt-6">
+            {/* Resolved Today Card */}
+            <Card className="rounded-lg bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/50 dark:to-green-900/30 border-green-200/50 dark:border-green-800/50 transition-colors duration-200">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">Resolved Today</p>
-                    <p className="text-2xl font-bold text-green-600">{stats.resolved}</p>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-green-900 dark:text-green-100 mb-2">Resolved Today</h3>
+                    <div className="space-y-1">
+                      <p className="text-2xl font-semibold text-green-700 dark:text-green-300">{stats.resolved}</p>
+                      <p className="text-xs font-normal text-green-600/70 dark:text-green-400/70">Successfully Handled</p>
+                    </div>
                   </div>
-                  <CheckCircle className="h-8 w-8 text-green-200" />
+                  <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/50">
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardContent className="pt-6">
+            {/* Average Resolution Time Card */}
+            <Card className="rounded-lg bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/50 dark:to-blue-900/30 border-blue-200/50 dark:border-blue-800/50 transition-colors duration-200">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">Avg Resolution Time</p>
-                    <p className="text-2xl font-bold">{stats.avgResolutionTime} min</p>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">Avg Resolution Time</h3>
+                    <div className="space-y-1">
+                      <p className="text-2xl font-semibold text-blue-700 dark:text-blue-300">{stats.avgResolutionTime}<span className="text-lg font-medium ml-1">min</span></p>
+                      <p className="text-xs font-normal text-blue-600/70 dark:text-blue-400/70">Response Efficiency</p>
+                    </div>
                   </div>
-                  <Clock className="h-8 w-8 text-blue-200" />
+                  <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+                    <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardContent className="pt-6">
+            {/* Total Escalations Card */}
+            <Card className="rounded-lg bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/50 dark:to-purple-900/30 border-purple-200/50 dark:border-purple-800/50 transition-colors duration-200">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">Total Escalations</p>
-                    <p className="text-2xl font-bold">{stats.total}</p>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-purple-900 dark:text-purple-100 mb-2">Total Escalations</h3>
+                    <div className="space-y-1">
+                      <p className="text-2xl font-semibold text-purple-700 dark:text-purple-300">{stats.total}</p>
+                      <p className="text-xs font-normal text-purple-600/70 dark:text-purple-400/70">All Time Count</p>
+                    </div>
                   </div>
-                  <MessageCircle className="h-8 w-8 text-purple-200" />
+                  <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/50">
+                    <MessageCircle className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -517,74 +539,78 @@ export default function EscalationManagement() {
                   {conversations.map((conv) => (
                     <div
                       key={conv.id}
-                      className={`border border-slate-200 dark:border-slate-700 rounded-lg p-4 ${conv.resolved_at ? 'bg-slate-50 dark:bg-slate-800' : 'bg-yellow-50 dark:bg-yellow-900/20'}`}
+                      className="border border-slate-200 dark:border-slate-700 rounded-lg p-5 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600"
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <Phone className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                            <span className="font-medium text-slate-900 dark:text-slate-100">{conv.whatsapp_number}</span>
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="p-1.5 rounded-md bg-slate-100 dark:bg-slate-800">
+                              <Phone className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                            </div>
+                            <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">{conv.whatsapp_number}</span>
                             {getReasonBadge(conv.reason)}
                             {conv.resolved_at && (
-                              <Badge className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                              <Badge className="bg-green-100 hover:bg-green-200 dark:bg-green-900/50 dark:hover:bg-green-900 text-green-800 dark:text-green-200">
                                 <CheckCircle className="h-3 w-3 mr-1" />
                                 Resolved
                               </Badge>
                             )}
                           </div>
                           
-                          <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3 text-slate-500 dark:text-slate-400" />
-                              {format(new Date(conv.escalated_at), 'dd/MM/yyyy HH:mm')}
+                          <div className="flex items-center gap-6 text-sm text-slate-500 dark:text-slate-400">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                              <span className="font-medium">{format(new Date(conv.escalated_at), 'dd/MM/yyyy HH:mm')}</span>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-3 w-3 text-slate-500 dark:text-slate-400" />
-                              {formatDistanceToNow(new Date(conv.escalated_at), { addSuffix: true })}
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                              <span className="font-medium">{formatDistanceToNow(new Date(conv.escalated_at), { addSuffix: true })}</span>
                             </div>
                             {conv.instance?.instance_name && (
-                              <div className="flex items-center gap-1">
-                                <User className="h-3 w-3 text-slate-500 dark:text-slate-400" />
-                                {conv.instance.instance_name}
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                                <span className="font-medium">{conv.instance.instance_name}</span>
                               </div>
                             )}
                           </div>
 
                           {conv.resolved_at && (
-                            <div className="mt-2 text-sm text-green-600 dark:text-green-400">
+                            <div className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">
                               Resolved at: {format(new Date(conv.resolved_at), 'dd/MM/yyyy HH:mm')}
                             </div>
                           )}
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 ml-4">
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="ghost"
                             onClick={() => {
                               setSelectedConversation(conv)
                               setShowContext(true)
                             }}
+                            className="h-9 w-9 p-0 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            title="View Context"
                           >
-                            <Eye className="h-4 w-4 mr-1" />
-                            View Context
+                            <Eye className="h-4 w-4 text-slate-600 dark:text-slate-400" />
                           </Button>
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="ghost"
                             onClick={() => openWhatsApp(conv.whatsapp_number)}
-                            className="text-green-600 hover:text-green-700"
+                            className="h-9 w-9 p-0 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            title="Open WhatsApp"
                           >
-                            <ExternalLink className="h-4 w-4 mr-1" />
-                            Open WhatsApp
+                            <ExternalLink className="h-4 w-4 text-green-600 dark:text-green-400" />
                           </Button>
                           {!conv.resolved_at && (
                             <Button
                               size="sm"
                               onClick={() => resolveEscalation(conv.id, conv.whatsapp_number, conv.instance_id)}
                               disabled={loading}
+                              className="h-9 px-4"
                             >
-                              <CheckCircle className="h-4 w-4 mr-1" />
+                              <CheckCircle className="h-4 w-4 mr-2" />
                               Mark Resolved
                             </Button>
                           )}

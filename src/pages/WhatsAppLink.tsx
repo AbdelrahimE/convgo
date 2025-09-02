@@ -943,7 +943,7 @@ const WhatsAppLink = () => {
               </p>
             </div>
             <div className="flex-shrink-0">
-              <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold rounded-lg">
+              <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-900 text-white border-0 font-semibold rounded-lg">
                 <Plus className="mr-2 h-4 w-4" />
                 New Instance
               </Button>
