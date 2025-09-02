@@ -899,7 +899,7 @@ const WhatsAppLink = () => {
           </div>
           
           {/* Loading text with animation */}
-          <div className="text-center space-y-2">
+          <div className="loading-text-center space-y-2">
             <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
               Loading WhatsApp Instances
             </p>
@@ -944,7 +944,7 @@ const WhatsAppLink = () => {
               </p>
             </div>
             <div className="flex-shrink-0">
-              <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white border-0 font-semibold rounded-lg">
+              <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white border-0 font-medium rounded-lg">
                 <CirclePlus className="h-4 w-4" />
                 New Instance
               </Button>

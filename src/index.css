@@ -55,7 +55,19 @@
   /* Ensure regular text elements stay LTR even with Arabic content */
   p, h1, h2, h3, h4, h5, h6, span, div, li, td, th, label {
     direction: ltr !important;
-    text-align: left !important;
+  }
+  
+  /* Apply left alignment only when not explicitly centered */
+  :not(.text-center):not(.flex):not([style*="text-align"]) p:not([style*="text-align"]),
+  :not(.text-center):not(.flex):not([style*="text-align"]) h1:not([style*="text-align"]),
+  :not(.text-center):not(.flex):not([style*="text-align"]) h2:not([style*="text-align"]),
+  :not(.text-center):not(.flex):not([style*="text-align"]) h3:not([style*="text-align"]),
+  :not(.text-center):not(.flex):not([style*="text-align"]) h4:not([style*="text-align"]),
+  :not(.text-center):not(.flex):not([style*="text-align"]) h5:not([style*="text-align"]),
+  :not(.text-center):not(.flex):not([style*="text-align"]) h6:not([style*="text-align"]),
+  :not(.text-center):not(.flex):not([style*="text-align"]) span:not([style*="text-align"]),
+  :not(.text-center):not(.flex):not([style*="text-align"]) label:not([style*="text-align"]) {
+    text-align: left;
   }
   
   /* Override for input fields only */
@@ -318,5 +330,19 @@
   /* Hide Radix ScrollArea scrollbar in sidebar */
   .sidebar-scroll-area [data-radix-scroll-area-scrollbar] {
     display: none !important;
+  }
+  
+  /* Loading State Text Center Override */
+  .loading-text-center,
+  .loading-text-center p,
+  .loading-text-center h1,
+  .loading-text-center h2,
+  .loading-text-center h3,
+  .loading-text-center h4,
+  .loading-text-center h5,
+  .loading-text-center h6,
+  .loading-text-center span {
+    text-align: center !important;
+    direction: ltr !important;
   }
 }

@@ -426,9 +426,9 @@ const WebhookMonitor = () => {
             </CardHeader>
             <CardContent>
               {isLoadingAnalytics ? (
-                <div className="flex justify-center items-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin" />
-                  <span className="ml-2">جاري تحميل التحليلات...</span>
+                <div className="loading-text-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                  <span className="text-sm">جاري تحميل التحليلات...</span>
                 </div>
               ) : aiInteractions.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">

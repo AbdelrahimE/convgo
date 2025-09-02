@@ -47,7 +47,7 @@ export default function FileManagement() {
           </div>
           
           {/* Loading text with animation */}
-          <div className="text-center space-y-2">
+          <div className="loading-text-center space-y-2">
             <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
               Loading File Management
             </p>

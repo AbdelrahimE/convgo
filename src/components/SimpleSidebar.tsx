@@ -6,7 +6,7 @@ import { Link, useLocation } from "react-router-dom";
 import { 
   FolderCog, 
   LogOut, 
-  QrCode, 
+  Link2, 
   BrainCog, 
   AlignJustify, 
   UserCog, 
@@ -37,7 +37,7 @@ const FULL_NAME_MAX_LENGTH = 25;
 const navigation = [{
   name: 'WhatsApp Numbers',
   href: '/whatsapp',
-  icon: QrCode
+  icon: Link2
 }, {
   name: 'AI Knowledge Base',
   href: '/knowledge-base',
