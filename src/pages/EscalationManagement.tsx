@@ -583,8 +583,8 @@ export default function EscalationManagement() {
                 </div>
               ) : conversations.length === 0 ? (
                 <div className="text-center py-8">
-                  <AlertTriangle className="h-12 w-12 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
-                  <p className="text-slate-600 dark:text-slate-400">No escalated conversations {filter !== 'all' ? `(${filter === 'active' ? 'active' : 'resolved'})` : ''}</p>
+                  <AlertTriangle className="h-12 w-12 mx-auto mb-2 text-slate-500 dark:text-slate-600" />
+                  <p className="text-slate-600 dark:text-slate-400">No Escalated Conversations {filter !== 'all' ? `(${filter === 'active' ? 'active' : 'resolved'})` : ''}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -739,7 +739,7 @@ export default function EscalationManagement() {
                     >
                       <div className="flex items-center gap-2">
                         <User className="h-5 w-5 text-blue-500 dark:text-blue-400" />
-                        <span className="font-medium text-blue-900 dark:text-blue-100">{number.whatsapp_number}</span>
+                        <span className="text-base font-semibold text-blue-900 dark:text-blue-100">{number.whatsapp_number}</span>
                         {!number.is_active && (
                           <span className="text-xs font-medium bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded-lg">
                             Disabled
