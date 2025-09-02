@@ -1,0 +1,127 @@
+import React from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ExternalLink, CheckCircle } from 'lucide-react';
+import { format } from 'date-fns';
+import { EscalatedConversation } from '@/hooks/use-escalation-queries';
+
+interface ConversationDialogProps {
+  conversation: EscalatedConversation | null;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  getReasonBadge: (reason: string) => React.ReactNode;
+  onResolve: (conversationId: string, whatsappNumber: string, instanceId: string) => void;
+  loading?: boolean;
+}
+
+const openWhatsApp = (phoneNumber: string) => {
+  const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+  window.open(`https://wa.me/${cleanNumber}`, '_blank');
+};
+
+export const ConversationDialog = React.memo(({
+  conversation,
+  isOpen,
+  onOpenChange,
+  getReasonBadge,
+  onResolve,
+  loading = false
+}: ConversationDialogProps) => {
+  if (!conversation) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader className="py-4 px-0">
+          <DialogTitle className="text-left">Conversation Context</DialogTitle>
+          <DialogDescription className="text-left">
+            Last 10 messages before escalation
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <span className="text-slate-900 font-medium dark:text-slate-400">Number:</span>{' '}
+                <span className="font-medium text-slate-900 dark:text-slate-100">{conversation.whatsapp_number}</span>
+              </div>
+              <div>
+                <span className="text-slate-900 font-medium dark:text-slate-400">Reason:</span>{' '}
+                {getReasonBadge(conversation.reason)}
+              </div>
+              <div>
+                <span className="text-slate-900 font-medium dark:text-slate-400">Escalated At:</span>{' '}
+                <span className="font-medium text-slate-900 dark:text-slate-100">
+                  {format(new Date(conversation.escalated_at), 'dd/MM/yyyy h:mm a')}
+                </span>
+              </div>
+              {conversation.resolved_at && (
+                <div>
+                  <span className="text-slate-900 font-medium dark:text-slate-400">Resolved At:</span>{' '}
+                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                    {format(new Date(conversation.resolved_at), 'dd/MM/yyyy h:mm a')}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h4 className="font-semibold">Conversation:</h4>
+            {conversation.conversation_context && conversation.conversation_context.length > 0 ? (
+              <div className="space-y-2 max-h-96 overflow-y-auto border rounded-lg p-4">
+                {conversation.conversation_context.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-2 rounded-lg ${
+                      msg.role === 'user'
+                        ? 'bg-blue-100 dark:bg-blue-900 ml-auto max-w-[70%]'
+                        : 'bg-slate-100 dark:bg-slate-700 mr-auto max-w-[70%]'
+                    }`}
+                  >
+                    <p className="text-sm font-medium mb-1 text-slate-900 dark:text-slate-100">
+                      {msg.role === 'user' ? 'Customer' : 'AI Assistant'}
+                    </p>
+                    <p className="text-sm text-slate-800 dark:text-slate-200">{msg.content}</p>
+                    {msg.timestamp && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {format(new Date(msg.timestamp), 'HH:mm')}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-600 dark:text-slate-400 text-center py-4">No conversation context available</p>
+            )}
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => openWhatsApp(conversation.whatsapp_number)}
+            >
+              <ExternalLink className="h-4 w-4 mr-1" />
+              Open in WhatsApp
+            </Button>
+            {!conversation.resolved_at && (
+              <Button
+                onClick={() => onResolve(
+                  conversation.id,
+                  conversation.whatsapp_number,
+                  conversation.instance_id
+                )}
+                disabled={loading}
+              >
+                <CheckCircle className="h-4 w-4 mr-1" />
+                Mark Resolved
+              </Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+});
