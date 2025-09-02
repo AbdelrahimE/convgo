@@ -49,8 +49,8 @@ interface EscalatedConversation {
   escalated_at: string
   reason: string
   conversation_context: Array<{
-    from: string
-    message: string
+    role: string
+    content: string
     timestamp?: string
   }>
   resolved_at: string | null
@@ -472,21 +472,21 @@ export default function EscalationManagement() {
                 onClick={() => setFilter('active')}
                 size="sm"
               >
-                Active ({stats.active})
+                Active
               </Button>
               <Button
                 variant={filter === 'resolved' ? 'default' : 'outline'}
                 onClick={() => setFilter('resolved')}
                 size="sm"
               >
-                Resolved ({stats.resolved})
+                Resolved
               </Button>
               <Button
                 variant={filter === 'all' ? 'default' : 'outline'}
                 onClick={() => setFilter('all')}
                 size="sm"
               >
-                All ({stats.total})
+                All
               </Button>
             </div>
           </div>
@@ -593,67 +593,98 @@ export default function EscalationManagement() {
                       key={conv.id}
                       className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600"
                     >
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="p-1 rounded-md bg-slate-100 dark:bg-slate-800">
-                            <Headset className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-                          </div>
-                          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{conv.whatsapp_number}</span>
-                          {getReasonBadge(conv.reason)}
-                          {conv.resolved_at && (
-                            <Badge className="bg-green-100 hover:bg-green-200 dark:bg-green-900/50 dark:hover:bg-green-900 text-green-800 dark:text-green-200 font-medium">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Resolved
-                            </Badge>
-                          )}
-                          
-                          <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 ml-2">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3 text-slate-400 dark:text-slate-500" />
-                              <span className="font-normal">{format(new Date(conv.escalated_at), 'dd/MM/yyyy h:mm a')}</span>
+                      {/* Mobile and Desktop Layout */}
+                      <div className="space-y-3">
+                        {/* First Row: Icon, Number, Badges, and Actions (Desktop) / Just Icon, Number, and Actions (Mobile) */}
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="p-1 rounded-md bg-slate-100 dark:bg-slate-800 flex-shrink-0">
+                              <Headset className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                            </div>
+                            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                              {conv.whatsapp_number}
+                            </span>
+                            
+                            {/* Show badges on larger screens only */}
+                            <div className="hidden md:flex items-center gap-2">
+                              {getReasonBadge(conv.reason)}
+                              {conv.resolved_at && (
+                                <Badge className="bg-green-100 hover:bg-green-200 dark:bg-green-900/50 dark:hover:bg-green-900 text-green-800 dark:text-green-200 font-medium">
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Resolved
+                                </Badge>
+                              )}
                             </div>
                           </div>
 
-                          {conv.resolved_at && (
-                            <div className="text-xs font-normal text-green-600 dark:text-green-400 ml-2">
-                              Resolved: {format(new Date(conv.resolved_at), 'dd/MM/yyyy h:mm a')}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex gap-1 ml-4">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setSelectedConversation(conv)
-                              setShowContext(true)
-                            }}
-                            className="h-7 w-7 p-0 hover:bg-slate-100 dark:hover:bg-slate-800"
-                            title="View Context"
-                          >
-                            <Eye className="h-3 w-3 text-slate-600 dark:text-slate-400" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => openWhatsApp(conv.whatsapp_number)}
-                            className="h-7 w-7 p-0 hover:bg-green-50 dark:hover:bg-green-900/20"
-                            title="Open WhatsApp"
-                          >
-                            <ExternalLink className="h-3 w-3 text-green-600 dark:text-green-400" />
-                          </Button>
-                          {!conv.resolved_at && (
+                          {/* Action buttons - always visible */}
+                          <div className="flex gap-1 flex-shrink-0">
                             <Button
                               size="sm"
-                              onClick={() => resolveEscalation(conv.id, conv.whatsapp_number, conv.instance_id)}
-                              disabled={loading}
-                              className="h-7 px-3 text-xs"
+                              variant="ghost"
+                              onClick={() => {
+                                setSelectedConversation(conv)
+                                setShowContext(true)
+                              }}
+                              className="h-7 w-7 p-0 hover:bg-slate-100 dark:hover:bg-slate-800"
+                              title="View Context"
                             >
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Resolve
+                              <Eye className="h-3 w-3 text-slate-600 dark:text-slate-400" />
                             </Button>
-                          )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openWhatsApp(conv.whatsapp_number)}
+                              className="h-7 w-7 p-0 hover:bg-green-50 dark:hover:bg-green-900/20"
+                              title="Open WhatsApp"
+                            >
+                              <ExternalLink className="h-3 w-3 text-green-600 dark:text-green-400" />
+                            </Button>
+                            {!conv.resolved_at && (
+                              <Button
+                                size="sm"
+                                onClick={() => resolveEscalation(conv.id, conv.whatsapp_number, conv.instance_id)}
+                                disabled={loading}
+                                className="h-7 px-2 text-xs"
+                              >
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                <span className="hidden sm:inline">Resolve</span>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Second Row: Badges and Date Info (Mobile) / Just Date Info (Desktop) */}
+                        <div className="space-y-2">
+                          {/* Show badges on mobile only */}
+                          <div className="flex flex-wrap gap-2 md:hidden">
+                            {getReasonBadge(conv.reason)}
+                            {conv.resolved_at && (
+                              <Badge className="bg-green-100 hover:bg-green-200 dark:bg-green-900/50 dark:hover:bg-green-900 text-green-800 dark:text-green-200 font-medium">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Resolved
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Date information */}
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3 text-slate-400 dark:text-slate-500" />
+                              <span className="font-normal">
+                                Escalated: {format(new Date(conv.escalated_at), 'dd/MM/yyyy h:mm a')}
+                              </span>
+                            </div>
+
+                            {conv.resolved_at && (
+                              <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                                <CheckCircle className="h-3 w-3" />
+                                <span className="font-normal">
+                                  Resolved: {format(new Date(conv.resolved_at), 'dd/MM/yyyy h:mm a')}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -883,33 +914,33 @@ export default function EscalationManagement() {
       {/* Context Dialog */}
       <Dialog open={showContext} onOpenChange={setShowContext}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Conversation Context</DialogTitle>
-            <DialogDescription>
+          <DialogHeader className="py-4 px-0">
+            <DialogTitle className="text-left">Conversation Context</DialogTitle>
+            <DialogDescription className="text-left">
               Last 10 messages before escalation
             </DialogDescription>
           </DialogHeader>
           {selectedConversation && (
             <div className="space-y-4">
-              <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg">
+              <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <span className="text-slate-600 font-medium dark:text-slate-400">Number:</span>{' '}
+                    <span className="text-slate-900 font-medium dark:text-slate-400">Number:</span>{' '}
                     <span className="font-medium text-slate-900 dark:text-slate-100">{selectedConversation.whatsapp_number}</span>
                   </div>
                   <div>
-                    <span className="text-slate-600 font-medium dark:text-slate-400">Reason:</span>{' '}
+                    <span className="text-slate-900 font-medium dark:text-slate-400">Reason:</span>{' '}
                     {getReasonBadge(selectedConversation.reason)}
                   </div>
                   <div>
-                    <span className="text-slate-600 font-medium dark:text-slate-400">Escalated At:</span>{' '}
+                    <span className="text-slate-900 font-medium dark:text-slate-400">Escalated At:</span>{' '}
                     <span className="font-medium text-slate-900 dark:text-slate-100">
                       {format(new Date(selectedConversation.escalated_at), 'dd/MM/yyyy h:mm a')}
                     </span>
                   </div>
                   {selectedConversation.resolved_at && (
                     <div>
-                      <span className="text-slate-600 font-medium dark:text-slate-400">Resolved At:</span>{' '}
+                      <span className="text-slate-900 font-medium dark:text-slate-400">Resolved At:</span>{' '}
                       <span className="font-medium text-slate-900 dark:text-slate-100">
                         {format(new Date(selectedConversation.resolved_at), 'dd/MM/yyyy h:mm a')}
                       </span>
@@ -926,15 +957,15 @@ export default function EscalationManagement() {
                       <div
                         key={idx}
                         className={`p-2 rounded-lg ${
-                          msg.from === 'user'
+                          msg.role === 'user'
                             ? 'bg-blue-100 dark:bg-blue-900 ml-auto max-w-[70%]'
                             : 'bg-slate-100 dark:bg-slate-700 mr-auto max-w-[70%]'
                         }`}
                       >
                         <p className="text-sm font-medium mb-1 text-slate-900 dark:text-slate-100">
-                          {msg.from === 'user' ? 'Customer' : 'AI Assistant'}
+                          {msg.role === 'user' ? 'Customer' : 'AI Assistant'}
                         </p>
-                        <p className="text-sm text-slate-800 dark:text-slate-200">{msg.message}</p>
+                        <p className="text-sm text-slate-800 dark:text-slate-200">{msg.content}</p>
                         {msg.timestamp && (
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                             {format(new Date(msg.timestamp), 'HH:mm')}
