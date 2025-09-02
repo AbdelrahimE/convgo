@@ -706,18 +706,18 @@ const AIPersonalities = React.memo(() => {
 
       {/* Create/Edit Personality Dialog */}
       <Dialog open={isPersonalityDialogOpen} onOpenChange={setIsPersonalityDialogOpen}>
-        <DialogContent className="w-full max-w-sm sm:max-w-md lg:max-w-xl max-h-[90vh] overflow-y-auto py-6 px-6 border-none">
-          <DialogHeader>
-            <DialogTitle>
-              
+        <DialogContent className="w-full max-w-[90vw] sm:max-w-lg md:max-w-xl lg:max-w-2xl h-[85vh] p-0 border-none flex flex-col overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-2 flex-shrink-0">
+            <DialogTitle className="text-left">
               {editingPersonality ? 'Edit' : 'Create'} AI Personality
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-left">
               Configure how your AI assistant should behave for specific types of customer inquiries
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-6 py-4">
+          <div className="flex-1 overflow-y-auto px-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="space-y-6 py-4">
             {/* Basic Information */}
             <div className="space-y-4">
               <div className="space-y-2">
@@ -727,6 +727,7 @@ const AIPersonalities = React.memo(() => {
                   value={personalityForm.name}
                   onChange={(e) => setPersonalityForm({...personalityForm, name: e.target.value})}
                   placeholder="e.g., Customer Support Specialist"
+                  className="text-sm sm:text-base"
                 />
               </div>
               
@@ -737,6 +738,7 @@ const AIPersonalities = React.memo(() => {
                   value={personalityForm.description}
                   onChange={(e) => setPersonalityForm({...personalityForm, description: e.target.value})}
                   placeholder="Brief description of this personality's role"
+                  className="text-sm sm:text-base"
                 />
               </div>
             </div>
@@ -774,7 +776,7 @@ const AIPersonalities = React.memo(() => {
                 onChange={(e) => setPersonalityForm({...personalityForm, system_prompt: e.target.value})}
                 rows={8}
                 placeholder="Define how this AI personality should behave and respond..."
-                className="resize-y"
+                className="resize-y text-sm sm:text-base"
               />
             </div>
 
@@ -806,6 +808,7 @@ const AIPersonalities = React.memo(() => {
                   max="10"
                   value={personalityForm.priority}
                   onChange={(e) => setPersonalityForm({...personalityForm, priority: parseInt(e.target.value)})}
+                  className="text-sm sm:text-base"
                 />
               </div>
             </div>
@@ -834,9 +837,10 @@ const AIPersonalities = React.memo(() => {
                 />
               </div>
             </div>
+            </div>
           </div>
           
-          <DialogFooter>
+          <DialogFooter className="px-4 py-3 flex-shrink-0 border-t border-border bg-white dark:bg-slate-900">
             <Button variant="outline" onClick={() => setIsPersonalityDialogOpen(false)}>
               Cancel
             </Button>

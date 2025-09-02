@@ -810,7 +810,7 @@ const WhatsAppAIConfig = () => {
       </div>
 
       <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
-        <DialogContent className="w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl py-6 px-6">
+        <DialogContent className="w-full max-w-[90vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl py-6 px-6">
         <DialogHeader>
           <DialogTitle className="text-left font-semibold">Smart Prompt Generator Wizard</DialogTitle>
           <DialogDescription className="text-left">

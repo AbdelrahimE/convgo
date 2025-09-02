@@ -215,4 +215,21 @@
     border: none;
     box-shadow: none;
   }
+
+  /* Hide scrollbars but maintain functionality */
+  .scrollbar-none {
+    -ms-overflow-style: none !important;  /* Internet Explorer 10+ */
+    scrollbar-width: none !important;  /* Firefox */
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none !important;  /* Safari and Chrome */
+    width: 0 !important;
+    height: 0 !important;
+  }
+  .scrollbar-none::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+  .scrollbar-none::-webkit-scrollbar-thumb {
+    background: transparent !important;
+  }
 }
