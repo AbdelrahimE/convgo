@@ -20,6 +20,11 @@ const openWhatsApp = (phoneNumber: string) => {
   window.open(`https://wa.me/${cleanNumber}`, '_blank');
 };
 
+const hasArabicText = (text: string) => {
+  const arabicRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+  return arabicRegex.test(text);
+};
+
 export const ConversationDialog = React.memo(({
   conversation,
   isOpen,
@@ -84,7 +89,7 @@ export const ConversationDialog = React.memo(({
                     <p className="text-sm font-medium mb-1 text-slate-900 dark:text-slate-100">
                       {msg.role === 'user' ? 'Customer' : 'AI Assistant'}
                     </p>
-                    <p className="text-sm text-slate-800 dark:text-slate-200">{msg.content}</p>
+                    <p className={`text-sm text-slate-800 dark:text-slate-200 ${hasArabicText(msg.content) ? 'font-arabic text-right' : ''}`} dir={hasArabicText(msg.content) ? 'rtl' : 'ltr'}>{msg.content}</p>
                     {msg.timestamp && (
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                         {format(new Date(msg.timestamp), 'HH:mm')}

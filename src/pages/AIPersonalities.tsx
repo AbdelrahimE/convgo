@@ -707,7 +707,7 @@ const AIPersonalities = React.memo(() => {
       {/* Create/Edit Personality Dialog */}
       <Dialog open={isPersonalityDialogOpen} onOpenChange={setIsPersonalityDialogOpen}>
         <DialogContent className="w-full max-w-[90vw] sm:max-w-lg md:max-w-xl lg:max-w-2xl h-[85vh] p-0 border-none flex flex-col overflow-hidden">
-          <DialogHeader className="px-4 pt-4 pb-2 flex-shrink-0">
+          <DialogHeader className="px-4 pt-4 pb-0 flex-shrink-0">
             <DialogTitle className="text-left">
               {editingPersonality ? 'Edit' : 'Create'} AI Personality
             </DialogTitle>
@@ -744,12 +744,12 @@ const AIPersonalities = React.memo(() => {
             </div>
 
             {/* Intent Categories */}
-            <div className="space-y-2">
-              <Label>Intent Categories</Label>
+            <div className="space-y-0">
+              <Label className="text-base font-semibold">Intent Categories</Label>
               <p className="text-sm text-muted-foreground">
                 Select which types of customer inquiries this personality should handle
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 pt-4">
                 {intentCategories.map(category => (
                   <div key={category.key} className="flex items-center space-x-2">
                     <input

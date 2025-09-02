@@ -51,6 +51,7 @@ export function CustomerInsightCard({
   className = ""
 }: CustomerInsightCardProps) {
   
+  
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
     return date.toLocaleString('ar-EG', {

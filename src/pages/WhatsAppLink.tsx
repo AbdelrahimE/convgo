@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, Plus, Check, X, LogOut, Trash2, MessageSquare, ArrowRight, Bot, Send, RotateCcw, Settings, Wifi, QrCode } from "lucide-react";
+import { Loader2, Check, X, LogOut, Trash2, MessageSquare, ArrowRight, Bot, RotateCcw, Wifi, QrCode, CirclePlus, Cog, PhoneMissed } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logger from '@/utils/logger';
 import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
@@ -190,7 +190,7 @@ const EmptyState = ({
               {[{
               title: "Create an Instance",
               description: "Set up your first WhatsApp connection",
-              icon: Plus
+              icon: CirclePlus
             }, {
               title: "Scan QR Code",
               description: "Link your WhatsApp account securely",
@@ -213,7 +213,7 @@ const EmptyState = ({
             </div>
 
             <Button onClick={onCreateClick} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg">
-              <Plus className="mr-2 h-4 w-4" />
+              <CirclePlus className="mr-2 h-4 w-4" />
               Create Your First Instance
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -279,19 +279,20 @@ const CallRejectionForm = ({
                   </p>}
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button type="submit" disabled={isLoading || !message.trim() || isOverLimit} size="lg" className="w-full sm:flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg">
+            <div className="flex flex-col sm:flex-row gap-4 sm:justify-between">
+              <Button type="button" variant="outline" onClick={onCancel}
+              className="w-full sm:w-auto bg-gray-200 hover:bg-gray-300 text-gray-900 border-0 rounded-lg order-2 sm:order-1" size="lg">
+                <X className="h-4 w-4" />
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading || !message.trim() || isOverLimit} size="lg" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white rounded-lg order-1 sm:order-2">
                 {isLoading ? <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Saving...
                   </> : <>
-                    <Send className="mr-2 h-4 w-4" />
+                    <PhoneMissed className="h-4 w-4" />
                     Enable Call Rejection
                   </>}
-              </Button>
-              <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:flex-1 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:hover:from-gray-600 dark:hover:to-gray-700 border-0 text-gray-700 dark:text-gray-200 rounded-lg" size="lg">
-                <X className="mr-2 h-4 w-4" />
-                Cancel
               </Button>
             </div>
           </form>
@@ -379,7 +380,7 @@ const CallRejectionToggle = React.memo(({
       {instance.reject_calls && <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="sm" onClick={onSettings} className="h-6 w-6 p-0 rounded-full">
-              <Settings className="h-3 w-3" />
+              <Cog className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -943,8 +944,8 @@ const WhatsAppLink = () => {
               </p>
             </div>
             <div className="flex-shrink-0">
-              <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-900 text-white border-0 font-semibold rounded-lg">
-                <Plus className="mr-2 h-4 w-4" />
+              <Button onClick={() => setShowCreateForm(true)} disabled={instances.length >= instanceLimit || showCreateForm} size="lg" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white border-0 font-semibold rounded-lg">
+                <CirclePlus className="h-4 w-4" />
                 New Instance
               </Button>
             </div>
@@ -1041,8 +1042,8 @@ const WhatsAppLink = () => {
                   setProxyPort('');
                   setProxyUsername('');
                   setProxyPassword('');
-                }} className="w-full sm:w-auto bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:hover:from-gray-600 dark:hover:to-gray-700 border-0 text-gray-700 dark:text-gray-200 rounded-lg" size="lg">
-                      <X className="mr-2 h-4 w-4" />
+                }} className="w-full sm:w-auto bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium border-0 rounded-lg" size="lg">
+                      <X className="h-4 w-4" />
                       Cancel
                     </Button>
                     <div className="flex flex-col sm:flex-row gap-3">
@@ -1050,18 +1051,18 @@ const WhatsAppLink = () => {
                         type="button"
                         variant="outline"
                         onClick={() => setShowProxyFields(!showProxyFields)}
-                        className="w-full sm:w-auto bg-gradient-to-r from-blue-100 to-blue-200 hover:from-blue-200 hover:to-blue-300 dark:from-blue-900 dark:to-blue-800 dark:hover:from-blue-800 dark:hover:to-blue-700 border-0 text-blue-700 dark:text-blue-200 rounded-lg"
+                        className="w-full sm:w-auto rounded-lg bg-blue-100 hover:bg-blue-600 text-blue-900 hover:text-white font-medium"
                         size="lg"
                       >
-                        <Settings className="mr-0 h-4 w-4" />
+                        <Cog className="h-4 w-4" />
                         {showProxyFields ? 'Hide Proxy' : 'Add Proxy'}
                       </Button>
-                      <Button type="submit" disabled={isLoading || !isValidName || !instanceName || (showProxyFields && (!proxyHost || !proxyPort))} size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg">
+                      <Button type="submit" disabled={isLoading || !isValidName || !instanceName || (showProxyFields && (!proxyHost || !proxyPort))} size="lg" className="w-full sm:w-auto rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">
                         {isLoading ? <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="h-4 w-4 animate-spin" />
                             Creating...
                           </> : <>
-                            <Plus className="mr-2 h-4 w-4" />
+                            <CirclePlus className="h-4 w-4" />
                             Create Instance
                           </>}
                       </Button>

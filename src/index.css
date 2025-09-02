@@ -3,6 +3,88 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Global Arabic Font Application */
+@layer base {
+  /* Default font stack with Arabic fallback */
+  * {
+    font-family: 'Poppins', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  }
+  
+  /* Automatic Arabic text styling - Font only, no direction change */
+  .font-arabic {
+    font-family: 'IBM Plex Sans Arabic', Arial, sans-serif !important;
+  }
+  
+  /* RTL only for input fields when they contain Arabic text */
+  input.font-arabic,
+  textarea.font-arabic,
+  [contenteditable].font-arabic,
+  *[dir="rtl"] {
+    direction: rtl !important;
+    text-align: right !important;
+  }
+  
+  /* Mixed content support - maintains LTR for mixed Arabic/English */
+  .mixed-content {
+    font-family: 'IBM Plex Sans Arabic', 'Poppins', system-ui, sans-serif !important;
+    direction: ltr;
+    text-align: left;
+  }
+  
+  /* Ensure all text inputs support Arabic */
+  input, textarea, select {
+    font-family: 'Poppins', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  }
+  
+  /* Dialog and modal content */
+  [role="dialog"] *,
+  [data-radix-collection-item] *,
+  [data-state] * {
+    font-family: inherit;
+  }
+  
+  /* Direction utilities */
+  .dir-rtl, .direction-rtl {
+    direction: rtl !important;
+  }
+  
+  .dir-ltr, .direction-ltr {
+    direction: ltr !important;
+  }
+  
+  /* Ensure regular text elements stay LTR even with Arabic content */
+  p, h1, h2, h3, h4, h5, h6, span, div, li, td, th, label {
+    direction: ltr !important;
+    text-align: left !important;
+  }
+  
+  /* Override for input fields only */
+  input.font-arabic, textarea.font-arabic, [contenteditable].font-arabic {
+    direction: rtl !important;
+    text-align: right !important;
+  }
+  
+  /* Auto-detect Arabic in common elements */
+  h1, h2, h3, h4, h5, h6, p, span, div, li, td, th, label, button {
+    font-family: 'Poppins', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  }
+  
+  /* Ensure proper font cascade in all UI components */
+  .ui-sans {
+    font-family: 'Poppins', 'IBM Plex Sans Arabic', system-ui, sans-serif !important;
+  }
+  
+  /* Force Arabic font when detected by MutationObserver */
+  .font-arabic * {
+    font-family: 'IBM Plex Sans Arabic', Arial, sans-serif !important;
+  }
+  
+  /* Preserve mixed content font stack */
+  .font-arabic.mixed-content * {
+    font-family: 'IBM Plex Sans Arabic', 'Poppins', system-ui, sans-serif !important;
+  }
+}
+
 @layer base {
   :root {
     /* Base Colors */
@@ -168,7 +250,7 @@
   .glass-active {
     position: relative;
     overflow: hidden;
-    border-radius: 0.75rem; /* match rounded-xl */
+    border-radius: 0.4rem; /* match rounded-xl */
     background: linear-gradient(
       135deg,
       hsl(var(--blue-700) / 0.18) 0%,
@@ -206,7 +288,7 @@
   }
 
   .dark .glass-active {
-    border-radius: 0.75rem; /* match rounded-xl */
+    border-radius: 0.4rem; /* match rounded-xl */
     background: linear-gradient(
       135deg,
       hsl(var(--blue-400) / 0.14) 0%,
@@ -231,5 +313,10 @@
   }
   .scrollbar-none::-webkit-scrollbar-thumb {
     background: transparent !important;
+  }
+  
+  /* Hide Radix ScrollArea scrollbar in sidebar */
+  .sidebar-scroll-area [data-radix-scroll-area-scrollbar] {
+    display: none !important;
   }
 }

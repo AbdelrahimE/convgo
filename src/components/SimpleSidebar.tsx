@@ -24,7 +24,6 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { LogoWithText } from "./Logo";
-import { ScrollArea } from "./ui/scroll-area";
 import logger from '@/utils/logger';
 import { useEffect, useImperativeHandle, useState, forwardRef } from 'react';
 export type SimpleSidebarHandle = {
@@ -193,7 +192,7 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
 
       {/* Navigation */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <ScrollArea className="h-full px-2 py-2">
+        <div className="h-full px-2 py-2 overflow-y-auto scrollbar-none">
           <nav className="space-y-2">
             {navigation.map((item) => {
               const isActive = location.pathname === item.href;
@@ -203,7 +202,7 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
                   to={item.href}
                   onClick={closeMobile}
                   className={cn(
-                    "relative flex items-center gap-2 px-3 py-3 text-sm font-normal rounded-lg overflow-hidden transition-all duration-200",
+                    "relative flex items-center gap-2 px-3.5 py-3 text-sm font-normal rounded-lg overflow-hidden transition-all duration-200",
                     "hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950/50 dark:hover:text-blue-300",
                     isActive 
                       ? "glass-active rounded-lg text-blue-700 font-normal dark:text-blue-300" 
@@ -223,13 +222,13 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
                     </div>
                   )}
                   {isActive && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-700" />
+                    <div className="absolute left-0 top-0 bottom-0 w-2 bg-blue-600" />
                   )}
                 </Link>
               );
             })}
           </nav>
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Footer with User Profile */}
