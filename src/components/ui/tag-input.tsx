@@ -1,6 +1,5 @@
 import * as React from "react";
 import { useState } from "react";
-import { useClientLanguageDetection } from "@/hooks/use-client-language-detection";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -19,11 +18,6 @@ const TagInput = React.forwardRef<HTMLDivElement, TagInputProps>(
   ({ value = [], onChange, placeholder, className, disabled = false, maxTags }, ref) => {
     const [inputValue, setInputValue] = useState("");
     const [isInputFocused, setIsInputFocused] = useState(false);
-    const { detectLanguage } = useClientLanguageDetection();
-
-    // Detect language of current input
-    const detectedLang = detectLanguage(inputValue);
-    const directionClass = detectedLang === 'ar' ? 'direction-rtl' : 'direction-ltr';
 
     const addTag = (tagText: string) => {
       const trimmedTag = tagText.trim();
@@ -70,17 +64,12 @@ const TagInput = React.forwardRef<HTMLDivElement, TagInputProps>(
         <div className="flex flex-wrap gap-1 w-full">
           {/* Render existing tags */}
           {value.map((tag, index) => {
-            const tagLang = detectLanguage(tag);
-            const tagDirectionClass = tagLang === 'ar' ? 'direction-rtl' : 'direction-ltr';
-            
             return (
               <Badge
                 key={index}
                 variant="secondary"
                 className={cn(
-                  "flex items-center gap-1 text-xs font-normal",
-                  tagDirectionClass,
-                  tagLang === 'ar' ? 'font-arabic' : ''
+                  "flex items-center gap-1 text-xs font-normal"
                 )}
               >
                 <span>{tag}</span>
@@ -112,9 +101,7 @@ const TagInput = React.forwardRef<HTMLDivElement, TagInputProps>(
             placeholder={value.length === 0 ? placeholder : ""}
             disabled={disabled || (maxTags ? value.length >= maxTags : false)}
             className={cn(
-              "border-0 p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0 min-w-[120px]",
-              directionClass,
-              detectedLang === 'ar' ? 'font-arabic' : ''
+              "border-0 p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0 min-w-[120px]"
             )}
             style={{ 
               backgroundColor: 'transparent',

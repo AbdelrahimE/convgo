@@ -23,7 +23,6 @@ import AIPersonalities from '@/pages/AIPersonalities';
 import EscalationManagement from '@/pages/EscalationManagement';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
-import { ArabicFontProvider } from '@/providers/ArabicFontProvider';
 
 import './App.css';
 
@@ -157,12 +156,10 @@ function App() {
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
             <AuthProvider>
-              <ArabicFontProvider>
-                <Router>
-                  <AppContent />
-                  <Toaster />
-                </Router>
-              </ArabicFontProvider>
+              <Router>
+                <AppContent />
+                <Toaster />
+              </Router>
             </AuthProvider>
           </TooltipProvider>
         </QueryClientProvider>

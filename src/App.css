@@ -43,31 +43,6 @@
   color: #888;
 }
 
-.direction-rtl {
-  direction: rtl;
-  text-align: right;
-  font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
-}
-
-.direction-ltr {
-  direction: ltr;
-  text-align: left;
-  font-family: 'Poppins', system-ui, sans-serif;
-}
-
-/* Auto language detection classes */
-.lang-ar {
-  font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
-}
-
-.lang-en {
-  font-family: 'Poppins', system-ui, sans-serif;
-}
-
-.font-arabic {
-  font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
-}
-
 /* Ensure icons maintain their original dimensions */
 img.icon, .icon img {
   object-fit: contain;
@@ -102,4 +77,17 @@ link[rel="icon"], link[rel="alternate icon"] {
 /* Laptop adjustments */
 @media (max-width: 1366px) and (min-width: 1201px) {
   /* Add specific laptop styles if needed */
+}
+
+/* Arabic font and RTL direction for input fields only */
+.lang-ar {
+  font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
+  direction: rtl;
+  text-align: right;
+}
+
+.lang-en {
+  font-family: 'Poppins', system-ui, sans-serif;
+  direction: ltr;
+  text-align: left;
 }

@@ -6,16 +6,14 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
 export interface LanguageAwareInputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {
-  defaultLanguage?: 'ar' | 'en' | 'auto';
-}
+  extends React.InputHTMLAttributes<HTMLInputElement> {}
 
 const LanguageAwareInput = React.forwardRef<
   HTMLInputElement,
   LanguageAwareInputProps
->(({ className, defaultLanguage = 'auto', value, onChange, ...props }, ref) => {
+>(({ className, value, onChange, ...props }, ref) => {
   const { detectLanguage } = useClientLanguageDetection();
-  const [detectedLang, setDetectedLang] = useState<'ar' | 'en' | 'auto'>(defaultLanguage);
+  const [detectedLang, setDetectedLang] = useState<'ar' | 'en' | 'auto'>('auto');
   
   // Update language detection when value changes
   useEffect(() => {
@@ -29,13 +27,10 @@ const LanguageAwareInput = React.forwardRef<
   const langClass = detectedLang === 'ar' ? 'lang-ar' : 
                    (detectedLang === 'en' ? 'lang-en' : '');
   
-  // Handle direction automatically
-  const directionClass = detectedLang === 'ar' ? 'direction-rtl' : 'direction-ltr';
-  
   return (
     <Input
       ref={ref}
-      className={cn(langClass, directionClass, className)}
+      className={cn(langClass, className)}
       value={value}
       onChange={(e) => {
         if (onChange) {

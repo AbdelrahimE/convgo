@@ -8,7 +8,6 @@ import { useMergeRefs } from "@/hooks/use-merge-refs";
 
 export interface LanguageAwareTextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  defaultLanguage?: 'ar' | 'en' | 'auto';
   autoExpand?: boolean;
   minRows?: number;
   maxRows?: number;
@@ -19,7 +18,6 @@ const LanguageAwareTextarea = React.forwardRef<
   LanguageAwareTextareaProps
 >(({ 
   className, 
-  defaultLanguage = 'auto', 
   value, 
   onChange, 
   autoExpand = false,
@@ -28,7 +26,7 @@ const LanguageAwareTextarea = React.forwardRef<
   ...props 
 }, ref) => {
   const { detectLanguage } = useClientLanguageDetection();
-  const [detectedLang, setDetectedLang] = useState<'ar' | 'en' | 'auto'>(defaultLanguage);
+  const [detectedLang, setDetectedLang] = useState<'ar' | 'en' | 'auto'>('auto');
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const combinedRef = useMergeRefs([textareaRef, ref]);
   
@@ -72,16 +70,13 @@ const LanguageAwareTextarea = React.forwardRef<
   const langClass = detectedLang === 'ar' ? 'lang-ar' : 
                    (detectedLang === 'en' ? 'lang-en' : '');
   
-  // Handle direction automatically
-  const directionClass = detectedLang === 'ar' ? 'direction-rtl' : 'direction-ltr';
-  
   // Add autoExpand styles if enabled
   const expandClass = autoExpand ? 'resize-none overflow-hidden' : '';
   
   return (
     <Textarea
       ref={combinedRef}
-      className={cn(langClass, directionClass, expandClass, className)}
+      className={cn(langClass, expandClass, className)}
       value={value}
       onChange={(e) => {
         if (onChange) {

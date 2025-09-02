@@ -26,10 +26,17 @@ import {
   Palette,
   FileText,
   Bot,
-  Cog
+  Cog,
+  Lightbulb,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck
 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import logger from '@/utils/logger';
+import { usePromptGenerationStats } from '@/hooks/use-prompt-generation-stats';
+import { PromptResetCountdown } from '@/components/ui/prompt-reset-countdown';
+import { cn } from "@/lib/utils";
 
 interface WhatsAppInstance {
   id: string;
@@ -65,6 +72,56 @@ interface PersonalityTemplate {
   template_category: string;
   intent_categories: string[];
 }
+
+// Auto-generate prompt interface
+interface PromptGenerationData {
+  businessType: string;
+  languages: string[];
+  arabicDialect?: string;
+  tone: string;
+  specialInstructions?: string;
+  description: string;
+}
+
+// Business types options for prompt generation
+const businessTypes = [
+  { value: 'ecommerce', label: 'E-commerce' },
+  { value: 'services', label: 'Services' },
+  { value: 'healthcare', label: 'Healthcare' },
+  { value: 'education', label: 'Education' },
+  { value: 'restaurant', label: 'Restaurant & Delivery' },
+  { value: 'realestate', label: 'Real Estate' },
+  { value: 'finance', label: 'Financial Services' },
+  { value: 'technology', label: 'Technology' },
+  { value: 'retail', label: 'Retail' },
+  { value: 'other', label: 'Other' }
+];
+
+// Language options for prompt generation
+const languageOptions = [
+  { value: 'arabic', label: 'Arabic Only' },
+  { value: 'english', label: 'English Only' },
+  { value: 'both', label: 'Both Arabic & English' }
+];
+
+// Arabic dialect options for prompt generation
+const arabicDialects = [
+  { value: 'standard', label: 'Modern Standard Arabic' },
+  { value: 'egyptian', label: 'Egyptian Arabic' },
+  { value: 'saudi', label: 'Saudi Arabic' },
+  { value: 'gulf', label: 'Gulf Arabic' },
+  { value: 'levantine', label: 'Levantine Arabic' },
+  { value: 'maghrebi', label: 'Maghrebi Arabic' }
+];
+
+// Tone options for prompt generation
+const toneOptions = [
+  { value: 'professional', label: 'Professional' },
+  { value: 'friendly', label: 'Friendly' },
+  { value: 'formal', label: 'Formal' },
+  { value: 'casual', label: 'Casual' },
+  { value: 'supportive', label: 'Supportive' }
+];
 
 // Memoized PersonalityCard component
 const PersonalityCard = React.memo<{
@@ -198,6 +255,27 @@ const AIPersonalities = React.memo(() => {
   const [initialPageLoading, setInitialPageLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('personalities');
   const [usageAnalytics, setUsageAnalytics] = useState<Record<string, number>>({});
+  
+  // Auto-generate prompt states
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [customBusinessType, setCustomBusinessType] = useState('');
+  const [promptData, setPromptData] = useState<PromptGenerationData>({
+    businessType: '',
+    languages: [],
+    arabicDialect: '',
+    tone: '',
+    specialInstructions: '',
+    description: ''
+  });
+  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
+  
+  // Prompt generation stats
+  const {
+    stats: promptStats,
+    isLoading: isLoadingStats,
+    refreshStats
+  } = usePromptGenerationStats();
   
   // Dialog states
   const [isPersonalityDialogOpen, setIsPersonalityDialogOpen] = useState(false);
@@ -487,6 +565,245 @@ const AIPersonalities = React.memo(() => {
     setIsPersonalityDialogOpen(true);
   }, [resetForm]);
 
+  // Auto-generate prompt functions
+  const openPromptWizard = useCallback(() => {
+    setCurrentStep(1);
+    setCustomBusinessType('');
+    setPromptData({
+      businessType: '',
+      languages: [],
+      arabicDialect: '',
+      tone: '',
+      specialInstructions: '',
+      description: ''
+    });
+    setPromptDialogOpen(true);
+  }, []);
+
+  const nextStep = useCallback(() => {
+    if (currentStep < 5) {
+      setCurrentStep(currentStep + 1);
+    }
+  }, [currentStep]);
+
+  const prevStep = useCallback(() => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  }, [currentStep]);
+
+  const canProceedToNextStep = useCallback(() => {
+    switch (currentStep) {
+      case 1:
+        return promptData.businessType !== '' && (promptData.businessType !== 'other' || customBusinessType.trim() !== '');
+      case 2:
+        return promptData.languages.length > 0;
+      case 3:
+        return promptData.tone !== '';
+      case 4:
+        return promptData.description.trim() !== '';
+      case 5:
+        return true;
+      default:
+        return false;
+    }
+  }, [currentStep, promptData, customBusinessType]);
+
+  const handleGenerateSystemPrompt = useCallback(async () => {
+    if (!promptData.description.trim()) {
+      toast.error('Please enter a description of what you want the AI to do');
+      return;
+    }
+    if (promptStats && promptStats.remaining <= 0) {
+      toast.error(`Monthly prompt generation limit reached (${promptStats.used}/${promptStats.limit})`);
+      return;
+    }
+    try {
+      setIsGeneratingPrompt(true);
+      const { data, error } = await supabase.functions.invoke('generate-system-prompt', {
+        body: {
+          ...promptData,
+          businessType: promptData.businessType === 'other' ? customBusinessType : promptData.businessType,
+          description: promptData.description
+        }
+      });
+      if (error) throw error;
+      if (!data.success) {
+        if (data.error === 'Monthly prompt generation limit reached') {
+          toast.error(`Monthly limit reached (${data.details.used}/${data.details.limit})`);
+          await refreshStats();
+        } else {
+          throw new Error(data.error || 'Failed to generate system prompt');
+        }
+        return;
+      }
+      // Set the generated prompt to the personality form
+      setPersonalityForm(prev => ({...prev, system_prompt: data.prompt}));
+      setPromptDialogOpen(false);
+      // Reset wizard data
+      setPromptData({
+        businessType: '',
+        languages: [],
+        arabicDialect: '',
+        tone: '',
+        specialInstructions: '',
+        description: ''
+      });
+      setCustomBusinessType('');
+      setCurrentStep(1);
+      await refreshStats();
+      toast.success('System prompt generated successfully');
+    } catch (error) {
+      logger.error('Error generating system prompt:', error);
+      toast.error('Failed to generate system prompt. Please try again.');
+    } finally {
+      setIsGeneratingPrompt(false);
+    }
+  }, [promptData, customBusinessType, promptStats, refreshStats, personalityForm]);
+
+  // Wizard step rendering functions
+  const renderStep1 = () => (
+    <div className="space-y-4">
+      <div>
+        <Label className="text-sm font-medium">What type of business do you have?</Label>
+        <p className="text-sm text-muted-foreground mb-3">Choose the type that best describes your business</p>
+      </div>
+      <Select 
+        value={promptData.businessType} 
+        onValueChange={(value) => {
+          setPromptData(prev => ({...prev, businessType: value}));
+          if (value !== 'other') {
+            setCustomBusinessType('');
+          }
+        }}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select your business type" />
+        </SelectTrigger>
+        <SelectContent>
+          {businessTypes.map((type) => (
+            <SelectItem key={type.value} value={type.value}>
+              {type.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      
+      {promptData.businessType === 'other' && (
+        <div>
+          <Label className="text-sm font-medium">Please specify your business type</Label>
+          <Input
+            value={customBusinessType}
+            onChange={(e) => setCustomBusinessType(e.target.value)}
+            placeholder="e.g., Consulting, Manufacturing, Media, etc."
+            className="mt-2"
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  const renderStep2 = () => (
+    <div className="space-y-4">
+      <div>
+        <Label className="text-sm font-medium">What languages should your AI support?</Label>
+        <p className="text-sm text-muted-foreground mb-3">Choose the languages your AI will interact with customers in</p>
+      </div>
+      <Select 
+        value={promptData.languages.length > 0 ? promptData.languages[0] : ''} 
+        onValueChange={(value) => setPromptData(prev => ({...prev, languages: [value]}))}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select preferred language" />
+        </SelectTrigger>
+        <SelectContent>
+          {languageOptions.map((lang) => (
+            <SelectItem key={lang.value} value={lang.value}>
+              {lang.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      
+      {(promptData.languages.includes('arabic') || promptData.languages.includes('both')) && (
+        <div>
+          <Label className="text-sm font-medium">Which Arabic dialect do you prefer?</Label>
+          <Select 
+            value={promptData.arabicDialect} 
+            onValueChange={(value) => setPromptData(prev => ({...prev, arabicDialect: value}))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select Arabic dialect" />
+            </SelectTrigger>
+            <SelectContent>
+              {arabicDialects.map((dialect) => (
+                <SelectItem key={dialect.value} value={dialect.value}>
+                  {dialect.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderStep3 = () => (
+    <div className="space-y-4">
+      <div>
+        <Label className="text-sm font-medium">What tone should your AI use in responses?</Label>
+        <p className="text-sm text-muted-foreground mb-3">Choose the style that matches your brand personality</p>
+      </div>
+      <Select 
+        value={promptData.tone} 
+        onValueChange={(value) => setPromptData(prev => ({...prev, tone: value}))}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select response tone" />
+        </SelectTrigger>
+        <SelectContent>
+          {toneOptions.map((tone) => (
+            <SelectItem key={tone.value} value={tone.value}>
+              {tone.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const renderStep4 = () => (
+    <div className="space-y-4">
+      <div>
+        <Label className="text-sm font-medium">Describe what you want your AI assistant to do</Label>
+        <p className="text-sm text-muted-foreground mb-3">Write a brief description of your AI assistant's main purpose and goals</p>
+      </div>
+      <LanguageAwareTextarea
+        value={promptData.description}
+        onChange={(e) => setPromptData(prev => ({...prev, description: e.target.value}))}
+        placeholder="Example: I want an AI assistant that answers customer inquiries about our products and helps them through the purchasing process"
+        rows={4}
+        className="resize-y"
+      />
+    </div>
+  );
+
+  const renderStep5 = () => (
+    <div className="space-y-4">
+      <div>
+        <Label className="text-sm font-medium">Special Instructions (Optional)</Label>
+        <p className="text-sm text-muted-foreground mb-3">Add any specific rules or guidelines you want your AI to follow</p>
+      </div>
+      <LanguageAwareTextarea
+        value={promptData.specialInstructions}
+        onChange={(e) => setPromptData(prev => ({...prev, specialInstructions: e.target.value}))}
+        placeholder="Example: Ignore questions outside our business scope, ask for phone number before providing quotes, use customer's name in responses"
+        rows={4}
+        className="resize-y"
+      />
+    </div>
+  );
+
   // Load data on component mount - now all functions are defined
   useEffect(() => {
     if (user) {
@@ -769,7 +1086,13 @@ const AIPersonalities = React.memo(() => {
 
             {/* System Prompt */}
             <div className="space-y-2">
-              <Label htmlFor="system-prompt">System Prompt</Label>
+              <div className="flex justify-between items-center">
+                <Label htmlFor="system-prompt">System Prompt</Label>
+                <Button variant="outline" size="sm" onClick={openPromptWizard}>
+                  <Lightbulb className="mr-2 h-4 w-4" />
+                  Auto-Generate Prompt
+                </Button>
+              </div>
               <LanguageAwareTextarea
                 id="system-prompt"
                 value={personalityForm.system_prompt}
@@ -861,6 +1184,128 @@ const AIPersonalities = React.memo(() => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Auto-Generate Prompt Dialog */}
+      <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
+        <DialogContent className="w-full max-w-[90vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl py-6 px-6">
+        <DialogHeader>
+          <DialogTitle className="text-left font-semibold">Smart Prompt Generator Wizard</DialogTitle>
+          <DialogDescription className="text-left">
+            We'll help you create a customized prompt step by step to improve your AI personality's performance
+          </DialogDescription>
+          {promptStats && (
+            <div className="mt-2 text-sm">
+              <div className="flex justify-between items-center">
+                <span>
+                  {promptStats.remaining} Generations Remaining
+                </span>
+                <span className="text-muted-foreground">
+                  ({promptStats.used}/{promptStats.limit} used)
+                </span>
+              </div>
+              {promptStats.timeUntilReset && (
+                <PromptResetCountdown 
+                  timeUntilReset={promptStats.timeUntilReset}
+                  className="mt-1"
+                />
+              )}
+            </div>
+          )}
+        </DialogHeader>
+        
+        {/* Progress Indicator */}
+        <div className="flex items-center justify-between mb-4 overflow-x-auto py-4">
+          <div className="flex items-center min-w-fit mx-auto px-2">
+            {[1, 2, 3, 4, 5].map((step) => (
+              <div key={step} className="flex items-center">
+                <div className={cn(
+                  "w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium flex-shrink-0 transition-colors",
+                  step < currentStep ? "bg-green-600 text-white" : 
+                  step === currentStep ? "bg-blue-600 text-white animate-pulse" : 
+                  "bg-gray-200 text-gray-500"
+                )}>
+                  {step < currentStep ? <CircleCheck className="h-3 w-3 sm:h-4 sm:w-4" /> : step}
+                </div>
+                {step < 5 && (
+                  <div className={cn(
+                    "w-8 sm:w-12 md:w-16 h-0.5 mx-1 sm:mx-2 transition-colors",
+                    step < currentStep ? "bg-green-500" : "bg-gray-200"
+                  )} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Step Content */}
+        <div className="min-h-[200px] sm:min-h-[250px] py-2 sm:py-4 overflow-y-auto max-h-[50vh] sm:max-h-[60vh]">
+          {currentStep === 1 && renderStep1()}
+          {currentStep === 2 && renderStep2()}
+          {currentStep === 3 && renderStep3()}
+          {currentStep === 4 && renderStep4()}
+          {currentStep === 5 && renderStep5()}
+        </div>
+        
+        {/* Navigation Footer */}
+        <DialogFooter className="pt-4 border-t">
+          <div className="flex flex-col sm:flex-row sm:justify-between w-full gap-2 sm:gap-3">
+            <div className="flex gap-2 w-full sm:w-auto order-2 sm:order-1">
+              <Button 
+                variant="outline" 
+                onClick={() => setPromptDialogOpen(false)}
+                className="flex-1 sm:flex-none text-xs sm:text-sm px-3 py-2"
+              >
+                Cancel
+              </Button>
+              {currentStep > 1 && (
+                <Button 
+                  variant="outline" 
+                  onClick={prevStep}
+                  className="flex items-center justify-center gap-1 flex-1 sm:flex-none text-xs sm:text-sm px-3 py-2"
+                >
+                  <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                  <span className="hidden sm:inline">Previous</span>
+                  <span className="sm:hidden">Back</span>
+                </Button>
+              )}
+            </div>
+            
+            <div className="flex gap-2 w-full sm:w-auto order-1 sm:order-2">
+              {currentStep < 5 ? (
+                <Button 
+                  onClick={nextStep} 
+                  disabled={!canProceedToNextStep()}
+                  className="flex items-center justify-center gap-1 w-full sm:w-auto text-xs sm:text-sm px-3 py-2 bg-blue-600 hover:bg-blue-700"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                </Button>
+              ) : (
+                <Button 
+                  onClick={handleGenerateSystemPrompt} 
+                  disabled={isGeneratingPrompt || !promptData.description.trim() || isLoadingStats || promptStats?.remaining === 0}
+                  className="flex items-center justify-center gap-1 bg-green-600 hover:bg-green-700 w-full sm:w-auto text-xs sm:text-sm px-3 py-2"
+                >
+                  {isGeneratingPrompt ? (
+                    <>
+                      <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin flex-shrink-0" /> 
+                      <span>Generating...</span>
+                    </>
+                  ) : promptStats?.remaining === 0 ? (
+                    <span>Limit reached</span>
+                  ) : (
+                    <>
+                      <Lightbulb className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                      <span>Generate Prompt</span>
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </div>
   );
 });
