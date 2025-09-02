@@ -11,11 +11,13 @@ import { TagInput } from '@/components/ui/tag-input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { 
   Trash2, Plus, Phone, Cog, MessageCircle, AlertCircle, 
   AlertTriangle, CheckCircle, Clock, User, Calendar, Eye, 
-  ExternalLink 
+  ExternalLink, 
+  Headset
 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
@@ -109,10 +111,17 @@ export default function EscalationManagement() {
   }, [user])
 
   useEffect(() => {
-    if (user && activeTab === 'conversations') {
+    if (user && activeTab === 'conversations' && selectedInstance) {
       fetchEscalatedConversations()
     }
   }, [filter, activeTab])
+
+  // Fetch escalated conversations when selectedInstance changes
+  useEffect(() => {
+    if (selectedInstance) {
+      fetchEscalatedConversations()
+    }
+  }, [selectedInstance])
 
   // Update localSettings when selectedInstance changes
   useEffect(() => {
@@ -283,6 +292,8 @@ export default function EscalationManagement() {
 
   // Conversations Tab Functions
   const fetchEscalatedConversations = async () => {
+    if (!selectedInstance) return
+    
     setLoading(true)
     try {
       let query = supabase
@@ -291,6 +302,7 @@ export default function EscalationManagement() {
           *,
           instance:whatsapp_instances(instance_name)
         `)
+        .eq('instance_id', selectedInstance)
         .order('escalated_at', { ascending: false })
 
       if (filter === 'active') {
@@ -399,6 +411,46 @@ export default function EscalationManagement() {
 
       {/* Main Content */}
       <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6">
+        
+        {/* WhatsApp Instance Selection - Global for both tabs */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="p-4">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Cog className="h-5 w-5" />
+                Choose WhatsApp Number
+              </h2>
+            </div>
+
+            <Select
+              value={selectedInstance}
+              onValueChange={(value) => setSelectedInstance(value)}
+              disabled={loading || instances.length === 0}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select WhatsApp number" />
+              </SelectTrigger>
+              <SelectContent>
+                {instances.length === 0 ? (
+                  <SelectItem value="none">
+                    No connected WhatsApp numbers available
+                  </SelectItem>
+                ) : (
+                  instances.map((instance) => (
+                    <SelectItem key={instance.id} value={instance.id}>
+                      <div className="flex items-center justify-between w-full gap-x-2">
+                        <span>{instance.instance_name}</span>
+                        <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
+                          Connected
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
@@ -443,7 +495,7 @@ export default function EscalationManagement() {
           {/* Statistics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Active Conversations Card */}
-            <Card className="rounded-lg bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/50 dark:to-red-900/30 border-red-200/50 dark:border-red-800/50 transition-colors duration-200">
+            <Card className="rounded-xl bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/50 dark:to-red-900/30 border-red-200/50 dark:border-red-800/50 transition-colors duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -461,7 +513,7 @@ export default function EscalationManagement() {
             </Card>
 
             {/* Resolved Today Card */}
-            <Card className="rounded-lg bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/50 dark:to-green-900/30 border-green-200/50 dark:border-green-800/50 transition-colors duration-200">
+            <Card className="rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/50 dark:to-green-900/30 border-green-200/50 dark:border-green-800/50 transition-colors duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -479,7 +531,7 @@ export default function EscalationManagement() {
             </Card>
 
             {/* Average Resolution Time Card */}
-            <Card className="rounded-lg bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/50 dark:to-blue-900/30 border-blue-200/50 dark:border-blue-800/50 transition-colors duration-200">
+            <Card className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/50 dark:to-blue-900/30 border-blue-200/50 dark:border-blue-800/50 transition-colors duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -497,7 +549,7 @@ export default function EscalationManagement() {
             </Card>
 
             {/* Total Escalations Card */}
-            <Card className="rounded-lg bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/50 dark:to-purple-900/30 border-purple-200/50 dark:border-purple-800/50 transition-colors duration-200">
+            <Card className="rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/50 dark:to-purple-900/30 border-purple-200/50 dark:border-purple-800/50 transition-colors duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -516,14 +568,15 @@ export default function EscalationManagement() {
           </div>
 
           {/* Conversations List */}
-          <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-            <CardHeader>
-              <CardTitle>Escalated Conversations List</CardTitle>
-              <CardDescription>
-                Manage and track conversations that have been escalated to human support
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-4">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold">Escalated Conversations List</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Manage and track conversations that have been escalated to human support
+                </p>
+              </div>
+              <div>
               {loading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
@@ -539,49 +592,43 @@ export default function EscalationManagement() {
                   {conversations.map((conv) => (
                     <div
                       key={conv.id}
-                      className="border border-slate-200 dark:border-slate-700 rounded-lg p-5 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600"
+                      className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600"
                     >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="p-1.5 rounded-md bg-slate-100 dark:bg-slate-800">
-                              <Phone className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-                            </div>
-                            <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">{conv.whatsapp_number}</span>
-                            {getReasonBadge(conv.reason)}
-                            {conv.resolved_at && (
-                              <Badge className="bg-green-100 hover:bg-green-200 dark:bg-green-900/50 dark:hover:bg-green-900 text-green-800 dark:text-green-200">
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Resolved
-                              </Badge>
-                            )}
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="p-1 rounded-md bg-slate-100 dark:bg-slate-800">
+                            <Phone className="h-3 w-3 text-slate-600 dark:text-slate-400" />
                           </div>
+                          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{conv.whatsapp_number}</span>
+                          {getReasonBadge(conv.reason)}
+                          {conv.resolved_at && (
+                            <Badge className="bg-green-100 hover:bg-green-200 dark:bg-green-900/50 dark:hover:bg-green-900 text-green-800 dark:text-green-200">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Resolved
+                            </Badge>
+                          )}
                           
-                          <div className="flex items-center gap-6 text-sm text-slate-500 dark:text-slate-400">
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-                              <span className="font-medium">{format(new Date(conv.escalated_at), 'dd/MM/yyyy HH:mm')}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-                              <span className="font-medium">{formatDistanceToNow(new Date(conv.escalated_at), { addSuffix: true })}</span>
+                          <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 ml-2">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3 text-slate-400 dark:text-slate-500" />
+                              <span className="font-medium">{format(new Date(conv.escalated_at), 'dd/MM/yyyy h:mm a')}</span>
                             </div>
                             {conv.instance?.instance_name && (
-                              <div className="flex items-center gap-2">
-                                <User className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                              <div className="flex items-center gap-1">
+                                <User className="h-3 w-3 text-slate-400 dark:text-slate-500" />
                                 <span className="font-medium">{conv.instance.instance_name}</span>
                               </div>
                             )}
                           </div>
 
                           {conv.resolved_at && (
-                            <div className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">
-                              Resolved at: {format(new Date(conv.resolved_at), 'dd/MM/yyyy HH:mm')}
+                            <div className="text-xs font-medium text-green-600 dark:text-green-400 ml-2">
+                              Resolved: {format(new Date(conv.resolved_at), 'dd/MM/yyyy h:mm a')}
                             </div>
                           )}
                         </div>
 
-                        <div className="flex gap-2 ml-4">
+                        <div className="flex gap-1 ml-4">
                           <Button
                             size="sm"
                             variant="ghost"
@@ -589,29 +636,29 @@ export default function EscalationManagement() {
                               setSelectedConversation(conv)
                               setShowContext(true)
                             }}
-                            className="h-9 w-9 p-0 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            className="h-7 w-7 p-0 hover:bg-slate-100 dark:hover:bg-slate-800"
                             title="View Context"
                           >
-                            <Eye className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                            <Eye className="h-3 w-3 text-slate-600 dark:text-slate-400" />
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => openWhatsApp(conv.whatsapp_number)}
-                            className="h-9 w-9 p-0 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            className="h-7 w-7 p-0 hover:bg-green-50 dark:hover:bg-green-900/20"
                             title="Open WhatsApp"
                           >
-                            <ExternalLink className="h-4 w-4 text-green-600 dark:text-green-400" />
+                            <ExternalLink className="h-3 w-3 text-green-600 dark:text-green-400" />
                           </Button>
                           {!conv.resolved_at && (
                             <Button
                               size="sm"
                               onClick={() => resolveEscalation(conv.id, conv.whatsapp_number, conv.instance_id)}
                               disabled={loading}
-                              className="h-9 px-4"
+                              className="h-7 px-3 text-xs"
                             >
-                              <CheckCircle className="h-4 w-4 mr-2" />
-                              Mark Resolved
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Resolve
                             </Button>
                           )}
                         </div>
@@ -620,24 +667,26 @@ export default function EscalationManagement() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+              </div>
+            </div>
+          </div>
         </TabsContent>
 
         {/* Settings Tab Content */}
         <TabsContent value="settings" className="space-y-6 mt-6">
           {/* Support Team Numbers Section */}
-          <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Phone className="h-5 w-5" />
-                Human Support Team Numbers
-              </CardTitle>
-              <CardDescription>
-                Add WhatsApp numbers for support team to receive notifications when conversations are escalated
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="p-4">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Phone className="h-5 w-5" />
+                  Support Team Numbers
+                </h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Add WhatsApp numbers for support team to receive notifications when conversations are escalated
+                </p>
+              </div>
+              <div className="space-y-4">
               <div className="flex gap-2">
                 <Input
                   placeholder="Enter WhatsApp number including country code (no ‘+’), e.g. 201234567890"
@@ -691,38 +740,24 @@ export default function EscalationManagement() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+              </div>
+            </div>
+          </div>
 
           {/* Instance Settings Section */}
-          {instances.length > 0 && (
-            <Card className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Cog className="h-5 w-5" />
-                  Escalation Settings
-                </CardTitle>
-                <CardDescription>
-                  Customize escalation messages and criteria for each WhatsApp account
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {instances.length > 1 && (
-                  <div>
-                    <Label>Select WhatsApp Account</Label>
-                    <select
-                      className="w-full mt-1 p-2 border rounded-md"
-                      value={selectedInstance}
-                      onChange={(e) => setSelectedInstance(e.target.value)}
-                    >
-                      {instances.map((instance) => (
-                        <option key={instance.id} value={instance.id}>
-                          {instance.instance_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+          {selectedInstance && (
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="p-4">
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <Cog className="h-5 w-5" />
+                    Escalation Settings
+                  </h2>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    Customize escalation messages and criteria for each WhatsApp account
+                  </p>
+                </div>
+                <div className="space-y-6">
 
                 {currentInstance && (
                   <>
@@ -743,10 +778,7 @@ export default function EscalationManagement() {
                     {currentInstance.escalation_enabled && (
                       <div className="space-y-4 border border-blue-300 rounded-lg p-4 bg-blue-50">
                         <div className="space-y-0.5">
-                          <Label className="text-base text-blue-900 font-medium">Escalation Detection Methods</Label>
-                          <p className="text-sm text-blue-600">
-                            Configure how escalations are detected
-                          </p>
+                          <Label className="text-base text-blue-900 font-semibold">Choose Detection Method</Label>
                         </div>
                         
                         {/* Smart AI Detection */}
@@ -755,7 +787,7 @@ export default function EscalationManagement() {
                             <Label className="flex items-center gap-2 text-blue-900">
                               Smart AI Detection
                             </Label>
-                            <p className="text-sm text-blue-600">
+                            <p className="text-xs text-blue-600">
                               Automatically detect when customers need human support using AI intent analysis
                             </p>
                           </div>
@@ -773,7 +805,7 @@ export default function EscalationManagement() {
                             <Label className="flex items-center gap-2 text-blue-900">
                               Keyword Detection
                             </Label>
-                            <p className="text-sm text-blue-600">
+                            <p className="text-xs text-blue-600">
                               Trigger escalation based on specific keywords in customer messages
                             </p>
                           </div>
@@ -847,8 +879,9 @@ export default function EscalationManagement() {
                     </div>
                   </>
                 )}
-              </CardContent>
-            </Card>
+                </div>
+              </div>
+            </div>
           )}
         </TabsContent>
       </Tabs>
@@ -878,14 +911,14 @@ export default function EscalationManagement() {
                   <div>
                     <span className="text-slate-600 dark:text-slate-400">Escalated At:</span>{' '}
                     <span className="font-medium text-slate-900 dark:text-slate-100">
-                      {format(new Date(selectedConversation.escalated_at), 'dd/MM/yyyy HH:mm')}
+                      {format(new Date(selectedConversation.escalated_at), 'dd/MM/yyyy h:mm a')}
                     </span>
                   </div>
                   {selectedConversation.resolved_at && (
                     <div>
                       <span className="text-slate-600 dark:text-slate-400">Resolved At:</span>{' '}
                       <span className="font-medium text-slate-900 dark:text-slate-100">
-                        {format(new Date(selectedConversation.resolved_at), 'dd/MM/yyyy HH:mm')}
+                        {format(new Date(selectedConversation.resolved_at), 'dd/MM/yyyy h:mm a')}
                       </span>
                     </div>
                   )}
