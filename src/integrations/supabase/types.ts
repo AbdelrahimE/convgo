@@ -7,76 +7,88 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
   public: {
     Tables: {
       ai_personalities: {
         Row: {
-          id: string
-          whatsapp_instance_id: string
-          user_id: string
-          name: string
+          created_at: string | null
+          default_voice_language: string | null
           description: string | null
+          id: string
+          intent_categories: Json | null
+          is_active: boolean | null
+          is_default: boolean | null
+          is_template: boolean | null
+          model: string | null
+          name: string
+          priority: number | null
+          process_voice_messages: boolean | null
           system_prompt: string
-          temperature: number
-          model: string
-          intent_categories: string[]
-          is_active: boolean
-          is_default: boolean
-          priority: number
-          process_voice_messages: boolean
-          voice_message_default_response: string | null
-          default_voice_language: string
-          usage_count: number
-          is_template: boolean
+          temperature: number | null
           template_category: string | null
-          created_at: string
-          updated_at: string
+          updated_at: string | null
+          usage_count: number | null
+          user_id: string
+          voice_message_default_response: string | null
+          whatsapp_instance_id: string
         }
         Insert: {
-          id?: string
-          whatsapp_instance_id: string
-          user_id: string
-          name: string
+          created_at?: string | null
+          default_voice_language?: string | null
           description?: string | null
+          id?: string
+          intent_categories?: Json | null
+          is_active?: boolean | null
+          is_default?: boolean | null
+          is_template?: boolean | null
+          model?: string | null
+          name: string
+          priority?: number | null
+          process_voice_messages?: boolean | null
           system_prompt: string
-          temperature?: number
-          model?: string
-          intent_categories?: string[]
-          is_active?: boolean
-          is_default?: boolean
-          priority?: number
-          process_voice_messages?: boolean
-          voice_message_default_response?: string | null
-          default_voice_language?: string
-          usage_count?: number
-          is_template?: boolean
+          temperature?: number | null
           template_category?: string | null
-          created_at?: string
-          updated_at?: string
+          updated_at?: string | null
+          usage_count?: number | null
+          user_id: string
+          voice_message_default_response?: string | null
+          whatsapp_instance_id: string
         }
         Update: {
-          id?: string
-          whatsapp_instance_id?: string
-          user_id?: string
-          name?: string
+          created_at?: string | null
+          default_voice_language?: string | null
           description?: string | null
+          id?: string
+          intent_categories?: Json | null
+          is_active?: boolean | null
+          is_default?: boolean | null
+          is_template?: boolean | null
+          model?: string | null
+          name?: string
+          priority?: number | null
+          process_voice_messages?: boolean | null
           system_prompt?: string
-          temperature?: number
-          model?: string
-          intent_categories?: string[]
-          is_active?: boolean
-          is_default?: boolean
-          priority?: number
-          process_voice_messages?: boolean
-          voice_message_default_response?: string | null
-          default_voice_language?: string
-          usage_count?: number
-          is_template?: boolean
+          temperature?: number | null
           template_category?: string | null
-          created_at?: string
-          updated_at?: string
+          updated_at?: string | null
+          usage_count?: number | null
+          user_id?: string
+          voice_message_default_response?: string | null
+          whatsapp_instance_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "ai_personalities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ai_personalities_whatsapp_instance_id_fkey"
             columns: ["whatsapp_instance_id"]
@@ -84,75 +96,139 @@ export type Database = {
             referencedRelation: "whatsapp_instances"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "ai_personalities_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          }
         ]
       }
-      intent_categories: {
+      collected_data_sessions: {
         Row: {
+          collected_data: Json | null
+          completed_at: string | null
+          config_id: string
+          conversation_id: string
+          created_at: string | null
+          export_error: string | null
+          exported_at: string | null
+          exported_to_sheets: boolean | null
           id: string
-          user_id: string
-          category_key: string
-          display_name: string
-          description: string | null
-          keywords: string[]
-          example_phrases: string[]
-          classification_prompt: string | null
-          is_active: boolean
-          confidence_threshold: number
-          is_system_category: boolean
-          match_count: number
-          avg_confidence: number
-          created_at: string
-          updated_at: string
+          is_complete: boolean | null
+          last_message_at: string | null
+          missing_fields: string[] | null
+          phone_number: string
+          retry_count: number | null
+          sheet_row_number: number | null
+          updated_at: string | null
+          validation_errors: Json | null
         }
         Insert: {
+          collected_data?: Json | null
+          completed_at?: string | null
+          config_id: string
+          conversation_id: string
+          created_at?: string | null
+          export_error?: string | null
+          exported_at?: string | null
+          exported_to_sheets?: boolean | null
           id?: string
-          user_id: string
-          category_key: string
-          display_name: string
-          description?: string | null
-          keywords?: string[]
-          example_phrases?: string[]
-          classification_prompt?: string | null
-          is_active?: boolean
-          confidence_threshold?: number
-          is_system_category?: boolean
-          match_count?: number
-          avg_confidence?: number
-          created_at?: string
-          updated_at?: string
+          is_complete?: boolean | null
+          last_message_at?: string | null
+          missing_fields?: string[] | null
+          phone_number: string
+          retry_count?: number | null
+          sheet_row_number?: number | null
+          updated_at?: string | null
+          validation_errors?: Json | null
         }
         Update: {
+          collected_data?: Json | null
+          completed_at?: string | null
+          config_id?: string
+          conversation_id?: string
+          created_at?: string | null
+          export_error?: string | null
+          exported_at?: string | null
+          exported_to_sheets?: boolean | null
           id?: string
-          user_id?: string
-          category_key?: string
-          display_name?: string
-          description?: string | null
-          keywords?: string[]
-          example_phrases?: string[]
-          classification_prompt?: string | null
-          is_active?: boolean
-          confidence_threshold?: number
-          is_system_category?: boolean
-          match_count?: number
-          avg_confidence?: number
-          created_at?: string
-          updated_at?: string
+          is_complete?: boolean | null
+          last_message_at?: string | null
+          missing_fields?: string[] | null
+          phone_number?: string
+          retry_count?: number | null
+          sheet_row_number?: number | null
+          updated_at?: string | null
+          validation_errors?: Json | null
         }
         Relationships: [
           {
-            foreignKeyName: "intent_categories_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "collected_data_sessions_config_id_fkey"
+            columns: ["config_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "google_sheets_config"
             referencedColumns: ["id"]
-          }
+          },
+        ]
+      }
+      data_collection_fields: {
+        Row: {
+          ask_if_missing_template: string | null
+          column_letter: string | null
+          config_id: string
+          created_at: string | null
+          extraction_keywords: string[] | null
+          field_display_name: string
+          field_display_name_ar: string | null
+          field_name: string
+          field_order: number | null
+          field_type: string | null
+          id: string
+          is_active: boolean | null
+          is_required: boolean | null
+          prompt_template: string | null
+          updated_at: string | null
+          validation_rules: Json | null
+        }
+        Insert: {
+          ask_if_missing_template?: string | null
+          column_letter?: string | null
+          config_id: string
+          created_at?: string | null
+          extraction_keywords?: string[] | null
+          field_display_name: string
+          field_display_name_ar?: string | null
+          field_name: string
+          field_order?: number | null
+          field_type?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_required?: boolean | null
+          prompt_template?: string | null
+          updated_at?: string | null
+          validation_rules?: Json | null
+        }
+        Update: {
+          ask_if_missing_template?: string | null
+          column_letter?: string | null
+          config_id?: string
+          created_at?: string | null
+          extraction_keywords?: string[] | null
+          field_display_name?: string
+          field_display_name_ar?: string | null
+          field_name?: string
+          field_order?: number | null
+          field_type?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_required?: boolean | null
+          prompt_template?: string | null
+          updated_at?: string | null
+          validation_rules?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_collection_fields_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "google_sheets_config"
+            referencedColumns: ["id"]
+          },
         ]
       }
       document_embeddings: {
@@ -209,7 +285,50 @@ export type Database = {
           },
         ]
       }
-
+      escalated_conversations: {
+        Row: {
+          conversation_context: Json | null
+          created_at: string | null
+          escalated_at: string | null
+          id: string
+          instance_id: string | null
+          reason: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          whatsapp_number: string
+        }
+        Insert: {
+          conversation_context?: Json | null
+          created_at?: string | null
+          escalated_at?: string | null
+          id?: string
+          instance_id?: string | null
+          reason?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          whatsapp_number: string
+        }
+        Update: {
+          conversation_context?: Json | null
+          created_at?: string | null
+          escalated_at?: string | null
+          id?: string
+          instance_id?: string | null
+          reason?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          whatsapp_number?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalated_conversations_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       files: {
         Row: {
           arabic_script_details: Json | null
@@ -290,11 +409,123 @@ export type Database = {
           },
         ]
       }
-
+      google_sheets_config: {
+        Row: {
+          created_at: string | null
+          google_email: string | null
+          google_sheet_id: string
+          google_tokens: Json | null
+          id: string
+          is_active: boolean | null
+          last_sync_at: string | null
+          sheet_name: string | null
+          updated_at: string | null
+          user_id: string
+          whatsapp_instance_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          google_email?: string | null
+          google_sheet_id: string
+          google_tokens?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          sheet_name?: string | null
+          updated_at?: string | null
+          user_id: string
+          whatsapp_instance_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          google_email?: string | null
+          google_sheet_id?: string
+          google_tokens?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          sheet_name?: string | null
+          updated_at?: string | null
+          user_id?: string
+          whatsapp_instance_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_sheets_config_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intent_categories: {
+        Row: {
+          avg_confidence: number | null
+          category_key: string
+          classification_prompt: string | null
+          confidence_threshold: number | null
+          created_at: string | null
+          description: string | null
+          display_name: string
+          example_phrases: Json | null
+          id: string
+          is_active: boolean | null
+          is_system_category: boolean | null
+          keywords: Json | null
+          match_count: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          avg_confidence?: number | null
+          category_key: string
+          classification_prompt?: string | null
+          confidence_threshold?: number | null
+          created_at?: string | null
+          description?: string | null
+          display_name: string
+          example_phrases?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_system_category?: boolean | null
+          keywords?: Json | null
+          match_count?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          avg_confidence?: number | null
+          category_key?: string
+          classification_prompt?: string | null
+          confidence_threshold?: number | null
+          created_at?: string | null
+          description?: string | null
+          display_name?: string
+          example_phrases?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_system_category?: boolean | null
+          keywords?: Json | null
+          match_count?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intent_categories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           business_name: string | null
           created_at: string | null
+          enable_smart_escalation_global: boolean | null
           full_name: string | null
           id: string
           instance_limit: number
@@ -311,6 +542,7 @@ export type Database = {
         Insert: {
           business_name?: string | null
           created_at?: string | null
+          enable_smart_escalation_global?: boolean | null
           full_name?: string | null
           id: string
           instance_limit?: number
@@ -327,6 +559,7 @@ export type Database = {
         Update: {
           business_name?: string | null
           created_at?: string | null
+          enable_smart_escalation_global?: boolean | null
           full_name?: string | null
           id?: string
           instance_limit?: number
@@ -339,6 +572,118 @@ export type Database = {
           monthly_prompt_generations_used?: number
           storage_limit_mb?: number
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sheets_export_logs: {
+        Row: {
+          config_id: string | null
+          created_at: string | null
+          error_message: string | null
+          exported_data: Json | null
+          id: string
+          response_data: Json | null
+          row_number: number | null
+          session_id: string | null
+          sheet_id: string
+          status: string | null
+        }
+        Insert: {
+          config_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          exported_data?: Json | null
+          id?: string
+          response_data?: Json | null
+          row_number?: number | null
+          session_id?: string | null
+          sheet_id: string
+          status?: string | null
+        }
+        Update: {
+          config_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          exported_data?: Json | null
+          id?: string
+          response_data?: Json | null
+          row_number?: number | null
+          session_id?: string | null
+          sheet_id?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sheets_export_logs_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "google_sheets_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sheets_export_logs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "collected_data_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sheets_export_logs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "data_collection_overview"
+            referencedColumns: ["session_id"]
+          },
+        ]
+      }
+      support_team_numbers: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          updated_at: string | null
+          user_id: string | null
+          whatsapp_number: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+          whatsapp_number: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+          whatsapp_number?: string
+        }
+        Relationships: []
+      }
+      system_logs: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          id: string
+          level: string
+          message: string
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          level: string
+          message: string
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          level?: string
+          message?: string
         }
         Relationships: []
       }
@@ -392,7 +737,6 @@ export type Database = {
           },
         ]
       }
-
       webhook_messages: {
         Row: {
           data: Json
@@ -420,65 +764,85 @@ export type Database = {
       whatsapp_ai_config: {
         Row: {
           created_at: string
+          data_collection_config_id: string | null
           default_voice_language: string
+          enable_data_collection: boolean | null
+          fallback_personality_id: string | null
           id: string
+          intent_confidence_threshold: number | null
+          intent_recognition_accuracy: number | null
+          intent_recognition_enabled: boolean
           is_active: boolean
+          personality_system_metadata: Json | null
           process_voice_messages: boolean
           system_prompt: string
           temperature: number
+          total_personality_switches: number | null
           updated_at: string
+          use_personality_system: boolean | null
           user_id: string
           voice_message_default_response: string | null
           whatsapp_instance_id: string
-          use_personality_system: boolean | null
-          fallback_personality_id: string | null
-          intent_recognition_enabled: boolean | null
-          intent_confidence_threshold: number | null
-          total_personality_switches: number | null
-          intent_recognition_accuracy: number | null
-          personality_system_metadata: Json | null
         }
         Insert: {
           created_at?: string
+          data_collection_config_id?: string | null
           default_voice_language?: string
+          enable_data_collection?: boolean | null
+          fallback_personality_id?: string | null
           id?: string
+          intent_confidence_threshold?: number | null
+          intent_recognition_accuracy?: number | null
+          intent_recognition_enabled?: boolean
           is_active?: boolean
+          personality_system_metadata?: Json | null
           process_voice_messages?: boolean
           system_prompt: string
           temperature?: number
+          total_personality_switches?: number | null
           updated_at?: string
+          use_personality_system?: boolean | null
           user_id: string
           voice_message_default_response?: string | null
           whatsapp_instance_id: string
-          use_personality_system?: boolean | null
-          fallback_personality_id?: string | null
-          intent_recognition_enabled?: boolean | null
-          intent_confidence_threshold?: number | null
-          total_personality_switches?: number | null
-          intent_recognition_accuracy?: number | null
-          personality_system_metadata?: Json | null
         }
         Update: {
           created_at?: string
+          data_collection_config_id?: string | null
           default_voice_language?: string
+          enable_data_collection?: boolean | null
+          fallback_personality_id?: string | null
           id?: string
+          intent_confidence_threshold?: number | null
+          intent_recognition_accuracy?: number | null
+          intent_recognition_enabled?: boolean
           is_active?: boolean
+          personality_system_metadata?: Json | null
           process_voice_messages?: boolean
           system_prompt?: string
           temperature?: number
+          total_personality_switches?: number | null
           updated_at?: string
+          use_personality_system?: boolean | null
           user_id?: string
           voice_message_default_response?: string | null
           whatsapp_instance_id?: string
-          use_personality_system?: boolean | null
-          fallback_personality_id?: string | null
-          intent_recognition_enabled?: boolean | null
-          intent_confidence_threshold?: number | null
-          total_personality_switches?: number | null
-          intent_recognition_accuracy?: number | null
-          personality_system_metadata?: Json | null
         }
         Relationships: [
+          {
+            foreignKeyName: "whatsapp_ai_config_data_collection_config_id_fkey"
+            columns: ["data_collection_config_id"]
+            isOneToOne: false
+            referencedRelation: "google_sheets_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_ai_config_fallback_personality_id_fkey"
+            columns: ["fallback_personality_id"]
+            isOneToOne: false
+            referencedRelation: "ai_personalities"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "whatsapp_ai_config_whatsapp_instance_id_fkey"
             columns: ["whatsapp_instance_id"]
@@ -623,41 +987,6 @@ export type Database = {
           },
         ]
       }
-      whatsapp_escalated_conversations: {
-        Row: {
-          escalated_at: string
-          id: string
-          is_resolved: boolean
-          resolved_at: string | null
-          user_phone: string
-          whatsapp_instance_id: string
-        }
-        Insert: {
-          escalated_at?: string
-          id?: string
-          is_resolved?: boolean
-          resolved_at?: string | null
-          user_phone: string
-          whatsapp_instance_id: string
-        }
-        Update: {
-          escalated_at?: string
-          id?: string
-          is_resolved?: boolean
-          resolved_at?: string | null
-          user_phone?: string
-          whatsapp_instance_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "whatsapp_escalated_conversations_whatsapp_instance_id_fkey"
-            columns: ["whatsapp_instance_id"]
-            isOneToOne: false
-            referencedRelation: "whatsapp_instances"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       whatsapp_file_mappings: {
         Row: {
           created_at: string
@@ -703,249 +1032,106 @@ export type Database = {
       whatsapp_instances: {
         Row: {
           created_at: string
+          escalated_conversation_message: string | null
+          escalation_enabled: boolean | null
+          escalation_keywords: string[] | null
+          escalation_message: string | null
           id: string
           instance_name: string
+          keyword_escalation_enabled: boolean | null
           last_connected: string | null
           reject_calls: boolean
           reject_calls_message: string | null
+          smart_escalation_enabled: boolean | null
           status: string
           updated_at: string
           user_id: string
-          escalation_enabled: boolean
-          escalation_message: string
-          escalated_conversation_message: string
-          escalation_keywords: string[]
-          smart_escalation_enabled: boolean
-          keyword_escalation_enabled: boolean
         }
         Insert: {
           created_at?: string
+          escalated_conversation_message?: string | null
+          escalation_enabled?: boolean | null
+          escalation_keywords?: string[] | null
+          escalation_message?: string | null
           id?: string
           instance_name: string
+          keyword_escalation_enabled?: boolean | null
           last_connected?: string | null
           reject_calls?: boolean
           reject_calls_message?: string | null
+          smart_escalation_enabled?: boolean | null
           status?: string
           updated_at?: string
           user_id: string
-          escalation_enabled?: boolean
-          escalation_message?: string
-          escalated_conversation_message?: string
-          escalation_keywords?: string[]
-          smart_escalation_enabled?: boolean
-          keyword_escalation_enabled?: boolean
         }
         Update: {
           created_at?: string
+          escalated_conversation_message?: string | null
+          escalation_enabled?: boolean | null
+          escalation_keywords?: string[] | null
+          escalation_message?: string | null
           id?: string
           instance_name?: string
+          keyword_escalation_enabled?: boolean | null
           last_connected?: string | null
           reject_calls?: boolean
           reject_calls_message?: string | null
+          smart_escalation_enabled?: boolean | null
           status?: string
           updated_at?: string
           user_id?: string
-          escalation_enabled?: boolean
-          escalation_message?: string
-          escalated_conversation_message?: string
-          escalation_keywords?: string[]
-          smart_escalation_enabled?: boolean
-          keyword_escalation_enabled?: boolean
         }
         Relationships: []
       }
-      whatsapp_support_config: {
-        Row: {
-          created_at: string
-          escalation_message: string
-          id: string
-          notification_message: string
-          support_phone_number: string
-          updated_at: string
-          user_id: string
-          whatsapp_instance_id: string
-        }
-        Insert: {
-          created_at?: string
-          escalation_message?: string
-          id?: string
-          notification_message?: string
-          support_phone_number: string
-          updated_at?: string
-          user_id: string
-          whatsapp_instance_id: string
-        }
-        Update: {
-          created_at?: string
-          escalation_message?: string
-          id?: string
-          notification_message?: string
-          support_phone_number?: string
-          updated_at?: string
-          user_id?: string
-          whatsapp_instance_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "whatsapp_support_config_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "whatsapp_support_config_whatsapp_instance_id_fkey"
-            columns: ["whatsapp_instance_id"]
-            isOneToOne: true
-            referencedRelation: "whatsapp_instances"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      whatsapp_support_keywords: {
-        Row: {
-          category: string | null
-          created_at: string
-          id: string
-          is_active: boolean
-          keyword: string
-          user_id: string
-          whatsapp_instance_id: string | null
-        }
-        Insert: {
-          category?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          keyword: string
-          user_id: string
-          whatsapp_instance_id?: string | null
-        }
-        Update: {
-          category?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          keyword?: string
-          user_id?: string
-          whatsapp_instance_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fk_whatsapp_support_keywords_instance"
-            columns: ["whatsapp_instance_id"]
-            isOneToOne: false
-            referencedRelation: "whatsapp_instances"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "whatsapp_support_keywords_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      escalated_conversations: {
-        Row: {
-          id: string
-          whatsapp_number: string
-          instance_id: string
-          escalated_at: string
-          reason: string
-          conversation_context: Json
-          resolved_at: string | null
-          resolved_by: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          whatsapp_number: string
-          instance_id: string
-          escalated_at?: string
-          reason?: string
-          conversation_context?: Json
-          resolved_at?: string | null
-          resolved_by?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          whatsapp_number?: string
-          instance_id?: string
-          escalated_at?: string
-          reason?: string
-          conversation_context?: Json
-          resolved_at?: string | null
-          resolved_by?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "escalated_conversations_instance_id_fkey"
-            columns: ["instance_id"]
-            isOneToOne: false
-            referencedRelation: "whatsapp_instances"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "escalated_conversations_resolved_by_fkey"
-            columns: ["resolved_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      support_team_numbers: {
-        Row: {
-          id: string
-          user_id: string
-          whatsapp_number: string
-          is_active: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id?: string
-          whatsapp_number: string
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          whatsapp_number?: string
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "support_team_numbers_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
     }
     Views: {
-      [_ in never]: never
+      data_collection_overview: {
+        Row: {
+          collected_data: Json | null
+          completed_at: string | null
+          conversation_id: string | null
+          exported_at: string | null
+          exported_to_sheets: boolean | null
+          google_email: string | null
+          google_sheet_id: string | null
+          is_complete: boolean | null
+          phone_number: string | null
+          required_fields: number | null
+          session_created_at: string | null
+          session_id: string | null
+          sheet_name: string | null
+          total_fields: number | null
+          user_id: string | null
+          whatsapp_instance_name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       binary_quantize: {
         Args: { "": string } | { "": unknown }
         Returns: unknown
       }
+      check_and_update_ai_usage: {
+        Args: { p_increment?: boolean; p_user_id: string }
+        Returns: Json
+      }
+      check_personalities_for_instance: {
+        Args: { p_whatsapp_instance_id: string }
+        Returns: {
+          active_personalities: number
+          has_billing_personality: boolean
+          has_general_personality: boolean
+          has_sales_personality: boolean
+          has_technical_personality: boolean
+          intent_categories: string[]
+          personality_count: number
+        }[]
+      }
       check_user_role: {
         Args: {
-          _user_id: string
           _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
         }
         Returns: boolean
       }
@@ -953,35 +1139,99 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      cleanup_orphaned_metadata: {
-        Args: Record<PropertyKey, never>
+      cleanup_webhook_debug_logs: {
+        Args: { retention_days?: number }
         Returns: undefined
       }
-
       detect_language_simple: {
         Args: { text_input: string }
         Returns: string
       }
-      is_conversation_escalated: {
-        Args: { p_phone_number: string; p_instance_id: string }
+      diagnose_smart_intent_system: {
+        Args: { p_whatsapp_instance_id: string }
+        Returns: {
+          check_name: string
+          details: string
+          recommendation: string
+          status: string
+        }[]
+      }
+      ensure_default_personalities: {
+        Args: { p_user_id: string; p_whatsapp_instance_id: string }
         Returns: boolean
       }
       escalate_conversation: {
-        Args: { 
-          p_phone_number: string
-          p_instance_id: string
-          p_reason: string
+        Args: {
           p_context?: Json
+          p_instance_id: string
+          p_phone_number: string
+          p_reason: string
         }
         Returns: string
       }
-      resolve_escalation: {
-        Args: { 
-          p_phone_number: string
-          p_instance_id: string
-          p_resolved_by: string
+      get_contextual_personality: {
+        Args: {
+          p_business_context?: Json
+          p_intent: string
+          p_intent_confidence?: number
+          p_whatsapp_instance_id: string
         }
-        Returns: boolean
+        Returns: {
+          confidence_score: number
+          personality_id: string
+          personality_name: string
+          system_prompt: string
+          temperature: number
+        }[]
+      }
+      get_conversation_with_context: {
+        Args: {
+          p_instance_id: string
+          p_message_limit?: number
+          p_user_phone: string
+        }
+        Returns: Json
+      }
+      get_intent_recognition_stats: {
+        Args: { p_whatsapp_instance_id: string }
+        Returns: {
+          avg_confidence: number
+          cache_hit_rate: number
+          most_common_intent: string
+          total_recognitions: number
+        }[]
+      }
+      get_personality_for_intent: {
+        Args: {
+          p_confidence?: number
+          p_intent_category: string
+          p_whatsapp_instance_id: string
+        }
+        Returns: {
+          default_voice_language: string
+          model: string
+          personality_id: string
+          personality_name: string
+          process_voice_messages: boolean
+          system_prompt: string
+          temperature: number
+          voice_message_default_response: string
+        }[]
+      }
+      get_personality_usage_analytics: {
+        Args: { p_whatsapp_instance_id: string }
+        Returns: {
+          avg_confidence: number
+          last_used_at: string
+          most_common_intent: string
+          personality_id: string
+          personality_name: string
+          usage_count: number
+        }[]
+      }
+      get_user_language_preference: {
+        Args: { user_id: string }
+        Returns: string
       }
       halfvec_avg: {
         Args: { "": number[] }
@@ -1019,8 +1269,10 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
-
-
+      is_conversation_escalated: {
+        Args: { p_instance_id: string; p_phone_number: string }
+        Returns: boolean
+      }
       ivfflat_bit_support: {
         Args: { "": unknown }
         Returns: unknown
@@ -1043,22 +1295,26 @@ export type Database = {
       }
       match_document_chunks_by_files: {
         Args: {
-          query_embedding: string
-          match_threshold: number
-          match_count: number
-          min_content_length?: number
-          filter_language?: string
           file_ids?: string[]
+          filter_language?: string
+          match_count: number
+          match_threshold: number
+          min_content_length?: number
+          query_embedding: string
         }
         Returns: {
-          id: string
           chunk_id: string
-          file_id: string
           content: string
+          file_id: string
+          id: string
+          language: string
           metadata: Json
           similarity: number
-          language: string
         }[]
+      }
+      migrate_to_personality_system: {
+        Args: { p_whatsapp_instance_id: string }
+        Returns: string
       }
       process_message_batch: {
         Args: { p_conversation_id: string; p_timestamp_threshold: string }
@@ -1072,6 +1328,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      resolve_escalation: {
+        Args: {
+          p_instance_id: string
+          p_phone_number: string
+          p_resolved_by: string
+        }
+        Returns: boolean
+      }
       sparsevec_out: {
         Args: { "": unknown }
         Returns: unknown
@@ -1083,6 +1347,27 @@ export type Database = {
       sparsevec_typmod_in: {
         Args: { "": unknown[] }
         Returns: number
+      }
+      store_message_with_update: {
+        Args: {
+          p_content: string
+          p_conversation_id: string
+          p_message_id?: string
+          p_role: string
+        }
+        Returns: Json
+      }
+      update_personality_usage: {
+        Args: { p_personality_id: string }
+        Returns: undefined
+      }
+      user_can_access_config: {
+        Args: { config_uuid: string }
+        Returns: boolean
+      }
+      user_can_access_instance: {
+        Args: { instance_uuid: string }
+        Returns: boolean
       }
       vector_avg: {
         Args: { "": number[] }
@@ -1118,21 +1403,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -1150,14 +1439,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -1173,14 +1464,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -1196,14 +1489,16 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -1211,14 +1506,16 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
