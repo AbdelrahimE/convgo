@@ -53,10 +53,11 @@ const DataCollection = () => {
         .from('google_sheets_config')
         .select('*')
         .eq('whatsapp_instance_id', selectedInstance)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching config:', error);
+      if (error) {
+        console.error('Error fetching google_sheets_config:', error);
+        throw error;
       }
       
       return data as GoogleSheetsConfig | null;
@@ -108,10 +109,11 @@ const DataCollection = () => {
         .from('whatsapp_ai_config')
         .select('enable_data_collection, data_collection_config_id')
         .eq('whatsapp_instance_id', selectedInstance)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching AI config:', error);
+      if (error) {
+        console.error('Error fetching whatsapp_ai_config:', error);
+        throw error;
       }
       
       return data;

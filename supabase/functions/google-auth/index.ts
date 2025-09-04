@@ -27,8 +27,15 @@ interface GoogleUserInfo {
 serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log('[GoogleAuth] CORS preflight request');
     return new Response('ok', { headers: corsHeaders });
   }
+
+  console.log('[GoogleAuth] New request received:', {
+    method: req.method,
+    url: req.url,
+    headers: Object.fromEntries(req.headers.entries())
+  });
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
@@ -37,23 +44,59 @@ serve(async (req: Request) => {
     const googleClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET') ?? '';
     const redirectUri = Deno.env.get('GOOGLE_REDIRECT_URI') ?? '';
 
+    console.log('[GoogleAuth] Environment variables check:', {
+      supabaseUrl: !!supabaseUrl,
+      supabaseServiceRoleKey: !!supabaseServiceRoleKey,
+      googleClientId: !!googleClientId,
+      googleClientSecret: !!googleClientSecret,
+      redirectUri: !!redirectUri
+    });
+
     if (!googleClientId || !googleClientSecret || !redirectUri) {
+      console.error('[GoogleAuth] Missing Google OAuth credentials:', {
+        googleClientId: !!googleClientId,
+        googleClientSecret: !!googleClientSecret,
+        redirectUri: !!redirectUri
+      });
       throw new Error('Google OAuth credentials not configured');
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-    const { action, code, whatsapp_instance_id, state } = await req.json();
+    
+    let requestBody;
+    try {
+      requestBody = await req.json();
+      console.log('[GoogleAuth] Request body:', requestBody);
+    } catch (bodyError) {
+      console.error('[GoogleAuth] Error parsing request body:', bodyError);
+      throw new Error('Invalid request body');
+    }
+    
+    const { action, code, whatsapp_instance_id, state } = requestBody;
 
     // Get authenticated user
     const authHeader = req.headers.get('Authorization');
+    console.log('[GoogleAuth] Auth header present:', !!authHeader);
+    
     if (!authHeader) {
+      console.error('[GoogleAuth] No authorization header found');
       throw new Error('No authorization header');
     }
 
     const token = authHeader.replace('Bearer ', '');
+    console.log('[GoogleAuth] Token length:', token.length);
+    
+    console.log('[GoogleAuth] Getting user from token...');
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     
+    console.log('[GoogleAuth] User authentication result:', {
+      user: !!user,
+      userId: user?.id,
+      userError: userError?.message
+    });
+    
     if (userError || !user) {
+      console.error('[GoogleAuth] User authentication failed:', userError);
       throw new Error('User not authenticated');
     }
 
@@ -272,9 +315,17 @@ serve(async (req: Request) => {
     throw new Error('Invalid action');
 
   } catch (error) {
-    console.error('Error in google-auth function:', error);
+    console.error('[GoogleAuth] Catch block - Error details:', {
+      error,
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: `GoogleAuth function error: ${error.message}` 
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400 
