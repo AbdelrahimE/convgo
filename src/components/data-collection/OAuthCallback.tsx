@@ -20,15 +20,26 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
   // Safe message setter with logging
   const safeSetMessage = (newMessage: any) => {
     console.log('[OAuthCallback] Setting message:', { newMessage, type: typeof newMessage });
+    
+    // Ensure we always set a string value
+    let finalMessage = 'Processing...';
+    
     if (typeof newMessage === 'string') {
-      setMessage(newMessage);
-    } else if (newMessage && typeof newMessage === 'object') {
+      finalMessage = newMessage;
+    } else if (newMessage === null || newMessage === undefined) {
+      finalMessage = 'Processing...';
+    } else if (typeof newMessage === 'number' || typeof newMessage === 'boolean') {
+      finalMessage = String(newMessage);
+    } else if (typeof newMessage === 'object') {
       console.warn('[OAuthCallback] Message is object, converting to string:', newMessage);
-      setMessage(JSON.stringify(newMessage));
+      // Don't use JSON.stringify as it might create invalid JSX
+      finalMessage = 'Processing authentication...';
     } else {
-      console.warn('[OAuthCallback] Invalid message type, using string conversion:', newMessage);
-      setMessage(String(newMessage || 'Processing...'));
+      console.warn('[OAuthCallback] Invalid message type, using fallback:', typeof newMessage);
+      finalMessage = 'Processing authentication...';
     }
+    
+    setMessage(finalMessage);
   };
 
   useEffect(() => {
@@ -126,9 +137,16 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
         if (data.email) {
           if (typeof data.email === 'string') {
             emailText = data.email;
+          } else if (data.email === null || data.email === undefined) {
+            emailText = 'your Google account';
           } else if (typeof data.email === 'object') {
             console.warn('[OAuthCallback] Email is an object instead of string:', data.email);
-            emailText = JSON.stringify(data.email);
+            // Try to extract email from object if it has an email property
+            if (data.email.email && typeof data.email.email === 'string') {
+              emailText = data.email.email;
+            } else {
+              emailText = 'your Google account';
+            }
           } else {
             console.warn('[OAuthCallback] Email is not a string:', typeof data.email, data.email);
             emailText = String(data.email);
@@ -146,16 +164,10 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
           description: `Successfully authenticated as ${emailText}`,
         });
 
-        // Redirect to data collection page after a short delay
+        // Use window.location for more reliable redirect after OAuth
         setTimeout(() => {
-          navigate('/data-collection', { 
-            replace: true,
-            state: { 
-              justConnected: true,
-              email: emailText,
-              whatsapp_instance_id: stateData.whatsapp_instance_id
-            }
-          });
+          // Force a full page navigation to ensure clean state
+          window.location.href = '/data-collection';
         }, 2000);
 
       } catch (error: any) {
@@ -180,7 +192,7 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
 
         // Redirect back to data collection page after error
         setTimeout(() => {
-          navigate('/data-collection', { replace: true });
+          window.location.href = '/data-collection';
         }, 3000);
       }
     };
@@ -230,7 +242,7 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
         <CardContent className="space-y-4">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
-              {typeof message === 'string' ? message : 'Processing authentication...'}
+              {message || 'Processing authentication...'}
             </p>
           </div>
 
