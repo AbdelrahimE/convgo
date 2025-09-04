@@ -21,6 +21,8 @@ import AccountSettings from '@/pages/AccountSettings';
 import AIUsageMonitoring from '@/pages/AIUsageMonitoring';
 import AIPersonalities from '@/pages/AIPersonalities';
 import EscalationManagement from '@/pages/EscalationManagement';
+import DataCollection from '@/pages/DataCollection';
+import OAuthCallback from '@/components/data-collection/OAuthCallback';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 
@@ -137,6 +139,22 @@ function AppContent() {
                     element={
                       <ProtectedRoute>
                         <EscalationManagement />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/data-collection"
+                    element={
+                      <ProtectedRoute>
+                        <DataCollection />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/data-collection/callback"
+                    element={
+                      <ProtectedRoute>
+                        <OAuthCallback />
                       </ProtectedRoute>
                     }
                   />

@@ -17,7 +17,8 @@ import {
   X,
   Users,
   Headset,
-  Settings
+  Settings,
+  Database
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -50,6 +51,10 @@ const navigation = [{
   name: 'AI Personalities',
   href: '/ai-personalities',
   icon: Users
+}, {
+  name: 'Data Collection',
+  href: '/data-collection',
+  icon: Database
 }, {
   name: 'Smart Escalation',
   href: '/escalation-management',
@@ -192,7 +197,7 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
 
       {/* Navigation */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="h-full px-2 py-2 overflow-y-auto scrollbar-none">
+        <div className="h-full px-3 py-3 overflow-y-auto scrollbar-none">
           <nav className="space-y-2">
             {navigation.map((item) => {
               const isActive = location.pathname === item.href;
@@ -210,9 +215,9 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
                   )}
                 >
                   <item.icon className={cn(
-                    "h-5 w-5 shrink-0 transition-transform duration-200",
+                    "h-4 w-4 shrink-0 transition-transform duration-200",
                     "group-hover:scale-110",
-                    isActive ? "text-blue-700 dark:text-blue-300" : "text-slate-900 dark:text-slate-100"
+                    isActive ? "text-blue-600 dark:text-blue-300" : "text-slate-900 dark:text-slate-100"
                   )} />
                   <span className="truncate">{item.name}</span>
                   {item.badge === 'escalated' && escalatedCount > 0 && (
