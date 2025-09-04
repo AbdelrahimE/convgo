@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 interface CollectedDataViewProps {
@@ -59,7 +59,6 @@ interface DataSession {
 }
 
 const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'complete' | 'incomplete' | 'exported'>('all');
@@ -108,17 +107,10 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collected-data-sessions'] });
-      toast({
-        title: "Success",
-        description: "Data exported to Google Sheets successfully",
-      });
+      toast.success("Data exported to Google Sheets successfully");
     },
     onError: (error: any) => {
-      toast({
-        title: "Export Failed",
-        description: error.message || "Failed to export data to Google Sheets",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to export data to Google Sheets");
     }
   });
 
@@ -143,17 +135,10 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['collected-data-sessions'] });
-      toast({
-        title: "Export Complete",
-        description: `Successfully exported ${data.exported} sessions to Google Sheets`,
-      });
+      toast.success(`Successfully exported ${data.exported} sessions to Google Sheets`);
     },
     onError: (error: any) => {
-      toast({
-        title: "Export Failed",
-        description: error.message || "Failed to export data",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to export data");
     }
   });
 
@@ -169,17 +154,10 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collected-data-sessions'] });
-      toast({
-        title: "Success",
-        description: "Session deleted successfully",
-      });
+      toast.success("Session deleted successfully");
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete session",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to delete session");
     }
   });
 

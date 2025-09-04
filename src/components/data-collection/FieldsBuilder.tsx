@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from 'sonner';
 import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -137,7 +137,6 @@ const SortableFieldItem: React.FC<{
 };
 
 const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingField, setEditingField] = useState<DataField | null>(null);
@@ -188,18 +187,11 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-collection-fields', configId] });
-      toast({
-        title: "Success",
-        description: editingField ? "Field updated successfully" : "Field added successfully",
-      });
+      toast.success(editingField ? "Field updated successfully" : "Field added successfully");
       resetForm();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save field",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to save field");
     }
   });
 
@@ -215,17 +207,10 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-collection-fields', configId] });
-      toast({
-        title: "Success",
-        description: "Field deleted successfully",
-      });
+      toast.success("Field deleted successfully");
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete field",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to delete field");
     }
   });
 
@@ -247,11 +232,7 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
       queryClient.invalidateQueries({ queryKey: ['data-collection-fields', configId] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update field order",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to update field order");
     }
   });
 
@@ -279,11 +260,7 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
 
   const handleSave = () => {
     if (!fieldForm.field_name || !fieldForm.field_display_name) {
-      toast({
-        title: "Validation Error",
-        description: "Field name and display name are required",
-        variant: "destructive",
-      });
+      toast.error("Field name and display name are required");
       return;
     }
 

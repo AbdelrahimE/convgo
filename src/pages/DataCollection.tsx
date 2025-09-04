@@ -15,7 +15,7 @@ import {
   RefreshCw,
   Download
 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import GoogleAuthButton from "@/components/data-collection/GoogleAuthButton";
@@ -37,7 +37,6 @@ interface GoogleSheetsConfig {
 }
 
 const DataCollection = () => {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
@@ -85,17 +84,10 @@ const DataCollection = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-ai-config', selectedInstance] });
-      toast({
-        title: "Success",
-        description: "Data collection settings updated",
-      });
+      toast.success("Data collection settings updated");
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update settings",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to update settings");
     }
   });
 
@@ -137,11 +129,7 @@ const DataCollection = () => {
         window.location.href = data.authUrl;
       }
     } catch (error: any) {
-      toast({
-        title: "Authentication Error",
-        description: error.message || "Failed to initiate Google authentication",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to initiate Google authentication");
     }
   };
 
@@ -155,16 +143,9 @@ const DataCollection = () => {
       if (error) throw error;
 
       queryClient.invalidateQueries({ queryKey: ['google-sheets-config'] });
-      toast({
-        title: "Disconnected",
-        description: "Google Sheets disconnected successfully",
-      });
+      toast.success("Google Sheets disconnected successfully");
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to disconnect",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to disconnect");
     }
   };
 

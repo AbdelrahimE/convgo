@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Save, ExternalLink, Info } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from 'sonner';
 
 interface SheetSelectorProps {
   configId: string;
@@ -20,7 +20,6 @@ const SheetSelector: React.FC<SheetSelectorProps> = ({
   currentSheetId, 
   sheetName 
 }) => {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [sheetId, setSheetId] = useState(currentSheetId || '');
   const [newSheetName, setNewSheetName] = useState(sheetName || 'Sheet1');
@@ -39,17 +38,10 @@ const SheetSelector: React.FC<SheetSelectorProps> = ({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['google-sheets-config'] });
-      toast({
-        title: "Success",
-        description: "Google Sheet settings updated successfully",
-      });
+      toast.success("Google Sheet settings updated successfully");
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update settings",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to update settings");
     }
   });
 
