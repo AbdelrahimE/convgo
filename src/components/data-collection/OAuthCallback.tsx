@@ -17,6 +17,20 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState<string>('Processing Google authentication...');
 
+  // Safe message setter with logging
+  const safeSetMessage = (newMessage: any) => {
+    console.log('[OAuthCallback] Setting message:', { newMessage, type: typeof newMessage });
+    if (typeof newMessage === 'string') {
+      setMessage(newMessage);
+    } else if (newMessage && typeof newMessage === 'object') {
+      console.warn('[OAuthCallback] Message is object, converting to string:', newMessage);
+      setMessage(JSON.stringify(newMessage));
+    } else {
+      console.warn('[OAuthCallback] Invalid message type, using string conversion:', newMessage);
+      setMessage(String(newMessage || 'Processing...'));
+    }
+  };
+
   useEffect(() => {
     const processOAuthCallback = async () => {
       try {
@@ -43,7 +57,7 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
           throw new Error('Missing required OAuth parameters (code or state)');
         }
 
-        setMessage('Validating authentication and saving credentials...');
+        safeSetMessage('Validating authentication and saving credentials...');
 
         // Decode state to get instance information
         let stateData;
@@ -79,23 +93,57 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
         });
 
         if (functionError) {
-          console.error('Edge function error:', functionError);
+          console.error('[OAuthCallback] Edge function error:', functionError);
           throw new Error(`Authentication failed: ${functionError.message || 'Unknown error'}`);
         }
 
+        // Log detailed data structure for debugging
+        console.log('[OAuthCallback] Raw response data:', data);
+        console.log('[OAuthCallback] Data type:', typeof data);
+        console.log('[OAuthCallback] Data stringified:', JSON.stringify(data));
+        
+        if (data && typeof data === 'object') {
+          console.log('[OAuthCallback] Data properties:', Object.keys(data));
+          console.log('[OAuthCallback] Data.success:', data.success, 'Type:', typeof data.success);
+          console.log('[OAuthCallback] Data.email:', data.email, 'Type:', typeof data.email);
+        }
+
+        // Validate data structure
+        if (!data || typeof data !== 'object') {
+          console.error('[OAuthCallback] Invalid response structure - data is not an object');
+          throw new Error('Invalid response from authentication service - invalid data structure');
+        }
+
         if (!data.success) {
+          console.error('[OAuthCallback] Authentication failed according to response');
           throw new Error(`Authentication failed: ${data.error || 'Unknown error'}`);
         }
 
-        console.log('Google OAuth completed successfully:', data);
+        console.log('[OAuthCallback] Google OAuth completed successfully:', data);
+        
+        // Safely handle email display
+        let emailText = 'your Google account';
+        if (data.email) {
+          if (typeof data.email === 'string') {
+            emailText = data.email;
+          } else if (typeof data.email === 'object') {
+            console.warn('[OAuthCallback] Email is an object instead of string:', data.email);
+            emailText = JSON.stringify(data.email);
+          } else {
+            console.warn('[OAuthCallback] Email is not a string:', typeof data.email, data.email);
+            emailText = String(data.email);
+          }
+        }
+
+        console.log('[OAuthCallback] Using email text:', emailText);
         
         setStatus('success');
-        setMessage(`Successfully connected as ${data.email}!`);
+        safeSetMessage(`Successfully connected as ${emailText}!`);
 
         // Show success toast
         toast({
           title: "Google Account Connected",
-          description: `Successfully authenticated as ${data.email}`,
+          description: `Successfully authenticated as ${emailText}`,
         });
 
         // Redirect to data collection page after a short delay
@@ -104,17 +152,25 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
             replace: true,
             state: { 
               justConnected: true,
-              email: data.email,
+              email: emailText,
               whatsapp_instance_id: stateData.whatsapp_instance_id
             }
           });
         }, 2000);
 
       } catch (error: any) {
-        console.error('OAuth callback error:', error);
+        console.error('[OAuthCallback] OAuth callback error details:', {
+          error,
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          type: typeof error
+        });
         
         setStatus('error');
-        setMessage(error.message || 'Authentication failed');
+        const errorMessage = error.message || 'Authentication failed';
+        console.log('[OAuthCallback] Setting error message:', errorMessage);
+        safeSetMessage(errorMessage);
         
         toast({
           title: "Authentication Failed",
@@ -174,7 +230,7 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
         <CardContent className="space-y-4">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
-              {message}
+              {typeof message === 'string' ? message : 'Processing authentication...'}
             </p>
           </div>
 

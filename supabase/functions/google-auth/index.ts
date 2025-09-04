@@ -184,6 +184,12 @@ serve(async (req: Request) => {
 
       const userInfo = await userInfoResponse.json() as GoogleUserInfo;
 
+      console.log('[GoogleAuth] User info received from Google:', {
+        userInfo,
+        email: userInfo.email,
+        emailType: typeof userInfo.email
+      });
+
       // Encrypt tokens before storing
       // In production, use a proper encryption library
       const encryptedTokens = {
@@ -229,11 +235,21 @@ serve(async (req: Request) => {
         if (insertError) throw insertError;
       }
 
+      const responseData = { 
+        success: true, 
+        email: userInfo.email 
+      };
+
+      console.log('[GoogleAuth] Callback response data:', {
+        responseData,
+        email: responseData.email,
+        emailType: typeof responseData.email,
+        success: responseData.success,
+        successType: typeof responseData.success
+      });
+
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          email: userInfo.email 
-        }),
+        JSON.stringify(responseData),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 200 
