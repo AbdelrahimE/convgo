@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
@@ -12,13 +12,23 @@ interface OAuthCallbackProps {
 
 const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { toast } = useToast();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState<string>('Processing Google authentication...');
+  const isMounted = useRef(true);
+  const hasProcessed = useRef(false);
 
-  // Safe message setter with logging
+  // Track component unmounting
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Safe message setter with mounting check
   const safeSetMessage = (newMessage: any) => {
+    if (!isMounted.current) return; // Don't update state if unmounted
+    
     console.log('[OAuthCallback] Setting message:', { newMessage, type: typeof newMessage });
     
     // Ensure we always set a string value
@@ -43,6 +53,10 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
   };
 
   useEffect(() => {
+    // Prevent double processing
+    if (hasProcessed.current) return;
+    hasProcessed.current = true;
+    
     const processOAuthCallback = async () => {
       try {
         // Extract parameters from URL
@@ -155,20 +169,22 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
 
         console.log('[OAuthCallback] Using email text:', emailText);
         
-        setStatus('success');
-        safeSetMessage(`Successfully connected as ${emailText}!`);
+        if (isMounted.current) {
+          setStatus('success');
+          safeSetMessage(`Successfully connected as ${emailText}!`);
 
-        // Show success toast
-        toast({
-          title: "Google Account Connected",
-          description: `Successfully authenticated as ${emailText}`,
-        });
+          // Show success toast
+          toast({
+            title: "Google Account Connected",
+            description: `Successfully authenticated as ${emailText}`,
+          });
+        }
 
-        // Use window.location for more reliable redirect after OAuth
+        // Use window.location.replace for immediate redirect
         setTimeout(() => {
-          // Force a full page navigation to ensure clean state
-          window.location.href = '/data-collection';
-        }, 2000);
+          // Force a full page navigation and prevent back button
+          window.location.replace('/data-collection');
+        }, 1500);
 
       } catch (error: any) {
         console.error('[OAuthCallback] OAuth callback error details:', {
@@ -179,26 +195,28 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
           type: typeof error
         });
         
-        setStatus('error');
-        const errorMessage = error.message || 'Authentication failed';
-        console.log('[OAuthCallback] Setting error message:', errorMessage);
-        safeSetMessage(errorMessage);
-        
-        toast({
-          title: "Authentication Failed",
-          description: error.message || "Failed to connect Google account",
-          variant: "destructive",
-        });
+        if (isMounted.current) {
+          setStatus('error');
+          const errorMessage = error.message || 'Authentication failed';
+          console.log('[OAuthCallback] Setting error message:', errorMessage);
+          safeSetMessage(errorMessage);
+          
+          toast({
+            title: "Authentication Failed",
+            description: error.message || "Failed to connect Google account",
+            variant: "destructive",
+          });
+        }
 
         // Redirect back to data collection page after error
         setTimeout(() => {
-          window.location.href = '/data-collection';
-        }, 3000);
+          window.location.replace('/data-collection');
+        }, 2500);
       }
     };
 
     processOAuthCallback();
-  }, [location.search, navigate, toast]);
+  }, [location.search, toast]);
 
   const getStatusIcon = () => {
     switch (status) {
@@ -226,6 +244,14 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
     }
   };
 
+  // Ensure message is always a string before rendering
+  const displayMessage = React.useMemo(() => {
+    if (typeof message === 'string') {
+      return message;
+    }
+    return 'Processing authentication...';
+  }, [message]);
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <Card className={`w-full max-w-md ${getStatusColor()}`}>
@@ -242,7 +268,7 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
         <CardContent className="space-y-4">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
-              {message || 'Processing authentication...'}
+              {displayMessage}
             </p>
           </div>
 

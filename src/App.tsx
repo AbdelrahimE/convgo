@@ -22,7 +22,7 @@ import AIUsageMonitoring from '@/pages/AIUsageMonitoring';
 import AIPersonalities from '@/pages/AIPersonalities';
 import EscalationManagement from '@/pages/EscalationManagement';
 import DataCollection from '@/pages/DataCollection';
-import OAuthCallback from '@/components/data-collection/OAuthCallback';
+import OAuthCallbackWrapper from '@/components/data-collection/OAuthCallbackWrapper';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 
@@ -154,7 +154,7 @@ function AppContent() {
                     path="/data-collection/callback"
                     element={
                       <ProtectedRoute>
-                        <OAuthCallback />
+                        <OAuthCallbackWrapper />
                       </ProtectedRoute>
                     }
                   />
