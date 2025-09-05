@@ -17,6 +17,12 @@ import { processAudioMessage } from "./audio-processor.ts";
 import { generateAndSendAIResponse } from "./ai-response-generator.ts";
 import { getRecentConversationHistory } from "./conversation-history.ts";
 
+// Data Collection integration imports
+import { 
+  isDataCollectionEnabled,
+  processDataExtraction 
+} from './data-collection-integration.ts';
+
 // Logger for debugging
 const logger = {
   log: (...args: any[]) => console.log(...args),
@@ -524,6 +530,99 @@ async function processMessageForAIIntegrated(
       supabaseServiceKey,    // 10. supabaseServiceKey: string
       imageUrl               // 11. imageUrl?: string | null
     );
+
+    // ========== DATA COLLECTION INTEGRATION ==========
+    logger.info('🔍 DATA COLLECTION: Starting integration check', {
+      aiResult,
+      instanceName,
+      instanceId: instanceData.id,
+      fromNumber,
+      messageText: messageText?.substring(0, 100),
+      isFromMe
+    });
+
+    if (aiResult) {
+      logger.info('✅ DATA COLLECTION: AI result exists, checking if enabled');
+      try {
+        logger.info('🔍 DATA COLLECTION: Calling isDataCollectionEnabled', {
+          instanceId: instanceData.id
+        });
+        
+        const isEnabled = await isDataCollectionEnabled(instanceData.id, supabaseAdmin);
+        
+        logger.info('📊 DATA COLLECTION: Enable check result', {
+          isEnabled,
+          instanceId: instanceData.id,
+          hasMessageText: !!messageText,
+          isFromMe,
+          allConditions: !!(isEnabled && messageText && !isFromMe)
+        });
+        
+        if (isEnabled && messageText && !isFromMe) {
+          logger.info('🚀 DATA COLLECTION: All conditions met, starting processing', {
+            instanceName,
+            instanceId: instanceData.id,
+            fromNumber,
+            conversationId,
+            messageLength: messageText.length
+          });
+          
+          // Get simple conversation history for context
+          const simpleHistory = conversationHistory.slice(-5).map(msg => ({
+            from: msg.role === 'user' ? 'customer' : 'assistant',
+            message: msg.content
+          }));
+
+          logger.info('📝 DATA COLLECTION: Conversation history prepared', {
+            historyLength: simpleHistory.length,
+            historyPreview: simpleHistory.slice(0, 2)
+          });
+
+          // Process data extraction (non-blocking)
+          logger.info('📞 DATA COLLECTION: Calling processDataExtraction');
+          processDataExtraction(
+            instanceData.id,
+            conversationId,
+            fromNumber,
+            messageText,
+            simpleHistory,
+            supabaseUrl,
+            supabaseServiceKey
+          ).then(result => {
+            logger.info('✅ DATA COLLECTION: processDataExtraction completed', { result });
+          }).catch(error => {
+            logger.error('❌ DATA COLLECTION: processDataExtraction failed', { 
+              error: error.message,
+              stack: error.stack,
+              instanceId: instanceData.id,
+              conversationId,
+              fromNumber
+            });
+          });
+          
+          logger.info('🎯 DATA COLLECTION: Processing initiated successfully');
+        } else {
+          logger.warn('⚠️ DATA COLLECTION: Conditions not met', {
+            isEnabled,
+            hasMessageText: !!messageText,
+            isFromMe,
+            reason: !isEnabled ? 'not_enabled' : !messageText ? 'no_message' : isFromMe ? 'from_me' : 'unknown'
+          });
+        }
+      } catch (error) {
+        logger.error('💥 DATA COLLECTION: Exception during check', { 
+          error: error.message,
+          stack: error.stack,
+          instanceId: instanceData.id
+        });
+      }
+    } else {
+      logger.warn('⚠️ DATA COLLECTION: No AI result, skipping data collection', {
+        aiResult,
+        instanceName
+      });
+    }
+    // ========== END DATA COLLECTION ==========
 
     logger.info('Integrated AI processing completed', { 
       instanceName, 

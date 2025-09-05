@@ -16,6 +16,14 @@ import { getRecentConversationHistory } from '../_shared/conversation-history.ts
 // Import parallel processing utilities
 import { executeParallel, executeSafeParallel, measureTime } from '../_shared/parallel-queries.ts';
 
+// Import data collection integration
+import { 
+  isDataCollectionEnabled, 
+  processDataExtraction, 
+  getConversationHistoryForExtraction,
+  mergeDataCollectionResponse 
+} from '../_shared/data-collection-integration.ts';
+
 // Helper function to check if conversation is currently escalated
 async function isConversationEscalated(instanceId: string, phoneNumber: string): Promise<boolean> {
   try {
@@ -896,6 +904,174 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
       supabaseServiceKey,
       null // No image URL for now (can be enhanced later)
     );
+
+    // ========== DATA COLLECTION INTEGRATION ==========
+    logger.info('🔍 DATA COLLECTION: Starting integration check after AI response', {
+      aiResponseSuccess,
+      instanceName,
+      instanceId: instanceData.id,
+      userPhone,
+      conversationId,
+      messageText: combinedMessage?.substring(0, 100),
+      timestamp: new Date().toISOString()
+    });
+
+    if (aiResponseSuccess) {
+      try {
+        logger.info('✅ DATA COLLECTION: AI response successful, checking if data collection enabled', {
+          instanceId: instanceData.id,
+          userPhone
+        });
+
+        // Check if data collection is enabled for this WhatsApp instance
+        const dataCollectionEnabled = await isDataCollectionEnabled(
+          instanceData.id,
+          supabaseAdmin
+        );
+
+        logger.info('📊 DATA COLLECTION: Enabled check result', {
+          enabled: dataCollectionEnabled,
+          instanceId: instanceData.id,
+          userPhone
+        });
+
+        if (dataCollectionEnabled) {
+          logger.info('🚀 DATA COLLECTION: Processing data extraction', {
+            instanceId: instanceData.id,
+            conversationId,
+            userPhone,
+            messageLength: combinedMessage?.length
+          });
+
+          // Get conversation history for data extraction context
+          const extractionHistory = await getConversationHistoryForExtraction(
+            conversationId,
+            supabaseAdmin,
+            10
+          );
+
+          logger.info('📚 DATA COLLECTION: Retrieved conversation history', {
+            historyLength: extractionHistory?.length || 0,
+            conversationId
+          });
+
+          // Process data extraction
+          const extractionResult = await processDataExtraction(
+            instanceData.id,
+            conversationId,
+            userPhone,
+            combinedMessage,
+            extractionHistory || [],
+            supabaseUrl,
+            supabaseServiceKey
+          );
+
+          logger.info('📋 DATA COLLECTION: Extraction result', {
+            extracted: extractionResult.extracted,
+            isComplete: extractionResult.isComplete,
+            hasResponseMessage: !!extractionResult.responseMessage,
+            responseMessagePreview: extractionResult.responseMessage?.substring(0, 100),
+            instanceId: instanceData.id,
+            conversationId,
+            userPhone
+          });
+
+          // If data extraction generated a follow-up message, send it
+          if (extractionResult.extracted && extractionResult.responseMessage) {
+            logger.info('💬 DATA COLLECTION: Sending follow-up message', {
+              instanceBaseUrl,
+              instanceName,
+              userPhone,
+              messagePreview: extractionResult.responseMessage.substring(0, 50) + '...'
+            });
+
+            try {
+              const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+              const response = await fetch(sendUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': Deno.env.get('EVOLUTION_API_KEY') || latestMessageData?.apikey || ''
+                },
+                body: JSON.stringify({
+                  number: userPhone,
+                  text: extractionResult.responseMessage
+                })
+              });
+
+              if (response.ok) {
+                const responseData = await response.json();
+                logger.info('✅ DATA COLLECTION: Follow-up message sent successfully', {
+                  responseData,
+                  userPhone,
+                  conversationId
+                });
+
+                // Store the data collection message in conversation
+                await storeMessageInConversation(
+                  conversationId, 
+                  'assistant', 
+                  extractionResult.responseMessage, 
+                  `data_collection_${Date.now()}`, 
+                  supabaseAdmin
+                );
+              } else {
+                const errorText = await response.text();
+                logger.error('❌ DATA COLLECTION: Failed to send follow-up message', {
+                  status: response.status,
+                  statusText: response.statusText,
+                  errorText,
+                  sendUrl,
+                  userPhone
+                });
+              }
+            } catch (sendError) {
+              logger.error('💥 DATA COLLECTION: Exception sending follow-up message', {
+                error: sendError.message,
+                stack: sendError.stack,
+                userPhone,
+                conversationId
+              });
+            }
+          }
+
+          logger.info('✅ DATA COLLECTION: Integration completed', {
+            extracted: extractionResult.extracted,
+            isComplete: extractionResult.isComplete,
+            sentFollowUp: !!extractionResult.responseMessage,
+            instanceId: instanceData.id,
+            conversationId,
+            userPhone
+          });
+        } else {
+          logger.info('⚠️ DATA COLLECTION: Disabled for this instance', {
+            instanceId: instanceData.id,
+            userPhone
+          });
+        }
+      } catch (dataCollectionError) {
+        logger.error('💥 DATA COLLECTION: Error during integration', {
+          error: dataCollectionError.message,
+          stack: dataCollectionError.stack,
+          instanceId: instanceData.id,
+          conversationId,
+          userPhone
+        });
+      }
+    } else {
+      logger.warn('⚠️ DATA COLLECTION: Skipping - AI response failed', {
+        aiResponseSuccess,
+        instanceId: instanceData.id,
+        userPhone
+      });
+    }
+
+    logger.info('🏁 DATA COLLECTION: Integration process finished', {
+      instanceName,
+      userPhone,
+      conversationId,
+      aiResponseSuccess
+    });
 
     // Mark buffer as processed
     await markBufferAsProcessed(instanceName, userPhone);

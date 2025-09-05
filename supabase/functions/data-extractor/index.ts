@@ -35,16 +35,29 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  console.log('🚀 DATA-EXTRACTOR: Function called');
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const openaiKey = Deno.env.get('OPENAI_API_KEY') ?? '';
 
+    console.log('🔧 DATA-EXTRACTOR: Environment check', {
+      hasSupabaseUrl: !!supabaseUrl,
+      hasSupabaseKey: !!supabaseServiceRoleKey,
+      hasOpenAI: !!openaiKey,
+      supabaseUrl: supabaseUrl?.substring(0, 30) + '...'
+    });
+
     if (!openaiKey) {
+      console.error('❌ DATA-EXTRACTOR: OpenAI API key not configured');
       throw new Error('OpenAI API key not configured');
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    
+    console.log('📥 DATA-EXTRACTOR: Parsing request body');
+    const requestBody = await req.json();
     
     const { 
       whatsapp_instance_id,
@@ -52,23 +65,54 @@ serve(async (req: Request) => {
       phone_number,
       message_text,
       conversation_history = []
-    } = await req.json();
+    } = requestBody;
 
-    console.log('Extracting data for conversation:', conversation_id);
+    console.log('📊 DATA-EXTRACTOR: Request data received', {
+      whatsapp_instance_id,
+      conversation_id,
+      phone_number,
+      message_text: message_text?.substring(0, 100),
+      conversation_history_length: conversation_history?.length,
+      fullRequestBody: requestBody
+    });
 
     // Get WhatsApp AI config with data collection settings
+    console.log('🔍 DATA-EXTRACTOR: Querying AI config', {
+      table: 'whatsapp_ai_config',
+      whatsapp_instance_id
+    });
+
     const { data: aiConfig, error: aiConfigError } = await supabase
       .from('whatsapp_ai_config')
-      .select('enable_data_collection, data_collection_config_id')
+      .select('enable_data_collection, data_collection_config_id, whatsapp_instance_id')
       .eq('whatsapp_instance_id', whatsapp_instance_id)
       .single();
 
+    console.log('📊 DATA-EXTRACTOR: AI config query result', {
+      hasData: !!aiConfig,
+      aiConfig,
+      error: aiConfigError?.message,
+      errorCode: aiConfigError?.code,
+      errorDetails: aiConfigError?.details
+    });
+
     if (aiConfigError || !aiConfig?.enable_data_collection || !aiConfig.data_collection_config_id) {
-      console.log('Data collection not enabled for this instance');
+      console.log('⚠️ DATA-EXTRACTOR: Data collection not enabled', {
+        hasError: !!aiConfigError,
+        enable_data_collection: aiConfig?.enable_data_collection,
+        data_collection_config_id: aiConfig?.data_collection_config_id,
+        reason: aiConfigError ? 'query_error' : !aiConfig?.enable_data_collection ? 'not_enabled' : 'no_config_id'
+      });
+      
       return new Response(
         JSON.stringify({ 
           extracted: false,
-          reason: 'Data collection not enabled' 
+          reason: 'Data collection not enabled',
+          details: {
+            error: aiConfigError?.message,
+            enable_data_collection: aiConfig?.enable_data_collection,
+            has_config_id: !!aiConfig?.data_collection_config_id
+          }
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -78,8 +122,15 @@ serve(async (req: Request) => {
     }
 
     const configId = aiConfig.data_collection_config_id;
+    console.log('✅ DATA-EXTRACTOR: Using config ID', { configId });
 
     // Get data collection fields configuration
+    console.log('🔍 DATA-EXTRACTOR: Querying fields configuration', {
+      table: 'data_collection_fields',
+      configId,
+      query: 'config_id = ' + configId + ' AND is_active = true'
+    });
+
     const { data: fields, error: fieldsError } = await supabase
       .from('data_collection_fields')
       .select('*')
@@ -87,12 +138,34 @@ serve(async (req: Request) => {
       .eq('is_active', true)
       .order('field_order');
 
+    console.log('📊 DATA-EXTRACTOR: Fields query result', {
+      hasFields: !!fields,
+      fieldsCount: fields?.length || 0,
+      fieldsError: fieldsError?.message,
+      fields: fields?.map(f => ({ 
+        field_name: f.field_name,
+        field_display_name: f.field_display_name,
+        is_required: f.is_required,
+        keywords: f.extraction_keywords
+      }))
+    });
+
     if (fieldsError || !fields || fields.length === 0) {
-      console.log('No fields configured for data collection');
+      console.log('⚠️ DATA-EXTRACTOR: No fields configured', {
+        error: fieldsError?.message,
+        hasFields: !!fields,
+        fieldsLength: fields?.length
+      });
+      
       return new Response(
         JSON.stringify({ 
           extracted: false,
-          reason: 'No fields configured' 
+          reason: 'No fields configured',
+          details: {
+            error: fieldsError?.message,
+            config_id: configId,
+            fields_found: fields?.length || 0
+          }
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

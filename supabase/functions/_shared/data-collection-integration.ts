@@ -1,12 +1,20 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.10';
-import { logger } from './logger.ts';
+
+// Create a simple logger since we can't use @/utils/logger in edge functions
+const logger = {
+  log: (...args: any[]) => console.log(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
 
 /**
  * Process data extraction for WhatsApp messages
  * This function is called after a message is received to extract structured data
  */
 export async function processDataExtraction(
-  instanceName: string,
+  instanceId: string,
   conversationId: string,
   phoneNumber: string,
   messageText: string,
@@ -19,16 +27,43 @@ export async function processDataExtraction(
   isComplete?: boolean;
 }> {
   try {
+    logger.info('🚀 EXTRACT: Starting processDataExtraction', {
+      instanceId,
+      conversationId,
+      phoneNumber,
+      messageLength: messageText?.length,
+      historyLength: conversationHistory?.length
+    });
+
     // Skip if no message text
     if (!messageText || messageText.trim().length === 0) {
+      logger.warn('⚠️ EXTRACT: No message text, skipping extraction', { messageText });
       return { extracted: false };
     }
 
-    logger.info('Processing data extraction', {
-      instanceName,
+    logger.info('📝 EXTRACT: Processing data extraction', {
+      instanceId,
       conversationId,
       phoneNumber,
-      messagePreview: messageText.substring(0, 50)
+      messagePreview: messageText.substring(0, 100),
+      supabaseUrl: supabaseUrl?.substring(0, 30) + '...'
+    });
+
+    const requestBody = {
+      whatsapp_instance_id: instanceId,
+      conversation_id: conversationId,
+      phone_number: phoneNumber,
+      message_text: messageText,
+      conversation_history: conversationHistory
+    };
+
+    logger.info('📞 EXTRACT: Calling data-extractor function', {
+      url: `${supabaseUrl}/functions/v1/data-extractor`,
+      requestBody: {
+        ...requestBody,
+        message_text: requestBody.message_text.substring(0, 100),
+        conversation_history: `${conversationHistory?.length} items`
+      }
     });
 
     // Call the data-extractor function
@@ -38,29 +73,38 @@ export async function processDataExtraction(
         'Authorization': `Bearer ${supabaseServiceKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        whatsapp_instance_id: instanceName,
-        conversation_id: conversationId,
-        phone_number: phoneNumber,
-        message_text: messageText,
-        conversation_history: conversationHistory
-      }),
+      body: JSON.stringify(requestBody),
+    });
+
+    logger.info('📊 EXTRACT: Data-extractor response received', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      ok: response.ok
     });
 
     if (!response.ok) {
-      logger.error('Data extractor function failed', {
+      const errorText = await response.text();
+      logger.error('❌ EXTRACT: Data extractor function failed', {
         status: response.status,
-        statusText: response.statusText
+        statusText: response.statusText,
+        errorBody: errorText,
+        instanceId,
+        conversationId,
+        phoneNumber
       });
       return { extracted: false };
     }
 
+    logger.info('📥 EXTRACT: Parsing response JSON');
     const result = await response.json();
     
-    logger.info('Data extraction result', {
+    logger.info('✅ EXTRACT: Data extraction result received', {
       extracted: result.extracted,
       isComplete: result.is_complete,
-      missingFields: result.missing_fields?.length || 0
+      missingFields: result.missing_fields?.length || 0,
+      responseMessage: result.response_message?.substring(0, 100),
+      fullResult: result
     });
 
     return {
@@ -69,7 +113,13 @@ export async function processDataExtraction(
       isComplete: result.is_complete
     };
   } catch (error) {
-    logger.error('Error in data extraction processing', { error });
+    logger.error('💥 EXTRACT: Exception in data extraction processing', { 
+      error: error.message,
+      stack: error.stack,
+      instanceId,
+      conversationId,
+      phoneNumber
+    });
     return { extracted: false };
   }
 }
@@ -78,24 +128,55 @@ export async function processDataExtraction(
  * Check if data collection is enabled for a WhatsApp instance
  */
 export async function isDataCollectionEnabled(
-  instanceName: string,
+  instanceId: string,
   supabaseAdmin: ReturnType<typeof createClient>
 ): Promise<boolean> {
   try {
+    logger.info('🔍 ENABLED CHECK: Starting data collection enabled check', {
+      instanceId,
+      queryTable: 'whatsapp_ai_config',
+      queryColumn: 'whatsapp_instance_id'
+    });
+
     const { data, error } = await supabaseAdmin
       .from('whatsapp_ai_config')
-      .select('enable_data_collection')
-      .eq('whatsapp_instance_id', instanceName)
+      .select('enable_data_collection, data_collection_config_id, whatsapp_instance_id')
+      .eq('whatsapp_instance_id', instanceId)
       .single();
 
+    logger.info('📊 ENABLED CHECK: Database query result', {
+      instanceId,
+      hasData: !!data,
+      error: error?.message,
+      errorCode: error?.code,
+      dataResult: data
+    });
+
     if (error) {
-      logger.error('Error checking data collection status', { error });
+      logger.error('❌ ENABLED CHECK: Error checking data collection status', { 
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        instanceId 
+      });
       return false;
     }
 
-    return data?.enable_data_collection || false;
+    const isEnabled = data?.enable_data_collection || false;
+    logger.info('✅ ENABLED CHECK: Final result', {
+      instanceId,
+      isEnabled,
+      rawValue: data?.enable_data_collection,
+      hasConfigId: !!data?.data_collection_config_id
+    });
+
+    return isEnabled;
   } catch (error) {
-    logger.error('Exception checking data collection status', { error });
+    logger.error('💥 ENABLED CHECK: Exception checking data collection status', { 
+      error: error.message,
+      stack: error.stack,
+      instanceId 
+    });
     return false;
   }
 }
@@ -127,9 +208,9 @@ export async function getConversationHistoryForExtraction(
   try {
     const { data, error } = await supabaseAdmin
       .from('whatsapp_conversation_messages')
-      .select('sender_phone, message_body, is_from_user')
+      .select('role, content, timestamp')
       .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: false })
+      .order('timestamp', { ascending: false })
       .limit(limit);
 
     if (error) {
@@ -139,8 +220,8 @@ export async function getConversationHistoryForExtraction(
 
     // Format for data extraction
     return (data || []).reverse().map(msg => ({
-      from: msg.is_from_user ? 'customer' : 'assistant',
-      message: msg.message_body
+      from: msg.role === 'user' ? 'customer' : 'assistant',
+      message: msg.content
     }));
   } catch (error) {
     logger.error('Exception fetching conversation history', { error });
