@@ -34,6 +34,9 @@ interface GenerateResponseRequest {
   detectedIndustry?: string;
   communicationStyle?: string;
   culturalContext?: string[];
+  
+  // Data Collection fields
+  dataCollectionFields?: any[];
 }
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
@@ -370,7 +373,10 @@ serve(async (req) => {
       businessContext,
       detectedIndustry,
       communicationStyle,
-      culturalContext
+      culturalContext,
+      
+      // Data Collection fields
+      dataCollectionFields
     } = await req.json() as GenerateResponseRequest;
 
     logger.log(`Processing request for user ID: ${userId || 'not provided'}`, {
@@ -439,6 +445,37 @@ serve(async (req) => {
       }
       
       finalSystemPrompt += `\nIMPORTANT: Adapt your response to match the industry context and communication style. Use appropriate terminology and tone for this business domain.`;
+    }
+    
+    // Data Collection Enhancement
+    if (dataCollectionFields && dataCollectionFields.length > 0) {
+      finalSystemPrompt += `\n\nDATA COLLECTION GUIDELINES:
+You must analyze if the user's message indicates they need a service that requires data collection.
+
+WHEN TO COLLECT DATA:
+- User wants to book/schedule something → Collect: name, phone, preferred time
+- User wants to purchase/order → Collect: name, phone, address  
+- User has a complaint/issue → Collect: name, contact details, issue description
+- User requests a consultation → Collect relevant contact and preference data
+
+WHEN NOT TO COLLECT DATA:
+- User asking about prices, general information, or FAQ-type questions
+- User just greeting or having casual conversation
+
+REQUIRED FIELDS FOR THIS BUSINESS:
+${dataCollectionFields.map(field => 
+  `- "${field.field_name}": ${field.field_display_name} (${field.field_type})${field.is_required ? ' [REQUIRED]' : ''}`
+).join('\n')}
+
+RESPONSE FORMAT:
+You must return your response as a JSON object with this exact structure:
+{
+  "response": "Your normal response to the user",
+  "needsDataCollection": true/false,
+  "requestedFields": ["field1", "field2"] // Only if needsDataCollection is true
+}
+
+IMPORTANT: If needsDataCollection is true, naturally integrate requests for missing data into your response.`;
     }
     
     if (!finalSystemPrompt.includes("Don't use markdown")) {

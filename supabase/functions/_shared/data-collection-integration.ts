@@ -49,12 +49,18 @@ export async function processDataExtraction(
       supabaseUrl: supabaseUrl?.substring(0, 30) + '...'
     });
 
+    // Format conversation history for data-extractor (expects different format)
+    const formattedConversationHistory = conversationHistory?.map(msg => ({
+      from: msg.role === 'user' ? 'customer' : 'assistant',
+      message: msg.content || msg.message || msg.text || ''
+    })) || [];
+
     const requestBody = {
       whatsapp_instance_id: instanceId,
       conversation_id: conversationId,
       phone_number: phoneNumber,
       message_text: messageText,
-      conversation_history: conversationHistory
+      conversation_history: formattedConversationHistory
     };
 
     logger.info('📞 EXTRACT: Calling data-extractor function', {
@@ -63,6 +69,15 @@ export async function processDataExtraction(
         ...requestBody,
         message_text: requestBody.message_text.substring(0, 100),
         conversation_history: `${conversationHistory?.length} items`
+      },
+      debugInfo: {
+        fullMessageText: messageText,
+        messageLength: messageText?.length,
+        originalConversationHistoryCount: conversationHistory?.length,
+        formattedConversationHistoryCount: formattedConversationHistory?.length,
+        originalConversationSample: conversationHistory?.slice(-2),
+        formattedConversationSample: formattedConversationHistory?.slice(-2),
+        hasValidData: !!messageText && messageText.trim().length > 0
       }
     });
 
@@ -104,7 +119,11 @@ export async function processDataExtraction(
       isComplete: result.is_complete,
       missingFields: result.missing_fields?.length || 0,
       responseMessage: result.response_message?.substring(0, 100),
-      fullResult: result
+      collectedData: result.collected_data || {},
+      validationErrors: result.validation_errors || {},
+      sessionId: result.session_id,
+      fullResult: result,
+      rawResponseText: JSON.stringify(result)
     });
 
     return {

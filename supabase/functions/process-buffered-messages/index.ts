@@ -890,6 +890,41 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
       originalSystemPrompt: aiConfig.system_prompt ? aiConfig.system_prompt.substring(0, 100) + '...' : 'undefined'
     });
 
+    // Get Data Collection fields configuration for unified AI processing
+    let dataCollectionFields: any[] = [];
+    const dataCollectionEnabled = await isDataCollectionEnabled(instanceData.id, supabaseAdmin);
+    
+    if (dataCollectionEnabled) {
+      logger.info('🔍 DATA COLLECTION: Fetching fields configuration', {
+        instanceId: instanceData.id,
+        configId: aiConfig.data_collection_config_id
+      });
+      
+      const { data: fields, error: fieldsError } = await supabaseAdmin
+        .from('data_collection_fields')
+        .select('field_name, field_display_name, field_type, is_required')
+        .eq('config_id', aiConfig.data_collection_config_id)
+        .eq('is_active', true)
+        .order('field_order');
+      
+      if (fieldsError) {
+        logger.error('❌ DATA COLLECTION: Error fetching fields', { 
+          error: fieldsError,
+          configId: aiConfig.data_collection_config_id
+        });
+      } else {
+        dataCollectionFields = fields || [];
+        logger.info('✅ DATA COLLECTION: Fields fetched successfully', {
+          fieldsCount: dataCollectionFields.length,
+          fields: dataCollectionFields.map(f => f.field_name)
+        });
+      }
+    } else {
+      logger.info('⚠️ DATA COLLECTION: Disabled for this instance', {
+        instanceId: instanceData.id
+      });
+    }
+
     // Generate and send AI response with smart context and personality management
     const aiResponseSuccess = await generateAndSendAIResponse(
       combinedMessage,
@@ -902,176 +937,105 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
       conversationId,
       supabaseUrl,
       supabaseServiceKey,
-      null // No image URL for now (can be enhanced later)
+      null, // No image URL for now (can be enhanced later)
+      dataCollectionFields // Data Collection fields for unified processing
     );
 
-    // ========== DATA COLLECTION INTEGRATION ==========
-    logger.info('🔍 DATA COLLECTION: Starting integration check after AI response', {
-      aiResponseSuccess,
-      instanceName,
-      instanceId: instanceData.id,
-      userPhone,
-      conversationId,
-      messageText: combinedMessage?.substring(0, 100),
-      timestamp: new Date().toISOString()
-    });
-
-    if (aiResponseSuccess) {
+    // 🔄 CRITICAL FIX: Extract data from user message if data collection is enabled
+    if (dataCollectionEnabled && dataCollectionFields.length > 0) {
       try {
-        logger.info('✅ DATA COLLECTION: AI response successful, checking if data collection enabled', {
-          instanceId: instanceData.id,
-          userPhone
-        });
-
-        // Check if data collection is enabled for this WhatsApp instance
-        const dataCollectionEnabled = await isDataCollectionEnabled(
-          instanceData.id,
-          supabaseAdmin
-        );
-
-        logger.info('📊 DATA COLLECTION: Enabled check result', {
-          enabled: dataCollectionEnabled,
-          instanceId: instanceData.id,
-          userPhone
-        });
-
-        if (dataCollectionEnabled) {
-          logger.info('🚀 DATA COLLECTION: Processing data extraction', {
-            instanceId: instanceData.id,
-            conversationId,
-            userPhone,
-            messageLength: combinedMessage?.length
-          });
-
-          // Get conversation history for data extraction context
-          const extractionHistory = await getConversationHistoryForExtraction(
-            conversationId,
-            supabaseAdmin,
-            10
-          );
-
-          logger.info('📚 DATA COLLECTION: Retrieved conversation history', {
-            historyLength: extractionHistory?.length || 0,
-            conversationId
-          });
-
-          // Process data extraction
-          const extractionResult = await processDataExtraction(
-            instanceData.id,
-            conversationId,
-            userPhone,
-            combinedMessage,
-            extractionHistory || [],
-            supabaseUrl,
-            supabaseServiceKey
-          );
-
-          logger.info('📋 DATA COLLECTION: Extraction result', {
-            extracted: extractionResult.extracted,
-            isComplete: extractionResult.isComplete,
-            hasResponseMessage: !!extractionResult.responseMessage,
-            responseMessagePreview: extractionResult.responseMessage?.substring(0, 100),
-            instanceId: instanceData.id,
-            conversationId,
-            userPhone
-          });
-
-          // If data extraction generated a follow-up message, send it
-          if (extractionResult.extracted && extractionResult.responseMessage) {
-            logger.info('💬 DATA COLLECTION: Sending follow-up message', {
-              instanceBaseUrl,
-              instanceName,
-              userPhone,
-              messagePreview: extractionResult.responseMessage.substring(0, 50) + '...'
-            });
-
-            try {
-              const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
-              const response = await fetch(sendUrl, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'apikey': Deno.env.get('EVOLUTION_API_KEY') || latestMessageData?.apikey || ''
-                },
-                body: JSON.stringify({
-                  number: userPhone,
-                  text: extractionResult.responseMessage
-                })
-              });
-
-              if (response.ok) {
-                const responseData = await response.json();
-                logger.info('✅ DATA COLLECTION: Follow-up message sent successfully', {
-                  responseData,
-                  userPhone,
-                  conversationId
-                });
-
-                // Store the data collection message in conversation
-                await storeMessageInConversation(
-                  conversationId, 
-                  'assistant', 
-                  extractionResult.responseMessage, 
-                  `data_collection_${Date.now()}`, 
-                  supabaseAdmin
-                );
-              } else {
-                const errorText = await response.text();
-                logger.error('❌ DATA COLLECTION: Failed to send follow-up message', {
-                  status: response.status,
-                  statusText: response.statusText,
-                  errorText,
-                  sendUrl,
-                  userPhone
-                });
-              }
-            } catch (sendError) {
-              logger.error('💥 DATA COLLECTION: Exception sending follow-up message', {
-                error: sendError.message,
-                stack: sendError.stack,
-                userPhone,
-                conversationId
-              });
-            }
-          }
-
-          logger.info('✅ DATA COLLECTION: Integration completed', {
-            extracted: extractionResult.extracted,
-            isComplete: extractionResult.isComplete,
-            sentFollowUp: !!extractionResult.responseMessage,
-            instanceId: instanceData.id,
-            conversationId,
-            userPhone
-          });
-        } else {
-          logger.info('⚠️ DATA COLLECTION: Disabled for this instance', {
-            instanceId: instanceData.id,
-            userPhone
-          });
-        }
-      } catch (dataCollectionError) {
-        logger.error('💥 DATA COLLECTION: Error during integration', {
-          error: dataCollectionError.message,
-          stack: dataCollectionError.stack,
+        logger.info('🔍 EXTRACT: Processing data extraction from user message', {
           instanceId: instanceData.id,
           conversationId,
+          userPhone,
+          messagePreview: combinedMessage.substring(0, 100),
+          fieldsCount: dataCollectionFields.length,
+          fields: dataCollectionFields.map(f => f.field_name)
+        });
+
+        // Extract data from user's message
+        const extractionResult = await processDataExtraction(
+          instanceData.id,
+          conversationId,
+          userPhone,
+          combinedMessage,
+          conversationHistory,
+          supabaseUrl,
+          supabaseServiceKey
+        );
+
+        logger.info('✅ EXTRACT: Data extraction completed', {
+          extracted: extractionResult.extracted,
+          isComplete: extractionResult.isComplete,
+          hasResponseMessage: !!extractionResult.responseMessage,
+          instanceId: instanceData.id,
           userPhone
         });
-      }
-    } else {
-      logger.warn('⚠️ DATA COLLECTION: Skipping - AI response failed', {
-        aiResponseSuccess,
-        instanceId: instanceData.id,
-        userPhone
-      });
-    }
 
-    logger.info('🏁 DATA COLLECTION: Integration process finished', {
-      instanceName,
-      userPhone,
-      conversationId,
-      aiResponseSuccess
-    });
+        // If data extraction generated a follow-up message, send it
+        if (extractionResult.responseMessage && instanceBaseUrl) {
+          logger.info('📤 EXTRACT: Sending follow-up data collection message', {
+            message: extractionResult.responseMessage.substring(0, 100),
+            userPhone
+          });
+
+          const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+          
+          try {
+            const response = await fetch(sendUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': Deno.env.get('EVOLUTION_API_KEY') || latestMessageData?.apikey
+              },
+              body: JSON.stringify({
+                number: userPhone,
+                text: extractionResult.responseMessage
+              })
+            });
+
+            if (response.ok) {
+              const responseData = await response.json();
+              logger.info('✅ EXTRACT: Follow-up message sent successfully', {
+                userPhone,
+                responseData
+              });
+              
+              // Store the follow-up message in conversation history
+              await storeMessageInConversation(
+                conversationId, 
+                'assistant', 
+                extractionResult.responseMessage, 
+                `data_collection_${Date.now()}`, 
+                supabaseAdmin
+              );
+            } else {
+              const errorText = await response.text();
+              logger.error('❌ EXTRACT: Failed to send follow-up message', {
+                status: response.status,
+                error: errorText,
+                userPhone
+              });
+            }
+          } catch (sendError) {
+            logger.error('💥 EXTRACT: Exception sending follow-up message', {
+              error: sendError.message,
+              userPhone
+            });
+          }
+        }
+
+      } catch (extractionError) {
+        logger.error('💥 EXTRACT: Exception during data extraction', {
+          error: extractionError.message,
+          stack: extractionError.stack,
+          instanceId: instanceData.id,
+          userPhone,
+          messagePreview: combinedMessage.substring(0, 100)
+        });
+        // Continue processing even if data extraction fails
+      }
+    }
 
     // Mark buffer as processed
     await markBufferAsProcessed(instanceName, userPhone);

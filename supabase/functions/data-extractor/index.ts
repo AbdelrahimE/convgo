@@ -231,19 +231,35 @@ Return ONLY a valid JSON object with the extracted data.
 Fields to extract:
 ${fieldsDescription}
 
-Rules:
+EXTRACTION RULES:
 1. Extract only the fields mentioned above
 2. Use field_name as the key in the JSON response
 3. If a field cannot be extracted from the message, omit it from the response
-4. For phone numbers, extract and format them properly
+4. For phone numbers, extract and format them properly (remove spaces, dashes, parentheses)
 5. For emails, validate the format
 6. For dates, use ISO format (YYYY-MM-DD)
 7. For boolean fields, use true/false
 8. Consider the conversation history for context
 9. If the customer provides multiple values for a field, use the most recent one
 
+LANGUAGE SUPPORT:
+- Support Arabic names and text (عبدالرحيم, محمد, فاطمة, etc.)
+- Support mixed Arabic-English content
+- Extract phone numbers in any format (01012345678, +201012345678, 0101 234 5678)
+- Look for names after common Arabic patterns like "اسمي" or "انا" or when directly asked for name
+
+DETECTION PATTERNS:
+- Names: Look for Arabic or English names in responses to name requests
+- Phone: Look for sequences of 10-11 digits, with or without country code
+- Direct responses: When user directly answers a question about a specific field
+
 Current collected data:
 ${JSON.stringify(session.collected_data)}
+
+EXAMPLES:
+- Message: "عبدالرحيم" → {"name": "عبدالرحيم"}  
+- Message: "01012345678" → {"phone": "01012345678"}
+- Message: "اسمي محمد ورقمي 01123456789" → {"name": "محمد", "phone": "01123456789"}
 
 Return only the JSON object with newly extracted or updated fields.`;
 
@@ -252,7 +268,19 @@ Return only the JSON object with newly extracted or updated fields.`;
 Conversation history:
 ${conversation_history.map((msg: any) => `${msg.from}: ${msg.message}`).join('\n')}`;
 
+    console.log('🤖 DATA-EXTRACTOR: Prepared prompts for OpenAI', {
+      systemPromptLength: systemPrompt.length,
+      userPromptLength: userPrompt.length,
+      messageText: message_text,
+      conversationHistoryLength: conversation_history?.length,
+      fieldsToExtract: fields?.map(f => f.field_name),
+      sessionData: session.collected_data,
+      systemPromptPreview: systemPrompt.substring(0, 200) + '...',
+      userPromptPreview: userPrompt.substring(0, 200) + '...'
+    });
+
     // Call OpenAI to extract data
+    console.log('🔄 DATA-EXTRACTOR: Calling OpenAI API...');
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -278,9 +306,40 @@ ${conversation_history.map((msg: any) => `${msg.from}: ${msg.message}`).join('\n
     }
 
     const aiResult = await openaiResponse.json();
-    const extractedData = JSON.parse(aiResult.choices[0].message.content);
+    
+    console.log('📥 DATA-EXTRACTOR: OpenAI API response received', {
+      status: 'success',
+      choices: aiResult.choices?.length,
+      usage: aiResult.usage,
+      model: aiResult.model,
+      rawResponse: JSON.stringify(aiResult)
+    });
 
-    console.log('Extracted data:', extractedData);
+    const rawContent = aiResult.choices[0].message.content;
+    console.log('🔍 DATA-EXTRACTOR: Raw AI response content', {
+      rawContent: rawContent,
+      contentLength: rawContent?.length,
+      startsWithBrace: rawContent?.trim()?.startsWith('{'),
+      endsWithBrace: rawContent?.trim()?.endsWith('}')
+    });
+
+    let extractedData;
+    try {
+      extractedData = JSON.parse(rawContent);
+      console.log('✅ DATA-EXTRACTOR: Successfully parsed AI response', {
+        extractedData: extractedData,
+        dataKeys: Object.keys(extractedData || {}),
+        dataCount: Object.keys(extractedData || {}).length
+      });
+    } catch (parseError) {
+      console.error('❌ DATA-EXTRACTOR: Failed to parse AI response as JSON', {
+        rawContent: rawContent,
+        parseError: parseError.message
+      });
+      extractedData = {};
+    }
+
+    console.log('📊 DATA-EXTRACTOR: Final extracted data:', extractedData);
 
     // Merge with existing collected data
     const updatedData = {

@@ -26,6 +26,7 @@ const logger = {
  * @param supabaseUrl Supabase project URL
  * @param supabaseServiceKey Supabase service role key
  * @param imageUrl Optional image URL for vision capabilities
+ * @param dataCollectionFields Optional data collection fields configuration
  * @returns Promise<boolean> Success status of the operation
  */
 export async function generateAndSendAIResponse(
@@ -39,7 +40,8 @@ export async function generateAndSendAIResponse(
   conversationId: string,
   supabaseUrl: string,
   supabaseServiceKey: string,
-  imageUrl?: string | null
+  imageUrl?: string | null,
+  dataCollectionFields?: any[]
 ): Promise<boolean> {
   try {
     // Initialize Supabase admin client for database operations
@@ -85,7 +87,10 @@ export async function generateAndSendAIResponse(
         businessContext: aiConfig.businessContext || null,
         detectedIndustry: aiConfig.detectedIndustry || null,
         communicationStyle: aiConfig.communicationStyle || null,
-        culturalContext: aiConfig.culturalContext || null
+        culturalContext: aiConfig.culturalContext || null,
+        
+        // Data Collection fields
+        dataCollectionFields: dataCollectionFields || null
       })
     });
 
@@ -99,11 +104,39 @@ export async function generateAndSendAIResponse(
     }
 
     const responseData = await responseGenResponse.json();
+    
+    // Parse AI response to extract data collection information
+    let finalResponse;
+    let needsDataCollection = false;
+    let requestedFields = [];
+    
+    try {
+      // Try to parse JSON response (if data collection is enabled)
+      const parsedResponse = JSON.parse(responseData.answer);
+      finalResponse = parsedResponse.response;
+      needsDataCollection = parsedResponse.needsDataCollection || false;
+      requestedFields = parsedResponse.requestedFields || [];
+      
+      logger.info('AI response parsed successfully', {
+        hasDataCollection: needsDataCollection,
+        requestedFieldsCount: requestedFields.length,
+        responsePreview: finalResponse?.substring(0, 100) + '...'
+      });
+    } catch (error) {
+      // If not JSON, use the response as is (backward compatibility)
+      finalResponse = responseData.answer;
+      logger.info('AI response used as plain text', {
+        responsePreview: finalResponse?.substring(0, 100) + '...'
+      });
+    }
+    
     logger.info('AI response generated successfully', {
-      responsePreview: responseData.answer?.substring(0, 100) + '...',
+      responsePreview: finalResponse?.substring(0, 100) + '...',
       tokens: responseData.usage,
       fromCache: responseData.cacheInfo?.fromCache || false,
-      cacheMatchType: responseData.cacheInfo?.matchType || 'none'
+      cacheMatchType: responseData.cacheInfo?.matchType || 'none',
+      needsDataCollection,
+      requestedFields: requestedFields.join(', ')
     });
 
     // Log token usage if available
@@ -121,8 +154,8 @@ export async function generateAndSendAIResponse(
     }
 
     // Store AI response in conversation history
-    if (responseData.answer) {
-      await storeMessageInConversation(conversationId, 'assistant', responseData.answer, undefined, supabaseAdmin);
+    if (finalResponse) {
+      await storeMessageInConversation(conversationId, 'assistant', finalResponse, undefined, supabaseAdmin);
     }
 
     // Save interaction to database
@@ -135,7 +168,7 @@ export async function generateAndSendAIResponse(
           whatsapp_instance_id: aiConfig.whatsapp_instance_id,
           user_phone: fromNumber,
           user_message: query,
-          ai_response: responseData.answer,
+          ai_response: finalResponse,
           prompt_tokens: responseData.usage?.prompt_tokens || 0,
           completion_tokens: responseData.usage?.completion_tokens || 0,
           total_tokens: responseData.usage?.total_tokens || 0,
@@ -216,7 +249,7 @@ export async function generateAndSendAIResponse(
     }
 
     // Send response back through WhatsApp
-    if (instanceBaseUrl && fromNumber && responseData.answer) {
+    if (instanceBaseUrl && fromNumber && finalResponse) {
       logger.info('Sending AI response to WhatsApp', {
         instanceName,
         toNumber: fromNumber,
@@ -244,7 +277,7 @@ export async function generateAndSendAIResponse(
           },
           body: JSON.stringify({
             number: fromNumber,
-            text: responseData.answer
+            text: finalResponse
           })
         });
 
@@ -260,7 +293,7 @@ export async function generateAndSendAIResponse(
             },
             body: {
               number: fromNumber,
-              text: responseData.answer.substring(0, 50) + '...'
+              text: finalResponse.substring(0, 50) + '...'
             }
           });
           return false;
@@ -282,7 +315,7 @@ export async function generateAndSendAIResponse(
       logger.warn('Missing data for sending WhatsApp message', {
         hasInstanceBaseUrl: !!instanceBaseUrl,
         hasFromNumber: !!fromNumber,
-        hasResponse: !!responseData.answer
+        hasResponse: !!finalResponse
       });
       return false;
     }
