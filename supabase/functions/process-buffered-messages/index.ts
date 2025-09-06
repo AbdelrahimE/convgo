@@ -969,61 +969,13 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
           isComplete: extractionResult.isComplete,
           hasResponseMessage: !!extractionResult.responseMessage,
           instanceId: instanceData.id,
-          userPhone
+          userPhone,
+          silentDataCollection: true // البيانات تُستخرج في الخلفية بدون رسائل إضافية
         });
 
-        // If data extraction generated a follow-up message, send it
-        if (extractionResult.responseMessage && instanceBaseUrl) {
-          logger.info('📤 EXTRACT: Sending follow-up data collection message', {
-            message: extractionResult.responseMessage.substring(0, 100),
-            userPhone
-          });
-
-          const sendUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
-          
-          try {
-            const response = await fetch(sendUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'apikey': Deno.env.get('EVOLUTION_API_KEY') || latestMessageData?.apikey
-              },
-              body: JSON.stringify({
-                number: userPhone,
-                text: extractionResult.responseMessage
-              })
-            });
-
-            if (response.ok) {
-              const responseData = await response.json();
-              logger.info('✅ EXTRACT: Follow-up message sent successfully', {
-                userPhone,
-                responseData
-              });
-              
-              // Store the follow-up message in conversation history
-              await storeMessageInConversation(
-                conversationId, 
-                'assistant', 
-                extractionResult.responseMessage, 
-                `data_collection_${Date.now()}`, 
-                supabaseAdmin
-              );
-            } else {
-              const errorText = await response.text();
-              logger.error('❌ EXTRACT: Failed to send follow-up message', {
-                status: response.status,
-                error: errorText,
-                userPhone
-              });
-            }
-          } catch (sendError) {
-            logger.error('💥 EXTRACT: Exception sending follow-up message', {
-              error: sendError.message,
-              userPhone
-            });
-          }
-        }
+        // 🔕 REMOVED: Follow-up message sending to prevent duplicate messages
+        // Data extraction continues to work silently in the background
+        // AI already includes data collection requests in its main response
 
       } catch (extractionError) {
         logger.error('💥 EXTRACT: Exception during data extraction', {
