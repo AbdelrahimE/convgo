@@ -133,20 +133,136 @@ const DataCollection = () => {
     }
   };
 
-  const handleDisconnect = async () => {
-    try {
-      const { error } = await supabase
+  const disconnectMutation = useMutation({
+    mutationFn: async () => {
+      console.log('🔌 DISCONNECT: Starting Google Sheets disconnect process', {
+        selectedInstance,
+        configId: sheetsConfig?.id,
+        userEmail: sheetsConfig?.google_email
+      });
+
+      // Step 1: Disable data collection first to prevent new data collection
+      console.log('🔧 DISCONNECT: Step 1 - Disabling data collection');
+      const { error: disableError } = await supabase
+        .from('whatsapp_ai_config')
+        .update({ 
+          enable_data_collection: false,
+          data_collection_config_id: null
+        })
+        .eq('whatsapp_instance_id', selectedInstance);
+
+      if (disableError) {
+        console.error('❌ DISCONNECT: Failed to disable data collection', {
+          error: disableError.message,
+          code: disableError.code,
+          selectedInstance
+        });
+        throw new Error(`Failed to disable data collection: ${disableError.message}`);
+      }
+
+      console.log('✅ DISCONNECT: Successfully disabled data collection');
+
+      // Step 2: Delete Google Sheets configuration
+      // The database migration ensures proper CASCADE behavior
+      console.log('🗑️ DISCONNECT: Step 2 - Deleting Google Sheets configuration');
+      const { error: deleteError } = await supabase
         .from('google_sheets_config')
         .delete()
         .eq('whatsapp_instance_id', selectedInstance);
 
-      if (error) throw error;
+      if (deleteError) {
+        console.error('❌ DISCONNECT: Failed to delete Google Sheets config', {
+          error: deleteError.message,
+          code: deleteError.code,
+          selectedInstance,
+          configId: sheetsConfig?.id
+        });
+        
+        // Try to re-enable if deletion failed (rollback)
+        try {
+          console.log('🔄 DISCONNECT: Attempting rollback - re-enabling data collection');
+          await supabase
+            .from('whatsapp_ai_config')
+            .update({ 
+              enable_data_collection: true,
+              data_collection_config_id: sheetsConfig?.id
+            })
+            .eq('whatsapp_instance_id', selectedInstance);
+          
+          console.log('✅ DISCONNECT: Rollback successful');
+        } catch (rollbackError) {
+          console.error('💥 DISCONNECT: Rollback failed', rollbackError);
+        }
+        
+        throw new Error(`Failed to disconnect Google Sheets: ${deleteError.message}`);
+      }
 
+      console.log('✅ DISCONNECT: Successfully deleted Google Sheets configuration');
+
+      // Step 3: Verify cleanup (optional verification step)
+      console.log('🔍 DISCONNECT: Step 3 - Verifying cleanup');
+      const { data: verifyConfig } = await supabase
+        .from('google_sheets_config')
+        .select('id')
+        .eq('whatsapp_instance_id', selectedInstance)
+        .maybeSingle();
+
+      if (verifyConfig) {
+        console.warn('⚠️ DISCONNECT: Configuration still exists after deletion', {
+          remainingConfigId: verifyConfig.id
+        });
+        throw new Error('Configuration cleanup verification failed');
+      }
+
+      console.log('🎉 DISCONNECT: Complete disconnect process finished successfully');
+      
+      return {
+        success: true,
+        message: 'Google Sheets disconnected successfully',
+        disconnectedEmail: sheetsConfig?.google_email
+      };
+    },
+    onSuccess: (result) => {
+      console.log('✅ DISCONNECT: Mutation success callback', result);
+      
+      // Invalidate all related queries to refresh UI
       queryClient.invalidateQueries({ queryKey: ['google-sheets-config'] });
-      toast.success("Google Sheets disconnected successfully");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to disconnect");
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-ai-config'] });
+      
+      toast.success(`Disconnected from ${result.disconnectedEmail || 'Google account'} successfully`);
+      
+      // Reset connection state
+      setIsConnected(false);
+    },
+    onError: (error: any) => {
+      console.error('💥 DISCONNECT: Mutation error callback', {
+        error: error.message,
+        selectedInstance,
+        timestamp: new Date().toISOString()
+      });
+      
+      toast.error(error.message || "Failed to disconnect Google Sheets. Please try again.");
     }
+  });
+
+  const handleDisconnect = async () => {
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to disconnect from ${sheetsConfig?.google_email}?\n\n` +
+      `This will:\n` +
+      `• Stop data collection for this WhatsApp number\n` +
+      `• Remove the Google Sheets integration\n` +
+      `• Keep existing data in your Google Sheet\n\n` +
+      `You can reconnect at any time.`
+    );
+
+    if (!confirmed) {
+      console.log('🚫 DISCONNECT: User cancelled disconnect operation');
+      return;
+    }
+
+    console.log('🚀 DISCONNECT: User confirmed - starting disconnect mutation');
+    disconnectMutation.mutate();
   };
 
   return (
@@ -181,11 +297,11 @@ const DataCollection = () => {
               <Settings className="h-4 w-4 mr-2" />
               Setup
             </TabsTrigger>
-            <TabsTrigger value="fields" disabled={!isConnected}>
+            <TabsTrigger value="fields" disabled={!isConnected || disconnectMutation.isPending}>
               <Database className="h-4 w-4 mr-2" />
               Fields
             </TabsTrigger>
-            <TabsTrigger value="data" disabled={!isConnected}>
+            <TabsTrigger value="data" disabled={!isConnected || disconnectMutation.isPending}>
               <FolderOpen className="h-4 w-4 mr-2" />
               Collected Data
             </TabsTrigger>
@@ -211,21 +327,51 @@ const DataCollection = () => {
                     <Alert>
                       <CheckCircle2 className="h-4 w-4" />
                       <AlertDescription>
-                        Connected as <strong>{sheetsConfig?.google_email}</strong>
+                        {disconnectMutation.isPending ? (
+                          <>Disconnecting from <strong>{sheetsConfig?.google_email}</strong>...</>
+                        ) : (
+                          <>Connected as <strong>{sheetsConfig?.google_email}</strong></>
+                        )}
                       </AlertDescription>
                     </Alert>
+                    
+                    {disconnectMutation.isPending && (
+                      <Alert>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <AlertDescription>
+                          <strong>Disconnecting Google Sheets...</strong><br />
+                          • Stopping data collection<br />
+                          • Removing integration settings<br />
+                          • Cleaning up configuration<br />
+                          <span className="text-sm text-muted-foreground mt-2 block">
+                            Please wait, do not refresh the page.
+                          </span>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    
                     <div className="space-y-4">
-                      <SheetSelector 
-                        configId={sheetsConfig?.id || ''}
-                        currentSheetId={sheetsConfig?.google_sheet_id}
-                        sheetName={sheetsConfig?.sheet_name}
-                      />
+                      <div className={disconnectMutation.isPending ? 'opacity-50 pointer-events-none' : ''}>
+                        <SheetSelector 
+                          configId={sheetsConfig?.id || ''}
+                          currentSheetId={sheetsConfig?.google_sheet_id}
+                          sheetName={sheetsConfig?.sheet_name}
+                        />
+                      </div>
                       <Button 
                         onClick={handleDisconnect}
                         variant="outline"
                         className="w-full"
+                        disabled={disconnectMutation.isPending}
                       >
-                        Disconnect Google Account
+                        {disconnectMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Disconnecting...
+                          </>
+                        ) : (
+                          'Disconnect Google Account'
+                        )}
                       </Button>
                     </div>
                   </>
@@ -266,7 +412,7 @@ const DataCollection = () => {
                     </div>
                     <Button
                       onClick={() => toggleDataCollection.mutate(!aiConfig?.enable_data_collection)}
-                      disabled={toggleDataCollection.isPending}
+                      disabled={toggleDataCollection.isPending || disconnectMutation.isPending}
                     >
                       {toggleDataCollection.isPending && (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
