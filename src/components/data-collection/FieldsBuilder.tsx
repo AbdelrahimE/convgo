@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -17,7 +17,8 @@ import {
   AlertCircle,
   Save,
   X,
-  Loader2
+  Loader2,
+  Database
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,10 +51,7 @@ const fieldTypes = [
   { value: 'phone', label: 'Phone Number' },
   { value: 'email', label: 'Email' },
   { value: 'number', label: 'Number' },
-  { value: 'date', label: 'Date' },
-  { value: 'address', label: 'Address' },
-  { value: 'select', label: 'Select Options' },
-  { value: 'boolean', label: 'Yes/No' }
+  { value: 'date', label: 'Date' }
 ];
 
 const SortableFieldItem: React.FC<{
@@ -252,6 +250,44 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
     setIsDialogOpen(false);
   };
 
+  // Helper function to get default keywords based on field type (supports both English and Arabic)
+  const getDefaultKeywords = (fieldType: string): string[] => {
+    switch (fieldType) {
+      case 'phone': return ['phone', 'mobile', 'number', 'رقم', 'هاتف', 'جوال'];
+      case 'email': return ['email', 'mail', 'ايميل', 'بريد'];
+      case 'number': return ['number', 'age', 'quantity', 'رقم', 'عدد', 'كمية', 'عمر'];
+      case 'date': return ['date', 'birthday', 'birth', 'when', 'تاريخ', 'ميلاد', 'ولادة', 'متى', 'يوم', 'شهر', 'سنة'];
+      default: return ['name', 'اسم', 'معلومات'];
+    }
+  };
+
+  // Helper function to generate default templates
+  const getDefaultTemplates = (fieldType: string, displayName: string) => {
+    const templates = {
+      text: {
+        prompt: `Extract the ${displayName} from the message`,
+        askIfMissing: `Could you please provide your ${displayName}?`
+      },
+      phone: {
+        prompt: `Extract the phone number for ${displayName} from the message`,
+        askIfMissing: `Could you please provide your phone number?`
+      },
+      email: {
+        prompt: `Extract the email address for ${displayName} from the message`,
+        askIfMissing: `Could you please provide your email address?`
+      },
+      number: {
+        prompt: `Extract the number for ${displayName} from the message`,
+        askIfMissing: `Could you please provide the ${displayName}?`
+      },
+      date: {
+        prompt: `Extract the date for ${displayName} from the message (format: DD/MM/YYYY or MM/DD/YYYY)`,
+        askIfMissing: `Could you please provide the ${displayName}? (e.g., 15/03/1990)`
+      }
+    };
+    return templates[fieldType] || templates.text;
+  };
+
   const handleEdit = (field: DataField) => {
     setEditingField(field);
     setFieldForm(field);
@@ -259,20 +295,39 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
   };
 
   const handleSave = () => {
-    if (!fieldForm.field_name || !fieldForm.field_display_name) {
-      toast.error("Field name and display name are required");
+    if (!fieldForm.field_display_name) {
+      toast.error("Field name is required");
       return;
     }
 
-    // Generate field_name from display name if not provided
-    if (!fieldForm.field_name) {
-      fieldForm.field_name = fieldForm.field_display_name
-        .toLowerCase()
-        .replace(/\s+/g, '_')
-        .replace(/[^a-z0-9_]/g, '');
-    }
+    // Auto-generate field_name from display name
+    const generatedFieldName = fieldForm.field_display_name
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_\u0600-\u06FF]/g, '')
+      .replace(/[\u0600-\u06FF]/g, '') // Remove Arabic characters for field_name
+      .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
+      .substring(0, 50); // Limit length
 
-    saveField.mutate(fieldForm);
+    // Generate default extraction keywords based on field name and type
+    const defaultKeywords = [
+      fieldForm.field_display_name,
+      generatedFieldName.replace(/_/g, ' '),
+      ...getDefaultKeywords(fieldForm.field_type)
+    ];
+
+    // Generate default templates based on field type
+    const templates = getDefaultTemplates(fieldForm.field_type, fieldForm.field_display_name);
+
+    const finalForm = {
+      ...fieldForm,
+      field_name: generatedFieldName || `field_${Date.now()}`,
+      extraction_keywords: defaultKeywords,
+      prompt_template: templates.prompt,
+      ask_if_missing_template: templates.askIfMissing
+    };
+
+    saveField.mutate(finalForm);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -311,7 +366,10 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Custom Fields</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            Custom Fields
+          </CardTitle>
           <CardDescription>
             Define the fields you want to collect from WhatsApp conversations. 
             These fields will be automatically extracted and exported to your Google Sheet.
@@ -353,126 +411,72 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>
               {editingField ? 'Edit Field' : 'Add New Field'}
             </DialogTitle>
+            <DialogDescription>
+              {editingField ? 'Modify the field configuration below.' : 'Configure a new field to collect data from WhatsApp conversations.'}
+            </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="field_name">Field Name (Internal)</Label>
-                <Input
-                  id="field_name"
-                  placeholder="customer_name"
-                  value={fieldForm.field_name}
-                  onChange={(e) => setFieldForm({ ...fieldForm, field_name: e.target.value })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Used internally (no spaces, lowercase)
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="field_type">Field Type</Label>
-                <Select 
-                  value={fieldForm.field_type} 
-                  onValueChange={(value) => setFieldForm({ ...fieldForm, field_type: value })}
-                >
-                  <SelectTrigger id="field_type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fieldTypes.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="field_display_name">Display Name (English)</Label>
-                <Input
-                  id="field_display_name"
-                  placeholder="Customer Name"
-                  value={fieldForm.field_display_name}
-                  onChange={(e) => setFieldForm({ ...fieldForm, field_display_name: e.target.value })}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="field_display_name_ar">Display Name (Arabic)</Label>
-                <Input
-                  id="field_display_name_ar"
-                  placeholder="اسم العميل"
-                  value={fieldForm.field_display_name_ar || ''}
-                  onChange={(e) => setFieldForm({ ...fieldForm, field_display_name_ar: e.target.value })}
-                  dir="rtl"
-                />
-              </div>
-            </div>
-
+          <div className="flex-1 overflow-y-auto">
+            <div className="space-y-4 py-4">
+            {/* Field Name */}
             <div className="space-y-2">
-              <Label htmlFor="keywords">Extraction Keywords (comma separated)</Label>
+              <Label htmlFor="field_display_name">
+                Field Name <span className="text-red-500">*</span>
+              </Label>
               <Input
-                id="keywords"
-                placeholder="name, customer, client, اسم, عميل"
-                value={fieldForm.extraction_keywords?.join(', ') || ''}
-                onChange={(e) => setFieldForm({ 
-                  ...fieldForm, 
-                  extraction_keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k)
-                })}
+                id="field_display_name"
+                placeholder="e.g., Customer Name, Phone Number, Email Address"
+                value={fieldForm.field_display_name}
+                onChange={(e) => setFieldForm({ ...fieldForm, field_display_name: e.target.value })}
+                className="text-left"
               />
               <p className="text-xs text-muted-foreground">
-                Keywords that help AI identify this field in messages
+                Enter the name of the field you want to collect from customers (supports both Arabic and English)
               </p>
             </div>
 
+            {/* Field Type */}
             <div className="space-y-2">
-              <Label htmlFor="prompt_template">Extraction Prompt (Optional)</Label>
-              <Textarea
-                id="prompt_template"
-                placeholder="Extract the customer's full name from the message"
-                value={fieldForm.prompt_template || ''}
-                onChange={(e) => setFieldForm({ ...fieldForm, prompt_template: e.target.value })}
-                rows={2}
-              />
-              <p className="text-xs text-muted-foreground">
-                Custom prompt to help AI extract this specific field
-              </p>
+              <Label htmlFor="field_type">
+                Field Type
+              </Label>
+              <Select 
+                value={fieldForm.field_type} 
+                onValueChange={(value) => setFieldForm({ ...fieldForm, field_type: value })}
+              >
+                <SelectTrigger id="field_type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {fieldTypes.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="ask_template">Missing Field Question (Optional)</Label>
-              <Textarea
-                id="ask_template"
-                placeholder="Could you please provide your name?"
-                value={fieldForm.ask_if_missing_template || ''}
-                onChange={(e) => setFieldForm({ ...fieldForm, ask_if_missing_template: e.target.value })}
-                rows={2}
-              />
-              <p className="text-xs text-muted-foreground">
-                Message to send when this field is missing
-              </p>
-            </div>
-
+            {/* Required Field */}
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="is_required"
                 checked={fieldForm.is_required}
                 onCheckedChange={(checked) => setFieldForm({ ...fieldForm, is_required: !!checked })}
               />
-              <Label htmlFor="is_required">This field is required</Label>
+              <Label htmlFor="is_required" className="cursor-pointer">
+                This field is required
+              </Label>
+            </div>
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button variant="outline" onClick={resetForm}>
               Cancel
             </Button>

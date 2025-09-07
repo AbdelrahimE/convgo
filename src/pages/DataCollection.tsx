@@ -4,17 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  FolderOpen, 
-  Settings, 
-  Database, 
-  ArrowRight,
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  RefreshCw,
-  Download
-} from "lucide-react";
+import { FolderOpen, Database, AlertCircle, CheckCircle2, Loader2, Cog } from "lucide-react";
 import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -278,7 +268,7 @@ const DataCollection = () => {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
+            <Cog className="h-5 w-5" />
             Choose WhatsApp Number
           </CardTitle>
         </CardHeader>
@@ -294,7 +284,7 @@ const DataCollection = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="setup">
-              <Settings className="h-4 w-4 mr-2" />
+              <Cog className="h-4 w-4 mr-2" />
               Setup
             </TabsTrigger>
             <TabsTrigger value="fields" disabled={!isConnected || disconnectMutation.isPending}>
