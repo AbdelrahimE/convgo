@@ -3,8 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 // Badge import removed as it's not used in current implementation
-import { FolderOpen, Database, AlertCircle, CheckCircle2, Loader2, Cog } from "lucide-react";
+import { FolderOpen, Database, AlertCircle, CheckCircle2, Loader2, Cog, Unlink } from "lucide-react";
 import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -279,7 +280,7 @@ const DataCollection = () => {
       <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6">
 
         {/* WhatsApp Instance Selection */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="p-4">
             <div className="mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -313,7 +314,7 @@ const DataCollection = () => {
 
             <TabsContent value="setup" className="space-y-6">
               {/* Google Connection Status */}
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div className="p-4">
                   <div className="mb-4">
                     <h3 className="text-lg font-semibold mb-1">Google Sheets Connection</h3>
@@ -329,30 +330,34 @@ const DataCollection = () => {
                   </div>
                 ) : isConnected ? (
                   <>
-                    <Alert>
-                      <CheckCircle2 className="h-4 w-4" />
-                      <AlertDescription>
-                        {disconnectMutation.isPending ? (
-                          <>Disconnecting from <strong>{sheetsConfig?.google_email}</strong>...</>
-                        ) : (
-                          <>Connected as <strong>{sheetsConfig?.google_email}</strong></>
-                        )}
-                      </AlertDescription>
-                    </Alert>
+                    <div className="bg-green-50 dark:bg-green-950/20 rounded-lg p-3 px-3 border border-green-200 dark:border-green-800">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                        <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                          {disconnectMutation.isPending ? (
+                            <>Disconnecting from {sheetsConfig?.google_email}...</>
+                          ) : (
+                            <>Connected as {sheetsConfig?.google_email}</>
+                          )}
+                        </p>
+                      </div>
+                    </div>
                     
                     {disconnectMutation.isPending && (
-                      <Alert>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <AlertDescription>
-                          <strong>Disconnecting Google Sheets...</strong><br />
-                          • Stopping data collection<br />
-                          • Removing integration settings<br />
-                          • Cleaning up configuration<br />
-                          <span className="text-sm text-muted-foreground mt-2 block">
-                            Please wait, do not refresh the page.
-                          </span>
-                        </AlertDescription>
-                      </Alert>
+                      <div className="bg-orange-50 dark:bg-orange-950/20 rounded-lg p-4 border border-orange-200 dark:border-orange-800">
+                        <div className="flex items-start gap-3">
+                          <Loader2 className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0 animate-spin mt-0.5" />
+                          <div className="text-sm text-orange-900 dark:text-orange-100">
+                            <strong>Disconnecting Google Sheets...</strong><br />
+                            • Stopping data collection<br />
+                            • Removing integration settings<br />
+                            • Cleaning up configuration<br />
+                            <span className="text-sm text-orange-700 dark:text-orange-300 mt-2 block">
+                              Please wait, do not refresh the page.
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     )}
                     
                     <div className="space-y-4">
@@ -365,29 +370,33 @@ const DataCollection = () => {
                       </div>
                       <Button 
                         onClick={handleDisconnect}
-                        variant="outline"
-                        className="w-full"
+                        className="w-full border border-red-200 bg-red-50 text-red-900 hover:bg-red-500 hover:text-white"
                         disabled={disconnectMutation.isPending}
                       >
                         {disconnectMutation.isPending ? (
                           <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            <Loader2 className="h-4 w-4 animate-spin" />
                             Disconnecting...
                           </>
                         ) : (
-                          'Disconnect Google Account'
+                          <>
+                            <Unlink className="h-4 w-4" />
+                            Disconnect Google Account
+                          </>
                         )}
                       </Button>
                     </div>
                   </>
                 ) : (
                   <>
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        No Google account connected. Connect your account to start collecting data.
-                      </AlertDescription>
-                    </Alert>
+                    <div className="bg-yellow-50 dark:bg-yellow-950/20 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                        <p className="text-sm text-yellow-900 dark:text-yellow-100">
+                          No Google account connected. Connect your account to start collecting data.
+                        </p>
+                      </div>
+                    </div>
                     <GoogleAuthButton onClick={handleGoogleAuth} />
                   </>
                 )}
@@ -399,32 +408,45 @@ const DataCollection = () => {
               {isConnected && (
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="p-4">
-                    <div className="mb-4">
-                      <h3 className="text-lg font-semibold mb-1">Data Collection Status</h3>
-                      <p className="text-sm text-slate-600 dark:text-slate-400">
-                        Enable or disable automatic data collection for this WhatsApp number
-                      </p>
+                    <div className="pb-3">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center">
+                          <Database className="h-5 w-5 mr-2 text-amber-500" />
+                          <h3 className="text-lg font-semibold">Data Collection Status</h3>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {toggleDataCollection.isPending && (
+                            <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                          )}
+                          <Switch 
+                            checked={aiConfig?.enable_data_collection || false}
+                            onCheckedChange={(checked) => toggleDataCollection.mutate(checked)}
+                            disabled={toggleDataCollection.isPending || disconnectMutation.isPending}
+                            className="data-[state=checked]:bg-green-500"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <p className="font-medium">
-                        {aiConfig?.enable_data_collection ? 'Active' : 'Inactive'}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {aiConfig?.enable_data_collection 
-                          ? 'Data is being collected from conversations'
-                          : 'Data collection is disabled'}
-                      </p>
-                    </div>
-                    <Button
-                      onClick={() => toggleDataCollection.mutate(!aiConfig?.enable_data_collection)}
-                      disabled={toggleDataCollection.isPending || disconnectMutation.isPending}
-                    >
-                      {toggleDataCollection.isPending && (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <div className="pt-0">
+                      {aiConfig?.enable_data_collection ? (
+                        <div className="bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-200 dark:border-green-900 p-3">
+                          <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                            Data Collection is Active
+                          </p>
+                          <p className="text-xs text-green-600 dark:text-green-500 mt-1">
+                            This WhatsApp number will automatically collect data from conversations
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bg-gray-50 dark:bg-gray-900/20 rounded-xl border border-gray-200 dark:border-gray-800 p-3">
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-400">
+                            Data Collection is Disabled
+                          </p>
+                          <p className="text-xs text-gray-600 dark:text-gray-500 mt-1">
+                            This WhatsApp number will not collect any data from conversations
+                          </p>
+                        </div>
                       )}
-                      {aiConfig?.enable_data_collection ? 'Disable' : 'Enable'}
-                    </Button>
                     </div>
                   </div>
                 </div>
@@ -446,7 +468,7 @@ const DataCollection = () => {
         )}
 
         {!selectedInstance && (
-          <div className="bg-blue-50 dark:bg-blue-950/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+          <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
             <div className="flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
               <p className="text-sm text-blue-900 dark:text-blue-100">

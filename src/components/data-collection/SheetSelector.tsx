@@ -65,14 +65,6 @@ const SheetSelector: React.FC<SheetSelectorProps> = ({
 
   return (
     <div className="space-y-4">
-      <Alert>
-        <Info className="h-4 w-4" />
-        <AlertDescription>
-          Provide either the Google Sheet URL or Sheet ID. The data will be exported to this sheet.
-          Make sure the sheet is accessible by your Google account.
-        </AlertDescription>
-      </Alert>
-
       <div className="space-y-2">
         <Label htmlFor="sheet-id">Google Sheet URL or ID</Label>
         <Input
@@ -106,9 +98,9 @@ const SheetSelector: React.FC<SheetSelectorProps> = ({
           className="flex-1"
         >
           {updateSheet.isPending && (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" />
           )}
-          <Save className="h-4 w-4 mr-2" />
+          <Save className="h-4 w-4" />
           Save Settings
         </Button>
         
@@ -117,17 +109,17 @@ const SheetSelector: React.FC<SheetSelectorProps> = ({
             onClick={openSheet}
             variant="outline"
           >
-            <ExternalLink className="h-4 w-4 mr-2" />
+            <ExternalLink className="h-4 w-4" />
             Open Sheet
           </Button>
         )}
       </div>
 
       {currentSheetId && (
-        <Card className="bg-muted/50">
-          <CardContent className="pt-6">
-            <CardDescription>
-              <strong>Current Sheet ID:</strong> {currentSheetId}
+        <Card className="bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800 shadow-sm">
+          <CardContent className="pt-3 pb-3 px-3">
+            <CardDescription className="text-sm text-blue-900">
+              Current Sheet ID: {currentSheetId}
             </CardDescription>
           </CardContent>
         </Card>

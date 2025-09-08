@@ -70,7 +70,7 @@ const WhatsAppInstanceSelector: React.FC<WhatsAppInstanceSelectorProps> = ({ val
                 variant="secondary"
                 className={`ml-2 ${
                   instance.status === 'Connected' || instance.status === 'connected' 
-                    ? 'bg-green-500 text-white px-2 py-0.5 text-xs font-medium dark:bg-green-950/50 dark:text-white'
+                    ? 'bg-green-500 hover:bg-green-500 text-white px-2 py-0.5 text-xs font-medium dark:bg-green-950/50 dark:text-white'
                     : ''
                 }`}
               >

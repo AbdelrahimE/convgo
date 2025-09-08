@@ -33,7 +33,9 @@ import {
   Loader2,
   FileSpreadsheet,
   Eye,
-  Trash2
+  Trash2,
+  Database,
+  ListCheck
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -182,43 +184,69 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
     <div className="space-y-6">
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{sessions.length}</div>
-            <p className="text-xs text-muted-foreground">Total Sessions</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">
-              {sessions.filter(s => s.is_complete).length}
+        {/* Total Sessions */}
+        <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Total Sessions</p>
+              <span className="text-2xl font-bold text-blue-700 dark:text-blue-300 block mt-1">{sessions.length}</span>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">All Data Collections</p>
             </div>
-            <p className="text-xs text-muted-foreground">Complete</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">
-              {sessions.filter(s => !s.is_complete).length}
+            <Database className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          </div>
+        </div>
+
+        {/* Complete */}
+        <div className="bg-green-50 dark:bg-green-950/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-green-900 dark:text-green-100">Complete</p>
+              <span className="text-2xl font-bold text-green-700 dark:text-green-300 block mt-1">
+                {sessions.filter(s => s.is_complete).length}
+              </span>
+              <p className="text-xs text-green-600 dark:text-green-400 mt-1">Ready for Export</p>
             </div>
-            <p className="text-xs text-muted-foreground">Incomplete</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">
-              {sessions.filter(s => s.exported_to_sheets).length}
+            <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+          </div>
+        </div>
+
+        {/* Incomplete */}
+        <div className="bg-orange-50 dark:bg-orange-950/20 rounded-lg p-4 border border-orange-200 dark:border-orange-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-orange-900 dark:text-orange-100">Incomplete</p>
+              <span className="text-2xl font-bold text-orange-700 dark:text-orange-300 block mt-1">
+                {sessions.filter(s => !s.is_complete).length}
+              </span>
+              <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">Missing Data Fields</p>
             </div>
-            <p className="text-xs text-muted-foreground">Exported</p>
-          </CardContent>
-        </Card>
+            <Clock className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+          </div>
+        </div>
+
+        {/* Exported */}
+        <div className="bg-purple-50 dark:bg-purple-950/20 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-purple-900 dark:text-purple-100">Exported</p>
+              <span className="text-2xl font-bold text-purple-700 dark:text-purple-300 block mt-1">
+                {sessions.filter(s => s.exported_to_sheets).length}
+              </span>
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Sent to Google Sheets</p>
+            </div>
+            <FileSpreadsheet className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+          </div>
+        </div>
       </div>
 
       {/* Actions and Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Collected Data</CardTitle>
-          <CardDescription>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ListCheck className="h-5 w-5 flex-shrink-0" />
+            Collected Data
+          </CardTitle>
+          <CardDescription className="text-sm">
             View and manage data collected from WhatsApp conversations
           </CardDescription>
         </CardHeader>

@@ -17,7 +17,7 @@ export const StatsCards = React.memo(({ stats }: StatsCardsProps) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {/* Active Conversations Card */}
-      <Card className="rounded-xl bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/50 dark:to-red-900/30 border-red-200/50 dark:border-red-800/50 transition-colors duration-200">
+      <Card className="rounded-lg bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/50 dark:to-red-900/30 border-red-200/50 dark:border-red-800/50 transition-colors duration-200">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex-1">
@@ -35,7 +35,7 @@ export const StatsCards = React.memo(({ stats }: StatsCardsProps) => {
       </Card>
 
       {/* Resolved Today Card */}
-      <Card className="rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/50 dark:to-green-900/30 border-green-200/50 dark:border-green-800/50 transition-colors duration-200">
+      <Card className="rounded-lg bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/50 dark:to-green-900/30 border-green-200/50 dark:border-green-800/50 transition-colors duration-200">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex-1">
@@ -53,7 +53,7 @@ export const StatsCards = React.memo(({ stats }: StatsCardsProps) => {
       </Card>
 
       {/* Average Resolution Time Card */}
-      <Card className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/50 dark:to-blue-900/30 border-blue-200/50 dark:border-blue-800/50 transition-colors duration-200">
+      <Card className="rounded-lg bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/50 dark:to-blue-900/30 border-blue-200/50 dark:border-blue-800/50 transition-colors duration-200">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex-1">
@@ -71,7 +71,7 @@ export const StatsCards = React.memo(({ stats }: StatsCardsProps) => {
       </Card>
 
       {/* Total Escalations Card */}
-      <Card className="rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/50 dark:to-purple-900/30 border-purple-200/50 dark:border-purple-800/50 transition-colors duration-200">
+      <Card className="rounded-lg bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/50 dark:to-purple-900/30 border-purple-200/50 dark:border-purple-800/50 transition-colors duration-200">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex-1">
