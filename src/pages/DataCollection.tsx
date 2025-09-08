@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+// Card components removed - using div with consistent styling instead
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+// Badge import removed as it's not used in current implementation
 import { FolderOpen, Database, AlertCircle, CheckCircle2, Loader2, Cog } from "lucide-react";
 import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
@@ -256,57 +256,72 @@ const DataCollection = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold mb-2">Data Collection</h1>
-        <p className="text-muted-foreground">
-          Automatically collect and export customer data from WhatsApp conversations to Google Sheets
-        </p>
+    <div className="w-full min-h-screen bg-white dark:bg-slate-900">
+      {/* Header Section */}
+      <div className="bg-white dark:bg-slate-900">
+        <div className="px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
+                  Data Collection
+                </h1>
+                <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
+                  Automatically collect and export customer data from WhatsApp conversations to Google Sheets
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* WhatsApp Instance Selection */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Cog className="h-5 w-5" />
-            Choose WhatsApp Number
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <WhatsAppInstanceSelector 
-            value={selectedInstance}
-            onChange={setSelectedInstance}
-          />
-        </CardContent>
-      </Card>
+      {/* Main Content */}
+      <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6">
 
-      {selectedInstance && (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="setup">
-              <Cog className="h-4 w-4 mr-2" />
-              Setup
-            </TabsTrigger>
-            <TabsTrigger value="fields" disabled={!isConnected || disconnectMutation.isPending}>
-              <Database className="h-4 w-4 mr-2" />
-              Fields
-            </TabsTrigger>
-            <TabsTrigger value="data" disabled={!isConnected || disconnectMutation.isPending}>
-              <FolderOpen className="h-4 w-4 mr-2" />
-              Collected Data
-            </TabsTrigger>
-          </TabsList>
+        {/* WhatsApp Instance Selection */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="p-4">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Cog className="h-5 w-5" />
+                Choose WhatsApp Number
+              </h2>
+            </div>
+            <WhatsAppInstanceSelector 
+              value={selectedInstance}
+              onChange={setSelectedInstance}
+            />
+          </div>
+        </div>
 
-          <TabsContent value="setup" className="space-y-6">
-            {/* Google Connection Status */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Google Sheets Connection</CardTitle>
-                <CardDescription>
-                  Connect your Google account to export data to Google Sheets
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+        {selectedInstance && (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="setup">
+                <Cog className="h-4 w-4 mr-2" />
+                Setup
+              </TabsTrigger>
+              <TabsTrigger value="fields" disabled={!isConnected || disconnectMutation.isPending}>
+                <Database className="h-4 w-4 mr-2" />
+                Fields
+              </TabsTrigger>
+              <TabsTrigger value="data" disabled={!isConnected || disconnectMutation.isPending}>
+                <FolderOpen className="h-4 w-4 mr-2" />
+                Collected Data
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="setup" className="space-y-6">
+              {/* Google Connection Status */}
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="p-4">
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold mb-1">Google Sheets Connection</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Connect your Google account to export data to Google Sheets
+                    </p>
+                  </div>
+                  <div className="space-y-4">
                 {configLoading ? (
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -376,19 +391,20 @@ const DataCollection = () => {
                     <GoogleAuthButton onClick={handleGoogleAuth} />
                   </>
                 )}
-              </CardContent>
-            </Card>
+                  </div>
+                </div>
+              </div>
 
-            {/* Data Collection Toggle */}
-            {isConnected && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Data Collection Status</CardTitle>
-                  <CardDescription>
-                    Enable or disable automatic data collection for this WhatsApp number
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
+              {/* Data Collection Toggle */}
+              {isConnected && (
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <div className="p-4">
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold mb-1">Data Collection Status</h3>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">
+                        Enable or disable automatic data collection for this WhatsApp number
+                      </p>
+                    </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <p className="font-medium">
@@ -409,34 +425,37 @@ const DataCollection = () => {
                       )}
                       {aiConfig?.enable_data_collection ? 'Disable' : 'Enable'}
                     </Button>
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
+                </div>
+              )}
+            </TabsContent>
 
-          <TabsContent value="fields" className="space-y-6">
-            {sheetsConfig && (
-              <FieldsBuilder configId={sheetsConfig.id} />
-            )}
-          </TabsContent>
+            <TabsContent value="fields" className="space-y-6">
+              {sheetsConfig && (
+                <FieldsBuilder configId={sheetsConfig.id} />
+              )}
+            </TabsContent>
 
-          <TabsContent value="data" className="space-y-6">
-            {sheetsConfig && (
-              <CollectedDataView configId={sheetsConfig.id} />
-            )}
-          </TabsContent>
-        </Tabs>
-      )}
+            <TabsContent value="data" className="space-y-6">
+              {sheetsConfig && (
+                <CollectedDataView configId={sheetsConfig.id} />
+              )}
+            </TabsContent>
+          </Tabs>
+        )}
 
-      {!selectedInstance && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Please select a WhatsApp number to configure data collection
-          </AlertDescription>
-        </Alert>
-      )}
+        {!selectedInstance && (
+          <div className="bg-blue-50 dark:bg-blue-950/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+              <p className="text-sm text-blue-900 dark:text-blue-100">
+                Please select a WhatsApp number to configure data collection
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

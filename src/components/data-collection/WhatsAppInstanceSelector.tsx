@@ -67,10 +67,14 @@ const WhatsAppInstanceSelector: React.FC<WhatsAppInstanceSelectorProps> = ({ val
             <div className="flex items-center justify-between w-full">
               <span>{instance.instance_name}</span>
               <Badge 
-                variant={instance.status === 'connected' ? 'default' : 'secondary'}
-                className="ml-2"
+                variant="secondary"
+                className={`ml-2 ${
+                  instance.status === 'Connected' || instance.status === 'connected' 
+                    ? 'bg-green-500 text-white px-2 py-0.5 text-xs font-medium dark:bg-green-950/50 dark:text-white'
+                    : ''
+                }`}
               >
-                {instance.status}
+                {instance.status === 'connected' ? 'Connected' : instance.status}
               </Badge>
             </div>
           </SelectItem>
