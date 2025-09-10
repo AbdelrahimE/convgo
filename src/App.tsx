@@ -16,7 +16,6 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
 import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
-import WebhookMonitor from '@/pages/WebhookMonitor';
 import AccountSettings from '@/pages/AccountSettings';
 import AIUsageMonitoring from '@/pages/AIUsageMonitoring';
 import AIPersonalities from '@/pages/AIPersonalities';
@@ -107,14 +106,6 @@ function AppContent() {
                     element={
                       <ProtectedRoute>
                         <AIPersonalities />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/webhook-monitor"
-                    element={
-                      <ProtectedRoute>
-                        <WebhookMonitor />
                       </ProtectedRoute>
                     }
                   />
