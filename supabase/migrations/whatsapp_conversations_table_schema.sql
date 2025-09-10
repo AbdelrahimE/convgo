@@ -21,3 +21,13 @@ create table public.whatsapp_conversations (
 create index IF not exists idx_whatsapp_conversations_status on public.whatsapp_conversations using btree (status) TABLESPACE pg_default;
 
 create index IF not exists idx_whatsapp_conversations_last_activity on public.whatsapp_conversations using btree (last_activity) TABLESPACE pg_default;
+
+create index IF not exists idx_conversations_phone_instance on public.whatsapp_conversations using btree (user_phone, instance_id) TABLESPACE pg_default;
+
+create index IF not exists idx_conversations_active on public.whatsapp_conversations using btree (instance_id, user_phone, status) TABLESPACE pg_default
+where
+  (status = 'active'::text);
+
+create index IF not exists idx_conversations_cleanup on public.whatsapp_conversations using btree (last_activity) TABLESPACE pg_default
+where
+  (status <> 'active'::text);

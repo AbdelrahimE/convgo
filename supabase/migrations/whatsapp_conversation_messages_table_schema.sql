@@ -19,6 +19,8 @@ create index IF not exists idx_whatsapp_conversation_messages_conversation_id on
 
 create index IF not exists idx_whatsapp_conversation_messages_timestamp on public.whatsapp_conversation_messages using btree ("timestamp") TABLESPACE pg_default;
 
+create index IF not exists idx_messages_conversation on public.whatsapp_conversation_messages using btree (conversation_id, "timestamp" desc) TABLESPACE pg_default;
+
 create trigger trigger_update_conversation_last_activity
 after INSERT on whatsapp_conversation_messages for EACH row
 execute FUNCTION update_conversation_last_activity ();

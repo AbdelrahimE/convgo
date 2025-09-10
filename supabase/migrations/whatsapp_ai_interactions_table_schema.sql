@@ -27,6 +27,10 @@ create index IF not exists whatsapp_ai_interactions_instance_id_idx on public.wh
 
 create index IF not exists whatsapp_ai_interactions_created_at_idx on public.whatsapp_ai_interactions using btree (created_at) TABLESPACE pg_default;
 
+create index IF not exists idx_ai_interactions_metadata_gin on public.whatsapp_ai_interactions using gin (metadata) TABLESPACE pg_default;
+
+create index IF not exists idx_ai_interactions_user on public.whatsapp_ai_interactions using btree (whatsapp_instance_id, user_phone, created_at desc) TABLESPACE pg_default;
+
 create trigger handle_updated_at BEFORE
 update on whatsapp_ai_interactions for EACH row
 execute FUNCTION handle_updated_at ();
