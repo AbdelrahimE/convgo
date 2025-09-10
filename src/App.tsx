@@ -11,7 +11,7 @@ import { SimpleSidebar, type SimpleSidebarHandle } from '@/components/SimpleSide
 import { Button } from '@/components/ui/button';
 import { AlignJustify } from 'lucide-react';
 import { LogoWithText } from '@/components/Logo';
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
@@ -24,6 +24,7 @@ import DataCollection from '@/pages/DataCollection';
 import OAuthCallbackWrapper from '@/components/data-collection/OAuthCallbackWrapper';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
+import { initLanguageDetection } from '@/utils/languageDetector';
 
 import './App.css';
 
@@ -159,6 +160,13 @@ function AppContent() {
 }
 
 function App() {
+  useEffect(() => {
+    // Initialize simple language detection
+    const observer = initLanguageDetection();
+    
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <ErrorBoundary>
       <NetworkErrorBoundary>

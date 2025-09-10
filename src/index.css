@@ -139,6 +139,18 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Poppins', 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  }
+
+  /* Language-based font selection using attributes - HIGH SPECIFICITY */
+  body *[dir="rtl"],
+  body *[lang="ar"] {
+    font-family: 'IBM Plex Sans Arabic', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
+  }
+
+  body *[dir="ltr"],
+  body *[lang="en"] {
+    font-family: 'Poppins', 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
   }
 }
 
@@ -251,4 +263,21 @@
     text-align: center !important;
     direction: ltr !important;
   }
+
+  /* Arabic input and textarea fields */
+  input.lang-ar,
+  textarea.lang-ar {
+    direction: rtl !important;
+    text-align: right !important;
+    font-family: 'IBM Plex Sans Arabic', 'Poppins', sans-serif !important;
+  }
+
+  /* English input and textarea fields */  
+  input.lang-en,
+  textarea.lang-en {
+    direction: ltr !important;
+    text-align: left !important;
+    font-family: 'Poppins', 'IBM Plex Sans Arabic', sans-serif !important;
+  }
+
 }

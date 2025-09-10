@@ -4,7 +4,6 @@
   margin: 0;
   padding: 0;
   text-align: left;
-  font-family: 'Poppins', system-ui, sans-serif;
 }
 
 .logo {
@@ -79,15 +78,3 @@ link[rel="icon"], link[rel="alternate icon"] {
   /* Add specific laptop styles if needed */
 }
 
-/* Arabic font and RTL direction for input fields only */
-.lang-ar {
-  font-family: 'IBM Plex Sans Arabic', Arial, sans-serif;
-  direction: rtl;
-  text-align: right;
-}
-
-.lang-en {
-  font-family: 'Poppins', system-ui, sans-serif;
-  direction: ltr;
-  text-align: left;
-}
