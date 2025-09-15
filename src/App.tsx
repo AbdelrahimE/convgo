@@ -21,6 +21,9 @@ import AIUsageMonitoring from '@/pages/AIUsageMonitoring';
 import AIPersonalities from '@/pages/AIPersonalities';
 import EscalationManagement from '@/pages/EscalationManagement';
 import DataCollection from '@/pages/DataCollection';
+import ExternalActions from '@/pages/ExternalActions';
+import CreateExternalAction from '@/pages/external-actions/CreateExternalAction';
+import EditExternalAction from '@/pages/external-actions/EditExternalAction';
 import OAuthCallbackWrapper from '@/components/data-collection/OAuthCallbackWrapper';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
@@ -139,6 +142,30 @@ function AppContent() {
                     element={
                       <ProtectedRoute>
                         <DataCollection />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/external-actions"
+                    element={
+                      <ProtectedRoute>
+                        <ExternalActions />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/external-actions/create"
+                    element={
+                      <ProtectedRoute>
+                        <CreateExternalAction />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/external-actions/edit/:id"
+                    element={
+                      <ProtectedRoute>
+                        <EditExternalAction />
                       </ProtectedRoute>
                     }
                   />

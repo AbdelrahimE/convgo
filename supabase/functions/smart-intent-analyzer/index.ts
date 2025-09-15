@@ -109,6 +109,15 @@ interface SmartIntentResult {
     urgency_level: string;
     decision_factors: string[];
   };
+  // External Action fields - only present when intent === 'external_action'
+  externalAction?: {
+    id: string;
+    name: string;
+    displayName: string;
+    extractedVariables: Record<string, any>;
+    webhookUrl: string;
+    payloadTemplate: Record<string, any>;
+  };
   error?: string;
 }
 
@@ -483,7 +492,7 @@ async function getSmartPersonality(
       id: personalityRow.personality_id,
       name: personalityRow.personality_name,
       system_prompt: personalityRow.system_prompt,
-      temperature: personalityRow.temperature || 0.7 // قيمة افتراضية
+      temperature: personalityRow.temperature || 1 // قيمة افتراضية ثابتة لموديل GPT-5 لأنه لا يقبل اقل من هذه القيمة
     };
 
     logger.log(`✅ Found contextual personality: ${normalizedPersonality.name} for intent: ${intent}`, {
@@ -505,9 +514,188 @@ async function getSmartPersonality(
 }
 
 /**
+ * Check for external actions using AI-based intent detection
+ * This runs BEFORE the core 5 intents to allow custom user-defined actions
+ */
+async function checkExternalActions(
+  message: string,
+  conversationHistory: string[],
+  instanceId: string
+): Promise<{
+  matchedAction: any | null;
+  confidence: number;
+  extractedVariables: Record<string, any>;
+  reasoning: string;
+}> {
+  try {
+    // Get active external actions for this instance
+    const { data: externalActions, error: actionsError } = await supabaseAdmin
+      .from('external_actions')
+      .select('*')
+      .eq('whatsapp_instance_id', instanceId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+    
+    if (actionsError || !externalActions || externalActions.length === 0) {
+      logger.debug('No external actions found for instance:', instanceId);
+      return {
+        matchedAction: null,
+        confidence: 0,
+        extractedVariables: {},
+        reasoning: 'No external actions configured'
+      };
+    }
+    
+    logger.info(`🔍 Checking ${externalActions.length} external actions for instance ${instanceId}`);
+    
+    // Prepare training examples for OpenAI analysis
+    const actionsForAnalysis = externalActions.map(action => ({
+      id: action.id,
+      name: action.action_name,
+      display_name: action.display_name,
+      training_examples: action.training_examples || [],
+      confidence_threshold: action.confidence_threshold || 0.75,
+      variable_prompts: action.variable_prompts || {}
+    }));
+    
+    const recentContext = conversationHistory && conversationHistory.length > 0 
+      ? conversationHistory.slice(-2).join('\n').substring(0, 200) 
+      : 'No previous context';
+    
+    const cleanMessage = message.trim().substring(0, 400);
+    
+    const externalActionPrompt = `You are an external action detector for a WhatsApp AI system. Analyze if this message matches any of the defined external actions.
+
+Previous context: ${recentContext}
+Current message: "${cleanMessage}"
+
+Available External Actions:
+${actionsForAnalysis.map((action, index) => `
+${index + 1}. Action: "${action.display_name}" (ID: ${action.name})
+   Training Examples: ${JSON.stringify(action.training_examples)}
+   Confidence Threshold: ${action.confidence_threshold}
+   Variable Prompts: ${JSON.stringify(action.variable_prompts)}
+`).join('\n')}
+
+Return ONLY valid JSON format:
+{
+  "matched_action_id": "action_name or null",
+  "confidence": 0.85,
+  "reasoning": "why this action matches or doesn't match",
+  "extracted_variables": {
+    "variable_name": "extracted_value"
+  }
+}
+
+Rules:
+1. Only match if confidence >= action's threshold
+2. Extract variables based on variable_prompts if action matches
+3. If no action matches confidently, return matched_action_id: null
+4. Be strict about matching - only match if really similar to training examples`;
+
+    const apiKey = getNextOpenAIKey();
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-5-nano',
+        messages: [
+          { role: 'system', content: externalActionPrompt },
+          { role: 'user', content: cleanMessage }
+        ],
+        temperature: 1,
+        max_completion_tokens: 3000,
+        reasoning_effort: 'low'
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      logger.error(`OpenAI API error for external actions: ${response.status}:`, errorData);
+      return {
+        matchedAction: null,
+        confidence: 0,
+        extractedVariables: {},
+        reasoning: `OpenAI error: ${response.status}`
+      };
+    }
+    
+    const responseData = await response.json();
+    const content = responseData.choices[0]?.message?.content;
+    
+    if (!content) {
+      logger.error('Empty response from OpenAI for external actions');
+      return {
+        matchedAction: null,
+        confidence: 0,
+        extractedVariables: {},
+        reasoning: 'Empty OpenAI response'
+      };
+    }
+    
+    let result;
+    try {
+      result = JSON.parse(content.trim());
+    } catch (parseError) {
+      logger.error('JSON parsing failed for external actions:', parseError.message);
+      return {
+        matchedAction: null,
+        confidence: 0,
+        extractedVariables: {},
+        reasoning: 'JSON parsing failed'
+      };
+    }
+    
+    if (result.matched_action_id && result.confidence) {
+      // Find the matched action
+      const matchedAction = externalActions.find(action => action.action_name === result.matched_action_id);
+      
+      if (matchedAction && result.confidence >= matchedAction.confidence_threshold) {
+        logger.info('✅ External action matched:', {
+          actionName: matchedAction.action_name,
+          confidence: result.confidence,
+          threshold: matchedAction.confidence_threshold,
+          extractedVariables: result.extracted_variables || {}
+        });
+        
+        return {
+          matchedAction,
+          confidence: result.confidence,
+          extractedVariables: result.extracted_variables || {},
+          reasoning: result.reasoning || 'External action matched'
+        };
+      }
+    }
+    
+    logger.debug('No external actions matched with sufficient confidence');
+    return {
+      matchedAction: null,
+      confidence: result.confidence || 0,
+      extractedVariables: {},
+      reasoning: result.reasoning || 'No confident match'
+    };
+    
+  } catch (error) {
+    logger.error('❌ Error in checkExternalActions:', error);
+    return {
+      matchedAction: null,
+      confidence: 0,
+      extractedVariables: {},
+      reasoning: `Error: ${error.message}`
+    };
+  }
+}
+
+/**
  * النظام الذكي المحسن للـ MVP - سرعة وبساطة
  * تحسين جذري: من 5 استدعاءات OpenAI إلى 1 فقط!
  * توفير متوقع: 60-70% من زمن الاستجابة
+ * 
+ * ENHANCED: Now checks external actions FIRST before core intents
  */
 async function smartIntentAnalysisOptimized(
   message: string,
@@ -526,7 +714,69 @@ async function smartIntentAnalysisOptimized(
   productInterest: any;
 }> {
   
-  // 1. التحليل الأساسي المحسن الجديد (استدعاء OpenAI واحد فقط)
+  // 1. FIRST: Check for external actions (user-defined custom intents)
+  logger.info('🔍 Phase 1: Checking external actions first');
+  const externalActionResult = await checkExternalActions(message, conversationHistory, instanceId);
+  
+  if (externalActionResult.matchedAction) {
+    logger.info('🎯 External action matched - bypassing core intent analysis:', {
+      actionName: externalActionResult.matchedAction.action_name,
+      confidence: externalActionResult.confidence,
+      extractedVariables: externalActionResult.extractedVariables
+    });
+    
+    // Return special response indicating external action was triggered
+    return {
+      intent: 'external_action',
+      confidence: externalActionResult.confidence,
+      needsHumanSupport: false,
+      humanSupportReason: null,
+      businessContext: {
+        industry: 'external_action',
+        communicationStyle: 'automated',
+        detectedTerms: Object.keys(externalActionResult.extractedVariables),
+        confidence: externalActionResult.confidence
+      },
+      reasoning: `External Action: ${externalActionResult.matchedAction.display_name} - ${externalActionResult.reasoning}`,
+      selectedPersonality: null, // External actions don't use personalities
+      emotionAnalysis: {
+        primary_emotion: 'neutral',
+        intensity: 0.5,
+        emotional_indicators: [],
+        sentiment_score: 0,
+        emotional_state: 'neutral',
+        urgency_detected: false
+      },
+      customerJourney: {
+        current_stage: 'action_triggered',
+        stage_confidence: 0.9,
+        progression_indicators: ['external_action_match'],
+        next_expected_action: 'Execute webhook',
+        conversion_probability: 0
+      },
+      productInterest: {
+        requested_item: null,
+        category: null,
+        specifications: [],
+        price_range_discussed: false,
+        urgency_level: 'low',
+        decision_factors: []
+      },
+      // Special fields for external action
+      externalAction: {
+        id: externalActionResult.matchedAction.id,
+        name: externalActionResult.matchedAction.action_name,
+        displayName: externalActionResult.matchedAction.display_name,
+        extractedVariables: externalActionResult.extractedVariables,
+        webhookUrl: externalActionResult.matchedAction.webhook_url,
+        payloadTemplate: externalActionResult.matchedAction.payload_template
+      }
+    };
+  }
+  
+  logger.info('⏭️ No external actions matched - proceeding with core intent analysis');
+  
+  // 2. التحليل الأساسي المحسن الجديد (استدعاء OpenAI واحد فقط)
   const coreAnalysis = await analyzeCoreIntentOptimized(message, conversationHistory);
   
   // 2. بيانات مبسطة للـ MVP - كافية للوظائف الأساسية
@@ -659,7 +909,9 @@ serve(async (req) => {
       cacheHit: false,
       emotionAnalysis: analysisResult.emotionAnalysis,
       customerJourney: analysisResult.customerJourney,
-      productInterest: analysisResult.productInterest
+      productInterest: analysisResult.productInterest,
+      // ✅ إضافة الـ externalAction المفقود
+      externalAction: analysisResult.externalAction
     };
 
     logger.info('🏁 Smart Intent Analysis Completed Successfully:', {
@@ -676,7 +928,11 @@ serve(async (req) => {
       processing_time_ms: processingTimeMs,
       gpt5_nano_reasoning_effort: 'low',
       cache_will_be_saved: true,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      // ✅ إضافة logging لـ externalAction
+      has_external_action: !!result.externalAction,
+      external_action_id: result.externalAction?.id || 'none',
+      external_action_name: result.externalAction?.name || 'none'
     });
 
     // حفظ النتيجة في الـ Cache للاستفسارات المستقبلية المشابهة

@@ -217,6 +217,118 @@ async function handleEscalation(
   }
 }
 
+/**
+ * Simple template engine for External Actions V2
+ * Processes template strings with variable replacements
+ */
+function processTemplate(template: string, variables: Record<string, any>): string {
+  let processed = template;
+  
+  // Replace {variable_name} with actual values
+  Object.keys(variables).forEach(key => {
+    const regex = new RegExp(`\\{${key}\\}`, 'g');
+    processed = processed.replace(regex, variables[key] || '');
+  });
+  
+  // Clean up any remaining unmatched variables
+  processed = processed.replace(/\{[^}]+\}/g, '');
+  
+  return processed;
+}
+
+/**
+ * Create pending response record for wait_for_webhook actions
+ */
+async function createPendingResponse(data: {
+  execution_log_id: string;
+  conversation_id: string;
+  user_phone: string;
+  instance_name: string;
+  expires_at: Date;
+}) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('external_action_responses')
+      .insert({
+        execution_log_id: data.execution_log_id,
+        conversation_id: data.conversation_id,
+        user_phone: data.user_phone,
+        instance_name: data.instance_name,
+        expires_at: data.expires_at.toISOString()
+      });
+
+    if (error) {
+      logger.error('Failed to create pending response record:', error);
+      throw error;
+    }
+
+    logger.info('✅ Created pending response record:', {
+      execution_log_id: data.execution_log_id,
+      user_phone: data.user_phone,
+      expires_at: data.expires_at.toISOString()
+    });
+  } catch (error) {
+    logger.error('Exception creating pending response:', error);
+    throw error;
+  }
+}
+
+/**
+ * Send confirmation message helper function for External Actions V2
+ */
+async function sendConfirmationMessage(
+  message: string, 
+  userPhone: string, 
+  instanceName: string, 
+  instanceBaseUrl: string, 
+  conversationId: string,
+  messageType: string
+) {
+  const sendMessageUrl = `${instanceBaseUrl}/message/sendText/${instanceName}`;
+  const sendMessagePayload = {
+    number: userPhone,
+    text: message
+  };
+  
+  logger.info(`📤 Sending ${messageType} External Action message:`, {
+    sendMessageUrl,
+    userPhone,
+    messageType,
+    messagePreview: message.substring(0, 100)
+  });
+  
+  try {
+    const response = await fetch(sendMessageUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': Deno.env.get('EVOLUTION_API_KEY') || ''
+      },
+      body: JSON.stringify(sendMessagePayload)
+    });
+    
+    if (response.ok) {
+      logger.info(`✅ ${messageType} External Action message sent successfully`);
+      // Store the confirmation message in conversation
+      await storeMessageInConversation(conversationId, 'assistant', message, `external_action_${messageType}_${Date.now()}`, supabaseAdmin);
+    } else {
+      const errorText = await response.text();
+      logger.error(`❌ Failed to send ${messageType} External Action message:`, {
+        status: response.status,
+        error: errorText,
+        sendMessageUrl,
+        userPhone
+      });
+    }
+  } catch (sendError) {
+    logger.error(`Exception sending ${messageType} External Action message:`, {
+      error: sendError.message || sendError,
+      sendMessageUrl,
+      userPhone
+    });
+  }
+}
+
 // Logger for debugging
 const logger = {
   log: (...args: any[]) => console.log(...args),
@@ -361,6 +473,9 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
 
     // Combine all buffered messages into a single message
     const combinedMessage = combineBufferedMessages(buffer.messages);
+    
+    // Extract message IDs for external action logging
+    const messageIds = buffer.messages.map(msg => msg.messageId);
     
     if (!combinedMessage || combinedMessage.trim().length === 0) {
       logger.warn('No valid message content to process');
@@ -629,6 +744,175 @@ async function processBufferedMessagesForUser(instanceName: string, userPhone: s
           error: error.message
         });
       }
+    }
+
+    // 🚀 EXTERNAL ACTION HANDLING: Check if an external action was triggered
+    if (intentClassification && (intentClassification as any)?.intent === 'external_action') {
+      const externalActionData = (intentClassification as any)?.externalAction;
+      
+      if (externalActionData) {
+        logger.info('🎯 External Action Triggered - Executing webhook:', {
+          actionId: externalActionData.id,
+          actionName: externalActionData.name,
+          displayName: externalActionData.displayName,
+          extractedVariables: externalActionData.extractedVariables,
+          conversationId,
+          messageId: messageIds[0]
+        });
+        
+        try {
+          // Call external-action-executor
+          const executorResponse = await fetch(`${supabaseUrl}/functions/v1/external-action-executor`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`
+            },
+            body: JSON.stringify({
+              externalActionId: externalActionData.id,
+              extractedVariables: externalActionData.extractedVariables,
+              whatsappConversationId: conversationId,
+              whatsappMessageId: messageIds[0],
+              intentConfidence: (intentClassification as any)?.confidence || 0
+            })
+          });
+          
+          if (executorResponse.ok) {
+            const executionResult = await executorResponse.json();
+            logger.info('✅ External Action executed successfully:', {
+              actionName: executionResult.actionName,
+              success: executionResult.success,
+              httpStatusCode: executionResult.httpStatusCode,
+              executionTime: executionResult.executionTimeMs,
+              retryCount: executionResult.retryCount
+            });
+            
+            // 🚀 EXTERNAL ACTIONS V2: Handle flexible response types
+            try {
+              // Get action configuration to determine response type
+              const { data: actionConfig, error: configError } = await supabaseAdmin
+                .from('external_actions')
+                .select('response_type, confirmation_message, response_timeout_seconds')
+                .eq('id', externalActionData.id)
+                .single();
+
+              let responseType: string;
+              let confirmationMessage: string;
+              let timeoutSeconds: number;
+
+              if (configError) {
+                logger.error('Failed to get action config for response handling:', configError);
+                // Fallback to simple confirmation
+                responseType = 'simple_confirmation';
+                confirmationMessage = '✅ Data received and sent successfully!\nThank you.';
+                timeoutSeconds = 30;
+              } else {
+                responseType = actionConfig.response_type || 'simple_confirmation';
+                confirmationMessage = actionConfig.confirmation_message || '✅ Data received and sent successfully!\nThank you.';
+                timeoutSeconds = actionConfig.response_timeout_seconds || 30;
+              }
+
+              logger.info('📋 Processing External Action response based on type:', {
+                responseType,
+                actionId: externalActionData.id,
+                actionName: externalActionData.displayName,
+                hasCustomMessage: !!actionConfig?.confirmation_message,
+                timeoutSeconds
+              });
+
+              // Handle different response types
+              switch (responseType) {
+                case 'none':
+                  logger.info('🔇 No response configured - External Action completed silently');
+                  break;
+                  
+                case 'simple_confirmation':
+                  await sendConfirmationMessage(confirmationMessage, userPhone, instanceName, instanceBaseUrl, conversationId, 'simple');
+                  break;
+                  
+                case 'custom_message':
+                  const processedMessage = processTemplate(confirmationMessage, externalActionData.extractedVariables);
+                  logger.info('🔄 Template processed:', {
+                    originalTemplate: confirmationMessage.substring(0, 100),
+                    processedMessage: processedMessage.substring(0, 100),
+                    variables: Object.keys(externalActionData.extractedVariables)
+                  });
+                  await sendConfirmationMessage(processedMessage, userPhone, instanceName, instanceBaseUrl, conversationId, 'custom');
+                  break;
+                  
+                case 'wait_for_webhook':
+                  // Create pending response record
+                  const executionLogId = `exec_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+                  const expiresAt = new Date(Date.now() + timeoutSeconds * 1000);
+                  
+                  await createPendingResponse({
+                    execution_log_id: executionLogId,
+                    conversation_id: conversationId,
+                    user_phone: userPhone,
+                    instance_name: instanceName,
+                    expires_at: expiresAt
+                  });
+                  
+                  logger.info('⏳ Waiting for webhook response - no immediate message sent:', {
+                    executionLogId,
+                    timeoutSeconds,
+                    expiresAt: expiresAt.toISOString()
+                  });
+                  break;
+                  
+                default:
+                  logger.warn('Unknown response type, falling back to simple confirmation:', { responseType });
+                  await sendConfirmationMessage(confirmationMessage, userPhone, instanceName, instanceBaseUrl, conversationId, 'fallback');
+              }
+              
+            } catch (responseError) {
+              logger.error('Exception handling External Action response:', {
+                error: responseError.message || responseError,
+                actionId: externalActionData.id
+              });
+              
+              // Fallback to simple confirmation on error
+              const fallbackMessage = '✅ Data received and sent successfully!\nThank you.';
+              await sendConfirmationMessage(fallbackMessage, userPhone, instanceName, instanceBaseUrl, conversationId, 'error_fallback');
+            }
+            
+            // Mark buffer as processed and return
+            await markBufferAsProcessed(instanceName, userPhone);
+            logger.info('✅ External Action processing completed for instance:', instanceName);
+            
+            return {
+              success: true,
+              action: 'external_action_executed',
+              actionName: externalActionData.displayName,
+              executionResult
+            };
+          } else {
+            const errorText = await executorResponse.text();
+            logger.error('❌ External Action execution failed:', {
+              actionName: externalActionData.name,
+              status: executorResponse.status,
+              error: errorText
+            });
+            
+            // Continue with normal AI flow as fallback
+            logger.info('⏭️ Falling back to normal AI response due to external action failure');
+          }
+        } catch (executionError) {
+          logger.error('❌ Exception during external action execution:', {
+            error: executionError.message,
+            actionName: externalActionData.name
+          });
+          
+          // Continue with normal AI flow as fallback
+          logger.info('⏭️ Falling back to normal AI response due to execution exception');
+        }
+      } else {
+        logger.warn('⚠️ External action intent detected but no action data found');
+      }
+    } else if (intentClassification && (intentClassification as any)?.intent) {
+      logger.info('📋 Core intent detected, proceeding with normal AI response:', {
+        intent: (intentClassification as any)?.intent
+      });
     }
 
     // 🧠 SMART ESCALATION CHECK: Check after intent analysis for intelligent detection

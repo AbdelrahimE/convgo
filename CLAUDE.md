@@ -75,5 +75,4 @@ This is a React + TypeScript application for WhatsApp AI conversation management
 ### Build Configuration:
 - Vite with React SWC plugin for fast builds
 - Path alias `@/` maps to `src/` directory
-- Lovable-tagger plugin enabled in development mode
 - Development server runs on `::` (all interfaces) port 8080
