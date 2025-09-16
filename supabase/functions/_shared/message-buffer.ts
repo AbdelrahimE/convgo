@@ -90,7 +90,7 @@ export async function addMessageToBuffer(
   messageText: string,
   messageId: string,
   messageData: any
-): Promise<{ success: boolean; bufferCreated: boolean; fallbackToImmediate: boolean }> {
+): Promise<{ success: boolean; bufferCreated: boolean; error?: string; retryAttempts?: number }> {
   const lockKey = `lock:buffer:${instanceName}:${userPhone}`;
   let lockAcquired = false;
   
@@ -228,14 +228,70 @@ export async function addMessageToBuffer(
     );
 
     if (!stored) {
-      logger.warn('Failed to store buffer in Redis, falling back to immediate processing');
-      return { success: false, bufferCreated: false, fallbackToImmediate: true };
+      // ✅ RETRY LOGIC: Try storing buffer with retry attempts
+      logger.warn('🔄 Initial buffer storage failed, attempting retries...');
+      
+      const maxRetries = 3;
+      let retrySuccess = false;
+      let lastError = '';
+      
+      for (let retry = 1; retry <= maxRetries; retry++) {
+        logger.info(`🔄 Retry attempt ${retry}/${maxRetries} for buffer storage`);
+        
+        // Progressive backoff: 100ms, 200ms, 400ms
+        const backoffMs = 100 * Math.pow(2, retry - 1);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        
+        const retryStored = await safeRedisCommand(
+          async (client) => {
+            await client.setex(bufferKey, BUFFER_TTL_SECONDS, buffer);
+            return true;
+          },
+          false,
+          `Retry ${retry} buffer storage`
+        );
+        
+        if (retryStored) {
+          retrySuccess = true;
+          logger.info(`✅ Buffer storage succeeded on retry ${retry}`);
+          break;
+        } else {
+          lastError = `Retry ${retry} failed`;
+          logger.warn(`❌ Buffer storage retry ${retry} failed`);
+        }
+      }
+      
+      if (!retrySuccess) {
+        logger.error('🚨 CRITICAL: All buffer storage attempts failed', {
+          instanceName,
+          userPhone,
+          messageId,
+          maxRetries,
+          lastError
+        });
+        return { 
+          success: false, 
+          bufferCreated: false, 
+          error: 'Redis storage failed after all retry attempts',
+          retryAttempts: maxRetries
+        };
+      }
     }
 
-    return { success: true, bufferCreated, fallbackToImmediate: false };
+    return { success: true, bufferCreated };
   } catch (error) {
-    logger.error('Error adding message to buffer:', error);
-    return { success: false, bufferCreated: false, fallbackToImmediate: true };
+    logger.error('🚨 CRITICAL: Exception in buffer system:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      instanceName,
+      userPhone,
+      messageId
+    });
+    return { 
+      success: false, 
+      bufferCreated: false, 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
   } finally {
     // Always release the lock if we acquired it
     if (lockAcquired) {
@@ -426,19 +482,43 @@ export async function markBufferAsProcessed(
  * Check if buffering is enabled and working
  */
 export async function isBufferingAvailable(): Promise<boolean> {
-  try {
-    const client = getRedisClient();
-    if (!client) {
-      return false;
+  const maxRetries = 3;
+  let lastError = '';
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const client = getRedisClient();
+      if (!client) {
+        lastError = 'Redis client not initialized';
+        logger.warn(`🔄 Redis client check failed (attempt ${attempt}/${maxRetries})`);
+        continue;
+      }
+      
+      // Quick connection test with timeout
+      await client.ping();
+      
+      if (attempt > 1) {
+        logger.info(`✅ Redis connection recovered on attempt ${attempt}`);
+      }
+      return true;
+      
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      logger.warn(`🔄 Redis ping failed (attempt ${attempt}/${maxRetries}):`, lastError);
+      
+      // Progressive backoff if not the last attempt
+      if (attempt < maxRetries) {
+        const backoffMs = 100 * attempt; // 100ms, 200ms, 300ms
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
     }
-
-    // Quick connection test
-    await client.ping();
-    return true;
-  } catch (error) {
-    logger.warn('Buffering not available:', error);
-    return false;
   }
+  
+  logger.error('🚨 CRITICAL: Redis buffering system completely unavailable after all retries', {
+    maxRetries,
+    lastError
+  });
+  return false;
 }
 
 /**

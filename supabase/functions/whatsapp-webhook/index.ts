@@ -1,17 +1,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { calculateSimilarity } from "../_shared/text-similarity.ts";
 import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processing.ts";
-import { downloadAudioFile } from "../_shared/audio-download.ts";
-import { storeMessageInConversation } from "../_shared/conversation-storage.ts";
 import { processConnectionStatus } from "../_shared/connection-status.ts";
 import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts";
-import { checkForDuplicateMessage } from "../_shared/duplicate-message-detector.ts";
 import { processAudioMessage } from "../_shared/audio-processor.ts";
-import { generateAndSendAIResponse } from "../_shared/ai-response-generator.ts";
 import { handleMessageWithBuffering } from "../_shared/buffering-handler.ts";
-import { getRecentConversationHistory } from "../_shared/conversation-history.ts";
-import { executeParallel, executeSafeParallel, measureTime } from "../_shared/parallel-queries.ts";
+import { measureTime } from "../_shared/parallel-queries.ts";
 
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {

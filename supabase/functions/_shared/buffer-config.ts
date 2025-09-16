@@ -11,86 +11,57 @@ const logger = {
 };
 
 /**
- * Check if message buffering is enabled for specific instance
- * Buffering is enabled by default - only checks if Redis is available and AI is configured
+ * UPDATED: Buffering is now MANDATORY - only fails if Redis is completely unavailable
+ * No longer checks AI configuration - buffering is required regardless
  */
 export async function isBufferingEnabledForInstance(
   instanceId: string,
   supabaseAdmin: ReturnType<typeof createClient>
 ): Promise<{ enabled: boolean; reason: string }> {
   try {
-    // Check if Redis is available
+    // ONLY check if Redis is available - this is the only hard requirement
     const redisAvailable = await isBufferingAvailable();
     if (!redisAvailable) {
+      logger.error('🚨 CRITICAL: Redis/Upstash not available - buffering system down', {
+        instanceId
+      });
       return { 
         enabled: false, 
-        reason: 'Redis/Upstash not available or misconfigured' 
+        reason: 'CRITICAL: Redis/Upstash not available - system cannot process messages' 
       };
     }
 
-    // Check if AI is configured and active for this instance
-    const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
-      .from('whatsapp_ai_config')
-      .select('is_active')
-      .eq('whatsapp_instance_id', instanceId)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (aiConfigError) {
-      logger.error('Error checking instance AI config:', aiConfigError);
-      return { 
-        enabled: false, 
-        reason: 'Error checking instance configuration' 
-      };
-    }
-
-    if (!aiConfig) {
-      return { 
-        enabled: false, 
-        reason: 'AI not configured or not active for this instance' 
-      };
-    }
-
-    logger.info('Message buffering enabled for instance', {
+    logger.info('✅ MANDATORY buffering system available for instance', {
       instanceId,
-      redisAvailable
+      redisAvailable,
+      note: 'Buffering is now mandatory for all messages'
     });
 
-    return { enabled: true, reason: 'Buffering enabled and available' };
+    // Buffering is mandatory and Redis is available
+    return { enabled: true, reason: 'Mandatory buffering system available' };
+    
   } catch (error) {
-    logger.error('Error checking buffering configuration:', error);
+    logger.error('🚨 CRITICAL: Exception in buffering system check:', error);
     return { 
       enabled: false, 
-      reason: 'Exception checking buffering configuration' 
+      reason: `CRITICAL: System error - ${error.message || 'Unknown exception'}` 
     };
   }
 }
 
 /**
- * Simple helper to check if buffering should be used
- * Returns true if Redis is available and AI is configured for the instance
+ * DEPRECATED: Buffering is now MANDATORY for all instances
+ * This function is kept for compatibility but always returns true
  */
 export async function shouldUseBuffering(
   instanceName: string,
   supabaseAdmin: ReturnType<typeof createClient>
 ): Promise<boolean> {
-  try {
-    // Get instance ID first
-    const { data: instanceData, error: instanceError } = await supabaseAdmin
-      .from('whatsapp_instances')
-      .select('id')
-      .eq('instance_name', instanceName)
-      .maybeSingle();
-
-    if (instanceError || !instanceData) {
-      logger.warn('Instance not found for buffering check', { instanceName });
-      return false;
-    }
-
-    const { enabled } = await isBufferingEnabledForInstance(instanceData.id, supabaseAdmin);
-    return enabled;
-  } catch (error) {
-    logger.error('Error in shouldUseBuffering:', error);
-    return false;
-  }
+  logger.info('⚠️ DEPRECATED: shouldUseBuffering called - buffering is now MANDATORY', {
+    instanceName,
+    note: 'All messages must go through buffering system'
+  });
+  
+  // Buffering is now mandatory - always return true
+  return true;
 }
