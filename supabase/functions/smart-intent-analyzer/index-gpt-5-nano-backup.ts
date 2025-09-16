@@ -4,15 +4,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getNextOpenAIKey } from "../_shared/openai-key-rotation.ts";
 
 /**
- * GPT-4o-mini Model Configuration:
+ * GPT-5-nano Model Configuration:
  * 
- * Temperature values (for controlling response creativity):
- * - 0.0: Deterministic responses - best for factual/logical tasks
- * - 0.3-0.7: Balanced creativity and accuracy - good for most tasks (current)
- * - 1.0: More creative responses - good for creative writing
- * - 2.0: Maximum creativity - experimental responses
+ * reasoning_effort values (from lowest to highest token consumption):
+ * - 'low': أقل استهلاك للتوكنز - أسرع استجابة (الحالي)
+ * - 'low': استهلاك منخفض للتوكنز - سرعة جيدة
+ * - 'medium': استهلاك متوسط للتوكنز - توازن بين السرعة والجودة
+ * - 'high': استهلاك عالي للتوكنز - أفضل جودة
  * 
- * Note: GPT-4o-mini offers better performance per cost compared to GPT-4
+ * Note: كل مستوى أعلى يستهلك توكنز أكثر ويستغرق وقتاً أطول
  */
 
 const logger = {
@@ -150,10 +150,10 @@ async function analyzeCoreIntentOptimized(
       throw new Error('Invalid message input');
     }
 
-    // تنظيف الرسالة مع السماح بطول أكبر للجودة العالية
-    const cleanMessage = message.trim().substring(0, 2000); // زيادة من 500 إلى 2000 حرف للجودة
+    // تنظيف الرسالة وتقليل السياق للتسريع
+    const cleanMessage = message.trim().substring(0, 500); // حد أقصى 500 حرف
     const recentContext = conversationHistory && conversationHistory.length > 0 
-      ? conversationHistory.slice(-5).join('\n').substring(0, 1500)  // زيادة من 3 إلى 5 رسائل ومن 300 إلى 1500 حرف
+      ? conversationHistory.slice(-3).join('\n').substring(0, 300) 
       : 'لا يوجد سياق سابق';
     
     // prompt محسن ومبسط مع اكتشاف نية التصعيد الذكي
@@ -198,19 +198,21 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
     
     // تسجيل تفاصيل الطلب قبل الإرسال
     const requestPayload = {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-nano',
       messages: [
         { role: 'system', content: optimizedPrompt },
         { role: 'user', content: cleanMessage }
       ],
-      temperature: 0.3,
-      max_tokens: 6000 // زيادة من 3000 إلى 6000 لتحليل أعمق وأشمل
+      temperature: 1,
+      max_completion_tokens: 3000, // المعيار الجديد لـ GPT-5
+      reasoning_effort: 'low' // أسرع إعداد للـ MVP
     };
     
-    logger.info('🚀 GPT-4o-mini Request Details:', {
+    logger.info('🚀 GPT-5-nano Request Details:', {
       model: requestPayload.model,
+      reasoning_effort: requestPayload.reasoning_effort,
       temperature: requestPayload.temperature,
-      max_tokens: requestPayload.max_tokens,
+      max_completion_tokens: requestPayload.max_completion_tokens,
       system_prompt_length: optimizedPrompt.length,
       user_message_length: cleanMessage.length,
       context_length: recentContext.length,
@@ -230,9 +232,9 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
     
     const requestDuration = Date.now() - requestStartTime;
     
-    logger.info('⏱️ GPT-4o-mini Request Timing:', {
+    logger.info('⏱️ GPT-5-nano Request Timing:', {
       request_duration_ms: requestDuration,
-      model_used: 'gpt-4o-mini',
+      reasoning_effort: 'low',
       response_status: response.status,
       response_ok: response.ok,
       response_headers: {
@@ -249,8 +251,8 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
 
     const responseData = await response.json();
     
-    // تسجيل تفاصيل الاستجابة من GPT-4o-mini
-    logger.info('📥 GPT-4o-mini Response Details:', {
+    // تسجيل تفاصيل الاستجابة من GPT-5-nano
+    logger.info('📥 GPT-5-nano Response Details:', {
       model_used: responseData.model || 'unknown',
       choices_count: responseData.choices?.length || 0,
       usage: responseData.usage || null,
@@ -262,7 +264,7 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
     
     // التحقق من صحة الاستجابة
     if (!responseData.choices || !responseData.choices[0] || !responseData.choices[0].message) {
-      logger.error('❌ Invalid GPT-4o-mini response structure:', {
+      logger.error('❌ Invalid GPT-5-nano response structure:', {
         has_choices: !!responseData.choices,
         choices_length: responseData.choices?.length || 0,
         response_data_keys: Object.keys(responseData)
@@ -272,17 +274,17 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
 
     const content = responseData.choices[0].message.content;
     if (!content) {
-      logger.error('❌ Empty content from GPT-4o-mini:', {
+      logger.error('❌ Empty content from GPT-5-nano:', {
         message_object: responseData.choices[0].message,
         finish_reason: responseData.choices[0].finish_reason
       });
       throw new Error('Empty response from OpenAI');
     }
 
-    logger.info('📝 GPT-4o-mini Response Content:', {
+    logger.info('📝 GPT-5-nano Response Content:', {
       content_length: content.length,
       content_preview: content.substring(0, 200) + '...',
-      model_used: 'gpt-4o-mini',
+      reasoning_effort_used: 'low',
       token_usage: responseData.usage
     });
 
@@ -290,13 +292,13 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
     let result;
     try {
       result = JSON.parse(content.trim());
-      logger.info('✅ JSON parsing successful from GPT-4o-mini response');
+      logger.info('✅ JSON parsing successful from GPT-5-nano response');
     } catch (parseError) {
-      logger.error('❌ JSON parsing failed for GPT-4o-mini response:', {
+      logger.error('❌ JSON parsing failed for GPT-5-nano response:', {
         error_message: parseError.message,
         content_sample: content.substring(0, 500),
         content_length: content.length,
-        model_used: 'gpt-4o-mini'
+        reasoning_effort: 'low'
       });
       throw new Error(`JSON parsing failed: ${parseError.message}`);
     }
@@ -322,7 +324,7 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
         ? result.basicEmotionState : 'neutral'
     };
 
-    logger.info('✅ GPT-4o-mini Analysis Complete:', {
+    logger.info('✅ GPT-5-nano Analysis Complete:', {
       intent: validatedResult.intent,
       confidence: validatedResult.confidence,
       needsHumanSupport: validatedResult.needsHumanSupport,
@@ -330,18 +332,19 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
       emotion_state: validatedResult.basicEmotionState,
       industry: validatedResult.businessContext.industry,
       detected_terms_count: validatedResult.businessContext.detectedTerms.length,
-      model_used: 'gpt-4o-mini',
+      reasoning_effort_used: 'low',
       total_processing_time_ms: Date.now() - requestStartTime
     });
     
     return validatedResult;
 
   } catch (error) {
-    logger.error('❌ Error in GPT-4o-mini analysis:', {
+    logger.error('❌ Error in GPT-5-nano analysis:', {
       error_message: error.message,
       error_type: error.constructor.name,
       stack_trace: error.stack,
-      model: 'gpt-4o-mini',
+      reasoning_effort: 'low',
+      model: 'gpt-5-nano',
       timestamp: new Date().toISOString()
     });
     
@@ -351,7 +354,7 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
       confidence: 0.5,
       needsHumanSupport: false,
       humanSupportReason: null,
-      reasoning: `تحليل احتياطي - خطأ في GPT-4o-mini: ${error.message}`,
+      reasoning: `تحليل احتياطي - خطأ في GPT-5-nano: ${error.message}`,
       businessContext: {
         industry: 'عام',
         communicationStyle: 'ودي',
@@ -489,7 +492,7 @@ async function getSmartPersonality(
       id: personalityRow.personality_id,
       name: personalityRow.personality_name,
       system_prompt: personalityRow.system_prompt,
-      temperature: personalityRow.temperature || 0.7 // قيمة افتراضية متوازنة لموديل GPT-4o-mini
+      temperature: personalityRow.temperature || 1 // قيمة افتراضية ثابتة لموديل GPT-5 لأنه لا يقبل اقل من هذه القيمة
     };
 
     logger.log(`✅ Found contextual personality: ${normalizedPersonality.name} for intent: ${intent}`, {
@@ -556,10 +559,10 @@ async function checkExternalActions(
     }));
     
     const recentContext = conversationHistory && conversationHistory.length > 0 
-      ? conversationHistory.slice(-4).join('\n').substring(0, 800)  // زيادة من 2 إلى 4 رسائل ومن 200 إلى 800 حرف
+      ? conversationHistory.slice(-2).join('\n').substring(0, 200) 
       : 'No previous context';
     
-    const cleanMessage = message.trim().substring(0, 1600);  // زيادة من 400 إلى 1600 حرف
+    const cleanMessage = message.trim().substring(0, 400);
     
     const externalActionPrompt = `You are an external action detector for a WhatsApp AI system. Analyze if this message matches any of the defined external actions.
 
@@ -599,13 +602,14 @@ Rules:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-nano',
         messages: [
           { role: 'system', content: externalActionPrompt },
           { role: 'user', content: cleanMessage }
         ],
-        temperature: 0.3,
-        max_tokens: 3000
+        temperature: 1,
+        max_completion_tokens: 3000,
+        reasoning_effort: 'low'
       }),
     });
     
@@ -708,7 +712,6 @@ async function smartIntentAnalysisOptimized(
   emotionAnalysis: any;
   customerJourney: any;
   productInterest: any;
-  externalAction?: any;
 }> {
   
   // 1. FIRST: Check for external actions (user-defined custom intents)
@@ -923,7 +926,7 @@ serve(async (req) => {
       personality_id: result.selectedPersonality?.id || 'none',
       detected_terms_count: result.businessContext.detectedTerms?.length || 0,
       processing_time_ms: processingTimeMs,
-      gpt4o_mini_model: 'gpt-4o-mini',
+      gpt5_nano_reasoning_effort: 'low',
       cache_will_be_saved: true,
       timestamp: new Date().toISOString(),
       // ✅ إضافة logging لـ externalAction
@@ -954,7 +957,8 @@ serve(async (req) => {
       error_type: error instanceof Error ? error.constructor.name : typeof error,
       error_stack: error instanceof Error ? error.stack : 'No stack trace',
       processing_time_ms: processingTimeMs,
-      gpt4o_mini_model: 'gpt-4o-mini',
+      gpt5_nano_model: 'gpt-5-nano',
+      reasoning_effort: 'low',
       timestamp: new Date().toISOString(),
       cache_size: intentCache.size
     });
@@ -965,7 +969,8 @@ serve(async (req) => {
         error: error instanceof Error ? error.message : 'Unknown error occurred',
         processingTimeMs,
         model_info: {
-          model: 'gpt-4o-mini'
+          model: 'gpt-5-nano',
+          reasoning_effort: 'low'
         },
         timestamp: new Date().toISOString()
       }),

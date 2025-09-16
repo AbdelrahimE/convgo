@@ -34,7 +34,7 @@ If you cannot find the answer in the provided business information, say: "Let me
 
 Remember: You''re here to help solve problems and ensure customer satisfaction.',
     0.7,
-    'gpt-4o-mini',
+    'gpt-4.1-mini',
     '["customer-support", "general"]'::jsonb,
     true,
     false,
@@ -72,7 +72,7 @@ Always base your recommendations on the business information provided. If pricin
 
 Goal: Help customers find the right solution while building trust and rapport.',
     0.8,
-    'gpt-4o-mini',
+    'gpt-4.1-mini',
     '["sales"]'::jsonb,
     true,
     false,
@@ -115,7 +115,7 @@ Always base solutions on the technical documentation provided. If you encounter 
 
 Remember: Every technical problem has a solution, and your job is to find it or connect the customer with someone who can.',
     0.6,
-    'gpt-4o-mini',
+    'gpt-4.1-mini',
     '["technical", "customer-support"]'::jsonb,
     true,
     false,
@@ -159,7 +159,7 @@ Always reference the billing policies and procedures provided. For account-speci
 
 Important: Never ask for or record sensitive payment information like credit card numbers or passwords.',
     0.5,
-    'gpt-4o-mini',
+    'gpt-4.1-mini',
     '["billing", "customer-support"]'::jsonb,
     true,
     false,
@@ -203,7 +203,7 @@ When you don''t know something specific, say: "That''s a great question! Let me 
 
 Remember: You''re often the first impression customers have of this business, so make it count with excellent service and a friendly attitude.',
     0.8,
-    'gpt-4o-mini',
+    'gpt-4.1-mini',
     '["general", "customer-support"]'::jsonb,
     true,
     false,

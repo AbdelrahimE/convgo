@@ -96,7 +96,7 @@ async function createPersonality(userId: string, whatsappInstanceId: string, dat
         description: data.description,
         system_prompt: data.system_prompt,
         temperature: data.temperature || 0.7,
-        model: data.model || 'gpt-4o-mini',
+        model: data.model || 'gpt-4.1-mini',
         intent_categories: data.intent_categories || [],
         is_active: data.is_active !== undefined ? data.is_active : true,
         is_default: data.is_default || false,

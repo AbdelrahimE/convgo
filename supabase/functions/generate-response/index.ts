@@ -80,9 +80,9 @@ If there is a question about the image, respond based on what you can see in it.
 Be descriptive but concise in your analysis of the image content.`;
 
 const TOKENS_PER_CHAR = 0.25;
-const MAX_CONTEXT_TOKENS = 3000;
-const MAX_CONVERSATION_TOKENS = 1000;
-const MAX_RAG_TOKENS = 2000;
+const MAX_CONTEXT_TOKENS = 12000;    // زيادة من 3000 إلى 12000 للجودة العالية
+const MAX_CONVERSATION_TOKENS = 4000; // زيادة من 1000 إلى 4000
+const MAX_RAG_TOKENS = 8000;         // زيادة من 2000 إلى 8000
 
 function estimateTokens(text: string): number {
   if (!text) return 0;
@@ -160,14 +160,14 @@ function balanceContextTokens(
   let trimmedRag = ragContent;
 
   const MIN_CONVERSATION_TOKENS = 300;
-  const MIN_RAG_TOKENS = 500;
+  const MIN_RAG_TOKENS = 2000;  // زيادة من 500 إلى 2000 لضمان سياق RAG كافي
 
   if (conversationTokens > MIN_CONVERSATION_TOKENS && totalTokens > maxContextTokens) {
     let targetConvTokens = Math.min(
       conversationTokens,
       Math.max(
         MIN_CONVERSATION_TOKENS,
-        Math.floor(maxContextTokens * 0.3)
+        Math.floor(maxContextTokens * 0.2)  // تقليل من 30% إلى 20% لإعطاء 80% للـ RAG
       )
     );
 
@@ -195,11 +195,12 @@ function balanceContextTokens(
     trimmedConversation = includedLines.join('\n\n');
   }
 
-  if (ragTokens > MIN_RAG_TOKENS && totalTokens > maxContextTokens) {
+  // تحسين: فقط قطع RAG إذا كان كبير جداً وتجاوز الحد بكثير
+  if (ragTokens > MIN_RAG_TOKENS && totalTokens > maxContextTokens * 1.2) {  // إضافة هامش 20% قبل القطع
     const targetRagTokens = Math.min(
       ragTokens,
       Math.max(
-        MIN_RAG_TOKENS,
+        MIN_RAG_TOKENS * 2,  // مضاعفة الحد الأدنى للـ RAG للحفاظ على المزيد من المحتوى
         maxContextTokens - estimateTokens(trimmedConversation)
       )
     );
@@ -355,7 +356,7 @@ serve(async (req) => {
     const { 
       query, 
       context, 
-      model = 'gpt-4o-mini', 
+      model = 'gpt-4.1-mini', 
       temperature = 0.3,
       systemPrompt,
       includeConversationHistory = false,

@@ -51,10 +51,10 @@ serve(async (req) => {
     const {
       query,
       fileIds,
-      limit = 5,
-      threshold = 0.3,
+      limit = 10,           // زيادة من 5 إلى 10 لجلب محتوى أكثر 
+      threshold = 0.2,      // تقليل من 0.3 إلى 0.2 لتضمين محتوى أكثر ذو صلة
       filterLanguage,
-      minContentLength = 20
+      minContentLength = 10 // تقليل من 20 إلى 10 لعدم تجاهل محتوى مفيد قصير
     } = await req.json() as SemanticSearchRequest;
 
     logger.log(`Starting semantic search for query: "${query?.substring(0, 50)}..."`);

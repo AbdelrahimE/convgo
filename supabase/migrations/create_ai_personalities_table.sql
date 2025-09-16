@@ -14,7 +14,7 @@ CREATE TABLE public.ai_personalities (
     
     -- AI settings specific to this personality
     temperature DECIMAL(3,2) DEFAULT 0.7 CHECK (temperature >= 0 AND temperature <= 2),
-    model VARCHAR(50) DEFAULT 'gpt-4o-mini',
+    model VARCHAR(50) DEFAULT 'gpt-4.1-mini',
     
     -- Intent categories this personality handles (JSON array)
     intent_categories JSONB DEFAULT '[]'::jsonb,

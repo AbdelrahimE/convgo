@@ -319,40 +319,76 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
 
   // Progress indicator
   const renderProgressIndicator = () => (
-    <div className="flex items-center justify-between mb-8 overflow-x-auto">
-      <div className="flex items-center space-x-4">
-        {STEPS.map((step, index) => {
-          const Icon = step.icon;
-          const isCompleted = index < currentStep;
-          const isCurrent = index === currentStep;
-          
-          return (
-            <div key={step.id} className="flex items-center">
-              <div className={`
-                flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors
-                ${isCompleted ? 'bg-green-600 border-green-600 text-white' : 
-                  isCurrent ? 'bg-blue-600 border-blue-600 text-white' : 
-                  'bg-gray-100 border-gray-300 text-gray-500'}
-              `}>
-                {isCompleted ? (
-                  <CheckCircle className="w-4 h-4" />
-                ) : (
-                  <Icon className="w-4 h-4" />
-                )}
-              </div>
-              <span className={`ml-2 text-sm font-medium ${
-                isCurrent ? 'text-blue-600' : 'text-gray-500'
-              }`}>
-                {step.title}
-              </span>
-              {index < STEPS.length - 1 && (
-                <div className={`w-12 h-0.5 mx-4 ${
-                  isCompleted ? 'bg-green-600' : 'bg-gray-300'
-                }`} />
-              )}
-            </div>
-          );
-        })}
+    <div className="mb-6">
+      {/* Mobile Version - Numbers only */}
+      <div className="block sm:hidden">
+        <div className="flex items-center justify-center">
+          <div className="flex items-center space-x-2">
+            {STEPS.map((step, index) => {
+              const isCompleted = index < currentStep;
+              const isCurrent = index === currentStep;
+              
+              return (
+                <div key={step.id} className="flex items-center">
+                  <div className="flex items-center justify-center">
+                    <div className={`
+                      flex items-center justify-center w-6 h-6 rounded-full border-2 transition-colors
+                      ${isCompleted ? 'bg-green-600 border-green-600 text-white' : 
+                        isCurrent ? 'bg-blue-600 border-blue-600 text-white' : 
+                        'bg-gray-100 border-gray-300 text-gray-500'}
+                    `}>
+                      <span className="text-xs font-semibold">
+                        {index + 1}
+                      </span>
+                    </div>
+                  </div>
+                  {index < STEPS.length - 1 && (
+                    <div className={`w-3 h-0.5 mx-2 ${
+                      isCompleted ? 'bg-green-600' : 'bg-gray-300'
+                    }`} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Version - Icons */}
+      <div className="hidden sm:block">
+        <div className="flex items-center justify-center overflow-x-auto">
+          <div className="flex items-center space-x-3">
+            {STEPS.map((step, index) => {
+              const Icon = step.icon;
+              const isCompleted = index < currentStep;
+              const isCurrent = index === currentStep;
+              
+              return (
+                <div key={step.id} className="flex items-center">
+                  <div className="flex items-center justify-center">
+                    <div className={`
+                      flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors
+                      ${isCompleted ? 'bg-green-600 border-green-600 text-white' : 
+                        isCurrent ? 'bg-blue-600 border-blue-600 text-white' : 
+                        'bg-gray-100 border-gray-300 text-gray-500'}
+                    `}>
+                      {isCompleted ? (
+                        <CheckCircle className="w-4 h-4" />
+                      ) : (
+                        <Icon className="w-4 h-4" />
+                      )}
+                    </div>
+                  </div>
+                  {index < STEPS.length - 1 && (
+                    <div className={`w-8 h-0.5 mx-3 ${
+                      isCompleted ? 'bg-green-600' : 'bg-gray-300'
+                    }`} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -360,6 +396,15 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
   // Basic step content
   const renderBasicStep = () => (
     <div className="space-y-6">
+      {/* Step Title */}
+      <div className="border-b pb-3 mb-4">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Basic Info
+        </h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          Set up the basic information for your external action
+        </p>
+      </div>
       <div>
         <Label htmlFor="display-name">Display Name *</Label>
         <Input
@@ -399,15 +444,18 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
   // Training step content
   const renderTrainingStep = () => (
     <div className="space-y-4">
-      <div>
-        <Label>Training Examples *</Label>
-        <p className="text-sm text-muted-foreground">
-          Provide examples of messages that should trigger this action. The AI will learn from these patterns.
+      {/* Step Title */}
+      <div className="border-b pb-3 mb-4">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Training Examples
+        </h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          Provide examples of messages that should trigger this action
         </p>
-        {validationErrors.training_examples && (
-          <p className="text-sm text-red-500 mt-1">{validationErrors.training_examples}</p>
-        )}
       </div>
+      {validationErrors.training_examples && (
+        <p className="text-sm text-red-500 mt-1">{validationErrors.training_examples}</p>
+      )}
 
       <div className="space-y-3">
         {formData.training_examples.map((example, index) => (
@@ -462,6 +510,15 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
   // Webhook step content
   const renderWebhookStep = () => (
     <div className="space-y-4">
+      {/* Step Title */}
+      <div className="border-b pb-3 mb-4">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Webhook Configuration
+        </h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          Configure the webhook URL and request settings
+        </p>
+      </div>
       <div>
         <Label htmlFor="webhook_url">Webhook URL *</Label>
         <Input
@@ -519,6 +576,15 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
   // Payload & Variables step content
   const renderPayloadStep = () => (
     <div className="space-y-4">
+      {/* Step Title */}
+      <div className="border-b pb-3 mb-4">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Payload & Variables
+        </h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          Define data extraction variables and webhook payload structure
+        </p>
+      </div>
       <Tabs defaultValue="variables" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="variables">Variables</TabsTrigger>
@@ -526,12 +592,6 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
         </TabsList>
 
         <TabsContent value="variables" className="space-y-4">
-          <div>
-            <Label>Variables to Extract</Label>
-            <p className="text-sm text-muted-foreground">
-              Define what data to extract from customer messages and how to extract it.
-            </p>
-          </div>
 
           <div className="space-y-3">
             {Object.entries(formData.variable_prompts).map(([variableName, prompt]) => (
@@ -575,15 +635,9 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
         </TabsContent>
 
         <TabsContent value="template" className="space-y-4">
-          <div>
-            <Label>Payload Template (JSON)</Label>
-            <p className="text-sm text-muted-foreground">
-              Define the JSON structure that will be sent to your webhook. Use {"{{variable_name}}"} for dynamic values.
-            </p>
-            {validationErrors.payload_template && (
-              <p className="text-sm text-red-500 mt-1">{validationErrors.payload_template}</p>
-            )}
-          </div>
+          {validationErrors.payload_template && (
+            <p className="text-sm text-red-500 mt-1">{validationErrors.payload_template}</p>
+          )}
 
           <LanguageAwareTextarea
             value={JSON.stringify(formData.payload_template, null, 2)}
@@ -619,6 +673,15 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
   // Settings step content
   const renderSettingsStep = () => (
     <div className="space-y-4">
+      {/* Step Title */}
+      <div className="border-b pb-3 mb-4">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Settings
+        </h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          Configure advanced settings and thresholds
+        </p>
+      </div>
       <div>
         <Label>Confidence Threshold</Label>
         <div className="flex items-center gap-3 mt-2">
@@ -682,12 +745,17 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
   // Response Configuration step content
   const renderResponseStep = () => (
     <div className="space-y-6">
-      <div>
-        <Label className="text-base font-medium">Response Type</Label>
-        <p className="text-sm text-muted-foreground">
-          Choose how ConvGo should respond after executing this action
+      {/* Step Title */}
+      <div className="border-b pb-3 mb-4">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Response Configuration
+        </h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          Configure how ConvGo responds after executing this action
         </p>
-        
+      </div>
+      
+      <div>
         <RadioGroup 
           value={formData.response_type} 
           onValueChange={(value: any) => setFormData(prev => ({ ...prev, response_type: value }))}
@@ -815,22 +883,6 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
           Primary language for response messages
         </p>
       </div>
-
-      <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-md">
-        <div className="flex gap-2">
-          <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-              External Actions V2 Features
-            </p>
-            <ul className="text-xs text-blue-700 dark:text-blue-300 mt-1 space-y-1">
-              <li>• <strong>Wait for Webhook:</strong> Automation platforms can send dynamic responses</li>
-              <li>• <strong>Custom Messages:</strong> Personalize responses with extracted variables</li>
-              <li>• <strong>Flexible Timeouts:</strong> Configure response wait times</li>
-            </ul>
-          </div>
-        </div>
-      </div>
     </div>
   );
 
@@ -868,24 +920,23 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
           <div className="flex items-center space-x-3">
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={handleBack}
-              className="gap-2"
+              className="h-8 w-8 flex-shrink-0"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to External Actions
             </Button>
-          </div>
-          <div className="mt-2">
-            <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
-              {mode === 'create' ? 'Create External Action' : 'Edit External Action'}
-            </h1>
-            <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
-              {mode === 'create' 
-                ? 'Create a new custom action that triggers webhooks based on customer messages'
-                : `Modify the settings for "${formData.display_name || 'this external action'}"`
-              }
-            </p>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
+                {mode === 'create' ? 'Create External Action' : 'Edit External Action'}
+              </h1>
+              <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
+                {mode === 'create' 
+                  ? 'Create a new custom action that triggers webhooks based on customer messages'
+                  : `Modify the settings for "${formData.display_name || 'this external action'}"`
+                }
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -898,12 +949,12 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
             {renderProgressIndicator()}
 
             {/* Step Content */}
-            <div className="min-h-[400px]">
+            <div className="min-h-[300px]">
               {renderCurrentStep()}
             </div>
 
             {/* Navigation Buttons */}
-            <div className="flex justify-between pt-6 border-t">
+            <div className="flex justify-between pt-4">
               <div className="flex gap-2">
                 <Button variant="outline" onClick={handleCancel}>
                   Cancel

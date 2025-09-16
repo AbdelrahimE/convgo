@@ -74,8 +74,8 @@ export async function generateAndSendAIResponse(
         context: context,
         systemPrompt: systemPrompt,
         temperature: aiConfig.temperature || 0.5,
-        model: 'gpt-4o-mini',
-        maxContextTokens: 3000, // Explicit token limit
+        model: 'gpt-4.1-mini',
+        maxContextTokens: 12000, // زيادة من 3000 إلى 12000 للجودة العالية
         imageUrl: imageUrl, // Pass the image URL if available
         userId: aiConfig.user_id || null,
 
@@ -174,7 +174,7 @@ export async function generateAndSendAIResponse(
           total_tokens: responseData.usage?.total_tokens || 0,
           context_token_count: Math.ceil((context?.length || 0) / 4),
           search_result_count: context ? 1 : 0,
-          response_model: responseData.model || 'gpt-4o-mini',
+          response_model: responseData.model || 'gpt-4.1-mini',
           // ENHANCED: Add comprehensive analysis metadata
           metadata: {
             personality_id: aiConfig.selectedPersonalityId || null,

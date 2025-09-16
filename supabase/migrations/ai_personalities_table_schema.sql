@@ -6,7 +6,7 @@ create table public.ai_personalities (
   description text null,
   system_prompt text not null,
   temperature numeric(3, 2) null default 0.7,
-  model character varying(50) null default 'gpt-4o-mini'::character varying,
+  model character varying(50) null default 'gpt-4.1-mini'::character varying,
   intent_categories jsonb null default '[]'::jsonb,
   is_active boolean null default true,
   is_default boolean null default false,

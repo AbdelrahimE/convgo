@@ -108,7 +108,7 @@ export function useAIResponse() {
         body: {
           query,
           context,
-          model: options?.model || 'gpt-4o-mini',
+          model: options?.model || 'gpt-4.1-mini',
           temperature: options?.temperature || 0.7,
           systemPrompt: options?.systemPrompt,
           includeConversationHistory: options?.includeConversationHistory || false,

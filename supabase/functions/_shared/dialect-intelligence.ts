@@ -139,7 +139,7 @@ export async function analyzeDialectIntelligently(text: string, whatsappInstance
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         messages: [
           { role: 'system', content: dialectPrompt },
           { role: 'user', content: `حلل: "${text}"` }
@@ -226,7 +226,7 @@ export async function analyzeCommunicationStyle(text: string, dialectAnalysis: D
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         messages: [
           { role: 'system', content: stylePrompt },
           { role: 'user', content: text }
@@ -298,7 +298,7 @@ export async function generateCulturallyAwareResponse(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         messages: [
           { role: 'system', content: culturalPrompt },
           { role: 'user', content: `اضبط: "${baseResponse}"` }
