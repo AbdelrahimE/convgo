@@ -7,6 +7,10 @@ import { processAudioMessage } from "../_shared/audio-processor.ts";
 import { handleMessageWithBuffering } from "../_shared/buffering-handler.ts";
 import { measureTime } from "../_shared/parallel-queries.ts";
 
+// QUEUE SYSTEM: Import Redis Queue and Direct Processing
+import { addToQueue } from "../_shared/redis-queue.ts";
+import { processMessageDirectly } from "../_shared/direct-message-processor.ts";
+
 // Create a simple logger since we can't use @/utils/logger in edge functions
 const logger = {
   log: (...args: any[]) => console.log(...args),
@@ -602,20 +606,109 @@ serve(async (req) => {
         // Extract user phone for processing
         const userPhone = normalizedData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
         
-        // Process message using integrated buffering system
-        const bufferingResult = await handleMessageWithBuffering(
-          instanceName,
-          normalizedData,
-          supabaseAdmin,
-          supabaseUrl,
-          supabaseServiceKey
-        );
+        // QUEUE SYSTEM: Check if queue system is enabled (default: true)
+        const useQueueSystem = Deno.env.get('USE_QUEUE_SYSTEM') !== 'false';
         
-        logger.info('Message processing completed', {
+        let processingResult: any = { success: false, reason: 'unknown' };
+        
+        if (useQueueSystem) {
+          logger.info('🚀 Using Redis Queue System for message processing', {
+            instanceName,
+            userPhone,
+            messageId: normalizedData.key?.id
+          });
+          
+          try {
+            // Try to add message to Redis queue
+            const queueResult = await addToQueue(instanceName, userPhone, normalizedData);
+            
+            if (queueResult.success) {
+              processingResult = {
+                success: true,
+                usedQueue: true,
+                messageId: queueResult.messageId,
+                reason: 'queued_for_processing'
+              };
+              
+              logger.info('✅ Message successfully added to Redis queue', {
+                instanceName,
+                userPhone,
+                messageId: queueResult.messageId
+              });
+            } else {
+              throw new Error(`Queue failed: ${queueResult.error}`);
+            }
+          } catch (queueError) {
+            logger.warn('⚠️ Redis Queue failed, falling back to direct processing', {
+              instanceName,
+              userPhone,
+              error: queueError.message || queueError
+            });
+            
+            // Fallback to direct processing
+            try {
+              const directSuccess = await processMessageDirectly(
+                instanceName,
+                normalizedData,
+                supabaseAdmin,
+                supabaseUrl,
+                supabaseServiceKey
+              );
+              
+              processingResult = {
+                success: directSuccess,
+                usedQueue: false,
+                usedFallback: true,
+                reason: directSuccess ? 'direct_processing_success' : 'direct_processing_failed'
+              };
+              
+              logger.info(directSuccess ? '✅ Direct processing fallback succeeded' : '❌ Direct processing fallback failed', {
+                instanceName,
+                userPhone
+              });
+            } catch (directError) {
+              logger.error('💥 Direct processing fallback also failed', {
+                instanceName,
+                userPhone,
+                error: directError.message || directError
+              });
+              
+              processingResult = {
+                success: false,
+                usedQueue: false,
+                usedFallback: true,
+                reason: 'both_systems_failed',
+                error: directError.message || directError
+              };
+            }
+          }
+        } else {
+          logger.info('🔄 Using legacy buffering system (queue disabled)', {
+            instanceName,
+            userPhone
+          });
+          
+          // Use legacy buffering system when queue is disabled
+          processingResult = await handleMessageWithBuffering(
+            instanceName,
+            normalizedData,
+            supabaseAdmin,
+            supabaseUrl,
+            supabaseServiceKey
+          );
+          
+          processingResult.usedLegacy = true;
+        }
+        
+        logger.info('📊 Message processing completed', {
           instanceName,
-          usedBuffering: bufferingResult.usedBuffering,
-          success: bufferingResult.success,
-          reason: bufferingResult.reason
+          userPhone,
+          success: processingResult.success,
+          usedQueue: processingResult.usedQueue || false,
+          usedFallback: processingResult.usedFallback || false,
+          usedLegacy: processingResult.usedLegacy || false,
+          reason: processingResult.reason,
+          messageId: processingResult.messageId || 'unknown'
         });
       }
       

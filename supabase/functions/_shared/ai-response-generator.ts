@@ -117,17 +117,59 @@ export async function generateAndSendAIResponse(
       needsDataCollection = parsedResponse.needsDataCollection || false;
       requestedFields = parsedResponse.requestedFields || [];
       
-      logger.info('AI response parsed successfully', {
+      logger.info('✅ AI response parsed as valid JSON', {
         hasDataCollection: needsDataCollection,
         requestedFieldsCount: requestedFields.length,
-        responsePreview: finalResponse?.substring(0, 100) + '...'
+        responsePreview: finalResponse?.substring(0, 100) + '...',
+        originalResponseLength: responseData.answer?.length
       });
     } catch (error) {
-      // If not JSON, use the response as is (backward compatibility)
-      finalResponse = responseData.answer;
-      logger.info('AI response used as plain text', {
-        responsePreview: finalResponse?.substring(0, 100) + '...'
+      logger.warn('⚠️ Initial JSON parsing failed, attempting enhanced extraction', {
+        error: error.message,
+        originalResponsePreview: responseData.answer?.substring(0, 200) + '...',
+        originalResponseLength: responseData.answer?.length
       });
+      
+      // الحل المحسن: تحقق من وجود JSON في النص
+      const jsonMatch = responseData.answer?.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          logger.info('🔍 Found JSON pattern in response, attempting extraction', {
+            jsonPattern: jsonMatch[0].substring(0, 100) + '...'
+          });
+          
+          const extracted = JSON.parse(jsonMatch[0]);
+          if (extracted.response) {
+            finalResponse = extracted.response;
+            needsDataCollection = extracted.needsDataCollection || false;
+            requestedFields = extracted.requestedFields || [];
+            
+            logger.info('✅ Successfully extracted JSON from mixed response', {
+              extractedResponse: finalResponse?.substring(0, 100) + '...',
+              hasDataCollection: needsDataCollection,
+              requestedFieldsCount: requestedFields.length
+            });
+          } else {
+            // JSON موجود لكن بدون response field
+            logger.warn('⚠️ JSON found but missing response field, using original', {
+              extractedKeys: Object.keys(extracted)
+            });
+            finalResponse = responseData.answer;
+          }
+        } catch (extractError) {
+          logger.warn('⚠️ JSON pattern found but parsing failed, using original', {
+            extractError: extractError.message,
+            jsonPatternPreview: jsonMatch[0].substring(0, 100) + '...'
+          });
+          finalResponse = responseData.answer;
+        }
+      } else {
+        // لا يوجد JSON pattern، استخدم النص كما هو
+        logger.info('📄 No JSON pattern found, using response as plain text', {
+          responsePreview: responseData.answer?.substring(0, 100) + '...'
+        });
+        finalResponse = responseData.answer;
+      }
     }
     
     logger.info('AI response generated successfully', {

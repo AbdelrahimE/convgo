@@ -1,0 +1,20 @@
+# Queue Monitor Edge Function Configuration
+
+[function]
+# Function timeout in seconds (max 60 for Edge Functions)
+timeout = 30
+
+# Memory limit (not yet configurable in Supabase Edge Functions)
+# memory = 256
+
+[env]
+# Environment variables needed for the function
+# These should be set in Supabase dashboard or via CLI
+
+# Redis Configuration (Required)
+# UPSTASH_REDIS_REST_URL
+# UPSTASH_REDIS_REST_TOKEN
+
+# Queue System Control (Optional)
+# USE_QUEUE_SYSTEM=true (default) - Enable Redis queue system
+# USE_QUEUE_SYSTEM=false - Emergency rollback to legacy buffering system

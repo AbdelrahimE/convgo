@@ -204,8 +204,8 @@ serve(async (req: Request) => {
     }
 
     // If session is already complete, no need to extract more data
-    if (session.is_complete && session.exported_to_sheets) {
-      console.log('Session already complete and exported');
+    if (session.is_complete) {
+      console.log('Session already complete, skipping data extraction');
       return new Response(
         JSON.stringify({ 
           extracted: false,
@@ -218,10 +218,11 @@ serve(async (req: Request) => {
       );
     }
 
-    // Build extraction prompt
+    // Build extraction prompt using display names for better AI understanding
     const fieldsDescription = fields.map((field: DataField) => {
       const keywords = field.extraction_keywords?.join(', ') || '';
-      return `- "${field.field_name}": ${field.field_display_name} (${field.field_type})${field.is_required ? ' [REQUIRED]' : ''}${keywords ? ` - Keywords: ${keywords}` : ''}${field.prompt_template ? ` - ${field.prompt_template}` : ''}`;
+      const displayName = field.field_display_name_ar || field.field_display_name;
+      return `- "${displayName}": ${field.field_display_name} (${field.field_type})${field.is_required ? ' [REQUIRED]' : ''}${keywords ? ` - Keywords: ${keywords}` : ''}${field.prompt_template ? ` - ${field.prompt_template}` : ''}`;
     }).join('\n');
 
     const systemPrompt = `You are a data extraction assistant for a WhatsApp business conversation.
@@ -233,7 +234,7 @@ ${fieldsDescription}
 
 EXTRACTION RULES:
 1. Extract only the fields mentioned above
-2. Use field_name as the key in the JSON response
+2. Use the exact field display name (Arabic name if available, otherwise English) as the key in the JSON response
 3. If a field cannot be extracted from the message, omit it from the response
 4. For phone numbers, extract and format them properly (remove spaces, dashes, parentheses)
 5. For emails, validate the format
@@ -257,9 +258,9 @@ Current collected data:
 ${JSON.stringify(session.collected_data)}
 
 EXAMPLES:
-- Message: "عبدالرحيم" → {"name": "عبدالرحيم"}  
-- Message: "01012345678" → {"phone": "01012345678"}
-- Message: "اسمي محمد ورقمي 01123456789" → {"name": "محمد", "phone": "01123456789"}
+- Message: "عبدالرحيم" → {"الاسم": "عبدالرحيم"}  
+- Message: "01012345678" → {"رقم الهاتف": "01012345678"}
+- Message: "اسمي محمد ورقمي 01123456789" → {"الاسم": "محمد", "رقم الهاتف": "01123456789"}
 
 Return only the JSON object with newly extracted or updated fields.`;
 
@@ -341,10 +342,30 @@ ${conversation_history.map((msg: any) => `${msg.from}: ${msg.message}`).join('\n
 
     console.log('📊 DATA-EXTRACTOR: Final extracted data:', extractedData);
 
+    // Map display names to field names
+    const mappedData: Record<string, any> = {};
+    for (const [displayKey, value] of Object.entries(extractedData || {})) {
+      // Find the field that matches this display name
+      const matchingField = fields.find((field: DataField) => {
+        const primaryDisplayName = field.field_display_name_ar || field.field_display_name;
+        const secondaryDisplayName = field.field_display_name;
+        return primaryDisplayName === displayKey || secondaryDisplayName === displayKey;
+      });
+
+      if (matchingField) {
+        mappedData[matchingField.field_name] = value;
+        console.log(`📝 DATA-EXTRACTOR: Mapped "${displayKey}" → "${matchingField.field_name}"`);
+      } else {
+        console.warn(`⚠️ DATA-EXTRACTOR: No field found for display name "${displayKey}"`);
+      }
+    }
+
+    console.log('🔄 DATA-EXTRACTOR: Mapped data to field names:', mappedData);
+
     // Merge with existing collected data
     const updatedData = {
       ...session.collected_data,
-      ...extractedData
+      ...mappedData
     };
 
     // Validate extracted data
@@ -414,7 +435,7 @@ ${conversation_history.map((msg: any) => `${msg.from}: ${msg.message}`).join('\n
 
     // Calculate missing required fields
     const missingFields = (fields as DataField[])
-      .filter(field => field.is_required && !validatedData[field.field_name])
+      .filter(field => field.is_required && !updatedData[field.field_name])
       .map(field => field.field_name);
 
     const isComplete = missingFields.length === 0;
@@ -423,7 +444,7 @@ ${conversation_history.map((msg: any) => `${msg.from}: ${msg.message}`).join('\n
     const { error: updateError } = await supabase
       .from('collected_data_sessions')
       .update({
-        collected_data: validatedData,
+        collected_data: updatedData,
         missing_fields: missingFields,
         validation_errors: Object.keys(validationErrors).length > 0 ? validationErrors : null,
         is_complete: isComplete,
@@ -450,22 +471,68 @@ ${conversation_history.map((msg: any) => `${msg.from}: ${msg.message}`).join('\n
 
     // If complete, trigger export to Google Sheets
     let exportStatus = null;
+    let exportError = null;
     if (isComplete) {
-      console.log('Data collection complete, triggering export to Google Sheets');
-      // Call the sheets-exporter function
-      const exportResponse = await fetch(`${supabaseUrl}/functions/v1/sheets-exporter`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supabaseServiceRoleKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId: session.id
-        }),
+      console.log('📊 DATA-EXTRACTOR: Data collection complete, triggering export to Google Sheets', {
+        sessionId: session.id,
+        configId: configId
       });
+      
+      try {
+        // Call the sheets-exporter function
+        const exportResponse = await fetch(`${supabaseUrl}/functions/v1/sheets-exporter`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseServiceRoleKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionId: session.id
+          }),
+        });
 
-      if (exportResponse.ok) {
-        exportStatus = await exportResponse.json();
+        console.log('📡 DATA-EXTRACTOR: Export response received', {
+          status: exportResponse.status,
+          statusText: exportResponse.statusText,
+          ok: exportResponse.ok
+        });
+
+        if (exportResponse.ok) {
+          exportStatus = await exportResponse.json();
+          console.log('✅ DATA-EXTRACTOR: Export successful', { exportStatus });
+        } else {
+          // Parse error response for better handling
+          const errorResponse = await exportResponse.json();
+          console.error('❌ DATA-EXTRACTOR: Export failed', {
+            status: exportResponse.status,
+            errorResponse
+          });
+          
+          exportError = {
+            failed: true,
+            status: exportResponse.status,
+            message: errorResponse.error || 'Export failed',
+            user_message: errorResponse.user_message || 'Failed to export data to Google Sheets. Please try again later.',
+            error_type: errorResponse.error_type || 'unknown_error',
+            needs_reconnect: errorResponse.needs_reconnect || false,
+            error_code: errorResponse.error_code,
+            reconnect_url: errorResponse.reconnect_url
+          };
+        }
+      } catch (fetchError) {
+        console.error('💥 DATA-EXTRACTOR: Exception during export call', {
+          error: fetchError.message,
+          stack: fetchError.stack,
+          sessionId: session.id
+        });
+        
+        exportError = {
+          failed: true,
+          message: fetchError.message,
+          user_message: 'Unable to connect to export service. Please try again later.',
+          error_type: 'network_error',
+          needs_reconnect: false
+        };
       }
     }
 
@@ -478,7 +545,8 @@ ${conversation_history.map((msg: any) => `${msg.from}: ${msg.message}`).join('\n
         is_complete: isComplete,
         validation_errors: validationErrors,
         response_message: responseMessage,
-        export_status: exportStatus
+        export_status: exportStatus,
+        export_error: exportError
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

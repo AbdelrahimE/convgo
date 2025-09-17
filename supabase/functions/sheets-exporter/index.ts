@@ -36,6 +36,128 @@ interface CollectedDataSession {
   exported_to_sheets: boolean;
 }
 
+interface ExportError {
+  type: 'auth_expired' | 'auth_revoked' | 'network_error' | 'permission_error' | 'unknown_error';
+  message: string;
+  userMessage: string;
+  needsReconnect: boolean;
+  code?: string;
+}
+
+// Helper function to analyze errors and provide user-friendly messages
+function analyzeError(error: any): ExportError {
+  const errorMessage = error.message || error.toString();
+  const lowerMessage = errorMessage.toLowerCase();
+
+  // Google OAuth Token Errors - More specific handling
+  if (lowerMessage.includes('invalid_grant')) {
+    return {
+      type: 'auth_expired',
+      message: errorMessage,
+      userMessage: 'Your Google account connection has expired. Please reconnect your Google account to continue exporting data.',
+      needsReconnect: true,
+      code: 'GOOGLE_AUTH_EXPIRED'
+    };
+  }
+
+  // Google API Quota/Rate Limit Errors
+  if (lowerMessage.includes('quota exceeded') || lowerMessage.includes('rate limit') || lowerMessage.includes('too many requests')) {
+    return {
+      type: 'unknown_error',
+      message: errorMessage,
+      userMessage: 'Google Sheets API quota exceeded. Please wait a few minutes and try again.',
+      needsReconnect: false,
+      code: 'QUOTA_EXCEEDED'
+    };
+  }
+
+  // Google Sheets Specific Errors
+  if (lowerMessage.includes('spreadsheet') && (lowerMessage.includes('not found') || lowerMessage.includes('does not exist'))) {
+    return {
+      type: 'permission_error',
+      message: errorMessage,
+      userMessage: 'The Google Sheet was not found or you don\'t have access to it. Please check the sheet ID and permissions.',
+      needsReconnect: true,
+      code: 'SHEET_NOT_FOUND'
+    };
+  }
+
+  // Google API Authentication Errors
+  if (lowerMessage.includes('401') || lowerMessage.includes('unauthorized') || lowerMessage.includes('invalid_token')) {
+    return {
+      type: 'auth_expired',
+      message: errorMessage,
+      userMessage: 'Your Google account authorization has expired. Please reconnect your Google account.',
+      needsReconnect: true,
+      code: 'AUTH_UNAUTHORIZED'
+    };
+  }
+
+  // Network/Connection Errors
+  if (lowerMessage.includes('network') || lowerMessage.includes('fetch') || lowerMessage.includes('timeout') || lowerMessage.includes('enotfound')) {
+    return {
+      type: 'network_error',
+      message: errorMessage,
+      userMessage: 'Unable to connect to Google Sheets. Please check your internet connection and try again.',
+      needsReconnect: false,
+      code: 'NETWORK_ERROR'
+    };
+  }
+
+  // Permission Errors
+  if (lowerMessage.includes('permission') || lowerMessage.includes('access denied') || lowerMessage.includes('forbidden') || lowerMessage.includes('403')) {
+    return {
+      type: 'permission_error',
+      message: errorMessage,
+      userMessage: 'Insufficient permissions to access Google Sheets. Please reconnect your Google account with proper permissions.',
+      needsReconnect: true,
+      code: 'PERMISSION_ERROR'
+    };
+  }
+
+  // Google OAuth Credentials Missing
+  if (lowerMessage.includes('credentials not configured') || lowerMessage.includes('client_id') || lowerMessage.includes('client_secret')) {
+    return {
+      type: 'auth_revoked',
+      message: errorMessage,
+      userMessage: 'Google authentication is not properly configured. Please contact support or reconnect your Google account.',
+      needsReconnect: true,
+      code: 'AUTH_CONFIG_ERROR'
+    };
+  }
+
+  // Google Sheets API Errors
+  if (lowerMessage.includes('range not found') || lowerMessage.includes('invalid range')) {
+    return {
+      type: 'unknown_error',
+      message: errorMessage,
+      userMessage: 'Invalid sheet range specified. Please check your sheet configuration.',
+      needsReconnect: false,
+      code: 'INVALID_RANGE'
+    };
+  }
+
+  // Token Refresh Specific Errors
+  if (lowerMessage.includes('refresh_token') || lowerMessage.includes('token_expired')) {
+    return {
+      type: 'auth_expired',
+      message: errorMessage,
+      userMessage: 'Your Google account session has expired. Please reconnect your Google account.',
+      needsReconnect: true,
+      code: 'TOKEN_REFRESH_FAILED'
+    };
+  }
+
+  // Default unknown error
+  return {
+    type: 'unknown_error',
+    message: errorMessage,
+    userMessage: 'An unexpected error occurred while exporting to Google Sheets. Please try again or reconnect your Google account.',
+    needsReconnect: false,
+    code: 'UNKNOWN_ERROR'
+  };
+}
+
 async function getAccessToken(
   supabase: any,
   config: GoogleSheetsConfig
@@ -197,7 +319,23 @@ async function getAccessToken(
       stack: error.stack,
       configId: config.id
     });
-    throw error;
+    
+    // Analyze token refresh error for better user guidance
+    const errorInfo = analyzeError(error);
+    console.log('🔍 TOKEN: Token refresh error analysis', {
+      errorType: errorInfo.type,
+      needsReconnect: errorInfo.needsReconnect,
+      userMessage: errorInfo.userMessage,
+      code: errorInfo.code
+    });
+    
+    // Throw enhanced error with more context
+    const enhancedError = new Error(errorInfo.userMessage);
+    enhancedError.name = errorInfo.code || 'TOKEN_REFRESH_ERROR';
+    enhancedError.type = errorInfo.type;
+    enhancedError.needsReconnect = errorInfo.needsReconnect;
+    enhancedError.originalMessage = error.message;
+    throw enhancedError;
   }
 }
 
@@ -903,6 +1041,9 @@ serve(async (req: Request) => {
         
         console.log(`🎉 EXPORT: Successfully completed export for session ${session.id}`);
       } catch (error) {
+        // Analyze the error for better user guidance
+        const errorInfo = analyzeError(error);
+        
         console.error(`💥 EXPORT: Failed to export session ${session.id}`, {
           error: error.message,
           stack: error.stack,
@@ -918,7 +1059,13 @@ serve(async (req: Request) => {
           sheet_id: config.google_sheet_id,
           exported_data: session.collected_data,
           status: 'failed',
-          error_message: error.message
+          error_message: error.message,
+          response_data: {
+            error_type: errorInfo.type,
+            user_message: errorInfo.userMessage,
+            needs_reconnect: errorInfo.needsReconnect,
+            error_code: errorInfo.code
+          }
         };
         
         const { error: failLogError } = await supabase
@@ -951,10 +1098,21 @@ serve(async (req: Request) => {
           });
         }
 
+        console.log(`🔍 EXPORT: Error analysis for session ${session.id}`, {
+          errorType: errorInfo.type,
+          needsReconnect: errorInfo.needsReconnect,
+          userMessage: errorInfo.userMessage,
+          code: errorInfo.code
+        });
+
         exportResults.push({
           session_id: session.id,
           status: 'failed',
-          error: error.message
+          error: error.message,
+          error_type: errorInfo.type,
+          user_message: errorInfo.userMessage,
+          needs_reconnect: errorInfo.needsReconnect,
+          error_code: errorInfo.code
         });
       }
     }
@@ -1004,8 +1162,22 @@ serve(async (req: Request) => {
       timestamp: new Date().toISOString()
     });
     
+    // Analyze the critical error for better user guidance
+    const errorInfo = analyzeError(error);
+    console.log('🔍 EXPORT: Critical error analysis', {
+      errorType: errorInfo.type,
+      needsReconnect: errorInfo.needsReconnect,
+      userMessage: errorInfo.userMessage,
+      code: errorInfo.code
+    });
+    
     const errorResponse = { 
       error: error.message,
+      error_type: errorInfo.type,
+      user_message: errorInfo.userMessage,
+      needs_reconnect: errorInfo.needsReconnect,
+      error_code: errorInfo.code,
+      reconnect_url: errorInfo.needsReconnect ? '/integrations/google-sheets' : undefined,
       timestamp: new Date().toISOString()
     };
     
@@ -1013,7 +1185,7 @@ serve(async (req: Request) => {
       JSON.stringify(errorResponse),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400 
+        status: errorInfo.type === 'auth_expired' || errorInfo.type === 'auth_revoked' ? 401 : 400
       }
     );
   }

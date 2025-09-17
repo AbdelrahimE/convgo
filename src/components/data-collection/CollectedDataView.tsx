@@ -50,7 +50,7 @@ interface DataSession {
   id: string;
   conversation_id: string;
   phone_number: string;
-  collected_data: Record<string, any>;
+  collected_data: Record<string, unknown>;
   missing_fields: string[];
   is_complete: boolean;
   exported_to_sheets: boolean;
@@ -60,12 +60,35 @@ interface DataSession {
   exported_at?: string;
 }
 
+interface DataField {
+  id: string;
+  field_name: string;
+  field_display_name: string;
+  field_display_name_ar?: string;
+  field_type: string;
+}
+
 const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'complete' | 'incomplete' | 'exported'>('all');
   const [selectedSession, setSelectedSession] = useState<DataSession | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
+  // Fetch data collection fields
+  const { data: fields = [] } = useQuery({
+    queryKey: ['data-collection-fields', configId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('data_collection_fields')
+        .select('id, field_name, field_display_name, field_display_name_ar, field_type')
+        .eq('config_id', configId)
+        .order('field_order');
+
+      if (error) throw error;
+      return data as DataField[];
+    }
+  });
 
   // Fetch collected data sessions
   const { data: sessions = [], isLoading, refetch } = useQuery({
@@ -97,6 +120,27 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
     }
   });
 
+  // Helper function to transform collected data using display names
+  const transformCollectedData = (collectedData: Record<string, unknown>) => {
+    const transformed: Record<string, unknown> = {};
+    
+    Object.entries(collectedData || {}).forEach(([fieldName, value]) => {
+      const field = fields.find(f => f.field_name === fieldName);
+      const displayName = field?.field_display_name_ar || field?.field_display_name || fieldName;
+      transformed[displayName] = value;
+    });
+    
+    return transformed;
+  };
+
+  // Helper function to transform missing fields using display names
+  const transformMissingFields = (missingFields: string[]) => {
+    return missingFields.map(fieldName => {
+      const field = fields.find(f => f.field_name === fieldName);
+      return field?.field_display_name_ar || field?.field_display_name || fieldName;
+    });
+  };
+
   // Export single session to Google Sheets
   const exportSession = useMutation({
     mutationFn: async (sessionId: string) => {
@@ -111,7 +155,7 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
       queryClient.invalidateQueries({ queryKey: ['collected-data-sessions'] });
       toast.success("Data exported to Google Sheets successfully");
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || "Failed to export data to Google Sheets");
     }
   });
@@ -139,7 +183,7 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
       queryClient.invalidateQueries({ queryKey: ['collected-data-sessions'] });
       toast.success(`Successfully exported ${data.exported} sessions to Google Sheets`);
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || "Failed to export data");
     }
   });
@@ -158,7 +202,7 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
       queryClient.invalidateQueries({ queryKey: ['collected-data-sessions'] });
       toast.success("Session deleted successfully");
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || "Failed to delete session");
     }
   });
@@ -305,7 +349,6 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
             </div>
           ) : sessions.length === 0 ? (
             <Alert>
-              <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 No data collected yet. Data will appear here when customers interact with your WhatsApp bot.
               </AlertDescription>
@@ -421,7 +464,7 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
                 <Label>Collected Data</Label>
                 <div className="mt-2 p-3 bg-muted rounded-lg">
                   <pre className="text-sm overflow-x-auto">
-                    {JSON.stringify(selectedSession.collected_data, null, 2)}
+                    {JSON.stringify(transformCollectedData(selectedSession.collected_data), null, 2)}
                   </pre>
                 </div>
               </div>
@@ -430,9 +473,9 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
                 <div>
                   <Label>Missing Fields</Label>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedSession.missing_fields.map((field) => (
-                      <Badge key={field} variant="outline">
-                        {field}
+                    {transformMissingFields(selectedSession.missing_fields).map((fieldDisplayName, index) => (
+                      <Badge key={selectedSession.missing_fields[index]} variant="outline">
+                        {fieldDisplayName}
                       </Badge>
                     ))}
                   </div>
