@@ -8,7 +8,7 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // Default API URL for WhatsApp API
-const DEFAULT_EVOLUTION_API_URL = 'https://api.botifiy.com';
+const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
 
 interface ResponseRequest {
   execution_log_id: string;  // UUID from external_action_logs or execution ID

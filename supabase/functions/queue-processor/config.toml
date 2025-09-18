@@ -19,6 +19,3 @@ timeout = 60
 # SUPABASE_URL
 # SUPABASE_SERVICE_ROLE_KEY
 
-# Queue System Control (Optional)
-# USE_QUEUE_SYSTEM=true (default) - Enable Redis queue system
-# USE_QUEUE_SYSTEM=false - Emergency rollback to legacy buffering system

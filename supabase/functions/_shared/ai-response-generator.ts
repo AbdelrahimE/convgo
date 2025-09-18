@@ -105,71 +105,85 @@ export async function generateAndSendAIResponse(
 
     const responseData = await responseGenResponse.json();
     
-    // Parse AI response to extract data collection information
+    // Parse AI response based on data collection configuration
     let finalResponse;
     let needsDataCollection = false;
     let requestedFields = [];
     
-    try {
-      // Try to parse JSON response (if data collection is enabled)
-      const parsedResponse = JSON.parse(responseData.answer);
-      finalResponse = parsedResponse.response;
-      needsDataCollection = parsedResponse.needsDataCollection || false;
-      requestedFields = parsedResponse.requestedFields || [];
-      
-      logger.info('✅ AI response parsed as valid JSON', {
-        hasDataCollection: needsDataCollection,
-        requestedFieldsCount: requestedFields.length,
-        responsePreview: finalResponse?.substring(0, 100) + '...',
-        originalResponseLength: responseData.answer?.length
-      });
-    } catch (error) {
-      logger.warn('⚠️ Initial JSON parsing failed, attempting enhanced extraction', {
-        error: error.message,
-        originalResponsePreview: responseData.answer?.substring(0, 200) + '...',
-        originalResponseLength: responseData.answer?.length
+    // 🎯 OPTIMIZED: Only attempt JSON parsing when data collection is enabled
+    if (dataCollectionFields && dataCollectionFields.length > 0) {
+      // Data collection is enabled → AI should return JSON format
+      logger.debug('📊 Data collection enabled, attempting JSON parsing', {
+        dataCollectionFieldsCount: dataCollectionFields.length
       });
       
-      // الحل المحسن: تحقق من وجود JSON في النص
-      const jsonMatch = responseData.answer?.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          logger.info('🔍 Found JSON pattern in response, attempting extraction', {
-            jsonPattern: jsonMatch[0].substring(0, 100) + '...'
-          });
-          
-          const extracted = JSON.parse(jsonMatch[0]);
-          if (extracted.response) {
-            finalResponse = extracted.response;
-            needsDataCollection = extracted.needsDataCollection || false;
-            requestedFields = extracted.requestedFields || [];
-            
-            logger.info('✅ Successfully extracted JSON from mixed response', {
-              extractedResponse: finalResponse?.substring(0, 100) + '...',
-              hasDataCollection: needsDataCollection,
-              requestedFieldsCount: requestedFields.length
+      try {
+        const parsedResponse = JSON.parse(responseData.answer);
+        finalResponse = parsedResponse.response;
+        needsDataCollection = parsedResponse.needsDataCollection || false;
+        requestedFields = parsedResponse.requestedFields || [];
+        
+        logger.info('✅ AI response parsed as valid JSON', {
+          hasDataCollection: needsDataCollection,
+          requestedFieldsCount: requestedFields.length,
+          responsePreview: finalResponse?.substring(0, 100) + '...',
+          originalResponseLength: responseData.answer?.length
+        });
+      } catch (error) {
+        logger.warn('⚠️ JSON parsing failed despite data collection being enabled', {
+          error: error.message,
+          originalResponsePreview: responseData.answer?.substring(0, 200) + '...',
+          originalResponseLength: responseData.answer?.length
+        });
+        
+        // Fallback: Try to extract JSON pattern from mixed response
+        const jsonMatch = responseData.answer?.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            logger.info('🔍 Found JSON pattern in response, attempting extraction', {
+              jsonPattern: jsonMatch[0].substring(0, 100) + '...'
             });
-          } else {
-            // JSON موجود لكن بدون response field
-            logger.warn('⚠️ JSON found but missing response field, using original', {
-              extractedKeys: Object.keys(extracted)
+            
+            const extracted = JSON.parse(jsonMatch[0]);
+            if (extracted.response) {
+              finalResponse = extracted.response;
+              needsDataCollection = extracted.needsDataCollection || false;
+              requestedFields = extracted.requestedFields || [];
+              
+              logger.info('✅ Successfully extracted JSON from mixed response', {
+                extractedResponse: finalResponse?.substring(0, 100) + '...',
+                hasDataCollection: needsDataCollection,
+                requestedFieldsCount: requestedFields.length
+              });
+            } else {
+              logger.warn('⚠️ JSON found but missing response field, using original text', {
+                extractedKeys: Object.keys(extracted)
+              });
+              finalResponse = responseData.answer;
+            }
+          } catch (extractError) {
+            logger.warn('⚠️ JSON pattern found but parsing failed, using original text', {
+              extractError: extractError.message,
+              jsonPatternPreview: jsonMatch[0].substring(0, 100) + '...'
             });
             finalResponse = responseData.answer;
           }
-        } catch (extractError) {
-          logger.warn('⚠️ JSON pattern found but parsing failed, using original', {
-            extractError: extractError.message,
-            jsonPatternPreview: jsonMatch[0].substring(0, 100) + '...'
+        } else {
+          logger.warn('⚠️ No JSON pattern found in response, using original text', {
+            responsePreview: responseData.answer?.substring(0, 100) + '...'
           });
           finalResponse = responseData.answer;
         }
-      } else {
-        // لا يوجد JSON pattern، استخدم النص كما هو
-        logger.info('📄 No JSON pattern found, using response as plain text', {
-          responsePreview: responseData.answer?.substring(0, 100) + '...'
-        });
-        finalResponse = responseData.answer;
       }
+    } else {
+      // Data collection is NOT enabled → AI returns plain text (expected behavior)
+      logger.debug('📄 Data collection disabled, using response as plain text', {
+        responsePreview: responseData.answer?.substring(0, 100) + '...'
+      });
+      
+      finalResponse = responseData.answer;
+      needsDataCollection = false;
+      requestedFields = [];
     }
     
     logger.info('AI response generated successfully', {

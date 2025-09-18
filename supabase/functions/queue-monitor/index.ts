@@ -6,7 +6,8 @@ import {
   detectOrphanedMessages,
   recoverOrphanedMessages,
   getQueueDepthStats,
-  emergencyCleanup
+  emergencyCleanup,
+  quickCleanupDeadKeys
 } from '../_shared/queue-monitor.ts';
 
 // Logger for debugging
@@ -82,6 +83,18 @@ serve(async (req) => {
         };
         break;
 
+      case 'quick':
+        // Quick cleanup - clean dead keys and expired locks (safe operation)
+        const quickResult = await quickCleanupDeadKeys();
+        result = {
+          success: quickResult.success,
+          action: 'quick',
+          cleanedItems: quickResult.cleanedItems,
+          errors: quickResult.errors,
+          timestamp: new Date().toISOString()
+        };
+        break;
+
       case 'emergency':
         // Emergency cleanup (use with caution)
         if (req.method !== 'POST') {
@@ -106,7 +119,7 @@ serve(async (req) => {
         result = {
           success: false,
           error: `Unknown action: ${action}`,
-          availableActions: ['health', 'cleanup', 'orphaned', 'stats', 'emergency']
+          availableActions: ['health', 'cleanup', 'orphaned', 'stats', 'quick', 'emergency']
         };
         statusCode = 400;
         break;

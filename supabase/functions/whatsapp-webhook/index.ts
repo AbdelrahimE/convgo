@@ -1,10 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processing.ts";
+import { extractImageDetails, hasImageContent, processImageMessage } from "../_shared/image-processing.ts";
 import { processConnectionStatus } from "../_shared/connection-status.ts";
 import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts";
 import { processAudioMessage } from "../_shared/audio-processor.ts";
-import { handleMessageWithBuffering } from "../_shared/buffering-handler.ts";
 import { measureTime } from "../_shared/parallel-queries.ts";
 
 // QUEUE SYSTEM: Import Redis Queue and Direct Processing
@@ -125,6 +125,51 @@ async function checkEscalationNeeded(
   } catch (error) {
     logger.error('Error checking escalation need:', error);
     return { needsEscalation: false, reason: '' };
+  }
+}
+
+// Helper function to check if AI is enabled for this instance (EARLY CHECK)
+async function isAIEnabledForInstance(instanceName: string): Promise<{ enabled: boolean; instanceId?: string }> {
+  try {
+    // Get instance data first
+    const { data: instanceData, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('id')
+      .eq('instance_name', instanceName)
+      .maybeSingle();
+
+    if (instanceError || !instanceData) {
+      logger.warn('⚠️ Instance not found for AI check', { instanceName, error: instanceError });
+      return { enabled: false };
+    }
+
+    // Check AI configuration
+    const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
+      .from('whatsapp_ai_config')
+      .select('id, is_active')
+      .eq('whatsapp_instance_id', instanceData.id)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    const isEnabled = !aiConfigError && !!aiConfig;
+    
+    logger.info('🤖 Early AI check completed', {
+      instanceName,
+      instanceId: instanceData.id,
+      aiEnabled: isEnabled,
+      configFound: !!aiConfig
+    });
+
+    return { 
+      enabled: isEnabled, 
+      instanceId: instanceData.id 
+    };
+  } catch (error) {
+    logger.error('💥 Error in early AI check', {
+      instanceName,
+      error: error.message || error
+    });
+    return { enabled: false };
   }
 }
 
@@ -326,7 +371,7 @@ async function findOrCreateConversation(instanceId: string, userPhone: string) {
 
 
 // Default API URL - Set to the correct Evolution API URL
-const DEFAULT_EVOLUTION_API_URL = 'https://api.botifiy.com';
+const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
 
 // Helper function to save webhook message
 async function saveWebhookMessage(instance: string, event: string, data: any) {
@@ -451,7 +496,7 @@ serve(async (req) => {
     if (instanceName) {
       logger.info(`Processing webhook for instance: ${instanceName}`);
       
-      // REMOVED: Support phone number check (escalation system removed)
+      // ✅ Escalation system is now integrated in Queue and Direct processing
       
       // Different webhook events have different structures
       // We need to normalize based on the structure
@@ -517,6 +562,7 @@ serve(async (req) => {
       // Process voice messages if needed
       let foundInstanceId = null;
       let transcribedText: string | null = null; // Add variable to store transcribed text for voice messages
+      let processedImageUrl: string | null = null; // Add variable to store processed image URL for image messages
       
       // Look up the instance ID if this is a message event
       if (event === 'messages.upsert') {
@@ -544,7 +590,7 @@ serve(async (req) => {
           }
 
           // Modified flow: First check if this is a voice message that needs transcription
-          let needsTranscription = false;
+          const needsTranscription = false;
           
           if (hasAudioContent(normalizedData)) {
             logger.info('Detected voice message, will transcribe before escalation check');
@@ -570,18 +616,44 @@ serve(async (req) => {
               });
             }
           }
+
+          // Process image messages - similar to voice message processing
+          if (hasImageContent(normalizedData)) {
+            logger.info('Detected image message, will process for AI analysis');
+            
+            // Extract image details
+            const imageDetails = extractImageDetails(normalizedData);
+            
+            // Get API keys for image processing
+            const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || normalizedData.apikey;
+            
+            // Process the image to get a usable URL
+            const imageProcessingResult = await processImageMessage(imageDetails, instanceName, 
+              normalizedData.key?.remoteJid?.split('@')[0] || '', evolutionApiKey);
+            
+            if (imageProcessingResult.success && imageProcessingResult.imageUrl) {
+              processedImageUrl = imageProcessingResult.imageUrl;
+              logger.info('Successfully processed image message', {
+                imageUrl: processedImageUrl.substring(0, 50) + '...'
+              });
+            } else {
+              logger.error('Failed to process image message', {
+                error: imageProcessingResult.error
+              });
+            }
+          }
           
           // REMOVED: Webhook data preparation (no longer needed)
           
-          logger.info('Voice message processing completed', { 
+          logger.info('Media message processing completed', { 
             instance: instanceName,
-            hasTranscribedText: !!transcribedText
+            hasTranscribedText: !!transcribedText,
+            hasProcessedImageUrl: !!processedImageUrl
           });
           
-          // REMOVED: Evolution API settings (no longer needed for escalation)
-          
-          // REMOVED: Smart escalation analysis (escalation system removed)
-          // Continue with normal AI processing
+          // ✅ Voice message transcribed and ready for processing
+          // ✅ Escalation analysis will be performed by Queue/Direct processors
+          // Continue with normal AI processing via queue system
         } catch (error) {
           // Log error but continue with AI processing
           logger.error('Error in voice message processing', { 
@@ -602,102 +674,114 @@ serve(async (req) => {
             transcription: transcribedText
           });
         }
+        
+        if (processedImageUrl) {
+          // If we already processed the image, pass it to AI processing
+          normalizedData.processedImageUrl = processedImageUrl;
+          logger.info('Using already processed image URL for AI processing', {
+            imageUrl: processedImageUrl.substring(0, 50) + '...'
+          });
+        }
 
         // Extract user phone for processing
         const userPhone = normalizedData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
         
-        // QUEUE SYSTEM: Check if queue system is enabled (default: true)
-        const useQueueSystem = Deno.env.get('USE_QUEUE_SYSTEM') !== 'false';
+        // 🤖 EARLY AI CHECK: Verify AI is enabled before storing in Redis
+        const aiStatus = await isAIEnabledForInstance(instanceName);
         
-        let processingResult: any = { success: false, reason: 'unknown' };
-        
-        if (useQueueSystem) {
-          logger.info('🚀 Using Redis Queue System for message processing', {
+        if (!aiStatus.enabled) {
+          logger.info('🚫 AI not enabled for instance, skipping Redis storage and processing', {
             instanceName,
             userPhone,
             messageId: normalizedData.key?.id
           });
           
-          try {
-            // Try to add message to Redis queue
-            const queueResult = await addToQueue(instanceName, userPhone, normalizedData);
-            
-            if (queueResult.success) {
-              processingResult = {
-                success: true,
-                usedQueue: true,
-                messageId: queueResult.messageId,
-                reason: 'queued_for_processing'
-              };
-              
-              logger.info('✅ Message successfully added to Redis queue', {
-                instanceName,
-                userPhone,
-                messageId: queueResult.messageId
-              });
-            } else {
-              throw new Error(`Queue failed: ${queueResult.error}`);
+          // Return success without processing - this prevents unnecessary Redis storage
+          return new Response(JSON.stringify({ 
+            success: true,
+            message: `AI not enabled for instance ${instanceName}`,
+            skipped: true
+          }), {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json'
             }
-          } catch (queueError) {
-            logger.warn('⚠️ Redis Queue failed, falling back to direct processing', {
+          });
+        }
+        
+        // QUEUE SYSTEM: Process message with Queue (automatic direct fallback)
+        let processingResult: any = { success: false, reason: 'unknown' };
+        
+        logger.info('🚀 Processing message with Queue System (automatic direct fallback)', {
+          instanceName,
+          userPhone,
+          messageId: normalizedData.key?.id,
+          aiEnabled: true
+        });
+        
+        try {
+          // Try to add message to Redis queue
+          const queueResult = await addToQueue(instanceName, userPhone, normalizedData);
+          
+          if (queueResult.success) {
+            processingResult = {
+              success: true,
+              usedQueue: true,
+              messageId: queueResult.messageId,
+              reason: 'queued_for_processing'
+            };
+            
+            logger.info('✅ Message successfully added to Redis queue', {
               instanceName,
               userPhone,
-              error: queueError.message || queueError
+              messageId: queueResult.messageId
             });
-            
-            // Fallback to direct processing
-            try {
-              const directSuccess = await processMessageDirectly(
-                instanceName,
-                normalizedData,
-                supabaseAdmin,
-                supabaseUrl,
-                supabaseServiceKey
-              );
-              
-              processingResult = {
-                success: directSuccess,
-                usedQueue: false,
-                usedFallback: true,
-                reason: directSuccess ? 'direct_processing_success' : 'direct_processing_failed'
-              };
-              
-              logger.info(directSuccess ? '✅ Direct processing fallback succeeded' : '❌ Direct processing fallback failed', {
-                instanceName,
-                userPhone
-              });
-            } catch (directError) {
-              logger.error('💥 Direct processing fallback also failed', {
-                instanceName,
-                userPhone,
-                error: directError.message || directError
-              });
-              
-              processingResult = {
-                success: false,
-                usedQueue: false,
-                usedFallback: true,
-                reason: 'both_systems_failed',
-                error: directError.message || directError
-              };
-            }
+          } else {
+            throw new Error(`Queue failed: ${queueResult.error}`);
           }
-        } else {
-          logger.info('🔄 Using legacy buffering system (queue disabled)', {
+        } catch (queueError) {
+          logger.warn('⚠️ Redis Queue failed, falling back to direct processing', {
             instanceName,
-            userPhone
+            userPhone,
+            error: queueError.message || queueError
           });
           
-          // Use legacy buffering system when queue is disabled
-          processingResult = await handleMessageWithBuffering(
-            instanceName,
-            normalizedData,
-            supabaseAdmin,
-            supabaseUrl,
-            supabaseServiceKey
-          );
-          
-          processingResult.usedLegacy = true;
+          // Automatic fallback to direct processing
+          try {
+            const directSuccess = await processMessageDirectly(
+              instanceName,
+              normalizedData,
+              supabaseAdmin,
+              supabaseUrl,
+              supabaseServiceKey
+            );
+            
+            processingResult = {
+              success: directSuccess,
+              usedQueue: false,
+              usedFallback: true,
+              reason: directSuccess ? 'direct_processing_success' : 'direct_processing_failed'
+            };
+            
+            logger.info(directSuccess ? '✅ Direct processing fallback succeeded' : '❌ Direct processing fallback failed', {
+              instanceName,
+              userPhone
+            });
+          } catch (directError) {
+            logger.error('💥 Direct processing fallback also failed', {
+              instanceName,
+              userPhone,
+              error: directError.message || directError
+            });
+            
+            processingResult = {
+              success: false,
+              usedQueue: false,
+              usedFallback: true,
+              reason: 'both_systems_failed',
+              error: directError.message || directError
+            };
+          }
         }
         
         logger.info('📊 Message processing completed', {
@@ -705,8 +789,7 @@ serve(async (req) => {
           userPhone,
           success: processingResult.success,
           usedQueue: processingResult.usedQueue || false,
-          usedFallback: processingResult.usedFallback || false,
-          usedLegacy: processingResult.usedLegacy || false,
+          usedDirectFallback: processingResult.usedFallback || false,
           reason: processingResult.reason,
           messageId: processingResult.messageId || 'unknown'
         });

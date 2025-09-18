@@ -33,6 +33,207 @@ const logger = {
   debug: (...args: any[]) => console.debug(...args),
 };
 
+// ===== ESCALATION SYSTEM FUNCTIONS =====
+
+/**
+ * Helper function to check if conversation is currently escalated
+ */
+async function isConversationEscalated(instanceId: string, phoneNumber: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('escalated_conversations')
+      .select('id')
+      .eq('instance_id', instanceId)
+      .eq('whatsapp_number', phoneNumber)
+      .is('resolved_at', null)
+      .single();
+
+    return !error && !!data;
+  } catch (error) {
+    logger.error('Error checking escalation status:', error);
+    return false;
+  }
+}
+
+/**
+ * Helper function to check if message needs escalation (enhanced with AI intent detection)
+ */
+async function checkEscalationNeeded(
+  message: string, 
+  phoneNumber: string,
+  instanceId: string,
+  conversationId: string,
+  aiResponseConfidence?: number,
+  intentAnalysis?: any
+): Promise<{ needsEscalation: boolean; reason: string }> {
+  try {
+    const escalationTimer = measureTime('Smart escalation check');
+    
+    // Get instance escalation configuration including separate controls
+    const { data: instance, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('escalation_enabled, escalation_keywords, smart_escalation_enabled, keyword_escalation_enabled')
+      .eq('id', instanceId)
+      .single();
+    
+    escalationTimer.end();
+
+    // If escalation is disabled or error, return false
+    if (instanceError || !instance?.escalation_enabled) {
+      return { needsEscalation: false, reason: '' };
+    }
+
+    // 🧠 SMART ESCALATION: Check AI intent analysis (if enabled and available)
+    if (instance.smart_escalation_enabled && intentAnalysis?.needsHumanSupport) {
+      logger.info('🚨 Smart escalation detected: AI identified human support need', { 
+        phoneNumber,
+        humanSupportReason: intentAnalysis.humanSupportReason,
+        intent: intentAnalysis.intent,
+        confidence: intentAnalysis.confidence,
+        detectedReason: intentAnalysis.humanSupportReason
+      });
+      return { needsEscalation: true, reason: 'ai_detected_intent' };
+    }
+
+    // 🔑 KEYWORD ESCALATION: Check escalation keywords (if enabled)
+    if (instance.keyword_escalation_enabled) {
+      const keywords = instance.escalation_keywords || [];
+      
+      if (keywords && keywords.length > 0) {
+        const lowerMessage = message.toLowerCase();
+        const hasEscalationKeyword = keywords.some(keyword => 
+          lowerMessage.includes(keyword.toLowerCase()) || message.includes(keyword)
+        );
+        
+        if (hasEscalationKeyword) {
+          const matchedKeyword = keywords.find(k => lowerMessage.includes(k.toLowerCase()) || message.includes(k));
+          logger.info('Escalation needed: User requested human support via keyword', { 
+            phoneNumber,
+            matchedKeyword,
+            configuredKeywords: keywords
+          });
+          return { needsEscalation: true, reason: 'user_request' };
+        }
+      }
+    }
+
+    // No escalation needed from either method
+    logger.debug('No escalation needed', {
+      phoneNumber,
+      smartEscalationEnabled: instance.smart_escalation_enabled,
+      keywordEscalationEnabled: instance.keyword_escalation_enabled,
+      smartAnalysisResult: intentAnalysis?.needsHumanSupport || false,
+      keywordMatches: false,
+      configuredKeywords: instance.escalation_keywords?.length || 0
+    });
+    
+    return { needsEscalation: false, reason: '' };
+  } catch (error) {
+    logger.error('Error checking escalation need:', error);
+    return { needsEscalation: false, reason: '' };
+  }
+}
+
+/**
+ * Helper function to handle escalation (imported from webhook logic)
+ */
+async function handleEscalation(
+  phoneNumber: string,
+  instanceId: string,
+  reason: string,
+  conversationHistory: any[]
+): Promise<string> {
+  try {
+    // Get instance configuration for escalation messages
+    const { data: instance, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('escalation_message, instance_name')
+      .eq('id', instanceId)
+      .single();
+
+    if (instanceError) {
+      logger.error('Error getting instance config for escalation:', instanceError);
+      return 'Your conversation has been transferred to our specialized support team.';
+    }
+
+    // Send escalation notification with detailed logging
+    logger.info('🚨 ESCALATION DEBUG: Starting notification process', {
+      phoneNumber,
+      instanceId,
+      reason,
+      conversationHistoryLength: conversationHistory.length,
+      timestamp: new Date().toISOString()
+    });
+
+    const notificationPayload = {
+      customerNumber: phoneNumber,
+      instanceId,
+      escalationReason: reason,
+      conversationContext: conversationHistory.slice(-10)
+    };
+
+    logger.info('🚨 ESCALATION DEBUG: Sending notification request', {
+      url: `${supabaseUrl}/functions/v1/send-escalation-notification`,
+      payload: {
+        ...notificationPayload,
+        conversationContext: `[${notificationPayload.conversationContext.length} messages]`
+      }
+    });
+
+    const notificationResponse = await fetch(`${supabaseUrl}/functions/v1/send-escalation-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify(notificationPayload)
+    });
+
+    logger.info('🚨 ESCALATION DEBUG: Notification response received', {
+      status: notificationResponse.status,
+      statusText: notificationResponse.statusText,
+      ok: notificationResponse.ok,
+      headers: Object.fromEntries(notificationResponse.headers.entries())
+    });
+
+    if (!notificationResponse.ok) {
+      try {
+        const errorText = await notificationResponse.text();
+        logger.error('❌ ESCALATION DEBUG: Notification failed with details', {
+          status: notificationResponse.status,
+          statusText: notificationResponse.statusText,
+          errorText,
+          requestPayload: notificationPayload
+        });
+      } catch (textError) {
+        logger.error('❌ ESCALATION DEBUG: Notification failed, could not read error text', {
+          status: notificationResponse.status,
+          statusText: notificationResponse.statusText,
+          textError: textError.message
+        });
+      }
+    } else {
+      try {
+        const responseData = await notificationResponse.json();
+        logger.info('✅ ESCALATION DEBUG: Notification successful', {
+          responseData,
+          escalationId: responseData.escalationId,
+          notificationsSent: responseData.message
+        });
+      } catch (jsonError) {
+        logger.warn('⚠️ ESCALATION DEBUG: Notification OK but could not parse response', {
+          jsonError: jsonError.message
+        });
+      }
+    }
+
+    return instance.escalation_message || 'Your conversation has been transferred to our specialized support team. One of our representatives will contact you shortly.';
+  } catch (error) {
+    logger.error('Error handling escalation:', error);
+    return 'Your conversation has been transferred to our specialized support team.';
+  }
+}
+
 // Processing configuration
 const PROCESSING_TIMEOUT_MS = 30000;    // 30 seconds max processing time
 const MAX_MESSAGES_PER_BATCH = 10;      // Maximum messages to process together
@@ -268,18 +469,18 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
         return false;
       }
 
-      // Get AI configuration
+      // Get AI configuration (AI status already verified by webhook before queuing)
       const { data: aiConfig, error: aiConfigError } = await supabaseAdmin
         .from('whatsapp_ai_config')
         .select('*')
         .eq('whatsapp_instance_id', instanceData.id)
-        .eq('is_active', true)
         .maybeSingle();
 
       if (aiConfigError || !aiConfig) {
-        logger.warn('⚠️ AI not enabled for this instance', { 
+        logger.error('💥 AI config missing for queued message - this should not happen!', { 
           instanceId: instanceData.id, 
-          error: aiConfigError 
+          error: aiConfigError,
+          note: 'Webhook should have prevented this message from being queued'
         });
         return false;
       }
@@ -322,6 +523,197 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
       // Get conversation history
       const conversationHistory = await getRecentConversationHistory(conversationId, 800, supabaseAdmin);
 
+      // ===== ESCALATION SYSTEM INTEGRATION =====
+      
+      // Check if conversation is already escalated
+      const isAlreadyEscalated = await isConversationEscalated(instanceData.id, userPhone);
+      
+      if (isAlreadyEscalated) {
+        // Send escalated conversation message
+        logger.info('📞 Conversation is already escalated, sending escalated message', {
+          userPhone,
+          instanceName
+        });
+        
+        const escalatedMessage = instanceData.escalated_conversation_message || 
+          'Your conversation has been escalated to our support team. One of our representatives will assist you shortly.';
+        
+        // Store escalated message
+        await storeMessageInConversation(conversationId, 'assistant', escalatedMessage, `escalated_${Date.now()}`, supabaseAdmin);
+        
+        // Send escalated message via WhatsApp API
+        try {
+          // Get Evolution API key
+          const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messagesToProcess[messagesToProcess.length - 1]?.messageData?.apikey;
+          
+          if (!evolutionApiKey) {
+            logger.error('❌ EVOLUTION_API_KEY not available for escalated message');
+            return;
+          }
+
+          const webhookConfig = await supabaseAdmin
+            .from('whatsapp_webhook_config')
+            .select('webhook_url')
+            .eq('whatsapp_instance_id', instanceData.id)
+            .maybeSingle();
+
+          let instanceBaseUrl = '';
+          if (webhookConfig?.data?.webhook_url) {
+            const url = new URL(webhookConfig.data.webhook_url);
+            instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+          } else {
+            instanceBaseUrl = 'https://api.convgo.com';
+          }
+
+          const sendResponse = await fetch(`${instanceBaseUrl}/message/sendText/${instanceName}`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'apikey': evolutionApiKey
+            },
+            body: JSON.stringify({
+              number: userPhone,
+              text: escalatedMessage
+            })
+          });
+
+          if (sendResponse.ok) {
+            logger.info('✅ Escalated message sent successfully');
+          } else {
+            logger.error('❌ Failed to send escalated message', {
+              status: sendResponse.status,
+              statusText: sendResponse.statusText
+            });
+          }
+        } catch (sendError) {
+          logger.error('❌ Error sending escalated message', { error: sendError.message });
+        }
+        
+        // Mark messages as completed and return
+        await markMessagesAsCompleted(messagesToProcess);
+        return;
+      }
+
+      // Check if message needs escalation (Smart AI + Keyword detection)
+      let intentAnalysis: any = null;
+      
+      // Perform intent analysis for smart escalation
+      try {
+        const intentResponse = await fetch(`${supabaseUrl}/functions/v1/smart-intent-analyzer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`
+          },
+          body: JSON.stringify({
+            message: combinedMessage,
+            conversationHistory: conversationHistory
+          })
+        });
+
+        if (intentResponse.ok) {
+          intentAnalysis = await intentResponse.json();
+          logger.info('🧠 Intent analysis completed', {
+            userPhone,
+            hasIntentAnalysis: !!intentAnalysis,
+            needsHumanSupport: intentAnalysis?.needsHumanSupport || false
+          });
+        }
+      } catch (intentError) {
+        logger.warn('⚠️ Intent analysis failed, continuing without smart escalation', {
+          error: intentError.message
+        });
+      }
+
+      // Check for escalation needs
+      const escalationCheck = await checkEscalationNeeded(
+        combinedMessage,
+        userPhone,
+        instanceData.id,
+        conversationId,
+        undefined, // aiResponseConfidence - not needed here
+        intentAnalysis
+      );
+
+      if (escalationCheck.needsEscalation) {
+        logger.info('🚨 ESCALATION TRIGGERED', {
+          phoneNumber: userPhone,
+          detectionMethod: escalationCheck.reason === 'ai_detected_intent' ? 'Smart AI Detection' : 'Keyword Matching'
+        });
+
+        // Handle escalation and get escalation message
+        const escalationMessage = await handleEscalation(
+          userPhone,
+          instanceData.id,
+          escalationCheck.reason,
+          conversationHistory
+        );
+
+        // Store escalation message
+        await storeMessageInConversation(conversationId, 'assistant', escalationMessage, `escalation_${Date.now()}`, supabaseAdmin);
+
+        // Send escalation message via WhatsApp API
+        try {
+          // Get Evolution API key
+          const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messagesToProcess[messagesToProcess.length - 1]?.messageData?.apikey;
+          
+          if (!evolutionApiKey) {
+            logger.error('❌ EVOLUTION_API_KEY not available for escalation message');
+            // Mark messages as completed and return
+            await markMessagesAsCompleted(messagesToProcess);
+            return;
+          }
+
+          const webhookConfig = await supabaseAdmin
+            .from('whatsapp_webhook_config')
+            .select('webhook_url')
+            .eq('whatsapp_instance_id', instanceData.id)
+            .maybeSingle();
+
+          let instanceBaseUrl = '';
+          if (webhookConfig?.data?.webhook_url) {
+            const url = new URL(webhookConfig.data.webhook_url);
+            instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+          } else {
+            instanceBaseUrl = 'https://api.convgo.com';
+          }
+
+          const sendResponse = await fetch(`${instanceBaseUrl}/message/sendText/${instanceName}`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'apikey': evolutionApiKey
+            },
+            body: JSON.stringify({
+              number: userPhone,
+              text: escalationMessage
+            })
+          });
+
+          if (sendResponse.ok) {
+            logger.info('✅ Escalation message sent successfully');
+          } else {
+            logger.error('❌ Failed to send escalation message', {
+              status: sendResponse.status,
+              statusText: sendResponse.statusText
+            });
+          }
+        } catch (sendError) {
+          logger.error('❌ Error sending escalation message', { error: sendError.message });
+        }
+        
+        // Mark messages as completed and return
+        await markMessagesAsCompleted(messagesToProcess);
+        return;
+      }
+
+      // No escalation needed, continue with normal AI processing
+      logger.info('✅ No escalation needed, proceeding with AI response', {
+        userPhone,
+        smartAnalysisResult: intentAnalysis?.needsHumanSupport || false,
+        keywordMatch: false
+      });
+
       // Get webhook config for instance base URL
       const { data: webhookConfig } = await supabaseAdmin
         .from('whatsapp_webhook_config')
@@ -334,7 +726,7 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
         const url = new URL(webhookConfig.webhook_url);
         instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
       } else {
-        instanceBaseUrl = 'https://api.botifiy.com'; // Default
+        instanceBaseUrl = 'https://api.convgo.com'; // Default
       }
 
       // Get files for RAG
@@ -406,6 +798,10 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
         dataCollectionFields = fields || [];
       }
 
+      // Extract processed image URL from latest message data if available
+      const latestMessageData = messagesToProcess[messagesToProcess.length - 1].messageData;
+      const imageUrl = latestMessageData?.processedImageUrl || null;
+      
       // Generate and send AI response
       const aiResponseSuccess = await generateAndSendAIResponse(
         combinedMessage,
@@ -414,11 +810,11 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
         userPhone,
         instanceBaseUrl,
         aiConfig,
-        messagesToProcess[messagesToProcess.length - 1].messageData, // Use latest message data
+        latestMessageData, // Use latest message data
         conversationId,
         supabaseUrl,
         supabaseServiceKey,
-        null, // No image URL
+        imageUrl, // Pass processed image URL
         dataCollectionFields
       );
 
@@ -467,6 +863,30 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
       userPhone,
       processorId
     });
+    
+    // ⚠️ CRITICAL FIX: Clean up any messages that might be stuck in processing state
+    try {
+      const stuckMessages = await getPendingMessages(instanceName, userPhone);
+      const processingMessages = stuckMessages.filter(msg => msg.status === 'processing');
+      
+      if (processingMessages.length > 0) {
+        logger.warn('🔄 Cleaning up stuck messages after error', {
+          instanceName,
+          userPhone,
+          stuckMessageCount: processingMessages.length,
+          messageIds: processingMessages.map(m => m.id)
+        });
+        
+        // Mark stuck messages as completed to clean them up
+        await markMessagesAsCompleted(processingMessages);
+      }
+    } catch (cleanupError) {
+      logger.error('💥 Failed to cleanup stuck messages after error', {
+        error: cleanupError.message || cleanupError,
+        instanceName,
+        userPhone
+      });
+    }
     
     // Release lock on error
     await releaseProcessingLock(instanceName, userPhone, processorId);

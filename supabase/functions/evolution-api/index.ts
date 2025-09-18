@@ -27,7 +27,7 @@ serve(async (req) => {
     logger.info(`Evolution API request: ${operation}`, params);
 
     // Base URL for Evolution API
-    const baseUrl = 'https://api.botifiy.com';
+    const baseUrl = 'https://api.convgo.com';
     let url, method, body;
 
     // Route based on operation

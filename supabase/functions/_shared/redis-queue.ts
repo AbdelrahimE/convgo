@@ -64,10 +64,14 @@ export async function addToQueue(
     const queueKey = getQueueKey(instanceName, userPhone);
     const now = new Date().toISOString();
     
-    // Extract message text from messageData
-    const messageText = messageData.message?.conversation || 
-                       messageData.message?.extendedTextMessage?.text ||
-                       '[Media Message]';
+    // Extract message text from messageData - enhanced to support voice/image messages
+    const messageText = messageData.transcribedText ||                    // Voice messages (transcribed)
+                       messageData.message?.conversation ||               // Regular text messages
+                       messageData.message?.extendedTextMessage?.text ||  // Extended text messages  
+                       messageData.message?.imageMessage?.caption ||      // Images with captions
+                       messageData.message?.videoMessage?.caption ||      // Videos with captions
+                       messageData.message?.documentMessage?.caption ||   // Documents with captions
+                       '[Media Message]';                                 // Fallback for media without text
 
     // Create queue message object
     const queueMessage: QueueMessage = {
@@ -342,10 +346,83 @@ export async function markMessagesAsCompleted(messages: QueueMessage[]): Promise
 }
 
 /**
- * Get list of active queue keys
+ * Clean up dead queue keys from active_queues set
+ * These are keys that exist in active_queues but their actual queues are expired/deleted
+ */
+export async function cleanupDeadQueueKeys(): Promise<number> {
+  try {
+    logger.debug('🧹 Starting dead queue keys cleanup');
+
+    let cleanedCount = 0;
+    
+    const allActiveQueues = await safeRedisCommand(
+      async (client) => {
+        return await client.smembers('active_queues');
+      },
+      []
+    );
+
+    if (allActiveQueues.length === 0) {
+      logger.debug('📭 No active queues to check');
+      return 0;
+    }
+
+    // Check each queue key to see if the actual queue still exists
+    const deadKeys: string[] = [];
+    
+    for (const queueKey of allActiveQueues) {
+      const queueExists = await safeRedisCommand(
+        async (client) => {
+          const exists = await client.exists(queueKey);
+          return exists === 1;
+        },
+        false
+      );
+
+      if (!queueExists) {
+        deadKeys.push(queueKey);
+        logger.debug('💀 Dead queue key found', { queueKey });
+      }
+    }
+
+    // Remove all dead keys in batch
+    if (deadKeys.length > 0) {
+      const removed = await safeRedisCommand(
+        async (client) => {
+          return await client.srem('active_queues', ...deadKeys);
+        },
+        0
+      );
+
+      cleanedCount = removed;
+      
+      logger.info('🗑️ Cleaned up dead queue keys', {
+        deadKeysFound: deadKeys.length,
+        actuallyRemoved: removed,
+        removedKeys: deadKeys
+      });
+    } else {
+      logger.debug('✅ No dead queue keys found');
+    }
+
+    return cleanedCount;
+  } catch (error) {
+    logger.error('💥 Exception in cleanupDeadQueueKeys', {
+      error: error.message || error
+    });
+    return 0;
+  }
+}
+
+/**
+ * Get list of active queue keys (with automatic cleanup of dead keys)
  */
 export async function getActiveQueues(): Promise<string[]> {
   try {
+    // First, clean up any dead keys
+    const cleanedCount = await cleanupDeadQueueKeys();
+    
+    // Then get the cleaned list
     const activeQueues = await safeRedisCommand(
       async (client) => {
         return await client.smembers('active_queues');
@@ -355,7 +432,8 @@ export async function getActiveQueues(): Promise<string[]> {
 
     logger.debug('📋 Retrieved active queues', {
       queueCount: activeQueues.length,
-      queues: activeQueues
+      queues: activeQueues,
+      cleanedDeadKeys: cleanedCount
     });
 
     return activeQueues;

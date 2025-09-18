@@ -15,6 +15,3 @@ timeout = 30
 # UPSTASH_REDIS_REST_URL
 # UPSTASH_REDIS_REST_TOKEN
 
-# Queue System Control (Optional)
-# USE_QUEUE_SYSTEM=true (default) - Enable Redis queue system
-# USE_QUEUE_SYSTEM=false - Emergency rollback to legacy buffering system

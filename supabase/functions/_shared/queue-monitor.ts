@@ -467,6 +467,49 @@ export async function monitorRedisHealth(): Promise<HealthReport> {
 }
 
 /**
+ * Quick cleanup for immediate dead key removal (lighter than emergency cleanup)
+ */
+export async function quickCleanupDeadKeys(): Promise<{ success: boolean; cleanedItems: number; errors: string[] }> {
+  const result = {
+    success: true,
+    cleanedItems: 0,
+    errors: []
+  };
+
+  try {
+    logger.info('🚀 Starting quick cleanup for dead keys');
+
+    // Import the cleanup function from redis-queue
+    const { cleanupDeadQueueKeys } = await import('./redis-queue.ts');
+    
+    // Clean up dead queue keys
+    const deadKeysRemoved = await cleanupDeadQueueKeys();
+    result.cleanedItems += deadKeysRemoved;
+
+    // Clean up expired locks
+    const expiredLocksRemoved = await cleanupExpiredLocks();
+    result.cleanedItems += expiredLocksRemoved;
+
+    logger.info('✅ Quick cleanup completed', {
+      deadKeysRemoved,
+      expiredLocksRemoved,
+      totalCleaned: result.cleanedItems
+    });
+
+    return result;
+  } catch (error) {
+    logger.error('💥 Exception in quick cleanup', {
+      error: error.message || error
+    });
+
+    result.success = false;
+    result.errors.push(`Quick cleanup error: ${error.message || error}`);
+    
+    return result;
+  }
+}
+
+/**
  * Emergency cleanup - remove all expired queues and data
  */
 export async function emergencyCleanup(): Promise<{ success: boolean; cleanedItems: number; errors: string[] }> {
