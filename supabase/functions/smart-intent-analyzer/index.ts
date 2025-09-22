@@ -69,12 +69,6 @@ interface SmartIntentResult {
   confidence: number;
   needsHumanSupport: boolean;
   humanSupportReason: string | null;
-  businessContext: {
-    industry: string;
-    communicationStyle: string;
-    detectedTerms: string[];
-    confidence: number;
-  };
   reasoning: string;
   selectedPersonality: {
     id: string;
@@ -135,12 +129,6 @@ async function analyzeCoreIntentOptimized(
   needsHumanSupport: boolean;
   humanSupportReason: string | null;
   reasoning: string;
-  businessContext: {
-    industry: string;
-    communicationStyle: string;
-    detectedTerms: string[];
-    confidence: number;
-  };
   basicEmotionState: string;
 }> {
   try {
@@ -169,12 +157,6 @@ Return this exact JSON format:
   "reasoning": "brief reason",
   "needsHumanSupport": false,
   "humanSupportReason": null,
-  "businessContext": {
-    "industry": "sector",
-    "communicationStyle": "style",
-    "detectedTerms": ["term1", "term2"],
-    "confidence": 0.8
-  },
   "basicEmotionState": "neutral|positive|negative|urgent"
 }
 
@@ -203,7 +185,7 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
         { role: 'system', content: optimizedPrompt },
         { role: 'user', content: cleanMessage }
       ],
-      temperature: 0.3,
+      temperature: 0.1,
       max_tokens: 6000 // زيادة من 3000 إلى 6000 لتحليل أعمق وأشمل
     };
     
@@ -270,14 +252,16 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
       throw new Error('Invalid OpenAI response structure');
     }
 
-    const content = responseData.choices[0].message.content;
-    if (!content) {
+    const rawContent = responseData.choices[0].message.content;
+    if (!rawContent) {
       logger.error('❌ Empty content from GPT-4o-mini:', {
         message_object: responseData.choices[0].message,
         finish_reason: responseData.choices[0].finish_reason
       });
       throw new Error('Empty response from OpenAI');
     }
+    
+    const content = rawContent.replace(/^```(?:json)?\s*|\s*```$/g, '');
 
     logger.info('📝 GPT-4o-mini Response Content:', {
       content_length: content.length,
@@ -310,14 +294,6 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
       needsHumanSupport: Boolean(result.needsHumanSupport),
       humanSupportReason: (result.humanSupportReason && ['direct_request', 'ai_frustration', 'complexity', 'escalation_needed'].includes(result.humanSupportReason))
         ? result.humanSupportReason : null,
-      businessContext: {
-        industry: String(result.businessContext?.industry || 'عام').substring(0, 50),
-        communicationStyle: String(result.businessContext?.communicationStyle || 'ودي').substring(0, 50),
-        detectedTerms: Array.isArray(result.businessContext?.detectedTerms) 
-          ? result.businessContext.detectedTerms.slice(0, 5).map(term => String(term).substring(0, 30))
-          : [],
-        confidence: Math.min(0.98, Math.max(0.3, Number(result.businessContext?.confidence) || 0.5))
-      },
       basicEmotionState: (result.basicEmotionState && ['neutral', 'positive', 'negative', 'urgent'].includes(result.basicEmotionState))
         ? result.basicEmotionState : 'neutral'
     };
@@ -328,8 +304,6 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
       needsHumanSupport: validatedResult.needsHumanSupport,
       humanSupportReason: validatedResult.humanSupportReason,
       emotion_state: validatedResult.basicEmotionState,
-      industry: validatedResult.businessContext.industry,
-      detected_terms_count: validatedResult.businessContext.detectedTerms.length,
       model_used: 'gpt-4o-mini',
       total_processing_time_ms: Date.now() - requestStartTime
     });
@@ -352,12 +326,6 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
       needsHumanSupport: false,
       humanSupportReason: null,
       reasoning: `تحليل احتياطي - خطأ في GPT-4o-mini: ${error.message}`,
-      businessContext: {
-        industry: 'عام',
-        communicationStyle: 'ودي',
-        detectedTerms: [],
-        confidence: 0.3
-      },
       basicEmotionState: 'neutral'
     };
   }
@@ -369,7 +337,6 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
 async function getSmartPersonality(
   instanceId: string,
   intent: string,
-  businessContext: any,
   intentConfidence: number = 0.5  // Add confidence parameter
 ): Promise<any> {
   // Fixed optimized threshold for MVP - no user control needed
@@ -382,15 +349,13 @@ async function getSmartPersonality(
     const { data, error } = await supabaseAdmin.rpc('get_contextual_personality', {
       p_whatsapp_instance_id: instanceId,
       p_intent: intent,
-      p_intent_confidence: intentConfidence, // Pass the actual confidence
-      p_business_context: businessContext
+      p_intent_confidence: intentConfidence // Pass the actual confidence
     });
 
     if (error) {
       logger.error('Error getting contextual personality:', error, {
         instanceId,
-        intent,
-        businessContext: JSON.stringify(businessContext)
+        intent
       });
       
       const { data: fallbackData, error: fallbackError } = await supabaseAdmin.rpc('get_personality_for_intent', {
@@ -503,8 +468,7 @@ async function getSmartPersonality(
       error: error.message || error,
       stack: error.stack,
       instanceId,
-      intent,
-      businessContext: JSON.stringify(businessContext)
+      intent
     });
     return null;
   }
@@ -604,7 +568,7 @@ Rules:
           { role: 'system', content: externalActionPrompt },
           { role: 'user', content: cleanMessage }
         ],
-        temperature: 0.3,
+        temperature: 0.1,
         max_tokens: 3000
       }),
     });
@@ -621,9 +585,9 @@ Rules:
     }
     
     const responseData = await response.json();
-    const content = responseData.choices[0]?.message?.content;
+    const rawContent = responseData.choices[0]?.message?.content;
     
-    if (!content) {
+    if (!rawContent) {
       logger.error('Empty response from OpenAI for external actions');
       return {
         matchedAction: null,
@@ -632,6 +596,8 @@ Rules:
         reasoning: 'Empty OpenAI response'
       };
     }
+    
+    const content = rawContent.replace(/^```(?:json)?\s*|\s*```$/g, '');
     
     let result;
     try {
@@ -702,7 +668,6 @@ async function smartIntentAnalysisOptimized(
   confidence: number;
   needsHumanSupport: boolean;
   humanSupportReason: string | null;
-  businessContext: any;
   reasoning: string;
   selectedPersonality: any;
   emotionAnalysis: any;
@@ -728,12 +693,6 @@ async function smartIntentAnalysisOptimized(
       confidence: externalActionResult.confidence,
       needsHumanSupport: false,
       humanSupportReason: null,
-      businessContext: {
-        industry: 'external_action',
-        communicationStyle: 'automated',
-        detectedTerms: Object.keys(externalActionResult.extractedVariables),
-        confidence: externalActionResult.confidence
-      },
       reasoning: `External Action: ${externalActionResult.matchedAction.display_name} - ${externalActionResult.reasoning}`,
       selectedPersonality: null, // External actions don't use personalities
       emotionAnalysis: {
@@ -799,15 +758,15 @@ async function smartIntentAnalysisOptimized(
   
   const productInterest = {
     requested_item: coreAnalysis.intent === 'sales' ? 'منتج محتمل' : null,
-    category: coreAnalysis.businessContext.industry || null,
-    specifications: coreAnalysis.businessContext.detectedTerms || [],
+    category: null,
+    specifications: [],
     price_range_discussed: message.includes('سعر') || message.includes('تكلفة') || message.includes('ثمن'),
     urgency_level: coreAnalysis.basicEmotionState === 'urgent' ? 'high' : 'medium',
     decision_factors: []
   };
   
   // 3. الحصول على الشخصية المناسبة (محسن للسرعة) مع تمرير الثقة الفعلية
-  const selectedPersonality = await getSmartPersonality(instanceId, coreAnalysis.intent, coreAnalysis.businessContext, coreAnalysis.confidence);
+  const selectedPersonality = await getSmartPersonality(instanceId, coreAnalysis.intent, coreAnalysis.confidence);
   
   // إضافة logging للتأكد من البيانات
   logger.info('Personality selection completed', {
@@ -823,7 +782,6 @@ async function smartIntentAnalysisOptimized(
     confidence: coreAnalysis.confidence,
     needsHumanSupport: coreAnalysis.needsHumanSupport,
     humanSupportReason: coreAnalysis.humanSupportReason,
-    businessContext: coreAnalysis.businessContext,
     reasoning: `${coreAnalysis.reasoning} - معالجة محسنة للـ MVP`,
     selectedPersonality,
     emotionAnalysis,
@@ -899,7 +857,6 @@ serve(async (req) => {
       confidence: analysisResult.confidence,
       needsHumanSupport: analysisResult.needsHumanSupport,
       humanSupportReason: analysisResult.humanSupportReason,
-      businessContext: analysisResult.businessContext,
       reasoning: analysisResult.reasoning,
       selectedPersonality: analysisResult.selectedPersonality,
       processingTimeMs,
@@ -916,12 +873,10 @@ serve(async (req) => {
       confidence: result.confidence,
       needsHumanSupport: result.needsHumanSupport,
       humanSupportReason: result.humanSupportReason,
-      industry: result.businessContext.industry,
       emotion_state: result.emotionAnalysis?.emotional_state,
       customer_stage: result.customerJourney?.current_stage,
       selected_personality: result.selectedPersonality?.name || 'none',
       personality_id: result.selectedPersonality?.id || 'none',
-      detected_terms_count: result.businessContext.detectedTerms?.length || 0,
       processing_time_ms: processingTimeMs,
       gpt4o_mini_model: 'gpt-4o-mini',
       cache_will_be_saved: true,

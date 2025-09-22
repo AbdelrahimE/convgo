@@ -19,7 +19,8 @@ import {
   Headset,
   Settings,
   Database,
-  Zap
+  Zap,
+  UserCheck
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -56,6 +57,10 @@ const navigation = [{
   name: 'Data Collection',
   href: '/data-collection',
   icon: Database
+}, {
+  name: 'Customer Profiles',
+  href: '/customer-profiles',
+  icon: UserCheck
 }, {
   name: 'External Actions',
   href: '/external-actions',

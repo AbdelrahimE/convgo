@@ -29,11 +29,6 @@ interface GenerateResponseRequest {
   selectedPersonalityName?: string;
   detectedIntent?: string;
   intentConfidence?: number;
-  // SMART: Business context fields for intelligent responses
-  businessContext?: any;
-  detectedIndustry?: string;
-  communicationStyle?: string;
-  culturalContext?: string[];
   
   // Data Collection fields
   dataCollectionFields?: any[];
@@ -370,11 +365,6 @@ serve(async (req) => {
       selectedPersonalityName,
       detectedIntent,
       intentConfidence,
-      // SMART: Business context fields
-      businessContext,
-      detectedIndustry,
-      communicationStyle,
-      culturalContext,
       
       // Data Collection fields
       dataCollectionFields
@@ -427,26 +417,6 @@ serve(async (req) => {
     }
 
     let finalSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
-    
-    // SMART: Enhance system prompt with business context
-    if (businessContext || detectedIndustry || communicationStyle) {
-      finalSystemPrompt += `\n\nBUSINESS CONTEXT:
-`;
-      
-      if (detectedIndustry) {
-        finalSystemPrompt += `- Industry: ${detectedIndustry}\n`;
-      }
-      
-      if (communicationStyle) {
-        finalSystemPrompt += `- Communication Style: ${communicationStyle}\n`;
-      }
-      
-      if (culturalContext && culturalContext.length > 0) {
-        finalSystemPrompt += `- Key Terms: ${culturalContext.slice(0, 5).join(', ')}\n`;
-      }
-      
-      finalSystemPrompt += `\nIMPORTANT: Adapt your response to match the industry context and communication style. Use appropriate terminology and tone for this business domain.`;
-    }
     
     // Data Collection Enhancement
     if (dataCollectionFields && dataCollectionFields.length > 0) {
@@ -596,7 +566,7 @@ IMPORTANT: If needsDataCollection is true, naturally integrate requests for miss
         },
         aiUsage: usageDetails,
         conversationId: conversationId,
-        // SMART: Personality and business context metadata
+        // SMART: Personality metadata
         personalityInfo: selectedPersonalityId ? {
           personalityId: selectedPersonalityId,
           personalityName: selectedPersonalityName,
@@ -605,12 +575,6 @@ IMPORTANT: If needsDataCollection is true, naturally integrate requests for miss
           personalitySystemUsed: true
         } : {
           personalitySystemUsed: false
-        },
-        businessContextInfo: {
-          detectedIndustry: detectedIndustry || null,
-          communicationStyle: communicationStyle || null,
-          culturalContext: culturalContext || null,
-          businessContextUsed: !!(businessContext || detectedIndustry || communicationStyle)
         }
       }),
       { 

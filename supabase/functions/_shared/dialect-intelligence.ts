@@ -154,7 +154,8 @@ export async function analyzeDialectIntelligently(text: string, whatsappInstance
     }
 
     const responseData = await response.json();
-    const result = JSON.parse(responseData.choices[0].message.content);
+    const content = (responseData.choices[0].message.content || '{}').replace(/^```(?:json)?\s*|\s*```$/g, '');
+    const result = JSON.parse(content);
 
     const dialectAnalysis = {
       primaryDialect: result.primaryDialect || 'عربية عامة',
@@ -241,7 +242,8 @@ export async function analyzeCommunicationStyle(text: string, dialectAnalysis: D
     }
 
     const responseData = await response.json();
-    const result = JSON.parse(responseData.choices[0].message.content);
+    const content = (responseData.choices[0].message.content || '{}').replace(/^```(?:json)?\s*|\s*```$/g, '');
+    const result = JSON.parse(content);
 
     return {
       directness: result.directness || 'direct',
@@ -303,7 +305,7 @@ export async function generateCulturallyAwareResponse(
           { role: 'system', content: culturalPrompt },
           { role: 'user', content: `اضبط: "${baseResponse}"` }
         ],
-        temperature: 0.2,
+        temperature: 0.1,
         max_tokens: 500
       }),
     });

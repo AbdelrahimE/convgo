@@ -272,14 +272,16 @@ Set humanSupportReason to: "direct_request|ai_frustration|complexity|escalation_
       throw new Error('Invalid OpenAI response structure');
     }
 
-    const content = responseData.choices[0].message.content;
-    if (!content) {
+    const rawContent = responseData.choices[0].message.content;
+    if (!rawContent) {
       logger.error('❌ Empty content from GPT-5-nano:', {
         message_object: responseData.choices[0].message,
         finish_reason: responseData.choices[0].finish_reason
       });
       throw new Error('Empty response from OpenAI');
     }
+    
+    const content = rawContent.replace(/^```(?:json)?\s*|\s*```$/g, '');
 
     logger.info('📝 GPT-5-nano Response Content:', {
       content_length: content.length,
@@ -625,9 +627,9 @@ Rules:
     }
     
     const responseData = await response.json();
-    const content = responseData.choices[0]?.message?.content;
+    const rawContent = responseData.choices[0]?.message?.content;
     
-    if (!content) {
+    if (!rawContent) {
       logger.error('Empty response from OpenAI for external actions');
       return {
         matchedAction: null,
@@ -636,6 +638,8 @@ Rules:
         reasoning: 'Empty OpenAI response'
       };
     }
+    
+    const content = rawContent.replace(/^```(?:json)?\s*|\s*```$/g, '');
     
     let result;
     try {

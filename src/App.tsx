@@ -25,6 +25,7 @@ import ExternalActions from '@/pages/ExternalActions';
 import CreateExternalAction from '@/pages/external-actions/CreateExternalAction';
 import EditExternalAction from '@/pages/external-actions/EditExternalAction';
 import OAuthCallbackWrapper from '@/components/data-collection/OAuthCallbackWrapper';
+import { CustomerProfiles } from '@/pages/CustomerProfiles';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import { initLanguageDetection } from '@/utils/languageDetector';
@@ -142,6 +143,14 @@ function AppContent() {
                     element={
                       <ProtectedRoute>
                         <DataCollection />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/customer-profiles"
+                    element={
+                      <ProtectedRoute>
+                        <CustomerProfiles />
                       </ProtectedRoute>
                     }
                   />

@@ -84,10 +84,6 @@ export async function generateAndSendAIResponse(
         selectedPersonalityName: aiConfig.selectedPersonalityName || null,
         detectedIntent: aiConfig.detectedIntent || null,
         intentConfidence: aiConfig.intentConfidence || null,
-        businessContext: aiConfig.businessContext || null,
-        detectedIndustry: aiConfig.detectedIndustry || null,
-        communicationStyle: aiConfig.communicationStyle || null,
-        culturalContext: aiConfig.culturalContext || null,
         
         // Data Collection fields
         dataCollectionFields: dataCollectionFields || null
@@ -246,7 +242,6 @@ export async function generateAndSendAIResponse(
             emotion_analysis: aiConfig.emotionAnalysis || null,
             customer_journey: aiConfig.customerJourney || null,
             product_interest: aiConfig.productInterest || null,
-            business_context: aiConfig.businessContext || null,
             // معرف المحادثة للتتبع المتقدم
             conversation_id: conversationId,
             // مؤشرات الجودة المحسنة

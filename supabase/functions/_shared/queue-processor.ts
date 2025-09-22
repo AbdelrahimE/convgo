@@ -24,6 +24,10 @@ import {
   processDataExtraction
 } from './data-collection-integration.ts';
 
+// Import customer profile management
+import { CustomerProfileManager } from './customer-profile-manager.ts';
+import { SmartCustomerProfileManager } from './smart-customer-profile-manager.ts';
+
 // Logger for debugging
 const logger = {
   log: (...args: any[]) => console.log(...args),
@@ -520,6 +524,24 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
       // Store user message
       await storeMessageInConversation(conversationId, 'user', combinedMessage, `queue_${Date.now()}`, supabaseAdmin);
 
+      // ===== SMART CUSTOMER PROFILE MANAGEMENT =====
+      const smartProfileManager = new SmartCustomerProfileManager(supabaseAdmin);
+      
+      // Get or create customer profile
+      const customerProfile = await smartProfileManager.getOrCreateProfile(instanceData.id, userPhone);
+      
+      // 🚀 SMART BATCHING: Process message with intelligent batching (every 5 messages)
+      // This replaces the old extractAndUpdateCustomerInfo + incrementMessageCounters
+      await smartProfileManager.processMessage(instanceData.id, userPhone, combinedMessage);
+      
+      logger.info('📋 Customer profile updated (queue)', {
+        userPhone,
+        customerName: customerProfile.name || 'Unknown',
+        customerStage: customerProfile.customer_stage,
+        totalMessages: customerProfile.total_messages + 1,
+        messageCount: messagesToProcess.length
+      });
+
       // Get conversation history
       const conversationHistory = await getRecentConversationHistory(conversationId, 800, supabaseAdmin);
 
@@ -607,6 +629,7 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
           },
           body: JSON.stringify({
             message: combinedMessage,
+            whatsappInstanceId: instanceData.id,
             conversationHistory: conversationHistory
           })
         });
@@ -616,8 +639,40 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
           logger.info('🧠 Intent analysis completed', {
             userPhone,
             hasIntentAnalysis: !!intentAnalysis,
-            needsHumanSupport: intentAnalysis?.needsHumanSupport || false
+            needsHumanSupport: intentAnalysis?.needsHumanSupport || false,
+            hasSelectedPersonality: !!intentAnalysis?.selectedPersonality,
+            selectedPersonalityName: intentAnalysis?.selectedPersonality?.name || 'none'
           });
+          
+          // ✅ UPDATE aiConfig with smart intent analysis results
+          if (intentAnalysis?.selectedPersonality) {
+            logger.info('🎯 Using smart personality from intent analysis', {
+              personalityId: intentAnalysis.selectedPersonality.id,
+              personalityName: intentAnalysis.selectedPersonality.name,
+              detectedIntent: intentAnalysis.intent,
+              confidence: intentAnalysis.confidence
+            });
+            
+            // Update aiConfig with personality information
+            aiConfig.selectedPersonalityId = intentAnalysis.selectedPersonality.id;
+            aiConfig.selectedPersonalityName = intentAnalysis.selectedPersonality.name;
+            aiConfig.detectedIntent = intentAnalysis.intent;
+            aiConfig.intentConfidence = intentAnalysis.confidence;
+            
+            // Update system prompt with personality system prompt if available
+            if (intentAnalysis.selectedPersonality.system_prompt) {
+              aiConfig.system_prompt = intentAnalysis.selectedPersonality.system_prompt;
+              logger.info('📝 Updated system prompt with personality prompt', {
+                personalityId: intentAnalysis.selectedPersonality.id,
+                promptLength: intentAnalysis.selectedPersonality.system_prompt.length
+              });
+            }
+            
+            // Add emotion analysis, customer journey, and product interest
+            aiConfig.emotionAnalysis = intentAnalysis.emotionAnalysis;
+            aiConfig.customerJourney = intentAnalysis.customerJourney;
+            aiConfig.productInterest = intentAnalysis.productInterest;
+          }
         }
       } catch (intentError) {
         logger.warn('⚠️ Intent analysis failed, continuing without smart escalation', {
@@ -783,6 +838,33 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
         }
       }
 
+      // ===== ENHANCE CONTEXT WITH SMART CUSTOMER PROFILE =====
+      
+      // Get enhanced customer profile context with improved conversation_summary
+      const customerProfileContext = await smartProfileManager.getEnhancedContext(instanceData.id, userPhone, combinedMessage);
+      
+      // Combine all context sources
+      if (customerProfileContext) {
+        if (context) {
+          context = `CUSTOMER PROFILE:\n${customerProfileContext}\n\n${context}`;
+        } else {
+          // If no RAG context, use conversation history + customer profile
+          const conversationContext = conversationHistory
+            .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+            .join('\n\n');
+          
+          context = conversationContext ? 
+            `CUSTOMER PROFILE:\n${customerProfileContext}\n\nCONVERSATION HISTORY:\n${conversationContext}` : 
+            `CUSTOMER PROFILE:\n${customerProfileContext}`;
+        }
+        
+        logger.debug('Enhanced context with customer profile (queue)', {
+          userPhone,
+          customerName: customerProfile.name || 'Unknown',
+          contextLength: context.length
+        });
+      }
+
       // Get data collection fields if enabled
       let dataCollectionFields: any[] = [];
       const dataCollectionEnabled = await isDataCollectionEnabled(instanceData.id, supabaseAdmin);
@@ -838,6 +920,7 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
           });
         }
       }
+
 
       // Mark messages as completed
       await markMessagesAsCompleted(messagesToProcess);

@@ -8,6 +8,7 @@ import {
   processDataExtraction
 } from './data-collection-integration.ts';
 import { measureTime } from './parallel-queries.ts';
+import { CustomerProfileManager } from './customer-profile-manager.ts';
 
 // Logger for debugging
 const logger = {
@@ -380,6 +381,25 @@ export async function processMessageDirectly(
     // Store user message
     await storeMessageInConversation(conversationId, 'user', messageText, `direct_${Date.now()}`, supabaseAdmin);
 
+    // ===== CUSTOMER PROFILE MANAGEMENT =====
+    const profileManager = new CustomerProfileManager(supabaseAdmin);
+    
+    // Get or create customer profile
+    const customerProfile = await profileManager.getOrCreateProfile(instanceData.id, userPhone);
+    
+    // Extract and update customer information from message
+    await profileManager.extractAndUpdateCustomerInfo(instanceData.id, userPhone, messageText);
+    
+    // Increment message counters
+    await profileManager.incrementMessageCounters(instanceData.id, userPhone);
+    
+    logger.info('📋 Customer profile updated', {
+      userPhone,
+      customerName: customerProfile.name || 'Unknown',
+      customerStage: customerProfile.customer_stage,
+      totalMessages: customerProfile.total_messages + 1
+    });
+
     // Get conversation history
     const conversationHistory = await getRecentConversationHistory(conversationId, 800, supabaseAdmin);
 
@@ -466,6 +486,7 @@ export async function processMessageDirectly(
         },
         body: JSON.stringify({
           message: messageText,
+          whatsappInstanceId: instanceData.id,
           conversationHistory: conversationHistory
         })
       });
@@ -475,8 +496,40 @@ export async function processMessageDirectly(
         logger.info('🧠 Intent analysis completed', {
           userPhone,
           hasIntentAnalysis: !!intentAnalysis,
-          needsHumanSupport: intentAnalysis?.needsHumanSupport || false
+          needsHumanSupport: intentAnalysis?.needsHumanSupport || false,
+          hasSelectedPersonality: !!intentAnalysis?.selectedPersonality,
+          selectedPersonalityName: intentAnalysis?.selectedPersonality?.name || 'none'
         });
+        
+        // ✅ UPDATE aiConfig with smart intent analysis results
+        if (intentAnalysis?.selectedPersonality) {
+          logger.info('🎯 Using smart personality from intent analysis', {
+            personalityId: intentAnalysis.selectedPersonality.id,
+            personalityName: intentAnalysis.selectedPersonality.name,
+            detectedIntent: intentAnalysis.intent,
+            confidence: intentAnalysis.confidence
+          });
+          
+          // Update aiConfig with personality information
+          aiConfig.selectedPersonalityId = intentAnalysis.selectedPersonality.id;
+          aiConfig.selectedPersonalityName = intentAnalysis.selectedPersonality.name;
+          aiConfig.detectedIntent = intentAnalysis.intent;
+          aiConfig.intentConfidence = intentAnalysis.confidence;
+          
+          // Update system prompt with personality system prompt if available
+          if (intentAnalysis.selectedPersonality.system_prompt) {
+            aiConfig.system_prompt = intentAnalysis.selectedPersonality.system_prompt;
+            logger.info('📝 Updated system prompt with personality prompt', {
+              personalityId: intentAnalysis.selectedPersonality.id,
+              promptLength: intentAnalysis.selectedPersonality.system_prompt.length
+            });
+          }
+          
+          // Add emotion analysis, customer journey, and product interest
+          aiConfig.emotionAnalysis = intentAnalysis.emotionAnalysis;
+          aiConfig.customerJourney = intentAnalysis.customerJourney;
+          aiConfig.productInterest = intentAnalysis.productInterest;
+        }
       }
     } catch (intentError) {
       logger.warn('⚠️ Intent analysis failed, continuing without smart escalation', {
@@ -641,6 +694,33 @@ export async function processMessageDirectly(
           error: searchError.message
         });
       }
+    }
+
+    // ===== ENHANCE CONTEXT WITH CUSTOMER PROFILE =====
+    
+    // Get customer profile context
+    const customerProfileContext = await profileManager.getEnhancedContext(instanceData.id, userPhone, messageText);
+    
+    // Combine all context sources
+    if (customerProfileContext) {
+      if (context) {
+        context = `CUSTOMER PROFILE:\n${customerProfileContext}\n\n${context}`;
+      } else {
+        // If no RAG context, use conversation history + customer profile
+        const conversationContext = conversationHistory
+          .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+          .join('\n\n');
+        
+        context = conversationContext ? 
+          `CUSTOMER PROFILE:\n${customerProfileContext}\n\nCONVERSATION HISTORY:\n${conversationContext}` : 
+          `CUSTOMER PROFILE:\n${customerProfileContext}`;
+      }
+      
+      logger.debug('Enhanced context with customer profile', {
+        userPhone,
+        customerName: customerProfile.name || 'Unknown',
+        contextLength: context.length
+      });
     }
 
     // Get data collection fields if enabled
