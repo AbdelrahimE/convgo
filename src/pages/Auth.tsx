@@ -28,10 +28,16 @@ import { PasswordInput } from '@/components/PasswordInput';
 import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
 import AuthDivider from '@/components/auth/AuthDivider';
 import TermsAndPrivacy from '@/components/auth/TermsAndPrivacy';
+import { useAuth } from '@/contexts/AuthContext';
 
-export default function Auth() {
+interface AuthProps {
+  isResetPasswordMode?: boolean;
+}
+
+export default function Auth({ isResetPasswordMode = false }: AuthProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { session, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,11 +58,39 @@ export default function Auth() {
   const [isSlowConnection, setIsSlowConnection] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('reset') === 'true') {
+    // Set reset mode if coming from reset password route or URL parameter
+    if (isResetPasswordMode) {
       setIsResetMode(true);
+      
+      // Check if there are recovery tokens in the URL hash
+      const hash = window.location.hash;
+      if (hash && hash.includes('access_token')) {
+        // This is a recovery session - mark it in localStorage
+        localStorage.setItem('pendingPasswordReset', 'true');
+        logger.info('Recovery tokens detected - user must reset password');
+      }
+    } else {
+      const params = new URLSearchParams(location.search);
+      if (params.get('reset') === 'true') {
+        setIsResetMode(true);
+      }
     }
-  }, [location]);
+  }, [location, isResetPasswordMode]);
+
+  // Validation for reset password mode - ensure user has valid session
+  useEffect(() => {
+    if (isResetPasswordMode && !authLoading && !session) {
+      logger.warn('Reset password mode accessed without valid session');
+      toast.error('Session Expired', {
+        description: 'Your password reset session has expired. Please request a new password reset link.'
+      });
+      
+      // Redirect to regular auth page
+      setTimeout(() => {
+        navigate('/auth');
+      }, 3000);
+    }
+  }, [isResetPasswordMode, session, authLoading, navigate]);
 
   // Network monitoring
   useEffect(() => {
@@ -335,10 +369,18 @@ export default function Auth() {
         description: 'You can now sign in with your new password.'
       });
       
+      // Clear the pending password reset flag
+      localStorage.removeItem('pendingPasswordReset');
+      logger.info('Password reset completed successfully');
+      
       setPassword('');
       setConfirmPassword('');
       setIsResetMode(false);
-      setActiveTab('signin');
+      
+      // Navigate to main app after successful password reset
+      setTimeout(() => {
+        navigate('/whatsapp');
+      }, 1500);
     } catch (error: any) {
       logger.error('Error updating password:', error);
       logAuthError(error, 'Password Update');
@@ -405,6 +447,18 @@ export default function Auth() {
   const { title, description } = getTabContent(activeTab);
 
   if (isResetMode) {
+    // Show loading while validating session
+    if (authLoading) {
+      return (
+        <div className="h-screen flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-500" />
+            <p className="mt-2 text-gray-600">Validating session...</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="h-screen flex items-center justify-center px-4 bg-gradient-to-br from-blue-50 to-blue-200 overflow-hidden relative">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50 via-transparent to-blue-200"></div>

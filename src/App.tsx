@@ -48,7 +48,7 @@ const queryClient = new QueryClient({
 
 function AppContent() {
   const location = useLocation();
-  const isAuthPage = location.pathname === '/auth' || location.pathname === '/auth/callback' || location.search.includes('reset=true');
+  const isAuthPage = location.pathname === '/auth' || location.pathname === '/auth/callback' || location.pathname === '/auth/reset-password' || location.search.includes('reset=true');
   const sidebarRef = useRef<SimpleSidebarHandle | null>(null);
   const isMobile = useIsMobile();
 
@@ -77,6 +77,7 @@ function AppContent() {
                 <Routes>
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route path="/auth/reset-password" element={<Auth isResetPasswordMode />} />
                   <Route
                     path="/"
                     element={

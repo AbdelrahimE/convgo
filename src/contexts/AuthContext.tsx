@@ -8,12 +8,14 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  isPendingPasswordReset: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
   loading: true,
+  isPendingPasswordReset: false,
 });
 
 interface AuthProviderProps {
@@ -24,9 +26,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPendingPasswordReset, setIsPendingPasswordReset] = useState(false);
 
   useEffect(() => {
     logger.log('AuthProvider mounted');
+    
+    // Check if user is in pending password reset state
+    const pendingReset = localStorage.getItem('pendingPasswordReset') === 'true';
+    setIsPendingPasswordReset(pendingReset);
+    
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       logger.log('Initial session:', session);
@@ -38,18 +46,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       logger.log('Auth state changed:', session);
+      
+      // Check pending password reset state on auth changes
+      const pendingReset = localStorage.getItem('pendingPasswordReset') === 'true';
+      setIsPendingPasswordReset(pendingReset);
+      
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    // Listen for localStorage changes (for pendingPasswordReset)
+    const handleStorageChange = () => {
+      const pendingReset = localStorage.getItem('pendingPasswordReset') === 'true';
+      setIsPendingPasswordReset(pendingReset);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   const value = {
     session,
     user,
-    loading
+    loading,
+    isPendingPasswordReset
   };
 
   logger.log('AuthProvider rendering with:', value);
