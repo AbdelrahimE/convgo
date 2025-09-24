@@ -7,10 +7,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { LogoWithText } from '@/components/Logo';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Signal } from 'lucide-react';
 import logger from '@/utils/logger';
+import { getSignInErrorMessage, getSignUpErrorMessage, getPasswordResetErrorMessage, logAuthError } from '@/utils/authErrors';
+import { withNetworkAwareAuth, NetworkMonitor } from '@/utils/networkHandling';
+import { 
+  validateEmail, 
+  validateLoginPassword, 
+  validateRegistrationPassword, 
+  validatePasswordConfirmation, 
+  validateFullName, 
+  validateBusinessName, 
+  validateLoginForm, 
+  validateRegistrationForm, 
+  hasValidationErrors,
+  type FormErrors 
+} from '@/utils/formValidation';
+import { suggestBusinessNameImprovements, validateBusinessNameEnhanced } from '@/utils/businessNameValidation';
 import { PasswordInput } from '@/components/PasswordInput';
+import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
+import AuthDivider from '@/components/auth/AuthDivider';
+import TermsAndPrivacy from '@/components/auth/TermsAndPrivacy';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -24,6 +41,15 @@ export default function Auth() {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [activeTab, setActiveTab] = useState('signin');
   const [isResetMode, setIsResetMode] = useState(false);
+  
+  // Validation states
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [businessNameSuggestions, setBusinessNameSuggestions] = useState<string[]>([]);
+  
+  // Network status
+  const [isOffline, setIsOffline] = useState(false);
+  const [isSlowConnection, setIsSlowConnection] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -32,58 +58,185 @@ export default function Auth() {
     }
   }, [location]);
 
+  // Network monitoring
+  useEffect(() => {
+    const networkMonitor = new NetworkMonitor();
+    
+    const cleanup = networkMonitor.onStatusChange((status) => {
+      setIsOffline(!status.isOnline);
+      setIsSlowConnection(status.isSlowConnection);
+      
+      if (status.isOnline && isOffline) {
+        // Back online notification
+        toast.success('Connection Restored', {
+          description: 'Your internet connection has been restored.'
+        });
+      } else if (!status.isOnline) {
+        // Offline notification
+        toast.error('Connection Lost', {
+          description: 'You appear to be offline. Please check your internet connection.'
+        });
+      }
+    });
+    
+    // Set initial status
+    const initialStatus = networkMonitor.getStatus();
+    setIsOffline(!initialStatus.isOnline);
+    setIsSlowConnection(initialStatus.isSlowConnection);
+    
+    return () => {
+      cleanup();
+      networkMonitor.destroy();
+    };
+  }, [isOffline]);
+
+  // Real-time validation handlers
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (touched.email) {
+      const validation = validateEmail(value);
+      setFormErrors(prev => ({
+        ...prev,
+        email: validation.isValid ? undefined : validation.error
+      }));
+    }
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (touched.password) {
+      const validation = activeTab === 'signin' 
+        ? validateLoginPassword(value) 
+        : validateRegistrationPassword(value);
+      setFormErrors(prev => ({
+        ...prev,
+        password: validation.isValid ? undefined : validation.error
+      }));
+    }
+    
+    // Also validate confirm password if it's filled
+    if (confirmPassword && touched.confirmPassword) {
+      const confirmValidation = validatePasswordConfirmation(value, confirmPassword);
+      setFormErrors(prev => ({
+        ...prev,
+        confirmPassword: confirmValidation.isValid ? undefined : confirmValidation.error
+      }));
+    }
+  };
+
+  const handleConfirmPasswordChange = (value: string) => {
+    setConfirmPassword(value);
+    if (touched.confirmPassword) {
+      const validation = validatePasswordConfirmation(password, value);
+      setFormErrors(prev => ({
+        ...prev,
+        confirmPassword: validation.isValid ? undefined : validation.error
+      }));
+    }
+  };
+
+  const handleFullNameChange = (value: string) => {
+    setFullName(value);
+    if (touched.fullName) {
+      const validation = validateFullName(value);
+      setFormErrors(prev => ({
+        ...prev,
+        fullName: validation.isValid ? undefined : validation.error
+      }));
+    }
+  };
+
+  const handleBusinessNameChange = (value: string) => {
+    setBusinessName(value);
+    if (touched.businessName) {
+      const validation = validateBusinessName(value, false); // Use quick validation for real-time
+      setFormErrors(prev => ({
+        ...prev,
+        businessName: validation.isValid ? undefined : validation.error
+      }));
+      
+      // Generate suggestions if name is valid but could be improved
+      if (validation.isValid && value.trim().length > 2) {
+        const suggestions = suggestBusinessNameImprovements(value);
+        setBusinessNameSuggestions(suggestions);
+      } else {
+        setBusinessNameSuggestions([]);
+      }
+    }
+  };
+
+  const markFieldTouched = (fieldName: string) => {
+    setTouched(prev => ({ ...prev, [fieldName]: true }));
+  };
+
+  const clearValidationErrors = () => {
+    setFormErrors({});
+    setTouched({});
+  };
+
+  // Tab change handler to clear validation
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    clearValidationErrors();
+    // Clear form fields when switching tabs
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setFullName('');
+    setBusinessName('');
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     logger.info('Starting sign up process...');
 
     try {
-      if (fullName.length < 3) {
-        throw new Error('Full name must be at least 3 characters long');
-      }
-
-      if (password !== confirmPassword) {
-        throw new Error('Passwords do not match. Please try again.');
-      }
-
-      const hasLower = /[a-z]/.test(password);
-      const hasUpper = /[A-Z]/.test(password);
-      const hasNumber = /[0-9]/.test(password);
-      const hasSpecial = /[!@#$%^&*]/.test(password);
-
-      if (password.length < 8 || !hasLower || !hasUpper || !hasNumber || !hasSpecial) {
-        throw new Error('Please ensure your password meets all the requirements');
-      }
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        throw new Error('Please enter a valid email address (example: name@domain.com)');
+      // Validate entire form
+      const errors = validateRegistrationForm(email, password, confirmPassword, fullName, businessName);
+      
+      if (hasValidationErrors(errors)) {
+        setFormErrors(errors);
+        setTouched({
+          email: true,
+          password: true,
+          confirmPassword: true,
+          fullName: true,
+          businessName: true
+        });
+        
+        const firstError = Object.values(errors)[0];
+        toast.error('Please fix the form errors', {
+          description: firstError
+        });
+        return;
       }
 
       logger.info('Attempting to sign up with email:', email);
 
-      const {
-        data,
-        error: signUpError
-      } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            business_name: businessName
+      const { data, error } = await withNetworkAwareAuth(async () => {
+        const result = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+              business_name: businessName
+            }
           }
+        });
+        
+        logger.info('Sign up response:', result);
+        
+        if (result.error) {
+          if (result.error.message.includes('User already registered')) {
+            throw new Error('This email is already registered. Please sign in instead or use a different email');
+          }
+          throw result.error;
         }
-      });
-
-      logger.info('Sign up response:', { data, error: signUpError });
-
-      if (signUpError) {
-        if (signUpError.message.includes('User already registered')) {
-          throw new Error('This email is already registered. Please sign in instead or use a different email');
-        }
-        throw signUpError;
-      }
+        
+        return result;
+      }, 'signup');
 
       if (data?.user) {
         toast.success("Success!", {
@@ -101,8 +254,11 @@ export default function Auth() {
       }
     } catch (error: any) {
       logger.error('Sign up error:', error);
-      toast.error("Error", {
-        description: error.message
+      logAuthError(error, 'Sign Up');
+      
+      const friendlyError = getSignUpErrorMessage(error);
+      toast.error(friendlyError.title, {
+        description: friendlyError.description
       });
     } finally {
       setLoading(false);
@@ -113,17 +269,36 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
-      const {
-        error: signInError
-      } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      if (signInError) throw signInError;
+      // Validate login form
+      const errors = validateLoginForm(email, password);
+      
+      if (hasValidationErrors(errors)) {
+        setFormErrors(errors);
+        setTouched({ email: true, password: true });
+        
+        const firstError = Object.values(errors)[0];
+        toast.error('Please fix the form errors', {
+          description: firstError
+        });
+        return;
+      }
+
+      const result = await withNetworkAwareAuth(async () => {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        if (error) throw error;
+        return data;
+      }, 'signin');
+      
       navigate('/whatsapp');
     } catch (error: any) {
-      toast.error("Error", {
-        description: error.message
+      logAuthError(error, 'Sign In');
+      
+      const friendlyError = getSignInErrorMessage(error);
+      toast.error(friendlyError.title, {
+        description: friendlyError.description
       });
     } finally {
       setLoading(false);
@@ -166,8 +341,11 @@ export default function Auth() {
       setActiveTab('signin');
     } catch (error: any) {
       logger.error('Error updating password:', error);
-      toast.error("Error", {
-        description: error.message
+      logAuthError(error, 'Password Update');
+      
+      const friendlyError = getPasswordResetErrorMessage(error);
+      toast.error(friendlyError.title, {
+        description: friendlyError.description
       });
     } finally {
       setLoading(false);
@@ -178,19 +356,32 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
-      const {
-        error
-      } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`
-      });
-      if (error) throw error;
+      // Validate email before sending reset
+      const emailValidation = validateEmail(email);
+      if (!emailValidation.isValid) {
+        toast.error('Invalid Email', {
+          description: emailValidation.error
+        });
+        return;
+      }
+
+      await withNetworkAwareAuth(async () => {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/reset-password`
+        });
+        if (error) throw error;
+        return {};
+      }, 'reset');
       toast.success("Success!", {
         description: "Check your email for the password reset link."
       });
       setShowResetPassword(false);
     } catch (error: any) {
-      toast.error("Error", {
-        description: error.message
+      logAuthError(error, 'Password Reset');
+      
+      const friendlyError = getPasswordResetErrorMessage(error);
+      toast.error(friendlyError.title, {
+        description: friendlyError.description
       });
     } finally {
       setLoading(false);
@@ -200,13 +391,13 @@ export default function Auth() {
   const getTabContent = (tab) => {
     if (tab === 'signin') {
       return {
-        title: "Sign in to ConvGo",
-        description: "Welcome back! Please sign in to continue"
+        title: "Welcome to ConvGo",
+        description: "Great to see you again! Sign in to continue"
       };
     } else {
       return {
         title: "Get Started with ConvGo",
-        description: "Automate WhatsApp with AI — Join ConvGo now."
+        description: "AI that Sells & Supports — Join ConvGo now"
       };
     }
   };
@@ -215,17 +406,21 @@ export default function Auth() {
 
   if (isResetMode) {
     return (
-      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <LogoWithText className="mb-4" />
-            <CardTitle className="font-bold">Set New Password</CardTitle>
+      <div className="h-screen flex items-center justify-center px-4 bg-gradient-to-br from-blue-50 to-blue-200 overflow-hidden relative">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50 via-transparent to-blue-200"></div>
+        <div className="absolute inset-0 bg-[conic-gradient(from_0deg_at_50%_50%,_var(--tw-gradient-stops))] from-transparent via-blue-50 to-transparent"></div>
+        <Card className="w-full max-w-md shadow-2xl border-1 backdrop-blur-sm bg-white relative z-10">
+          <CardHeader className="text-center pb-4">
+            <div className="flex items-center justify-center mb-2">
+              <img src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon/convgo-icon-auth-page.png" alt="ConvGo icon" className="h-14 w-auto" />
+            </div>
+            <CardTitle className="font-medium">Set New Password</CardTitle>
             <CardDescription>Enter your new password below</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handlePasswordUpdate} className="space-y-4">
               <div>
-                <Label htmlFor="new-password" className="text-left block py-[5px]">New Password</Label>
+                <Label htmlFor="new-password" className="text-left block py-1">New Password</Label>
                 <Input
                   id="new-password"
                   type="password"
@@ -236,7 +431,7 @@ export default function Auth() {
                 />
               </div>
               <div>
-                <Label htmlFor="confirm-password" className="text-left block py-[5px]">Confirm Password</Label>
+                <Label htmlFor="confirm-password" className="text-left block py-1">Confirm Password</Label>
                 <Input
                   id="confirm-password"
                   type="password"
@@ -262,18 +457,22 @@ export default function Auth() {
   }
 
   if (showResetPassword) {
-    return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <LogoWithText className="mb-4" />
-            <CardTitle className="font-bold">Reset Your Password</CardTitle>
+    return <div className="h-screen flex items-center justify-center px-4 bg-gradient-to-br from-blue-50 to-blue-200 overflow-hidden relative">
+    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50 via-transparent to-blue-200"></div>
+    <div className="absolute inset-0 bg-[conic-gradient(from_0deg_at_50%_50%,_var(--tw-gradient-stops))] from-transparent via-blue-50 to-transparent"></div>
+        <Card className="w-full max-w-md shadow-2xl border-1 backdrop-blur-sm bg-white relative z-10">
+          <CardHeader className="text-center pb-4">
+            <div className="flex items-center justify-center mb-2">
+              <img src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon/convgo-icon-auth-page.png" alt="ConvGo Logo" className="h-14 w-auto" />
+            </div>
+            <CardTitle className="font-semibold">Reset Your Password</CardTitle>
             <CardDescription>Enter your email to receive a password reset link</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <Label htmlFor="reset-email" className="text-left block py-[5px]">Email</Label>
-                <Input id="reset-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                <Label htmlFor="reset-email" className="text-left block py-1">Email</Label>
+                <Input id="reset-email" type="email" placeholder="Enter your email address" value={email} onChange={e => setEmail(e.target.value)} required />
               </div>
               <div className="flex gap-4">
                 <Button type="submit" disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700">
@@ -289,101 +488,231 @@ export default function Auth() {
       </div>;
   }
 
-  return <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white/0">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <LogoWithText className="mb-4" />
-          <CardTitle className="text-2xl font-bold text-center">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
+  return <div className="h-screen flex items-center justify-center px-4 bg-gradient-to-br from-slate-50 via-blue-50 to-blue-200 overflow-hidden relative">
+    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-100/20 via-transparent to-blue-100/20"></div>
+    <div className="absolute inset-0 bg-[conic-gradient(from_0deg_at_50%_50%,_var(--tw-gradient-stops))] from-transparent via-blue-100/10 to-transparent"></div>
+      <Card className="w-full max-w-md shadow-2xl border-1 backdrop-blur-sm bg-white relative z-10">
+        <CardHeader className="text-center pb-4">
+          <div className="flex items-center justify-center mb-3">
+            <img src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon/convgo-icon-auth-page.png" alt="ConvGo Logo" className="h-14 w-auto" />
+          </div>
+          <CardTitle className="text-xl font-semibold text-center mb-2">{title}</CardTitle>
+          <CardDescription className="text-sm text-gray-600">{description}</CardDescription>
         </CardHeader>
-        <CardContent>
-          <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
+        <CardContent className="space-y-3">
+          {/* Network Status Indicator */}
+          {(isOffline || isSlowConnection) && (
+            <div className={`mb-4 p-3 rounded-lg border flex items-center gap-2 text-sm ${
+              isOffline 
+                ? 'bg-red-50 border-red-200 text-red-800' 
+                : 'bg-yellow-50 border-yellow-200 text-yellow-800'
+            }`}>
+              {isOffline ? (
+                <>
+                  <WifiOff className="h-4 w-4" />
+                  <span>You're offline. Please check your internet connection.</span>
+                </>
+              ) : (
+                <>
+                  <Signal className="h-4 w-4" />
+                  <span>Slow connection detected. Operations may take longer.</span>
+                </>
+              )}
+            </div>
+          )}
+          
+          <Tabs value={activeTab} className="w-full" onValueChange={handleTabChange}>
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
+              <TabsTrigger value="signin">Login</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
+              <form onSubmit={handleSignIn} className="space-y-3">
                 <div>
-                  <Label htmlFor="signin-email" className="text-left block py-[5px]">Email</Label>
-                  <Input id="signin-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                  <Label htmlFor="signin-email" className="text-left block py-1">Email</Label>
+                  <Input 
+                    id="signin-email" 
+                    type="email" 
+                    placeholder="Enter your email address" 
+                    value={email} 
+                    onChange={e => handleEmailChange(e.target.value)}
+                    onBlur={() => markFieldTouched('email')}
+                    className={formErrors.email ? 'border-red-500 focus:border-red-500' : ''}
+                    required 
+                  />
+                  {formErrors.email && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>
+                  )}
                 </div>
                 <div>
-                  <Label htmlFor="signin-password" className="text-left block py-[5px]">Password</Label>
-                  <Input id="signin-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+                  <Label htmlFor="signin-password" className="text-left block py-1">Password</Label>
+                  <Input 
+                    id="signin-password" 
+                    type="password" 
+                    placeholder="Enter your password" 
+                    value={password} 
+                    onChange={e => handlePasswordChange(e.target.value)}
+                    onBlur={() => markFieldTouched('password')}
+                    className={formErrors.password ? 'border-red-500 focus:border-red-500' : ''}
+                    required 
+                  />
+                  {formErrors.password && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.password}</p>
+                  )}
                 </div>
-                <Button type="button" variant="link" onClick={() => setShowResetPassword(true)} className="px-0 justify-start w-auto h-auto text-left my-0 mx-0 py-0">
-                  Can't access your account?
-                </Button>
-                <Button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700">
-                  {loading ? 'Signing in...' : 'Sign In'}
+                <p 
+                  onClick={() => setShowResetPassword(true)} 
+                  className="text-sm font-normal text-black hover:text-blue-600 cursor-pointer transition-colors duration-200"
+                >
+                  Forgot Password?
+                </p>
+                <Button 
+                  type="submit" 
+                  disabled={loading || isOffline} 
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {isSlowConnection ? 'Signing in (slow connection)...' : 'Signing in...'}
+                    </>
+                  ) : isOffline ? (
+                    <>
+                      <WifiOff className="mr-2 h-4 w-4" />
+                      Offline
+                    </>
+                  ) : (
+                    'Sign In'
+                  )}
                 </Button>
               </form>
             </TabsContent>
 
             <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
+              <form onSubmit={handleSignUp} className="space-y-2">
                 <div>
-                  <Label htmlFor="fullName" className="text-left block py-[5px]">Full Name</Label>
+                  <Label htmlFor="fullName" className="text-left block py-1">Full Name</Label>
                   <Input 
                     id="fullName" 
                     type="text" 
-                    placeholder="John Doe" 
+                    placeholder="Enter your full name" 
                     value={fullName} 
-                    onChange={e => setFullName(e.target.value)} 
+                    onChange={e => handleFullNameChange(e.target.value)}
+                    onBlur={() => markFieldTouched('fullName')}
+                    className={formErrors.fullName ? 'border-red-500 focus:border-red-500' : ''}
                     required 
                   />
+                  {formErrors.fullName && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.fullName}</p>
+                  )}
                 </div>
                 <div>
-                  <Label htmlFor="signup-email" className="text-left block py-[5px]">Email</Label>
+                  <Label htmlFor="signup-email" className="text-left block py-1">Email</Label>
                   <Input 
                     id="signup-email" 
                     type="email" 
-                    placeholder="you@example.com" 
+                    placeholder="Enter your email address" 
                     value={email} 
-                    onChange={e => setEmail(e.target.value)} 
+                    onChange={e => handleEmailChange(e.target.value)}
+                    onBlur={() => markFieldTouched('email')}
+                    className={formErrors.email ? 'border-red-500 focus:border-red-500' : ''}
                     required 
                   />
+                  {formErrors.email && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>
+                  )}
                 </div>
                 <div>
-                  <Label htmlFor="businessName" className="text-left block py-[5px]">Business Name</Label>
+                  <Label htmlFor="businessName" className="text-left block py-1">Business Name</Label>
                   <Input 
                     id="businessName" 
                     type="text" 
-                    placeholder="Acme Inc" 
+                    placeholder="MAVERK LLC" 
                     value={businessName} 
-                    onChange={e => setBusinessName(e.target.value)} 
+                    onChange={e => handleBusinessNameChange(e.target.value)}
+                    onBlur={() => markFieldTouched('businessName')}
+                    className={formErrors.businessName ? 'border-red-500 focus:border-red-500' : ''}
                     required 
                   />
+                  {formErrors.businessName && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.businessName}</p>
+                  )}
+                  {!formErrors.businessName && businessNameSuggestions.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-slate-600 mb-2">Suggestions:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {businessNameSuggestions.map((suggestion, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => {
+                              handleBusinessNameChange(suggestion);
+                              setBusinessName(suggestion);
+                              setBusinessNameSuggestions([]);
+                            }}
+                            className="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 rounded border border-blue-200 transition-colors"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <PasswordInput
-                  id="signup-password"
-                  label="Password"
-                  value={password}
-                  onChange={setPassword}
-                  required
-                />
-                <PasswordInput
-                  id="confirm-password"
-                  label="Confirm Password"
-                  value={confirmPassword}
-                  onChange={setConfirmPassword}
-                  isConfirm
-                  originalPassword={password}
-                  required
-                />
-                <Button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700">
+                <div>
+                  <PasswordInput
+                    id="signup-password"
+                    label="Password"
+                    value={password}
+                    onChange={handlePasswordChange}
+                    onBlur={() => markFieldTouched('password')}
+                    required
+                  />
+                  {formErrors.password && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.password}</p>
+                  )}
+                </div>
+                <div>
+                  <PasswordInput
+                    id="confirm-password"
+                    label="Confirm Password"
+                    value={confirmPassword}
+                    onChange={handleConfirmPasswordChange}
+                    onBlur={() => markFieldTouched('confirmPassword')}
+                    isConfirm
+                    originalPassword={password}
+                    required
+                  />
+                  {formErrors.confirmPassword && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.confirmPassword}</p>
+                  )}
+                </div>
+                <Button 
+                  type="submit" 
+                  disabled={loading || isOffline} 
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                >
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Signing up...
+                      {isSlowConnection ? 'Signing up (slow connection)...' : 'Signing up...'}
                     </>
-                  ) : 'Sign Up'}
+                  ) : isOffline ? (
+                    <>
+                      <WifiOff className="mr-2 h-4 w-4" />
+                      Offline
+                    </>
+                  ) : (
+                    'Sign Up'
+                  )}
                 </Button>
               </form>
             </TabsContent>
           </Tabs>
+          <AuthDivider />
+          <GoogleSignInButton disabled={loading} />
+          <TermsAndPrivacy />
         </CardContent>
       </Card>
     </div>;

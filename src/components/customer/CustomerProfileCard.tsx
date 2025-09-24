@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { 
   User, 
@@ -170,6 +170,10 @@ export const CustomerProfileCard: React.FC<CustomerProfileCardProps> = ({
         <div className="flex items-start justify-between">
           <div className="flex items-center space-x-3">
             <Avatar className="h-12 w-12">
+              <AvatarImage 
+                src="/images/default-avatar.png" 
+                alt="User Avatar"
+              />
               <AvatarFallback className="bg-primary/10 text-primary font-semibold">
                 {getInitials(profile.name, profile.phone_number)}
               </AvatarFallback>
@@ -329,7 +333,7 @@ export const CustomerProfileCard: React.FC<CustomerProfileCardProps> = ({
               onClick={() => openWhatsApp(profile.phone_number)}
               className="flex-1"
             >
-              <ExternalLink className="h-4 w-4 mr-1" />
+              <ExternalLink className="h-4 w-4" />
               WhatsApp
             </Button>
             {onEdit && (

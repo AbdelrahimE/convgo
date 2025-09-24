@@ -25,7 +25,9 @@ import ExternalActions from '@/pages/ExternalActions';
 import CreateExternalAction from '@/pages/external-actions/CreateExternalAction';
 import EditExternalAction from '@/pages/external-actions/EditExternalAction';
 import OAuthCallbackWrapper from '@/components/data-collection/OAuthCallbackWrapper';
+import AuthCallback from '@/components/auth/AuthCallback';
 import { CustomerProfiles } from '@/pages/CustomerProfiles';
+import { CustomerProfileEdit } from '@/pages/CustomerProfileEdit';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
 import { initLanguageDetection } from '@/utils/languageDetector';
@@ -46,14 +48,14 @@ const queryClient = new QueryClient({
 
 function AppContent() {
   const location = useLocation();
-  const isAuthPage = location.pathname === '/auth' || location.search.includes('reset=true');
+  const isAuthPage = location.pathname === '/auth' || location.pathname === '/auth/callback' || location.search.includes('reset=true');
   const sidebarRef = useRef<SimpleSidebarHandle | null>(null);
   const isMobile = useIsMobile();
 
   return (
     <div className="h-screen flex w-full overflow-hidden">
       {!isAuthPage && <SimpleSidebar ref={sidebarRef} />}
-      <main className="flex-1 overflow-auto relative w-full">
+      <main className={`flex-1 ${isAuthPage ? 'overflow-hidden' : 'overflow-auto'} relative w-full`}>
         {!isAuthPage && isMobile && (
           <div className="sticky top-0 z-30 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
             <div className="px-4 py-3 flex items-center gap-3">
@@ -69,11 +71,12 @@ function AppContent() {
             </div>
           </div>
         )}
-        <div className="px-2 py-2 md:py-4">
+        <div className={isAuthPage ? "" : "px-2 py-2 md:py-4"}>
             <ErrorBoundary>
               <NetworkErrorBoundary>
                 <Routes>
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/auth/callback" element={<AuthCallback />} />
                   <Route
                     path="/"
                     element={
@@ -151,6 +154,14 @@ function AppContent() {
                     element={
                       <ProtectedRoute>
                         <CustomerProfiles />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/customer-profiles/edit/:instanceId/:phoneNumber"
+                    element={
+                      <ProtectedRoute>
+                        <CustomerProfileEdit />
                       </ProtectedRoute>
                     }
                   />

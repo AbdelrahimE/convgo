@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -6,51 +6,82 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
-  Users, 
+  Users,
+  Cog,
   Search, 
   Filter,
   TrendingUp,
   MessageSquare,
   Bot,
-  UserPlus
+  UserPlus,
+  Star,
+  ShoppingBag,
+  Heart,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWhatsAppInstances } from '@/hooks/use-whatsapp-instances';
 import { 
-  useCustomerProfiles, 
-  useCustomerProfilesStats 
+  useCustomerProfilesWithAdvancedSearch,
+  type AdvancedSearchFilters 
 } from '@/hooks/use-customer-profiles';
+import { useDebounce } from '@/hooks/use-debounce';
 import { CustomerProfileCard, CustomerProfile } from '@/components/customer/CustomerProfileCard';
+import { CustomerProfileRow } from '@/components/customer/CustomerProfileRow';
+import { VirtualRowContainer } from '@/components/customer/VirtualRowContainer';
 
 export const CustomerProfiles = () => {
   const { user } = useAuth();
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [initialPageLoading, setInitialPageLoading] = useState(true);
+  const pageSize = 50; // Number of profiles per page
+  
+  // Debounce search term to improve performance during typing
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   // Fetch WhatsApp instances
   const { data: instances = [], isLoading: loadingInstances } = useWhatsAppInstances(user?.id);
 
-  // Fetch customer profiles for selected instance
-  const { data: profiles = [], isLoading: loadingProfiles } = useCustomerProfiles(selectedInstance);
+  // Create filters object for server-side filtering
+  const filters: AdvancedSearchFilters = useMemo(() => ({
+    searchTerm: debouncedSearchTerm || undefined,
+    stageFilter: stageFilter === 'all' ? undefined : stageFilter,
+  }), [debouncedSearchTerm, stageFilter]);
 
-  // Fetch customer profile statistics
-  const { data: stats } = useCustomerProfilesStats(selectedInstance);
+  // Fetch customer profiles with advanced server-side search
+  const { 
+    data: profilesData,
+    isLoading: loadingProfiles 
+  } = useCustomerProfilesWithAdvancedSearch(selectedInstance, currentPage, pageSize, filters);
 
-  // Filter profiles based on search and stage
-  const filteredProfiles = profiles.filter((profile: CustomerProfile) => {
-    const matchesSearch = !searchTerm || 
-      profile.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      profile.phone_number.includes(searchTerm) ||
-      profile.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      profile.company?.toLowerCase().includes(searchTerm.toLowerCase());
+  // Extract data from combined response
+  const profiles = profilesData?.profiles || [];
+  const stats = profilesData?.stats;
+  const pagination = profilesData?.pagination;
 
-    const matchesStage = stageFilter === 'all' || profile.customer_stage === stageFilter;
+  // Reset pagination when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, stageFilter, selectedInstance]);
 
-    return matchesSearch && matchesStage;
-  });
+  // Handle initial page loading
+  React.useEffect(() => {
+    // Set initial page loading to false after a short delay
+    const timer = setTimeout(() => {
+      setInitialPageLoading(false);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const StatCard = ({ 
+  // No need for client-side filtering anymore - all filtering is done server-side
+  const filteredProfiles = profiles;
+
+  // Memoized StatCard component for performance optimization
+  const StatCard = React.memo(({ 
     title, 
     value, 
     description, 
@@ -63,252 +94,427 @@ export const CustomerProfiles = () => {
     icon: any; 
     color: string; 
   }) => (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className={`h-4 w-4 ${color}`} />
-      </CardHeader>
-      <CardContent>
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="p-4">
+        <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <h4 className="text-sm font-medium">{title}</h4>
+          <Icon className={`h-4 w-4 ${color}`} />
+        </div>
         <div className="text-2xl font-bold">{value}</div>
         <p className="text-xs text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
-  );
+      </div>
+    </div>
+  ));
+
+  // Memoized row renderer for virtual scrolling
+  const renderCustomerRow = useCallback((profile: CustomerProfile, index: number) => (
+    <CustomerProfileRow
+      key={profile.id}
+      profile={profile}
+    />
+  ), []);
+
+  // Show initial loading state
+  if (initialPageLoading) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-white dark:bg-slate-900">
+        <div className="flex flex-col items-center space-y-4">
+          {/* Modern animated loader with gradient */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-20 w-20 rounded-full border-4 border-blue-100 dark:border-blue-900"></div>
+            </div>
+            <div className="relative flex items-center justify-center">
+              <div className="h-20 w-20 animate-spin rounded-full border-4 border-transparent border-t-blue-600 dark:border-t-blue-400"></div>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Users className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+          
+          {/* Loading text with animation */}
+          <div className="loading-text-center space-y-2">
+            <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Loading Customer Profiles
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Please wait while we prepare your customer data...
+            </p>
+          </div>
+          
+          {/* Loading dots animation */}
+          <div className="flex space-x-1">
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold">Customer Profiles</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage and view detailed customer information and conversation history
-          </p>
+    <div className="w-full min-h-screen bg-white dark:bg-slate-900">
+      {/* Header Section */}
+      <div className="bg-white dark:bg-slate-900">
+        <div className="px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
+                  Customer Profiles
+                </h1>
+                <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
+                  Manage and view detailed customer information and conversation history
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Instance Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Choose WhatsApp Number</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Select value={selectedInstance} onValueChange={setSelectedInstance}>
-            <SelectTrigger className="w-full max-w-md">
-              <SelectValue placeholder="Choose WhatsApp Number" />
-            </SelectTrigger>
-            <SelectContent>
-              {instances.map((instance) => (
-                <SelectItem key={instance.id} value={instance.id}>
-                  {instance.instance_name}
-                  <Badge 
-                    variant={instance.status === 'connected' ? 'default' : 'secondary'}
-                    className="ml-2"
-                  >
-                    {instance.status}
-                  </Badge>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      {selectedInstance && (
-        <>
-          {/* Statistics */}
-          {stats && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <StatCard
-                title="Total Customers"
-                value={stats.total}
-                description="All registered customers"
-                icon={Users}
-                color="text-blue-600"
-              />
-              <StatCard
-                title="New Customers"
-                value={stats.stages.new}
-                description="Recently added customers"
-                icon={UserPlus}
-                color="text-green-600"
-              />
-              <StatCard
-                title="Total Messages"
-                value={stats.totalMessages}
-                description={`Avg ${stats.avgMessagesPerCustomer} per customer`}
-                icon={MessageSquare}
-                color="text-orange-600"
-              />
-              <StatCard
-                title="AI Interactions"
-                value={stats.totalInteractions}
-                description={`Avg ${stats.avgInteractionsPerCustomer} per customer`}
-                icon={Bot}
-                color="text-purple-600"
-              />
+      {/* Main Content */}
+      <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6">
+        {/* Instance Selection */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="p-4">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Cog className="h-5 w-5" />
+                Choose WhatsApp Number
+              </h2>
             </div>
-          )}
 
-          <Tabs defaultValue="profiles" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="profiles">Customer Profiles</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="profiles" className="space-y-4">
-              {/* Search and Filters */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Filter className="h-5 w-5" />
-                    Filters
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex gap-4 flex-wrap">
-                    <div className="flex-1 min-w-[200px]">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search by name, phone, email, or company..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="pl-9"
-                        />
-                      </div>
+            <Select value={selectedInstance} onValueChange={setSelectedInstance}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose WhatsApp Number" />
+              </SelectTrigger>
+              <SelectContent>
+                {instances.map((instance) => (
+                  <SelectItem key={instance.id} value={instance.id}>
+                    <div className="flex items-center justify-between w-full gap-x-2">
+                      <span>{instance.instance_name}</span>
+                      <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
+                        Connected
+                      </span>
                     </div>
-                    <Select value={stageFilter} onValueChange={setStageFilter}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Filter by stage" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Stages</SelectItem>
-                        <SelectItem value="new">New</SelectItem>
-                        <SelectItem value="interested">Interested</SelectItem>
-                        <SelectItem value="customer">Customer</SelectItem>
-                        <SelectItem value="loyal">Loyal</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>Showing {filteredProfiles.length} of {profiles.length} customers</span>
-                  </div>
-                </CardContent>
-              </Card>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
-              {/* Customer Profiles Grid */}
-              {loadingProfiles ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="mt-2 text-muted-foreground">Loading customer profiles...</p>
-                </div>
-              ) : filteredProfiles.length === 0 ? (
-                <Card>
-                  <CardContent className="text-center py-8">
-                    <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold mb-2">No Customer Profiles Found</h3>
-                    <p className="text-muted-foreground">
-                      {searchTerm || stageFilter !== 'all' 
-                        ? 'Try adjusting your search or filters'
-                        : 'Customer profiles will appear here as customers interact with your WhatsApp AI'
-                      }
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredProfiles.map((profile: CustomerProfile) => (
-                    <CustomerProfileCard
-                      key={profile.id}
-                      profile={profile}
-                      onEdit={() => {
-                        // TODO: Implement edit functionality
-                        console.log('Edit profile:', profile.id);
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </TabsContent>
+        {selectedInstance && (
+          <>
+            {/* Statistics */}
+            {stats && (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                  title="Total Customers"
+                  value={stats.total}
+                  description="All registered customers"
+                  icon={Users}
+                  color="text-blue-600"
+                />
+                <StatCard
+                  title="New Customers"
+                  value={stats.stages.new}
+                  description="Recently added customers"
+                  icon={UserPlus}
+                  color="text-green-600"
+                />
+                <StatCard
+                  title="Total Messages"
+                  value={stats.totalMessages}
+                  description={`Avg ${stats.avgMessagesPerCustomer} per customer`}
+                  icon={MessageSquare}
+                  color="text-orange-600"
+                />
+                <StatCard
+                  title="AI Interactions"
+                  value={stats.totalInteractions}
+                  description={`Avg ${stats.avgInteractionsPerCustomer} per customer`}
+                  icon={Bot}
+                  color="text-purple-600"
+                />
+              </div>
+            )}
 
-            <TabsContent value="analytics" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5" />
-                    Customer Analytics
-                  </CardTitle>
-                  <CardDescription>
-                    Insights about your customer base and engagement
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {stats ? (
-                    <div className="space-y-6">
-                      {/* Stage Distribution */}
-                      <div>
-                        <h4 className="text-sm font-medium mb-3">Customer Stage Distribution</h4>
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                          <div className="bg-blue-50 p-3 rounded-lg">
-                            <div className="text-2xl font-bold text-blue-600">{stats.stages.new}</div>
-                            <div className="text-sm text-blue-600">New</div>
-                          </div>
-                          <div className="bg-yellow-50 p-3 rounded-lg">
-                            <div className="text-2xl font-bold text-yellow-600">{stats.stages.interested}</div>
-                            <div className="text-sm text-yellow-600">Interested</div>
-                          </div>
-                          <div className="bg-green-50 p-3 rounded-lg">
-                            <div className="text-2xl font-bold text-green-600">{stats.stages.customer}</div>
-                            <div className="text-sm text-green-600">Customer</div>
-                          </div>
-                          <div className="bg-purple-50 p-3 rounded-lg">
-                            <div className="text-2xl font-bold text-purple-600">{stats.stages.loyal}</div>
-                            <div className="text-sm text-purple-600">Loyal</div>
+            <Tabs defaultValue="profiles" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="profiles">Customer Profiles</TabsTrigger>
+                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="profiles" className="space-y-4">
+                {/* Search and Filters */}
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <div className="p-4">
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <Filter className="h-5 w-5" />
+                        Filters
+                      </h3>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex gap-4 flex-wrap">
+                        <div className="flex-1 min-w-[200px]">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              placeholder="Search by name, phone, email, or company..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="pl-9"
+                            />
                           </div>
                         </div>
+                        <Select value={stageFilter} onValueChange={setStageFilter}>
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="All Stages" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Stages</SelectItem>
+                            <SelectItem value="new">New</SelectItem>
+                            <SelectItem value="interested">Interested</SelectItem>
+                            <SelectItem value="customer">Customer</SelectItem>
+                            <SelectItem value="loyal">Loyal</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-
-                      {/* Engagement Metrics */}
-                      <div>
-                        <h4 className="text-sm font-medium mb-3">Engagement Metrics</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="bg-orange-50 p-4 rounded-lg">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="text-2xl font-bold text-orange-600">
-                                  {stats.avgMessagesPerCustomer}
-                                </div>
-                                <div className="text-sm text-orange-600">Avg Messages per Customer</div>
-                              </div>
-                              <MessageSquare className="h-8 w-8 text-orange-600" />
-                            </div>
-                          </div>
-                          <div className="bg-purple-50 p-4 rounded-lg">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="text-2xl font-bold text-purple-600">
-                                  {stats.avgInteractionsPerCustomer}
-                                </div>
-                                <div className="text-sm text-purple-600">Avg AI Interactions per Customer</div>
-                              </div>
-                              <Bot className="h-8 w-8 text-purple-600" />
-                            </div>
-                          </div>
-                        </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>
+                          {pagination ? (
+                            filters.searchTerm || filters.stageFilter ? (
+                              `Showing ${((currentPage - 1) * pageSize) + 1}-${Math.min(currentPage * pageSize, pagination.filtered)} of ${pagination.filtered} filtered customers (${pagination.total} total)`
+                            ) : (
+                              `Showing ${((currentPage - 1) * pageSize) + 1}-${Math.min(currentPage * pageSize, pagination.total)} of ${pagination.total} customers`
+                            )
+                          ) : (
+                            `Showing ${filteredProfiles.length} customers`
+                          )}
+                        </span>
                       </div>
                     </div>
-                  ) : (
+                  </div>
+                </div>
+
+                {/* Customer Profiles List */}
+                {loadingProfiles ? (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <div className="text-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                      <p className="mt-2 text-muted-foreground">Loading analytics...</p>
+                      <p className="mt-2 text-muted-foreground">Loading customer profiles...</p>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </div>
+                ) : filteredProfiles.length === 0 ? (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="text-center py-8">
+                      <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-semibold mb-2">No Customer Profiles Found</h3>
+                      <p className="text-muted-foreground">
+                        {searchTerm || stageFilter !== 'all' 
+                          ? 'Try adjusting your search or filters'
+                          : 'Customer profiles will appear here as customers interact with your WhatsApp AI'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                    {/* Use Virtual Row Container for better performance */}
+                    <div style={{ height: '600px' }}> {/* Fixed height for virtual scrolling */}
+                      <VirtualRowContainer
+                        profiles={filteredProfiles}
+                        renderRow={renderCustomerRow}
+                        itemsPerPage={12}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Pagination Controls */}
+                {pagination && pagination.totalPages > 1 && (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="px-4 py-3 flex items-center justify-between">
+                      <div className="text-sm text-slate-600 dark:text-slate-400">
+                        {filters.searchTerm || filters.stageFilter ? (
+                          <>
+                            Showing {((currentPage - 1) * pageSize) + 1} to{' '}
+                            {Math.min(currentPage * pageSize, pagination.filtered)} of{' '}
+                            {pagination.filtered} filtered customers ({pagination.total} total)
+                          </>
+                        ) : (
+                          <>
+                            Showing {((currentPage - 1) * pageSize) + 1} to{' '}
+                            {Math.min(currentPage * pageSize, pagination.total)} of{' '}
+                            {pagination.total} customers
+                          </>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(currentPage - 1)}
+                          disabled={currentPage === 1}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          Previous
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => {
+                            let pageNum;
+                            if (pagination.totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (currentPage >= pagination.totalPages - 2) {
+                              pageNum = pagination.totalPages - 4 + i;
+                            } else {
+                              pageNum = currentPage - 2 + i;
+                            }
+                            
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={currentPage === pageNum ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setCurrentPage(pageNum)}
+                                className="w-8 h-8 p-0"
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(currentPage + 1)}
+                          disabled={currentPage === pagination.totalPages}
+                        >
+                          Next
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
             </TabsContent>
-          </Tabs>
-        </>
-      )}
+
+              <TabsContent value="analytics" className="space-y-4">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <div className="p-4">
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5" />
+                        Customer Analytics
+                      </h3>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                        Insights about your customer base and engagement
+                      </p>
+                    </div>
+                    {stats ? (
+                      <div className="space-y-6">
+                        {/* Stage Distribution */}
+                        <div>
+                          <h4 className="text-sm font-medium mb-3">Customer Stage Distribution</h4>
+                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            {/* New Customers */}
+                            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                              <div className="p-4">
+                                <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                  <h4 className="text-sm font-medium">New</h4>
+                                  <UserPlus className="h-4 w-4 text-blue-600" />
+                                </div>
+                                <div className="text-2xl font-bold text-blue-600">{stats.stages.new}</div>
+                                <p className="text-xs text-muted-foreground">New customers</p>
+                              </div>
+                            </div>
+                            
+                            {/* Interested Customers */}
+                            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                              <div className="p-4">
+                                <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                  <h4 className="text-sm font-medium">Interested</h4>
+                                  <Star className="h-4 w-4 text-orange-600" />
+                                </div>
+                                <div className="text-2xl font-bold text-orange-600">{stats.stages.interested}</div>
+                                <p className="text-xs text-muted-foreground">Interested prospects</p>
+                              </div>
+                            </div>
+                            
+                            {/* Customers */}
+                            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                              <div className="p-4">
+                                <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                  <h4 className="text-sm font-medium">Customer</h4>
+                                  <ShoppingBag className="h-4 w-4 text-green-600" />
+                                </div>
+                                <div className="text-2xl font-bold text-green-600">{stats.stages.customer}</div>
+                                <p className="text-xs text-muted-foreground">Active customers</p>
+                              </div>
+                            </div>
+                            
+                            {/* Loyal Customers */}
+                            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                              <div className="p-4">
+                                <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                  <h4 className="text-sm font-medium">Loyal</h4>
+                                  <Heart className="h-4 w-4 text-purple-600" />
+                                </div>
+                                <div className="text-2xl font-bold text-purple-600">{stats.stages.loyal}</div>
+                                <p className="text-xs text-muted-foreground">Loyal customers</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Engagement Metrics */}
+                        <div>
+                          <h4 className="text-sm font-medium mb-3">Engagement Metrics</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Average Messages */}
+                            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                              <div className="p-4">
+                                <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                  <h4 className="text-sm font-medium">Avg Messages</h4>
+                                  <MessageSquare className="h-4 w-4 text-orange-600" />
+                                </div>
+                                <div className="text-2xl font-bold text-orange-600">{stats.avgMessagesPerCustomer}</div>
+                                <p className="text-xs text-muted-foreground">Per customer</p>
+                              </div>
+                            </div>
+                            
+                            {/* Average AI Interactions */}
+                            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                              <div className="p-4">
+                                <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                  <h4 className="text-sm font-medium">Avg AI Interactions</h4>
+                                  <Bot className="h-4 w-4 text-purple-600" />
+                                </div>
+                                <div className="text-2xl font-bold text-purple-600">{stats.avgInteractionsPerCustomer}</div>
+                                <p className="text-xs text-muted-foreground">Per customer</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                        <p className="mt-2 text-muted-foreground">Loading analytics...</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
+      </div>
     </div>
   );
 };

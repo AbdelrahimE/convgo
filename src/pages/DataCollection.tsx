@@ -32,6 +32,7 @@ const DataCollection = () => {
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
   const [activeTab, setActiveTab] = useState("setup");
+  const [initialPageLoading, setInitialPageLoading] = useState(true);
 
   // Fetch Google Sheets configuration
   const { data: sheetsConfig, isLoading: configLoading } = useQuery({
@@ -59,6 +60,15 @@ const DataCollection = () => {
   useEffect(() => {
     setIsConnected(!!sheetsConfig?.google_email);
   }, [sheetsConfig]);
+
+  // Handle initial page loading
+  useEffect(() => {
+    // Set initial page loading to false after a short delay
+    const timer = setTimeout(() => {
+      setInitialPageLoading(false);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Toggle data collection for WhatsApp instance
   const toggleDataCollection = useMutation({
@@ -255,6 +265,45 @@ const DataCollection = () => {
     console.log('🚀 DISCONNECT: User confirmed - starting disconnect mutation');
     disconnectMutation.mutate();
   };
+
+  // Show initial loading state
+  if (initialPageLoading) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-white dark:bg-slate-900">
+        <div className="flex flex-col items-center space-y-4">
+          {/* Modern animated loader with gradient */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-20 w-20 rounded-full border-4 border-blue-100 dark:border-blue-900"></div>
+            </div>
+            <div className="relative flex items-center justify-center">
+              <div className="h-20 w-20 animate-spin rounded-full border-4 border-transparent border-t-blue-600 dark:border-t-blue-400"></div>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Database className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+          
+          {/* Loading text with animation */}
+          <div className="loading-text-center space-y-2">
+            <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Loading Data Collection
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Please wait while we prepare your data collection settings...
+            </p>
+          </div>
+          
+          {/* Loading dots animation */}
+          <div className="flex space-x-1">
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="h-2 w-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-h-screen bg-white dark:bg-slate-900">

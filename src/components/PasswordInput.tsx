@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, Check, X } from 'lucide-react';
+import { Eye, EyeOff, Check, X, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ interface PasswordInputProps {
   isConfirm?: boolean;
   originalPassword?: string;
   required?: boolean;
+  onBlur?: () => void;
 }
 
 export const PasswordInput: React.FC<PasswordInputProps> = ({
@@ -37,9 +38,12 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
   isConfirm = false,
   originalPassword = '',
   required = false,
+  onBlur,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [strength, setStrength] = useState(0);
+  const [isFocused, setIsFocused] = useState(false);
+  const [hasInteracted, setHasInteracted] = useState(false);
 
   const generateStrongPassword = () => {
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
@@ -83,64 +87,88 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
   };
 
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id} className="text-left block py-[5px]">{label}</Label>
+    <div>
+      <Label htmlFor={id} className="text-left block py-1">{label}</Label>
       <div className="relative">
         <Input
           id={id}
           type={showPassword ? 'text' : 'password'}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setHasInteracted(true);
+          }}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => {
+            setIsFocused(false);
+            onBlur?.();
+          }}
           required={required}
-          className="pr-20"
+          className="pr-20 text-sm"
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8"
-          onClick={togglePasswordVisibility}
-        >
-          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </Button>
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          {!isConfirm && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={generateStrongPassword}
+              title="Generate Strong Password"
+            >
+              <Sparkles className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={togglePasswordVisibility}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
 
-      {!isConfirm && (
+      {!isConfirm && (isFocused || (hasInteracted && value)) && (
         <>
-          <div className="space-y-2">
-            <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+          {value && (
+            <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden mt-2">
               <div
                 className={cn("h-full transition-all", getStrengthColor())}
                 style={{ width: `${strength}%` }}
               />
             </div>
-            <div className="space-y-1">
-              {passwordRequirements.map((req, index) => (
-                <div key={index} className="flex items-center gap-2 text-sm">
-                  {req.regex.test(value) ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <X className="h-4 w-4 text-red-500" />
-                  )}
-                  <span>{req.text}</span>
-                </div>
-              ))}
+          )}
+          {(isFocused || (hasInteracted && value && strength < 100)) && (
+            <div className="space-y-1 text-xs mt-2">
+              {passwordRequirements.map((req, index) => {
+                const isValid = req.regex.test(value);
+                if (isValid && !isFocused) return null;
+                return (
+                  <div key={index} className={cn(
+                    "flex items-center gap-2 transition-all",
+                    isValid ? "opacity-50" : "opacity-100"
+                  )}>
+                    {isValid ? (
+                      <Check className="h-3 w-3 text-green-500" />
+                    ) : (
+                      <X className="h-3 w-3 text-red-500" />
+                    )}
+                    <span className={cn(
+                      isValid ? "text-gray-500 line-through" : "text-gray-700"
+                    )}>{req.text}</span>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={generateStrongPassword}
-            className="w-full mt-2"
-          >
-            Generate Strong Password
-          </Button>
+          )}
         </>
       )}
 
       {isConfirm && (
-        <div className="flex items-center gap-2 text-sm mt-1">
+        <div className="flex items-center gap-2 text-sm mt-2">
           {value && (
             <>
               {value === originalPassword ? (

@@ -591,7 +591,7 @@ export function FileList({ searchTerm = '' }: FileListProps) {
                 Status
               </TableHead>
               <TableHead className="text-left font-medium text-slate-700 dark:text-slate-300">
-                WhatsApp Instance
+                WhatsApp Number
               </TableHead>
               <TableHead className="text-left font-medium text-slate-700 dark:text-slate-300">
                 Upload date
