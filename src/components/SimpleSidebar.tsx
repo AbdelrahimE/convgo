@@ -62,10 +62,6 @@ const navigation = [{
   href: '/customer-profiles',
   icon: UserCheck
 }, {
-  name: 'External Actions',
-  href: '/external-actions',
-  icon: Zap
-}, {
   name: 'Smart Escalation',
   href: '/escalation-management',
   icon: Headset,
