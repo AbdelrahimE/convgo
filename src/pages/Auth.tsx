@@ -365,22 +365,31 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
       
       if (error) throw error;
       
-      toast.success('Password updated successfully', {
-        description: 'You can now sign in with your new password.'
+      toast.success('Password updated successfully!', {
+        description: 'Redirecting to sign in page...'
       });
       
-      // Clear the pending password reset flag
-      localStorage.removeItem('pendingPasswordReset');
-      logger.info('Password reset completed successfully');
+      logger.info('Password reset completed successfully - signing out user for security');
       
+      // Clean sign out - this is the secure and standard approach
+      await supabase.auth.signOut();
+      
+      // Clear all localStorage to ensure clean state
+      localStorage.removeItem('pendingPasswordReset');
+      
+      // Clear form fields
       setPassword('');
       setConfirmPassword('');
       setIsResetMode(false);
       
-      // Navigate to main app after successful password reset
-      setTimeout(() => {
-        navigate('/whatsapp');
-      }, 1500);
+      // Show brief informational message
+      toast.info('Redirected to Sign In', {
+        description: 'Please sign in with your new password.',
+        duration: 3000
+      });
+      
+      // Navigate to auth page for fresh sign in - no delay needed
+      navigate('/auth', { replace: true });
     } catch (error: any) {
       logger.error('Error updating password:', error);
       logAuthError(error, 'Password Update');
@@ -468,8 +477,8 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
             <div className="flex items-center justify-center mb-2">
               <img src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon/convgo-icon-auth-page.png" alt="ConvGo icon" className="h-14 w-auto" />
             </div>
-            <CardTitle className="font-medium">Set New Password</CardTitle>
-            <CardDescription>Enter your new password below</CardDescription>
+            <CardTitle className="font-semibold">Set New Password</CardTitle>
+            <CardDescription className="text-sm">Enter your new password below</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handlePasswordUpdate} className="space-y-4">
