@@ -548,8 +548,8 @@ EXTRACTION RULES:
         context += `\nConversation History Summary:\n${profile.conversation_summary}\n`;
       }
       
-      // Add action items if available (prioritize new action_items field over metadata)
-      const actionItems = profile.action_items || profile.metadata?.action_items || [];
+      // Add action items if available (use dedicated action_items field)
+      const actionItems = profile.action_items || [];
       if (actionItems.length > 0) {
         context += `\nPending Action Items:\n`;
         actionItems.slice(-5).forEach((item: any, index: number) => {

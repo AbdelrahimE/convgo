@@ -760,12 +760,16 @@ export async function processMessageDirectly(
     // Process data extraction if enabled
     if (dataCollectionEnabled && dataCollectionFields.length > 0) {
       try {
+        // Get conversation summary from customer profile for enhanced data extraction
+        const conversationSummary = customerProfile.conversation_summary || '';
+        
         await processDataExtraction(
           instanceData.id,
           conversationId,
           userPhone,
           messageText,
           conversationHistory,
+          conversationSummary, // Add conversation summary for context
           supabaseUrl,
           supabaseServiceKey
         );

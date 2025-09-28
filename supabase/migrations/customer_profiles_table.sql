@@ -125,6 +125,34 @@ create index IF not exists idx_customer_profiles_last_summary_update on public.c
 
 create index IF not exists idx_customer_profiles_messages_since_summary on public.customer_profiles using btree (messages_since_last_summary) TABLESPACE pg_default;
 
+create index IF not exists idx_customer_profiles_search_name on public.customer_profiles using gin (
+  to_tsvector('english'::regconfig, COALESCE(name, ''::text))
+) TABLESPACE pg_default;
+
+create index IF not exists idx_customer_profiles_search_company on public.customer_profiles using gin (
+  to_tsvector('english'::regconfig, COALESCE(company, ''::text))
+) TABLESPACE pg_default;
+
+create index IF not exists idx_customer_profiles_search_summary on public.customer_profiles using gin (
+  to_tsvector(
+    'english'::regconfig,
+    COALESCE(conversation_summary, ''::text)
+  )
+) TABLESPACE pg_default;
+
+create index IF not exists idx_customer_profiles_filters on public.customer_profiles using btree (
+  whatsapp_instance_id,
+  customer_stage,
+  customer_intent,
+  customer_mood,
+  urgency_level,
+  last_interaction desc
+) TABLESPACE pg_default;
+
+create index IF not exists idx_customer_profiles_phone_search on public.customer_profiles using gin (phone_number gin_trgm_ops) TABLESPACE pg_default;
+
+create index IF not exists idx_customer_profiles_email_search on public.customer_profiles using gin (COALESCE(email, ''::text) gin_trgm_ops) TABLESPACE pg_default;
+
 create trigger handle_customer_profiles_updated_at BEFORE
 update on customer_profiles for EACH row
 execute FUNCTION handle_customer_profiles_updated_at ();

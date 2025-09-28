@@ -35,7 +35,7 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  console.log('🚀 DATA-EXTRACTOR: Function called');
+  console.log('🚀 DATA-EXTRACTOR: Function called with enhanced conversation summary support');
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
@@ -64,7 +64,8 @@ serve(async (req: Request) => {
       conversation_id,
       phone_number,
       message_text,
-      conversation_history = []
+      conversation_history = [],
+      conversation_summary = ''
     } = requestBody;
 
     console.log('📊 DATA-EXTRACTOR: Request data received', {
@@ -73,6 +74,8 @@ serve(async (req: Request) => {
       phone_number,
       message_text: message_text?.substring(0, 100),
       conversation_history_length: conversation_history?.length,
+      conversation_summary_length: conversation_summary?.length,
+      conversation_summary_preview: conversation_summary?.substring(0, 100),
       fullRequestBody: requestBody
     });
 
@@ -226,22 +229,29 @@ serve(async (req: Request) => {
     }).join('\n');
 
     const systemPrompt = `You are a data extraction assistant for a WhatsApp business conversation.
-Extract the following fields from the customer's message and conversation history.
+Extract the following fields from the customer's CURRENT message, RECENT messages, AND PREVIOUS conversation context.
 Return ONLY a valid JSON object with the extracted data.
 
 Fields to extract:
 ${fieldsDescription}
 
+IMPORTANT CONTEXT SOURCES:
+1. Current message: The most recent message from the customer
+2. Recent messages: The last 10 messages from this customer
+3. Conversation summary: A comprehensive summary of all previous interactions with this customer
+4. Previously collected data: Data already extracted from past conversations
+
 EXTRACTION RULES:
-1. Extract only the fields mentioned above
+1. Extract from ALL available sources (current message + recent messages + conversation summary)
 2. Use the exact field display name (Arabic name if available, otherwise English) as the key in the JSON response
-3. If a field cannot be extracted from the message, omit it from the response
+3. If a field cannot be extracted from any source, omit it from the response
 4. For phone numbers, extract and format them properly (remove spaces, dashes, parentheses)
 5. For emails, validate the format
 6. For dates, use ISO format (YYYY-MM-DD)
 7. For boolean fields, use true/false
-8. Consider the conversation history for context
-9. If the customer provides multiple values for a field, use the most recent one
+8. If the customer provides multiple values for a field, use the most recent one
+9. UPDATE existing data if you find newer or more accurate information in any source
+10. The conversation summary contains valuable historical context - use it to extract missing fields
 
 LANGUAGE SUPPORT:
 - Support Arabic names and text (عبدالرحيم, محمد, فاطمة, etc.)
@@ -250,9 +260,13 @@ LANGUAGE SUPPORT:
 - Look for names after common Arabic patterns like "اسمي" or "انا" or when directly asked for name
 
 DETECTION PATTERNS:
-- Names: Look for Arabic or English names in responses to name requests
+- Names: Look for Arabic or English names in responses to name requests OR mentioned in conversation summary
 - Phone: Look for sequences of 10-11 digits, with or without country code
 - Direct responses: When user directly answers a question about a specific field
+- Historical data: Information mentioned in the conversation summary from previous interactions
+
+Previous conversation summary (contains historical context):
+${conversation_summary || 'No previous conversation summary available'}
 
 Current collected data:
 ${JSON.stringify(session.collected_data)}
@@ -261,23 +275,31 @@ EXAMPLES:
 - Message: "عبدالرحيم" → {"الاسم": "عبدالرحيم"}  
 - Message: "01012345678" → {"رقم الهاتف": "01012345678"}
 - Message: "اسمي محمد ورقمي 01123456789" → {"الاسم": "محمد", "رقم الهاتف": "01123456789"}
+- From summary: "Customer Ahmed mentioned he works at Microsoft" → {"الاسم": "Ahmed", "الشركة": "Microsoft"}
 
-Return only the JSON object with newly extracted or updated fields.`;
+Return only the JSON object with newly extracted or updated fields based on ALL available information.`;
 
     const userPrompt = `Current message: "${message_text}"
 
-Conversation history:
-${conversation_history.map((msg: any) => `${msg.from}: ${msg.message}`).join('\n')}`;
+Recent conversation history (last 10 customer messages):
+${conversation_history.map((msg: any) => `${msg.from}: ${msg.message}`).join('\n')}
+
+Previous conversation summary (historical context):
+${conversation_summary || 'No previous conversation summary available'}
+
+Please extract or update data fields based on ALL the above information (current message + recent messages + conversation summary).`;
 
     console.log('🤖 DATA-EXTRACTOR: Prepared prompts for OpenAI', {
       systemPromptLength: systemPrompt.length,
       userPromptLength: userPrompt.length,
       messageText: message_text,
       conversationHistoryLength: conversation_history?.length,
+      conversationSummaryLength: conversation_summary?.length,
       fieldsToExtract: fields?.map(f => f.field_name),
       sessionData: session.collected_data,
       systemPromptPreview: systemPrompt.substring(0, 200) + '...',
-      userPromptPreview: userPrompt.substring(0, 200) + '...'
+      userPromptPreview: userPrompt.substring(0, 200) + '...',
+      conversationSummaryPreview: conversation_summary?.substring(0, 150) + '...'
     });
 
     // Call OpenAI to extract data
@@ -289,14 +311,14 @@ ${conversation_history.map((msg: any) => `${msg.from}: ${msg.message}`).join('\n
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-mini',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.1,
-        max_tokens: 500
+        temperature: 0.2,
+        max_tokens: 5000
       }),
     });
 

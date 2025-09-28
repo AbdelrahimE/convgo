@@ -223,13 +223,78 @@ function findBestMatch(errorMessage: string): string | null {
 }
 
 /**
+ * Checks if an error is an authentication-related error
+ */
+function isAuthenticationError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+
+  const errorMessage = (error as { message?: string }).message?.toLowerCase() || '';
+
+  // List of known authentication error patterns
+  const authErrorPatterns = [
+    'invalid login credentials',
+    'invalid credentials',
+    'email not confirmed',
+    'user already registered',
+    'user not found',
+    'unable to validate email address',
+    'unauthorized',
+    'forbidden',
+    'access denied',
+    'too many requests'
+  ];
+
+  // Check status codes for authentication errors
+  const errorObj = error as { status?: number; statusCode?: number };
+  if (errorObj.status || errorObj.statusCode) {
+    const status = errorObj.status || errorObj.statusCode;
+    if (status === 401 || status === 403) {
+      return true;
+    }
+    // 400 can be authentication error if it matches auth patterns
+    if (status === 400 && authErrorPatterns.some(pattern => errorMessage.includes(pattern))) {
+      return true;
+    }
+    // 429 is rate limiting, which is auth-related
+    if (status === 429) {
+      return true;
+    }
+  }
+
+  return authErrorPatterns.some(pattern => errorMessage.includes(pattern));
+}
+
+/**
  * Converts a Supabase Auth error to a user-friendly message
  */
 export function getAuthErrorMessage(
   error: AuthError | Error | string,
   language: ErrorLanguage = 'en'
 ): FriendlyErrorMessage {
-  // Handle network errors first
+  // Handle authentication errors first, even if wrapped as network errors
+  if (error && typeof error === 'object') {
+    // If it's a NetworkError but contains an authentication error
+    if (isNetworkError(error) && isAuthenticationError(error)) {
+      // Ignore the NetworkError wrapper and treat as authentication error
+      const errorMessage = extractErrorMessage(error as AuthError);
+      const matchedKey = findBestMatch(errorMessage);
+
+      if (matchedKey && ERROR_MESSAGE_MAP[matchedKey]) {
+        return ERROR_MESSAGE_MAP[matchedKey][language];
+      }
+    }
+    // If it's a regular authentication error (not wrapped)
+    else if (isAuthenticationError(error)) {
+      const errorMessage = extractErrorMessage(error as AuthError);
+      const matchedKey = findBestMatch(errorMessage);
+
+      if (matchedKey && ERROR_MESSAGE_MAP[matchedKey]) {
+        return ERROR_MESSAGE_MAP[matchedKey][language];
+      }
+    }
+  }
+
+  // Handle genuine network errors
   if (error && typeof error === 'object' && isNetworkError(error)) {
     const networkErrorMsg = getNetworkErrorMessage(error as NetworkError);
     return {
@@ -238,9 +303,9 @@ export function getAuthErrorMessage(
       action: networkErrorMsg.action
     };
   }
-  
+
   let errorMessage: string;
-  
+
   // Handle different error types
   if (typeof error === 'string') {
     errorMessage = error;
@@ -249,14 +314,14 @@ export function getAuthErrorMessage(
   } else {
     return FALLBACK_MESSAGES[language];
   }
-  
+
   // Find the best matching error message
   const matchedKey = findBestMatch(errorMessage);
-  
+
   if (matchedKey && ERROR_MESSAGE_MAP[matchedKey]) {
     return ERROR_MESSAGE_MAP[matchedKey][language];
   }
-  
+
   // Return fallback message
   return FALLBACK_MESSAGES[language];
 }
@@ -285,17 +350,22 @@ export function getPasswordResetErrorMessage(error: AuthError | Error | string):
 /**
  * Type guard to check if an error is a Supabase Auth error
  */
-export function isAuthError(error: any): error is AuthError {
-  return error && typeof error === 'object' && 'message' in error;
+export function isAuthError(error: unknown): error is AuthError {
+  return error !== null && typeof error === 'object' && 'message' in error;
 }
 
 /**
  * Logs auth errors with additional context for debugging
  */
 export function logAuthError(error: AuthError | Error | string, context: string = '') {
-  const errorMessage = typeof error === 'string' ? error : (error as any)?.message || 'Unknown error';
-  const errorCode = typeof error === 'object' && 'code' in error ? (error as any).code : undefined;
-  const errorStatus = typeof error === 'object' && 'status' in error ? (error as any).status : undefined;
+  const errorMessage = typeof error === 'string' ? error :
+    (typeof error === 'object' && error !== null && 'message' in error ? error.message : 'Unknown error');
+
+  const errorCode = typeof error === 'object' && error !== null && 'code' in error ?
+    (error as { code: unknown }).code : undefined;
+
+  const errorStatus = typeof error === 'object' && error !== null && 'status' in error ?
+    (error as { status: unknown }).status : undefined;
   
   console.error(`[Auth Error] ${context}`, {
     message: errorMessage,

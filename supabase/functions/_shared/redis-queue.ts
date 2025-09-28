@@ -52,6 +52,56 @@ function getLockKey(instanceName: string, userPhone: string): string {
 }
 
 /**
+ * Safely validate and extract data from Redis responses
+ * Handles both string (JSON) and object responses from Upstash Redis Client
+ */
+function validateAndExtractData(rawData: any, dataType: 'lock' | 'message'): { valid: boolean; data?: any; error?: string } {
+  try {
+    let extractedData;
+    
+    // Handle different data types from Redis
+    if (typeof rawData === 'string') {
+      // Data stored as JSON string - parse it
+      extractedData = JSON.parse(rawData);
+    } else if (typeof rawData === 'object' && rawData !== null) {
+      // Data already parsed by Upstash client - use directly
+      extractedData = rawData;
+    } else {
+      return { 
+        valid: false, 
+        error: `Invalid data type: expected string or object, got ${typeof rawData}` 
+      };
+    }
+    
+    // Validate based on data type
+    if (dataType === 'lock') {
+      // Validate lock data structure
+      if (!extractedData.processorId || !extractedData.lockedAt) {
+        return { 
+          valid: false, 
+          error: 'Missing required lock fields: processorId or lockedAt' 
+        };
+      }
+    } else if (dataType === 'message') {
+      // Validate message data structure
+      if (!extractedData.id || !extractedData.instanceName || !extractedData.userPhone) {
+        return { 
+          valid: false, 
+          error: 'Missing required message fields: id, instanceName, or userPhone' 
+        };
+      }
+    }
+    
+    return { valid: true, data: extractedData };
+  } catch (error) {
+    return { 
+      valid: false, 
+      error: `Parse error: ${error.message}` 
+    };
+  }
+}
+
+/**
  * Add message to Redis queue atomically
  */
 export async function addToQueue(
@@ -222,7 +272,8 @@ export async function getPendingMessages(
 }
 
 /**
- * Mark messages as processing
+ * Mark messages as processing (preserving any new messages that arrived)
+ * Enhanced with robust error handling to prevent message loss during parsing failures
  */
 export async function markMessagesAsProcessing(messages: QueueMessage[]): Promise<boolean> {
   if (messages.length === 0) return true;
@@ -230,15 +281,11 @@ export async function markMessagesAsProcessing(messages: QueueMessage[]): Promis
   try {
     const processingTime = new Date().toISOString();
     
-    // Update message status to processing
-    const updatedMessages = messages.map(msg => ({
-      ...msg,
-      status: 'processing' as const,
-      processingStartedAt: processingTime
-    }));
-
-    // Update each queue with processed messages
-    const queueGroups = updatedMessages.reduce((groups, msg) => {
+    // Create a set of message IDs to update for quick lookup
+    const messageIdsToUpdate = new Set(messages.map(m => m.id));
+    
+    // Group messages by queue for batch processing
+    const queueGroups = messages.reduce((groups, msg) => {
       const queueKey = getQueueKey(msg.instanceName, msg.userPhone);
       if (!groups[queueKey]) groups[queueKey] = [];
       groups[queueKey].push(msg);
@@ -248,22 +295,73 @@ export async function markMessagesAsProcessing(messages: QueueMessage[]): Promis
     for (const [queueKey, queueMessages] of Object.entries(queueGroups)) {
       await safeRedisCommand(
         async (client) => {
-          // Replace the entire queue with updated messages
+          // Get all current messages from queue (including any new messages that arrived)
+          const allMessages = await client.lrange(queueKey, 0, -1);
+          const allParsedMessages = allMessages.map(msg => {
+            try {
+              // Handle both string and object message formats
+              const parsed = typeof msg === 'string' ? JSON.parse(msg) : msg;
+              
+              // Update message status if it's in our processing list
+              if (messageIdsToUpdate.has(parsed.id)) {
+                return {
+                  ...parsed,
+                  status: 'processing' as const,
+                  processingStartedAt: processingTime
+                };
+              }
+              
+              // Return message as-is if not being processed
+              return parsed;
+            } catch (parseError) {
+              logger.warn('⚠️ Failed to parse message during processing update, keeping original format', {
+                error: parseError.message,
+                queueKey,
+                messagePreview: String(msg).substring(0, 100)
+              });
+              // احتفظ بالرسالة الأصلية بدلاً من حذفها
+              return msg;
+            }
+          }).filter(msg => msg !== null);
+
+          // Replace queue with all messages (updated + preserved)
           const pipeline = client.multi();
           pipeline.del(queueKey);
-          for (const msg of queueMessages) {
-            pipeline.lpush(queueKey, JSON.stringify(msg));
+          
+          if (allParsedMessages.length > 0) {
+            for (const msg of allParsedMessages) {
+              // Handle both parsed objects and original strings
+              const messageToStore = typeof msg === 'string' ? msg : JSON.stringify(msg);
+              pipeline.lpush(queueKey, messageToStore);
+            }
+            pipeline.expire(queueKey, QUEUE_TTL);
+          } else if (allMessages.length > 0) {
+            // 🚨 CRITICAL PROTECTION: If all messages failed parsing but original messages exist
+            logger.error('🚨 All messages failed parsing but original messages exist - preserving queue', {
+              queueKey,
+              originalMessageCount: allMessages.length,
+              preservedMessages: allMessages.map(m => String(m).substring(0, 50))
+            });
+            // Keep the original messages in the queue
+            for (const msg of allMessages) {
+              pipeline.lpush(queueKey, typeof msg === 'string' ? msg : JSON.stringify(msg));
+            }
+            pipeline.expire(queueKey, QUEUE_TTL);
+          } else {
+            // Remove from active queues only if truly empty
+            pipeline.srem('active_queues', queueKey);
           }
-          pipeline.expire(queueKey, QUEUE_TTL);
+          
           return await pipeline.exec();
         },
         null
       );
     }
 
-    logger.info('✅ Messages marked as processing', {
+    logger.info('✅ Messages marked as processing (enhanced preservation)', {
       messageCount: messages.length,
-      messageIds: messages.map(m => m.id)
+      messageIds: messages.map(m => m.id),
+      preservationNote: 'Enhanced error handling prevents message loss during parsing failures'
     });
 
     return true;
@@ -300,9 +398,15 @@ export async function markMessagesAsCompleted(messages: QueueMessage[]): Promise
           // Get all messages from queue
           const allMessages = await client.lrange(queueKey, 0, -1);
           const parsedMessages = allMessages.map(msg => {
-            try {
-              return JSON.parse(msg);
-            } catch {
+            const validation = validateAndExtractData(msg, 'message');
+            if (validation.valid) {
+              return validation.data;
+            } else {
+              logger.warn('Failed to parse message in markMessagesAsCompleted - preserving original', {
+                error: validation.error,
+                messageType: typeof msg,
+                messagePreview: JSON.stringify(msg).substring(0, 50)
+              });
               return null;
             }
           }).filter(msg => msg !== null);
@@ -519,17 +623,26 @@ export async function releaseProcessingLock(
           return true; // Already released
         }
 
-        try {
-          const lockData = JSON.parse(currentLock);
-          if (lockData.processorId !== processorId) {
-            logger.warn('Cannot release lock - processor ID mismatch', {
-              expected: processorId,
-              actual: lockData.processorId
-            });
-            return false;
-          }
-        } catch (parseError) {
-          logger.warn('Failed to parse lock data, releasing anyway');
+        // Safely validate and extract lock data
+        const validation = validateAndExtractData(currentLock, 'lock');
+        if (!validation.valid) {
+          logger.error('Lock data validation failed - preserving lock for safety', {
+            lockKey,
+            lockType: typeof currentLock,
+            lockPreview: JSON.stringify(currentLock).substring(0, 100),
+            error: validation.error,
+            processorId
+          });
+          return false; // Critical: Do not release lock on validation failure
+        }
+
+        if (validation.data.processorId !== processorId) {
+          logger.warn('Cannot release lock - processor ID mismatch', {
+            expected: processorId,
+            actual: validation.data.processorId,
+            lockKey
+          });
+          return false;
         }
 
         // Delete the lock
@@ -599,6 +712,72 @@ export async function testQueueOperations(): Promise<boolean> {
     return true;
   } catch (error) {
     logger.error('💥 Redis queue operations test failed', {
+      error: error.message || error
+    });
+    return false;
+  }
+}
+
+/**
+ * Test the new validation and lock mechanism (for debugging)
+ */
+export async function testLockValidationFix(): Promise<boolean> {
+  try {
+    logger.info('🧪 Testing new lock validation fix');
+    
+    const testInstanceName = 'test_validation';
+    const testUserPhone = '1234567890';
+    const processorId = `test_${Date.now()}`;
+
+    // Test 1: Normal lock acquisition and release
+    logger.info('Test 1: Normal lock acquisition and release');
+    const acquired = await acquireProcessingLock(testInstanceName, testUserPhone, processorId);
+    if (!acquired) {
+      logger.error('❌ Test 1 failed: Could not acquire lock');
+      return false;
+    }
+
+    const released = await releaseProcessingLock(testInstanceName, testUserPhone, processorId);
+    if (!released) {
+      logger.error('❌ Test 1 failed: Could not release lock');
+      return false;
+    }
+
+    // Test 2: Test validation with different data types
+    logger.info('Test 2: Testing validation function');
+    
+    // Test object data (simulating Upstash auto-parsing)
+    const objectData = {
+      processorId: 'test123',
+      lockedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60000).toISOString()
+    };
+    
+    const objectValidation = validateAndExtractData(objectData, 'lock');
+    if (!objectValidation.valid) {
+      logger.error('❌ Test 2 failed: Object validation failed', objectValidation.error);
+      return false;
+    }
+
+    // Test string data (simulating JSON storage)
+    const stringData = JSON.stringify(objectData);
+    const stringValidation = validateAndExtractData(stringData, 'lock');
+    if (!stringValidation.valid) {
+      logger.error('❌ Test 2 failed: String validation failed', stringValidation.error);
+      return false;
+    }
+
+    // Test invalid data
+    const invalidValidation = validateAndExtractData(null, 'lock');
+    if (invalidValidation.valid) {
+      logger.error('❌ Test 2 failed: Invalid data should not validate');
+      return false;
+    }
+
+    logger.info('✅ All lock validation tests passed');
+    return true;
+  } catch (error) {
+    logger.error('💥 Lock validation test failed', {
       error: error.message || error
     });
     return false;

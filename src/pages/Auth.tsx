@@ -586,8 +586,8 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
           
           <Tabs value={activeTab} className="w-full" onValueChange={handleTabChange}>
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Login</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              <TabsTrigger value="signin">Sign in</TabsTrigger>
+              <TabsTrigger value="signup">Sign up</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">

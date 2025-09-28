@@ -2,7 +2,8 @@ import React, { useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle } from 'lucide-react';
-import { useEscalatedConversations, useResolveEscalation, EscalatedConversation } from '@/hooks/use-escalation-queries';
+import { useEscalatedConversations, EscalatedConversation } from '@/hooks/use-escalation-queries';
+import { useResolveEscalationDialog } from '@/hooks/use-resolve-escalation-dialog';
 import { StatsCards } from './StatsCards';
 import { ConversationItem } from './ConversationItem';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,15 +22,14 @@ interface ConversationsTabProps {
   onViewContext: (conversation: EscalatedConversation) => void;
 }
 
-export const ConversationsTab = React.memo(({ 
+export const ConversationsTab = React.memo(({
   selectedInstance,
   filter,
   onFilterChange,
   onViewContext
 }: ConversationsTabProps) => {
-  const { user } = useAuth();
   const { data: conversations = [], isLoading, refetch } = useEscalatedConversations(selectedInstance, filter);
-  const resolveEscalationMutation = useResolveEscalation();
+  const { handleResolve, isLoading: resolveLoading } = useResolveEscalationDialog();
 
   // Calculate stats from conversations
   const stats: Stats = useMemo(() => {
@@ -72,16 +72,10 @@ export const ConversationsTab = React.memo(({
     }
   }, []);
 
-  // Handle resolve escalation
+  // Handle resolve escalation - now using unified hook
   const handleResolveEscalation = useCallback((conversationId: string, whatsappNumber: string, instanceId: string) => {
-    if (!user?.id) return;
-
-    resolveEscalationMutation.mutate({
-      phoneNumber: whatsappNumber,
-      instanceId: instanceId,
-      resolvedBy: user.id
-    });
-  }, [user?.id, resolveEscalationMutation]);
+    handleResolve(conversationId, whatsappNumber, instanceId);
+  }, [handleResolve]);
 
   return (
     <div className="space-y-6 mt-6">
@@ -147,7 +141,7 @@ export const ConversationsTab = React.memo(({
                     onResolve={handleResolveEscalation}
                     onViewContext={onViewContext}
                     getReasonBadge={getReasonBadge}
-                    loading={resolveEscalationMutation.isPending}
+                    loading={resolveLoading}
                   />
                 ))}
               </div>

@@ -54,13 +54,17 @@ const navigation = [{
   href: '/ai-personalities',
   icon: Users
 }, {
+  name: 'Customer Profiles',
+  href: '/customer-profiles',
+  icon: UserCheck
+}, {
   name: 'Data Collection',
   href: '/data-collection',
   icon: Database
 }, {
-  name: 'Customer Profiles',
-  href: '/customer-profiles',
-  icon: UserCheck
+  name: 'External Actions',
+  href: '/external-actions',
+  icon: Zap
 }, {
   name: 'Smart Escalation',
   href: '/escalation-management',

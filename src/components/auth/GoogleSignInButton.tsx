@@ -68,8 +68,8 @@ const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
         </>
       ) : (
         <>
-          <FcGoogle className="mr-2 h-5 w-5" />
-          Google
+          <FcGoogle className="h-5 w-5" />
+          Continue with Google
         </>
       )}
     </Button>

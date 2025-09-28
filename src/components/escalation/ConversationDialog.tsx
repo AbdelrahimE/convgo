@@ -37,15 +37,16 @@ export const ConversationDialog = React.memo(({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader className="py-4 px-0">
-          <DialogTitle className="text-left">Conversation Context</DialogTitle>
-          <DialogDescription className="text-left">
-            Last 10 messages before escalation
-          </DialogDescription>
-        </DialogHeader>
-        
-        <div className="space-y-4">
+      <DialogContent className="max-w-3xl h-[80vh] border-none flex flex-col">
+        {/* Header Section - Fixed */}
+        <div className="flex-shrink-0 pb-4">
+          <DialogHeader className="py-4 px-0">
+            <DialogTitle className="text-left">Conversation Context</DialogTitle>
+            <DialogDescription className="text-left">
+              Last 10 messages before escalation
+            </DialogDescription>
+          </DialogHeader>
+
           <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg">
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
@@ -72,11 +73,13 @@ export const ConversationDialog = React.memo(({
               )}
             </div>
           </div>
+        </div>
 
-          <div className="space-y-2">
+        {/* Content Section - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
             <h4 className="font-semibold">Conversation:</h4>
             {conversation.conversation_context && conversation.conversation_context.length > 0 ? (
-              <div className="space-y-2 max-h-96 overflow-y-auto border rounded-lg p-4">
+              <div className="space-y-2 rounded-lg p-4">
                 {conversation.conversation_context.map((msg, idx) => (
                   <div
                     key={idx}
@@ -103,8 +106,10 @@ export const ConversationDialog = React.memo(({
             ) : (
               <p className="text-slate-600 dark:text-slate-400 text-center py-4">No conversation context available</p>
             )}
-          </div>
+        </div>
 
+        {/* Footer Section - Fixed */}
+        <div className="flex-shrink-0 pt-4 border-t border-slate-200 dark:border-slate-700">
           <div className="flex gap-2 justify-end">
             <Button
               variant="outline"

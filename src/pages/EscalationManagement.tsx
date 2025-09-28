@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Cog, MessageCircle, Settings } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWhatsAppInstances, EscalatedConversation } from '@/hooks/use-escalation-queries'
+import { useResolveEscalationDialog } from '@/hooks/use-resolve-escalation-dialog'
 import { ConversationDialog } from '@/components/escalation/ConversationDialog'
 import { Badge } from '@/components/ui/badge'
 
@@ -30,6 +31,14 @@ export default function EscalationManagement() {
 
   // Use TanStack Query hook for instances
   const { data: instances = [] } = useWhatsAppInstances(user?.id)
+
+  // Use unified resolve escalation hook
+  const { handleResolve, isLoading: resolveLoading } = useResolveEscalationDialog({
+    onSuccess: () => {
+      setShowContext(false)
+      setSelectedConversation(null)
+    }
+  })
 
   // Set initial instance when instances are loaded
   useEffect(() => {
@@ -67,12 +76,10 @@ export default function EscalationManagement() {
     setShowContext(true)
   }, [])
 
-  // Handle resolve escalation
+  // Handle resolve escalation - now using unified hook
   const handleResolveEscalation = useCallback((conversationId: string, whatsappNumber: string, instanceId: string) => {
-    // This will be handled by the individual components using mutations
-    setShowContext(false)
-    setSelectedConversation(null)
-  }, [])
+    handleResolve(conversationId, whatsappNumber, instanceId)
+  }, [handleResolve])
 
   // Show initial loading state
   if (initialPageLoading) {
@@ -215,6 +222,7 @@ export default function EscalationManagement() {
         onOpenChange={setShowContext}
         getReasonBadge={getReasonBadge}
         onResolve={handleResolveEscalation}
+        loading={resolveLoading}
       />
     </div>
   )

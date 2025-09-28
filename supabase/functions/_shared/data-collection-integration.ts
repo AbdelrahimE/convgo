@@ -12,6 +12,7 @@ const logger = {
 /**
  * Process data extraction for WhatsApp messages
  * This function is called after a message is received to extract structured data
+ * Now enhanced with conversation summary for better context understanding
  */
 export async function processDataExtraction(
   instanceId: string,
@@ -19,6 +20,7 @@ export async function processDataExtraction(
   phoneNumber: string,
   messageText: string,
   conversationHistory: any[],
+  conversationSummary: string,
   supabaseUrl: string,
   supabaseServiceKey: string
 ): Promise<{
@@ -32,7 +34,8 @@ export async function processDataExtraction(
       conversationId,
       phoneNumber,
       messageLength: messageText?.length,
-      historyLength: conversationHistory?.length
+      historyLength: conversationHistory?.length,
+      conversationSummaryLength: conversationSummary?.length
     });
 
     // Skip if no message text
@@ -49,18 +52,22 @@ export async function processDataExtraction(
       supabaseUrl: supabaseUrl?.substring(0, 30) + '...'
     });
 
-    // Format conversation history for data-extractor (expects different format)
-    const formattedConversationHistory = conversationHistory?.map(msg => ({
-      from: msg.role === 'user' ? 'customer' : 'assistant',
-      message: msg.content || msg.message || msg.text || ''
-    })) || [];
+    // Format conversation history for data-extractor (CUSTOMER MESSAGES ONLY for better token efficiency)
+    // We only send customer messages since AI responses don't contain extractable customer data
+    const formattedConversationHistory = conversationHistory
+      ?.filter(msg => msg.role === 'user') // Filter only customer messages
+      ?.map(msg => ({
+        from: 'customer',
+        message: msg.content || msg.message || msg.text || ''
+      })) || [];
 
     const requestBody = {
       whatsapp_instance_id: instanceId,
       conversation_id: conversationId,
       phone_number: phoneNumber,
       message_text: messageText,
-      conversation_history: formattedConversationHistory
+      conversation_history: formattedConversationHistory,
+      conversation_summary: conversationSummary
     };
 
     logger.info('📞 EXTRACT: Calling data-extractor function', {
@@ -68,16 +75,18 @@ export async function processDataExtraction(
       requestBody: {
         ...requestBody,
         message_text: requestBody.message_text.substring(0, 100),
-        conversation_history: `${conversationHistory?.length} items`
+        conversation_history: `${formattedConversationHistory?.length} customer messages (filtered)`,
+        conversation_summary: requestBody.conversation_summary?.substring(0, 100) + '...'
       },
       debugInfo: {
         fullMessageText: messageText,
         messageLength: messageText?.length,
         originalConversationHistoryCount: conversationHistory?.length,
-        formattedConversationHistoryCount: formattedConversationHistory?.length,
+        filteredCustomerMessagesCount: formattedConversationHistory?.length,
         originalConversationSample: conversationHistory?.slice(-2),
         formattedConversationSample: formattedConversationHistory?.slice(-2),
-        hasValidData: !!messageText && messageText.trim().length > 0
+        hasValidData: !!messageText && messageText.trim().length > 0,
+        tokenSavings: `Filtered out ${conversationHistory?.length - formattedConversationHistory?.length} AI messages`
       }
     });
 
@@ -225,25 +234,28 @@ export async function getConversationHistoryForExtraction(
   limit: number = 10
 ): Promise<any[]> {
   try {
+    // Only fetch customer messages (role='user') for data extraction efficiency
+    // AI responses don't contain extractable customer data and waste tokens
     const { data, error } = await supabaseAdmin
       .from('whatsapp_conversation_messages')
       .select('role, content, timestamp')
       .eq('conversation_id', conversationId)
+      .eq('role', 'user') // Only customer messages for data extraction
       .order('timestamp', { ascending: false })
       .limit(limit);
 
     if (error) {
-      logger.error('Error fetching conversation history', { error });
+      logger.error('Error fetching conversation history for extraction', { error });
       return [];
     }
 
-    // Format for data extraction
+    // Format customer messages only for data extraction
     return (data || []).reverse().map(msg => ({
-      from: msg.role === 'user' ? 'customer' : 'assistant',
+      from: 'customer',
       message: msg.content
     }));
   } catch (error) {
-    logger.error('Exception fetching conversation history', { error });
+    logger.error('Exception fetching conversation history for extraction', { error });
     return [];
   }
 }

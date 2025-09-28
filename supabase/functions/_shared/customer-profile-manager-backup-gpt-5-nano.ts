@@ -26,7 +26,6 @@ export interface CustomerProfile {
   first_interaction: string;
   total_messages: number;
   ai_interactions: number;
-  metadata: any;
   created_at: string;
   updated_at: string;
   
@@ -47,7 +46,6 @@ export interface CustomerProfileUpdate {
   conversation_summary?: string;
   key_points?: any[];
   preferences?: any;
-  metadata?: any;
   total_messages?: number;
   ai_interactions?: number;
   
@@ -109,7 +107,6 @@ export class CustomerProfileManager {
           preferences: {},
           total_messages: 0,
           ai_interactions: 0,
-          metadata: {},
           last_interaction: new Date().toISOString()
         })
         .select()

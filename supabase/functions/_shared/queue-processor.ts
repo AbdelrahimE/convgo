@@ -438,12 +438,31 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
         return true;
       }
 
+      // Enhanced logging for race condition tracking
+      const oldestMessage = messages[0];
+      const newestMessage = messages[messages.length - 1];
+      const timeSinceOldest = Date.now() - new Date(oldestMessage.addedAt).getTime();
+      
+      logger.info('📋 Queue analysis before processing decision', {
+        instanceName,
+        userPhone,
+        messageCount: messages.length,
+        oldestMessageAge: `${Math.round(timeSinceOldest/1000)}s`,
+        timeWindow: `${timeSinceOldest}ms since first message`,
+        messageTimeRange: `${new Date(oldestMessage.addedAt).toISOString()} to ${new Date(newestMessage.addedAt).toISOString()}`,
+        messageIds: messages.map(m => m.id),
+        messagePreview: messages.map(m => m.message.substring(0, 30) + '...')
+      });
+
       // Check if messages are ready for processing
       if (!shouldProcessQueue(messages)) {
+        const remainingWait = 8000 - timeSinceOldest;
         logger.debug('⏳ Queue not ready for processing yet', {
           instanceName,
           userPhone,
-          messageCount: messages.length
+          messageCount: messages.length,
+          remainingWaitTime: `${Math.max(0, Math.round(remainingWait/1000))}s`,
+          reason: messages.length >= 5 ? 'waiting for more messages' : 'waiting for 8-second window'
         });
         return true;
       }
@@ -451,15 +470,25 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
       // Limit batch size
       const messagesToProcess = messages.slice(0, MAX_MESSAGES_PER_BATCH);
       
-      logger.info('📦 Processing message batch', {
+      logger.info('📦 Processing message batch - RACE CONDITION CHECKPOINT', {
         instanceName,
         userPhone,
         messageCount: messagesToProcess.length,
-        totalInQueue: messages.length
+        totalInQueue: messages.length,
+        processingTrigger: timeSinceOldest >= 8000 ? '8_second_timeout' : 'message_count_limit',
+        timeFromFirstMessage: `${Math.round(timeSinceOldest/1000)}s`,
+        note: 'About to call markMessagesAsProcessing - any new messages arriving now should be preserved'
       });
 
-      // Mark messages as processing
+      // Mark messages as processing (with enhanced race condition protection)
       await markMessagesAsProcessing(messagesToProcess);
+      
+      logger.info('✅ Messages successfully marked as processing', {
+        instanceName,
+        userPhone,
+        messageCount: messagesToProcess.length,
+        note: 'markMessagesAsProcessing() now preserves any new messages that arrive during processing'
+      });
 
       // Get instance data
       const { data: instanceData, error: instanceError } = await supabaseAdmin
@@ -903,12 +932,16 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
       // Process data extraction if enabled
       if (dataCollectionEnabled && dataCollectionFields.length > 0) {
         try {
+          // Get conversation summary from customer profile for enhanced data extraction
+          const conversationSummary = customerProfile.conversation_summary || '';
+          
           await processDataExtraction(
             instanceData.id,
             conversationId,
             userPhone,
             combinedMessage,
             conversationHistory,
+            conversationSummary, // Add conversation summary for context
             supabaseUrl,
             supabaseServiceKey
           );
