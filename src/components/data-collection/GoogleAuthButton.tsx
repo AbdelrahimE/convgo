@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { FcGoogle } from "react-icons/fc";
+import { useTranslation } from 'react-i18next';
 
 interface GoogleAuthButtonProps {
   onClick: () => void;
@@ -8,6 +9,8 @@ interface GoogleAuthButtonProps {
 }
 
 const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({ onClick, isLoading = false }) => {
+  const { t } = useTranslation();
+
   return (
     <Button
       onClick={onClick}
@@ -17,7 +20,7 @@ const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({ onClick, isLoading 
       variant="outline"
     >
       <FcGoogle className="h-5 w-5 mr-2" />
-      Connect with Google
+      {t('dataCollection.connectWithGoogle')}
     </Button>
   );
 };

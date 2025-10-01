@@ -7,6 +7,7 @@ import { useWhatsAppInstances, EscalatedConversation } from '@/hooks/use-escalat
 import { useResolveEscalationDialog } from '@/hooks/use-resolve-escalation-dialog'
 import { ConversationDialog } from '@/components/escalation/ConversationDialog'
 import { Badge } from '@/components/ui/badge'
+import { useTranslation } from 'react-i18next'
 
 // Lazy load components for better performance
 const SettingsTab = lazy(() => import('@/components/escalation/SettingsTab').then(module => ({ default: module.SettingsTab })))
@@ -22,6 +23,7 @@ const LoadingSpinner = () => (
 
 export default function EscalationManagement() {
   const { user } = useAuth()
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('settings')
   const [selectedInstance, setSelectedInstance] = useState<string>('')
   const [filter, setFilter] = useState<'all' | 'active' | 'resolved'>('active')
@@ -62,13 +64,13 @@ export default function EscalationManagement() {
   const getReasonBadge = useCallback((reason: string) => {
     switch (reason) {
       case 'ai_detected_intent':
-        return <Badge className="bg-purple-100 hover:bg-purple-200 text-purple-800 font-medium">Smart AI Detection</Badge>
+        return <Badge className="bg-purple-100 hover:bg-purple-200 text-purple-800 font-medium">{t('escalation.smartAiDetectionBadge')}</Badge>
       case 'user_request':
-        return <Badge className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-medium">Keyword Triggered</Badge>
+        return <Badge className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-medium">{t('escalation.keywordTriggeredBadge')}</Badge>
       default:
-        return <Badge className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium">Unknown Reason</Badge>
+        return <Badge className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium">{t('escalation.unknownReasonBadge')}</Badge>
     }
-  }, [])
+  }, [t])
 
   // Handle view context
   const handleViewContext = useCallback((conversation: EscalatedConversation) => {
@@ -102,10 +104,10 @@ export default function EscalationManagement() {
           {/* Loading text with animation */}
           <div className="loading-text-center space-y-2">
             <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Loading Escalation Management
+              {t('escalation.loadingTitle')}
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Please wait while we prepare your escalation settings...
+              {t('escalation.loadingDescription')}
             </p>
           </div>
           
@@ -126,11 +128,11 @@ export default function EscalationManagement() {
       <div className="bg-white dark:bg-slate-900">
         <div className="px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex-1">
-            <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
-              Escalation Management
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100">
+              {t('escalation.title')}
             </h1>
             <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
-              Manage escalated conversations and resolve them when needed
+              {t('escalation.description')}
             </p>
           </div>
         </div>
@@ -145,7 +147,7 @@ export default function EscalationManagement() {
             <div className="mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Cog className="h-5 w-5" />
-                Choose WhatsApp Number
+                {t('escalation.chooseWhatsappNumber')}
               </h2>
             </div>
 
@@ -155,12 +157,12 @@ export default function EscalationManagement() {
               disabled={instances.length === 0}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select WhatsApp number" />
+                <SelectValue placeholder={t('escalation.selectWhatsappNumber')} />
               </SelectTrigger>
               <SelectContent>
                 {instances.length === 0 ? (
                   <SelectItem value="none">
-                    No connected WhatsApp numbers available
+                    {t('escalation.noConnectedNumbers')}
                   </SelectItem>
                 ) : (
                   instances.map((instance) => (
@@ -168,7 +170,7 @@ export default function EscalationManagement() {
                       <div className="flex items-center justify-between w-full gap-x-2">
                         <span>{instance.instance_name}</span>
                         <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
-                          Connected
+                          {t('escalation.connected')}
                         </span>
                       </div>
                     </SelectItem>
@@ -183,11 +185,11 @@ export default function EscalationManagement() {
         <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
           <TabsTrigger value="settings">
             <Cog className="h-5 w-5 mr-2" />
-            Settings
+            {t('escalation.settings')}
           </TabsTrigger>
           <TabsTrigger value="conversations">
             <MessageCircle className="h-5 w-5 mr-2"/>
-            Conversations
+            {t('escalation.conversations')}
           </TabsTrigger>
         </TabsList>
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { AlertTriangle, CheckCircle, Clock, MessageCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface Stats {
   total: number;
@@ -14,6 +15,8 @@ interface StatsCardsProps {
 }
 
 export const StatsCards = React.memo(({ stats }: StatsCardsProps) => {
+  const { t } = useTranslation();
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {/* Active Conversations Card */}
@@ -21,10 +24,10 @@ export const StatsCards = React.memo(({ stats }: StatsCardsProps) => {
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <h3 className="text-sm font-medium text-red-900 dark:text-red-100 mb-2">Active Conversations</h3>
+              <h3 className="text-sm font-medium text-red-900 dark:text-red-100 mb-2">{t('escalation.activeConversations')}</h3>
               <div className="space-y-1">
                 <p className="text-2xl font-semibold text-red-700 dark:text-red-300">{stats.active}</p>
-                <p className="text-xs font-normal text-red-600/70 dark:text-red-400/70">Require Attention</p>
+                <p className="text-xs font-normal text-red-600/70 dark:text-red-400/70">{t('escalation.requireAttention')}</p>
               </div>
             </div>
             <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/50">
@@ -39,10 +42,10 @@ export const StatsCards = React.memo(({ stats }: StatsCardsProps) => {
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <h3 className="text-sm font-medium text-green-900 dark:text-green-100 mb-2">Resolved Today</h3>
+              <h3 className="text-sm font-medium text-green-900 dark:text-green-100 mb-2">{t('escalation.resolvedToday')}</h3>
               <div className="space-y-1">
                 <p className="text-2xl font-semibold text-green-700 dark:text-green-300">{stats.resolved}</p>
-                <p className="text-xs font-normal text-green-600/70 dark:text-green-400/70">Successfully Handled</p>
+                <p className="text-xs font-normal text-green-600/70 dark:text-green-400/70">{t('escalation.successfullyHandled')}</p>
               </div>
             </div>
             <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/50">
@@ -57,10 +60,10 @@ export const StatsCards = React.memo(({ stats }: StatsCardsProps) => {
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">Avg Resolution Time</h3>
+              <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">{t('escalation.avgResolutionTime')}</h3>
               <div className="space-y-1">
-                <p className="text-2xl font-semibold text-blue-700 dark:text-blue-300">{stats.avgResolutionTime}<span className="text-lg font-medium ml-1">min</span></p>
-                <p className="text-xs font-normal text-blue-600/70 dark:text-blue-400/70">Response Efficiency</p>
+                <p className="text-2xl font-semibold text-blue-700 dark:text-blue-300">{stats.avgResolutionTime}<span className="text-lg font-medium ml-1">{t('escalation.min')}</span></p>
+                <p className="text-xs font-normal text-blue-600/70 dark:text-blue-400/70">{t('escalation.responseEfficiency')}</p>
               </div>
             </div>
             <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
@@ -75,10 +78,10 @@ export const StatsCards = React.memo(({ stats }: StatsCardsProps) => {
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <h3 className="text-sm font-medium text-purple-900 dark:text-purple-100 mb-2">Total Escalations</h3>
+              <h3 className="text-sm font-medium text-purple-900 dark:text-purple-100 mb-2">{t('escalation.totalEscalations')}</h3>
               <div className="space-y-1">
                 <p className="text-2xl font-semibold text-purple-700 dark:text-purple-300">{stats.total}</p>
-                <p className="text-xs font-normal text-purple-600/70 dark:text-purple-400/70">All Time Count</p>
+                <p className="text-xs font-normal text-purple-600/70 dark:text-purple-400/70">{t('escalation.allTimeCount')}</p>
               </div>
             </div>
             <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/50">

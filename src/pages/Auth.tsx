@@ -11,17 +11,17 @@ import { Loader2, Wifi, WifiOff, Signal } from 'lucide-react';
 import logger from '@/utils/logger';
 import { getSignInErrorMessage, getSignUpErrorMessage, getPasswordResetErrorMessage, logAuthError } from '@/utils/authErrors';
 import { withNetworkAwareAuth, NetworkMonitor } from '@/utils/networkHandling';
-import { 
-  validateEmail, 
-  validateLoginPassword, 
-  validateRegistrationPassword, 
-  validatePasswordConfirmation, 
-  validateFullName, 
-  validateBusinessName, 
-  validateLoginForm, 
-  validateRegistrationForm, 
+import {
+  validateEmail,
+  validateLoginPassword,
+  validateRegistrationPassword,
+  validatePasswordConfirmation,
+  validateFullName,
+  validateBusinessName,
+  validateLoginForm,
+  validateRegistrationForm,
   hasValidationErrors,
-  type FormErrors 
+  type FormErrors
 } from '@/utils/formValidation';
 import { suggestBusinessNameImprovements, validateBusinessNameEnhanced } from '@/utils/businessNameValidation';
 import { PasswordInput } from '@/components/PasswordInput';
@@ -29,6 +29,7 @@ import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
 import AuthDivider from '@/components/auth/AuthDivider';
 import TermsAndPrivacy from '@/components/auth/TermsAndPrivacy';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 interface AuthProps {
   isResetPasswordMode?: boolean;
@@ -38,6 +39,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { session, loading: authLoading } = useAuth();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -442,13 +444,13 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
   const getTabContent = (tab) => {
     if (tab === 'signin') {
       return {
-        title: "Welcome to ConvGo",
-        description: "Great to see you again! Sign in to continue"
+        title: t('auth.welcomeTitle'),
+        description: t('auth.welcomeDescription')
       };
     } else {
       return {
-        title: "Get Started with ConvGo",
-        description: "AI that Sells & Supports — Join ConvGo now"
+        title: t('auth.getStartedTitle'),
+        description: t('auth.getStartedDescription')
       };
     }
   };
@@ -462,7 +464,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
         <div className="h-screen flex items-center justify-center">
           <div className="text-center">
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-500" />
-            <p className="mt-2 text-gray-600">Validating session...</p>
+            <p className="mt-2 text-gray-600">{t('auth.validatingSession')}</p>
           </div>
         </div>
       );
@@ -477,28 +479,28 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
             <div className="flex items-center justify-center mb-2">
               <img src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon/convgo-icon-auth-page.png" alt="ConvGo icon" className="h-14 w-auto" />
             </div>
-            <CardTitle className="font-semibold">Set New Password</CardTitle>
-            <CardDescription className="text-sm">Enter your new password below</CardDescription>
+            <CardTitle className="font-semibold">{t('auth.setNewPasswordTitle')}</CardTitle>
+            <CardDescription className="text-sm">{t('auth.setNewPasswordDescription')}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handlePasswordUpdate} className="space-y-4">
               <div>
-                <Label htmlFor="new-password" className="text-left block py-1">New Password</Label>
+                <Label htmlFor="new-password" className="text-left block py-1">{t('auth.newPassword')}</Label>
                 <Input
                   id="new-password"
                   type="password"
-                  placeholder="Enter your new password"
+                  placeholder={t('auth.newPasswordPlaceholder')}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="confirm-password" className="text-left block py-1">Confirm Password</Label>
+                <Label htmlFor="confirm-password" className="text-left block py-1">{t('auth.confirmPassword')}</Label>
                 <Input
                   id="confirm-password"
                   type="password"
-                  placeholder="Confirm your new password"
+                  placeholder={t('auth.confirmPasswordPlaceholder')}
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   required
@@ -508,9 +510,9 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Updating Password...
+                    {t('auth.updatingPassword')}
                   </>
-                ) : 'Update Password'}
+                ) : t('auth.updatePassword')}
               </Button>
             </form>
           </CardContent>
@@ -528,21 +530,21 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
             <div className="flex items-center justify-center mb-2">
               <img src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon/convgo-icon-auth-page.png" alt="ConvGo Logo" className="h-14 w-auto" />
             </div>
-            <CardTitle className="font-semibold">Reset Your Password</CardTitle>
-            <CardDescription>Enter your email to receive a password reset link</CardDescription>
+            <CardTitle className="font-semibold">{t('auth.resetPasswordTitle')}</CardTitle>
+            <CardDescription>{t('auth.resetPasswordDescription')}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <Label htmlFor="reset-email" className="text-left block py-1">Email</Label>
-                <Input id="reset-email" type="email" placeholder="Enter your email address" value={email} onChange={e => setEmail(e.target.value)} required />
+                <Label htmlFor="reset-email" className="text-left block py-1">{t('auth.email')}</Label>
+                <Input id="reset-email" type="email" placeholder={t('auth.emailPlaceholder')} value={email} onChange={e => setEmail(e.target.value)} required />
               </div>
               <div className="flex gap-4">
                 <Button type="submit" disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700">
-                  {loading ? 'Sending...' : 'Send Reset Link'}
+                  {loading ? t('auth.sending') : t('auth.sendResetLink')}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setShowResetPassword(false)} className="flex-1">
-                  Back to Login
+                  {t('auth.backToLogin')}
                 </Button>
               </div>
             </form>
@@ -573,12 +575,12 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
               {isOffline ? (
                 <>
                   <WifiOff className="h-4 w-4" />
-                  <span>You're offline. Please check your internet connection.</span>
+                  <span>{t('auth.offlineMessage')}</span>
                 </>
               ) : (
                 <>
                   <Signal className="h-4 w-4" />
-                  <span>Slow connection detected. Operations may take longer.</span>
+                  <span>{t('auth.slowConnectionMessage')}</span>
                 </>
               )}
             </div>
@@ -586,49 +588,49 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
           
           <Tabs value={activeTab} className="w-full" onValueChange={handleTabChange}>
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign in</TabsTrigger>
-              <TabsTrigger value="signup">Sign up</TabsTrigger>
+              <TabsTrigger value="signin">{t('auth.signIn')}</TabsTrigger>
+              <TabsTrigger value="signup">{t('auth.signUp')}</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-3">
                 <div>
-                  <Label htmlFor="signin-email" className="text-left block py-1">Email</Label>
-                  <Input 
-                    id="signin-email" 
-                    type="email" 
-                    placeholder="Enter your email address" 
-                    value={email} 
+                  <Label htmlFor="signin-email" className="text-left block py-1">{t('auth.email')}</Label>
+                  <Input
+                    id="signin-email"
+                    type="email"
+                    placeholder={t('auth.emailPlaceholder')}
+                    value={email}
                     onChange={e => handleEmailChange(e.target.value)}
                     onBlur={() => markFieldTouched('email')}
                     className={formErrors.email ? 'border-red-500 focus:border-red-500' : ''}
-                    required 
+                    required
                   />
                   {formErrors.email && (
                     <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>
                   )}
                 </div>
                 <div>
-                  <Label htmlFor="signin-password" className="text-left block py-1">Password</Label>
-                  <Input 
-                    id="signin-password" 
-                    type="password" 
-                    placeholder="Enter your password" 
-                    value={password} 
+                  <Label htmlFor="signin-password" className="text-left block py-1">{t('auth.password')}</Label>
+                  <Input
+                    id="signin-password"
+                    type="password"
+                    placeholder={t('auth.passwordPlaceholder')}
+                    value={password}
                     onChange={e => handlePasswordChange(e.target.value)}
                     onBlur={() => markFieldTouched('password')}
                     className={formErrors.password ? 'border-red-500 focus:border-red-500' : ''}
-                    required 
+                    required
                   />
                   {formErrors.password && (
                     <p className="text-red-500 text-xs mt-1">{formErrors.password}</p>
                   )}
                 </div>
-                <p 
-                  onClick={() => setShowResetPassword(true)} 
+                <p
+                  onClick={() => setShowResetPassword(true)}
                   className="text-sm font-normal text-black hover:text-blue-600 cursor-pointer transition-colors duration-200"
                 >
-                  Forgot Password?
+                  {t('auth.forgotPassword')}
                 </p>
                 <Button 
                   type="submit" 
@@ -638,15 +640,15 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {isSlowConnection ? 'Signing in (slow connection)...' : 'Signing in...'}
+                      {isSlowConnection ? t('auth.signingInSlow') : t('auth.signingIn')}
                     </>
                   ) : isOffline ? (
                     <>
                       <WifiOff className="mr-2 h-4 w-4" />
-                      Offline
+                      {t('auth.offline')}
                     </>
                   ) : (
-                    'Sign In'
+                    t('auth.signIn')
                   )}
                 </Button>
               </form>
@@ -655,55 +657,55 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-2">
                 <div>
-                  <Label htmlFor="fullName" className="text-left block py-1">Full Name</Label>
-                  <Input 
-                    id="fullName" 
-                    type="text" 
-                    placeholder="Enter your full name" 
-                    value={fullName} 
+                  <Label htmlFor="fullName" className="text-left block py-1">{t('auth.fullName')}</Label>
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder={t('auth.fullNamePlaceholder')}
+                    value={fullName}
                     onChange={e => handleFullNameChange(e.target.value)}
                     onBlur={() => markFieldTouched('fullName')}
                     className={formErrors.fullName ? 'border-red-500 focus:border-red-500' : ''}
-                    required 
+                    required
                   />
                   {formErrors.fullName && (
                     <p className="text-red-500 text-xs mt-1">{formErrors.fullName}</p>
                   )}
                 </div>
                 <div>
-                  <Label htmlFor="signup-email" className="text-left block py-1">Email</Label>
-                  <Input 
-                    id="signup-email" 
-                    type="email" 
-                    placeholder="Enter your email address" 
-                    value={email} 
+                  <Label htmlFor="signup-email" className="text-left block py-1">{t('auth.email')}</Label>
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    placeholder={t('auth.emailPlaceholder')}
+                    value={email}
                     onChange={e => handleEmailChange(e.target.value)}
                     onBlur={() => markFieldTouched('email')}
                     className={formErrors.email ? 'border-red-500 focus:border-red-500' : ''}
-                    required 
+                    required
                   />
                   {formErrors.email && (
                     <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>
                   )}
                 </div>
                 <div>
-                  <Label htmlFor="businessName" className="text-left block py-1">Business Name</Label>
-                  <Input 
-                    id="businessName" 
-                    type="text" 
-                    placeholder="MAVERK LLC" 
-                    value={businessName} 
+                  <Label htmlFor="businessName" className="text-left block py-1">{t('auth.businessName')}</Label>
+                  <Input
+                    id="businessName"
+                    type="text"
+                    placeholder={t('auth.businessNamePlaceholder')}
+                    value={businessName}
                     onChange={e => handleBusinessNameChange(e.target.value)}
                     onBlur={() => markFieldTouched('businessName')}
                     className={formErrors.businessName ? 'border-red-500 focus:border-red-500' : ''}
-                    required 
+                    required
                   />
                   {formErrors.businessName && (
                     <p className="text-red-500 text-xs mt-1">{formErrors.businessName}</p>
                   )}
                   {!formErrors.businessName && businessNameSuggestions.length > 0 && (
                     <div className="mt-2">
-                      <p className="text-xs text-slate-600 mb-2">Suggestions:</p>
+                      <p className="text-xs text-slate-600 mb-2">{t('auth.suggestions')}</p>
                       <div className="flex flex-wrap gap-1">
                         {businessNameSuggestions.map((suggestion, index) => (
                           <button
@@ -759,15 +761,15 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {isSlowConnection ? 'Signing up (slow connection)...' : 'Signing up...'}
+                      {isSlowConnection ? t('auth.signingUpSlow') : t('auth.signingUp')}
                     </>
                   ) : isOffline ? (
                     <>
                       <WifiOff className="mr-2 h-4 w-4" />
-                      Offline
+                      {t('auth.offline')}
                     </>
                   ) : (
-                    'Sign Up'
+                    t('auth.signUp')
                   )}
                 </Button>
               </form>

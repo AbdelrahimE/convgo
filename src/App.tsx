@@ -30,7 +30,8 @@ import { CustomerProfiles } from '@/pages/CustomerProfiles';
 import { CustomerProfileEdit } from '@/pages/CustomerProfileEdit';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
-import { initLanguageDetection } from '@/utils/languageDetector';
+// Disabled languageDetector - now using unified i18n system for language management
+// import { initLanguageDetection } from '@/utils/languageDetector';
 
 import './App.css';
 
@@ -208,12 +209,17 @@ function AppContent() {
 }
 
 function App() {
+  // Disabled languageDetector - now using unified i18n system for language management
+  // Language direction and fonts are now managed by i18n system in src/i18n/index.ts
+  // CSS targets html[lang] attribute set by i18n, no need for per-element detection
+  /*
   useEffect(() => {
     // Initialize simple language detection
     const observer = initLanguageDetection();
-    
+
     return () => observer.disconnect();
   }, []);
+  */
 
   return (
     <ErrorBoundary>

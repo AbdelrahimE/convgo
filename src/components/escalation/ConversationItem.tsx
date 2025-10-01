@@ -1,11 +1,12 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
+import {
   Headset, CheckCircle, Eye, ExternalLink, Calendar
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { EscalatedConversation } from '@/hooks/use-escalation-queries';
+import { useTranslation } from 'react-i18next';
 
 interface ConversationItemProps {
   conversation: EscalatedConversation;
@@ -20,13 +21,15 @@ const openWhatsApp = (phoneNumber: string) => {
   window.open(`https://wa.me/${cleanNumber}`, '_blank');
 };
 
-export const ConversationItem = React.memo(({ 
-  conversation, 
-  onResolve, 
+export const ConversationItem = React.memo(({
+  conversation,
+  onResolve,
   onViewContext,
   getReasonBadge,
   loading = false
 }: ConversationItemProps) => {
+  const { t } = useTranslation();
+
   return (
     <div
       key={conversation.id}
@@ -43,14 +46,14 @@ export const ConversationItem = React.memo(({
             <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
               {conversation.whatsapp_number}
             </span>
-            
+
             {/* Show badges on larger screens only */}
             <div className="hidden md:flex items-center gap-2">
               {getReasonBadge(conversation.reason)}
               {conversation.resolved_at && (
                 <Badge className="bg-green-100 hover:bg-green-200 dark:bg-green-900/50 dark:hover:bg-green-900 text-green-800 dark:text-green-200 font-medium">
                   <CheckCircle className="h-3 w-3 mr-1" />
-                  Resolved
+                  {t('escalation.resolvedBadge')}
                 </Badge>
               )}
             </div>
@@ -63,7 +66,7 @@ export const ConversationItem = React.memo(({
               variant="ghost"
               onClick={() => onViewContext(conversation)}
               className="h-7 w-7 p-0 hover:bg-slate-100 dark:hover:bg-slate-800"
-              title="View Context"
+              title={t('escalation.viewContext')}
             >
               <Eye className="h-3 w-3 text-slate-600 dark:text-slate-400" />
             </Button>
@@ -72,7 +75,7 @@ export const ConversationItem = React.memo(({
               variant="ghost"
               onClick={() => openWhatsApp(conversation.whatsapp_number)}
               className="h-7 w-7 p-0 hover:bg-green-50 dark:hover:bg-green-900/20"
-              title="Open WhatsApp"
+              title={t('escalation.openWhatsapp')}
             >
               <ExternalLink className="h-3 w-3 text-green-600 dark:text-green-400" />
             </Button>
@@ -84,7 +87,7 @@ export const ConversationItem = React.memo(({
                 className="h-7 px-2 text-xs"
               >
                 <CheckCircle className="h-3 w-3 mr-1" />
-                <span className="hidden sm:inline">Resolve</span>
+                <span className="hidden sm:inline">{t('escalation.resolve')}</span>
               </Button>
             )}
           </div>
@@ -98,7 +101,7 @@ export const ConversationItem = React.memo(({
             {conversation.resolved_at && (
               <Badge className="bg-green-100 hover:bg-green-200 dark:bg-green-900/50 dark:hover:bg-green-900 text-green-800 dark:text-green-200 font-medium">
                 <CheckCircle className="h-3 w-3 mr-1" />
-                Resolved
+                {t('escalation.resolvedBadge')}
               </Badge>
             )}
           </div>
@@ -108,7 +111,7 @@ export const ConversationItem = React.memo(({
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3 text-slate-400 dark:text-slate-500" />
               <span className="font-normal">
-                Escalated: {format(new Date(conversation.escalated_at), 'dd/MM/yyyy h:mm a')}
+                {t('escalation.escalated')} {format(new Date(conversation.escalated_at), 'dd/MM/yyyy h:mm a')}
               </span>
             </div>
 
@@ -116,7 +119,7 @@ export const ConversationItem = React.memo(({
               <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
                 <CheckCircle className="h-3 w-3" />
                 <span className="font-normal">
-                  Resolved: {format(new Date(conversation.resolved_at), 'dd/MM/yyyy h:mm a')}
+                  {t('escalation.resolvedAt')} {format(new Date(conversation.resolved_at), 'dd/MM/yyyy h:mm a')}
                 </span>
               </div>
             )}

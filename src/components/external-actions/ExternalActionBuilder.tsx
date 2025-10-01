@@ -32,6 +32,13 @@ import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import logger from '@/utils/logger';
 
+// UUID-based variable structure for internal state management
+interface Variable {
+  id: string;        // Stable UUID - never changes
+  name: string;      // Variable name - editable
+  prompt: string;    // Prompt text - editable
+}
+
 interface ExternalAction {
   id?: string;
   user_id?: string;
@@ -88,6 +95,9 @@ const ExternalActionBuilder: React.FC<ExternalActionBuilderProps> = ({
   const [loading, setLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
+  // Internal variables state with UUID keys (solves focus issue)
+  const [variables, setVariables] = useState<Variable[]>([]);
+
   // Form state
   const [formData, setFormData] = useState<ExternalAction>({
     action_name: '',
@@ -110,10 +120,39 @@ const ExternalActionBuilder: React.FC<ExternalActionBuilderProps> = ({
     response_language: 'ar'
   });
 
+  // Conversion functions for compatibility with database format
+  const convertVariablesToLegacyFormat = (variables: Variable[]) => {
+    const variable_prompts: Record<string, string> = {};
+    const payload_template: Record<string, any> = {
+      phone_number: '{{phone_number}}',
+      message: '{{message}}',
+      timestamp: '{{timestamp}}'
+    };
+
+    variables.forEach(variable => {
+      variable_prompts[variable.name] = variable.prompt;
+      payload_template[variable.name] = `{{${variable.name}}}`;
+    });
+
+    return { variable_prompts, payload_template };
+  };
+
+  const convertLegacyFormatToVariables = (variable_prompts: Record<string, string>): Variable[] => {
+    return Object.entries(variable_prompts || {}).map(([name, prompt]) => ({
+      id: crypto.randomUUID(),
+      name,
+      prompt
+    }));
+  };
+
   // Initialize form with existing action data
   useEffect(() => {
     if (open) {
       if (existingAction) {
+        // Convert existing data to new format
+        const existingVariables = convertLegacyFormatToVariables(existingAction.variable_prompts);
+        setVariables(existingVariables);
+
         setFormData({
           action_name: existingAction.action_name,
           display_name: existingAction.display_name,
@@ -136,6 +175,7 @@ const ExternalActionBuilder: React.FC<ExternalActionBuilderProps> = ({
         });
       } else {
         // Reset for new action
+        setVariables([]);
         setFormData({
           action_name: '',
           display_name: '',
@@ -244,57 +284,24 @@ const ExternalActionBuilder: React.FC<ExternalActionBuilderProps> = ({
   };
 
   const addVariable = () => {
-    const variableName = `variable_${Object.keys(formData.variable_prompts).length + 1}`;
-    setFormData(prev => ({
-      ...prev,
-      variable_prompts: {
-        ...prev.variable_prompts,
-        [variableName]: ''
-      },
-      payload_template: {
-        ...prev.payload_template,
-        [variableName]: `{{${variableName}}}`
-      }
-    }));
+    const newVariable: Variable = {
+      id: crypto.randomUUID(),
+      name: `variable_${variables.length + 1}`,
+      prompt: ''
+    };
+    setVariables(prev => [...prev, newVariable]);
   };
 
-  const updateVariable = (oldName: string, newName: string, prompt: string) => {
-    setFormData(prev => {
-      const newVariablePrompts = { ...prev.variable_prompts };
-      const newPayloadTemplate = { ...prev.payload_template };
-
-      // Remove old variable
-      delete newVariablePrompts[oldName];
-      if (newPayloadTemplate[oldName]) {
-        delete newPayloadTemplate[oldName];
-      }
-
-      // Add new variable
-      newVariablePrompts[newName] = prompt;
-      newPayloadTemplate[newName] = `{{${newName}}}`;
-
-      return {
-        ...prev,
-        variable_prompts: newVariablePrompts,
-        payload_template: newPayloadTemplate
-      };
-    });
+  const updateVariable = (id: string, field: 'name' | 'prompt', value: string) => {
+    setVariables(prev => prev.map(variable =>
+      variable.id === id
+        ? { ...variable, [field]: value }
+        : variable
+    ));
   };
 
-  const removeVariable = (variableName: string) => {
-    setFormData(prev => {
-      const newVariablePrompts = { ...prev.variable_prompts };
-      const newPayloadTemplate = { ...prev.payload_template };
-
-      delete newVariablePrompts[variableName];
-      delete newPayloadTemplate[variableName];
-
-      return {
-        ...prev,
-        variable_prompts: newVariablePrompts,
-        payload_template: newPayloadTemplate
-      };
-    });
+  const removeVariable = (id: string) => {
+    setVariables(prev => prev.filter(variable => variable.id !== id));
   };
 
   const handleSave = async () => {
@@ -304,8 +311,13 @@ const ExternalActionBuilder: React.FC<ExternalActionBuilderProps> = ({
 
     setLoading(true);
     try {
+      // Convert variables to legacy format for database compatibility
+      const { variable_prompts, payload_template } = convertVariablesToLegacyFormat(variables);
+
       const actionData = {
         ...formData,
+        variable_prompts,
+        payload_template,
         user_id: user?.id,
         whatsapp_instance_id: whatsappInstanceId,
         updated_at: new Date().toISOString()
@@ -452,7 +464,7 @@ const ExternalActionBuilder: React.FC<ExternalActionBuilderProps> = ({
                 id="webhook_url"
                 value={formData.webhook_url}
                 onChange={(e) => setFormData(prev => ({ ...prev, webhook_url: e.target.value }))}
-                placeholder="https://hooks.zapier.com/hooks/catch/123456/abcdef/"
+                placeholder="https://hooks.convgo.com/hooks/catch/123456/abcdef/"
                 className={validationErrors.webhook_url ? 'border-red-500' : ''}
               />
               {validationErrors.webhook_url && (
@@ -518,28 +530,28 @@ const ExternalActionBuilder: React.FC<ExternalActionBuilderProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  {Object.entries(formData.variable_prompts).map(([variableName, prompt]) => (
-                    <Card key={variableName} className="p-3">
+                  {variables.map((variable) => (
+                    <Card key={variable.id} className="p-3">
                       <div className="space-y-3">
                         <div className="flex gap-3">
                           <Input
-                            value={variableName}
-                            onChange={(e) => updateVariable(variableName, e.target.value, prompt)}
+                            value={variable.name}
+                            onChange={(e) => updateVariable(variable.id, 'name', e.target.value)}
                             placeholder="product_name"
                             className="flex-1"
                           />
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => removeVariable(variableName)}
+                            onClick={() => removeVariable(variable.id)}
                             className="text-red-500 hover:text-red-700"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                         <LanguageAwareTextarea
-                          value={prompt}
-                          onChange={(e) => updateVariable(variableName, variableName, e.target.value)}
+                          value={variable.prompt}
+                          onChange={(e) => updateVariable(variable.id, 'prompt', e.target.value)}
                           placeholder="Extract the product name from the message"
                           className="min-h-[60px]"
                         />
@@ -570,7 +582,7 @@ const ExternalActionBuilder: React.FC<ExternalActionBuilderProps> = ({
                 </div>
 
                 <LanguageAwareTextarea
-                  value={JSON.stringify(formData.payload_template, null, 2)}
+                  value={JSON.stringify(convertVariablesToLegacyFormat(variables).payload_template, null, 2)}
                   onChange={(e) => {
                     try {
                       const template = JSON.parse(e.target.value || '{}');
@@ -588,9 +600,9 @@ const ExternalActionBuilder: React.FC<ExternalActionBuilderProps> = ({
                     <Badge variant="secondary">{'{{phone_number}}'}</Badge>
                     <Badge variant="secondary">{'{{message}}'}</Badge>
                     <Badge variant="secondary">{'{{timestamp}}'}</Badge>
-                    {Object.keys(formData.variable_prompts).map(varName => (
-                      <Badge key={varName} variant="secondary">
-                        {`{{${varName}}}`}
+                    {variables.map(variable => (
+                      <Badge key={variable.id} variant="secondary">
+                        {`{{${variable.name}}}`}
                       </Badge>
                     ))}
                   </div>
@@ -720,8 +732,8 @@ const ExternalActionBuilder: React.FC<ExternalActionBuilderProps> = ({
                   onChange={(e) => setFormData(prev => ({ ...prev, confirmation_message: e.target.value }))}
                   placeholder={
                     formData.response_type === 'custom_message' 
-                      ? "مرحباً {name}، تم استلام طلبك رقم {order_id} بنجاح!" 
-                      : "✅ تم استلام البيانات وإرسالها بنجاح!\nشكراً لك."
+                      ? "Hello {name}, your order {order_id} has been received successfully!" 
+                      : "✅ Data received and sent successfully!\nThank you."
                   }
                   rows={3}
                   className="mt-2"
@@ -734,9 +746,9 @@ const ExternalActionBuilder: React.FC<ExternalActionBuilderProps> = ({
                       <Badge variant="secondary">{'phone_number'}</Badge>
                       <Badge variant="secondary">{'message'}</Badge>
                       <Badge variant="secondary">{'timestamp'}</Badge>
-                      {Object.keys(formData.variable_prompts).map(varName => (
-                        <Badge key={varName} variant="secondary">
-                          {varName}
+                      {variables.map(variable => (
+                        <Badge key={variable.id} variant="secondary">
+                          {variable.name}
                         </Badge>
                       ))}
                     </div>

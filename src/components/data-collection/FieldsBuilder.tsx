@@ -9,10 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import {  
-  Trash2, 
-  Edit, 
-  GripVertical, 
+import {
+  Trash2,
+  Edit,
+  GripVertical,
   AlertCircle,
   Loader2,
   CirclePlus,
@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslation } from 'react-i18next';
 
 interface DataField {
   id?: string;
@@ -44,20 +45,22 @@ interface FieldsBuilderProps {
   configId: string;
 }
 
-const fieldTypes = [
-  { value: 'text', label: 'Text' },
-  { value: 'phone', label: 'Phone Number' },
-  { value: 'email', label: 'Email' },
-  { value: 'number', label: 'Number' },
-  { value: 'date', label: 'Date' },
-  { value: 'address', label: 'Address' }
+// Helper function to get field types with translations
+const getFieldTypes = (t: any) => [
+  { value: 'text', label: t('dataCollection.fieldTypeText') },
+  { value: 'phone', label: t('dataCollection.fieldTypePhone') },
+  { value: 'email', label: t('dataCollection.fieldTypeEmail') },
+  { value: 'number', label: t('dataCollection.fieldTypeNumber') },
+  { value: 'date', label: t('dataCollection.fieldTypeDate') },
+  { value: 'address', label: t('dataCollection.fieldTypeAddress') }
 ];
 
 const SortableFieldItem: React.FC<{
   field: DataField;
   onEdit: (field: DataField) => void;
   onDelete: (id: string) => void;
-}> = ({ field, onEdit, onDelete }) => {
+  t: any;
+}> = ({ field, onEdit, onDelete, t }) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: field.id || field.field_name
   });
@@ -94,10 +97,10 @@ const SortableFieldItem: React.FC<{
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <Badge variant="outline" className="text-xs">
-                  {fieldTypes.find(t => t.value === field.field_type)?.label}
+                  {getFieldTypes(t).find(ft => ft.value === field.field_type)?.label}
                 </Badge>
                 {field.is_required && (
-                  <Badge variant="destructive" className="text-xs">Required</Badge>
+                  <Badge variant="destructive" className="text-xs">{t('dataCollection.required')}</Badge>
                 )}
               </div>
             </div>
@@ -113,10 +116,10 @@ const SortableFieldItem: React.FC<{
                 )}
               </p>
               <Badge variant="outline" className="text-xs">
-                {fieldTypes.find(t => t.value === field.field_type)?.label}
+                {getFieldTypes(t).find(ft => ft.value === field.field_type)?.label}
               </Badge>
               {field.is_required && (
-                <Badge variant="destructive" className="text-xs">Required</Badge>
+                <Badge variant="destructive" className="text-xs">{t('dataCollection.required')}</Badge>
               )}
             </div>
           </div>
@@ -146,6 +149,7 @@ const SortableFieldItem: React.FC<{
 };
 
 const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingField, setEditingField] = useState<DataField | null>(null);
@@ -160,6 +164,8 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
     ask_if_missing_template: '',
     field_order: 0
   });
+
+  const fieldTypes = getFieldTypes(t);
 
   // Fetch existing fields
   const { data: fields = [], isLoading } = useQuery({
@@ -196,11 +202,11 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-collection-fields', configId] });
-      toast.success(editingField ? "Field updated successfully" : "Field added successfully");
+      toast.success(editingField ? t('dataCollection.fieldUpdatedSuccessfully') : t('dataCollection.fieldAddedSuccessfully'));
       resetForm();
     },
     onError: (error: any) => {
-      toast.error(error.message || "Failed to save field");
+      toast.error(error.message || t('dataCollection.failedToSaveField'));
     }
   });
 
@@ -216,10 +222,10 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-collection-fields', configId] });
-      toast.success("Field deleted successfully");
+      toast.success(t('dataCollection.fieldDeletedSuccessfully'));
     },
     onError: (error: any) => {
-      toast.error(error.message || "Failed to delete field");
+      toast.error(error.message || t('dataCollection.failedToDeleteField'));
     }
   });
 
@@ -241,7 +247,7 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
       queryClient.invalidateQueries({ queryKey: ['data-collection-fields', configId] });
     },
     onError: (error: any) => {
-      toast.error(error.message || "Failed to update field order");
+      toast.error(error.message || t('dataCollection.failedToSaveField'));
     }
   });
 
@@ -312,7 +318,7 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
 
   const handleSave = () => {
     if (!fieldForm.field_display_name) {
-      toast.error("Field name is required");
+      toast.error(t('dataCollection.fieldNameRequired'));
       return;
     }
 
@@ -384,11 +390,10 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Settings2 className="h-5 w-5 flex-shrink-0" />
-            <span>Custom Fields</span>
+            <span>{t('dataCollection.customFields')}</span>
           </CardTitle>
           <CardDescription className="text-sm leading-relaxed">
-            Define the fields you want to collect from WhatsApp conversations. 
-            These fields will be automatically extracted and exported to your Google Sheet.
+            {t('dataCollection.customFieldsDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 px-3 sm:px-6">
@@ -397,7 +402,7 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
               <div className="flex items-center gap-3">
                 <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                 <p className="text-sm text-blue-900 dark:text-blue-100">
-                  No fields configured yet. Add your first field to start collecting data.
+                  {t('dataCollection.noFieldsConfigured')}
                 </p>
               </div>
             </div>
@@ -414,6 +419,7 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
                       field={field}
                       onEdit={handleEdit}
                       onDelete={deleteField.mutate}
+                      t={t}
                     />
                   ))}
                 </div>
@@ -421,13 +427,13 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
             </DndContext>
           )}
           
-          <Button 
-            onClick={() => setIsDialogOpen(true)} 
+          <Button
+            onClick={() => setIsDialogOpen(true)}
             className="w-full mt-4 h-10 sm:h-11"
             size="default"
           >
             <CirclePlus className="h-4 w-4" />
-            Add New Field
+            {t('dataCollection.addNewField')}
           </Button>
         </CardContent>
       </Card>
@@ -436,10 +442,10 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
         <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] flex flex-col mx-auto">
           <DialogHeader className="flex-shrink-0 text-left">
             <DialogTitle className="text-lg sm:text-xl">
-              {editingField ? 'Edit Field' : 'Add New Field'}
+              {editingField ? t('dataCollection.editField') : t('dataCollection.addNewField')}
             </DialogTitle>
             <DialogDescription className="text-sm leading-relaxed">
-              {editingField ? 'Modify the field configuration below.' : 'Configure a new field to collect data from WhatsApp conversations.'}
+              {editingField ? t('dataCollection.modifyFieldConfiguration') : t('dataCollection.configureNewField')}
             </DialogDescription>
           </DialogHeader>
           
@@ -448,24 +454,24 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
               {/* Field Name */}
               <div className="space-y-2">
                 <Label htmlFor="field_display_name" className="text-sm font-medium">
-                  Field Name <span className="text-red-500">*</span>
+                  {t('dataCollection.fieldName')} <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="field_display_name"
-                  placeholder="e.g., Customer Name, Phone Number, Email Address"
+                  placeholder={t('dataCollection.fieldNamePlaceholder')}
                   value={fieldForm.field_display_name}
                   onChange={(e) => setFieldForm({ ...fieldForm, field_display_name: e.target.value })}
                   className="text-left h-10"
                 />
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Enter the name of the field you want to collect from customers (supports both Arabic and English)
+                  {t('dataCollection.fieldNameDescription')}
                 </p>
               </div>
 
               {/* Field Type */}
               <div className="space-y-2">
                 <Label htmlFor="field_type" className="text-sm font-medium">
-                  Field Type
+                  {t('dataCollection.fieldType')}
                 </Label>
                 <Select 
                   value={fieldForm.field_type} 
@@ -492,27 +498,27 @@ const FieldsBuilder: React.FC<FieldsBuilderProps> = ({ configId }) => {
                   onCheckedChange={(checked) => setFieldForm({ ...fieldForm, is_required: !!checked })}
                 />
                 <Label htmlFor="is_required" className="cursor-pointer text-sm">
-                  This field is required
+                  {t('dataCollection.thisFieldIsRequired')}
                 </Label>
               </div>
             </div>
           </div>
 
           <DialogFooter className="flex-shrink-0 flex-col sm:flex-row gap-2 pt-4">
-            <Button 
-              variant="outline" 
-              onClick={resetForm} 
+            <Button
+              variant="outline"
+              onClick={resetForm}
               className="w-full sm:w-auto order-2 sm:order-1"
             >
-              Cancel
+              {t('dataCollection.cancel')}
             </Button>
-            <Button 
-              onClick={handleSave} 
+            <Button
+              onClick={handleSave}
               disabled={saveField.isPending}
               className="w-full sm:w-auto order-1 sm:order-2"
             >
               {saveField.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {editingField ? 'Update Field' : 'Add Field'}
+              {editingField ? t('dataCollection.updateField') : t('dataCollection.addField')}
             </Button>
           </DialogFooter>
         </DialogContent>

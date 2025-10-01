@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,14 +10,14 @@ import { TagInput } from '@/components/ui/tag-input';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  Loader2, 
-  User, 
-  Mail, 
-  Building2, 
-  Target, 
-  Heart, 
-  Clock, 
+import {
+  Loader2,
+  User,
+  Mail,
+  Building2,
+  Target,
+  Heart,
+  Clock,
   TrendingUp,
   MessageSquare,
   Save,
@@ -102,12 +103,63 @@ const openWhatsApp = (phoneNumber: string) => {
 };
 
 export const CustomerProfileEdit = () => {
+  const { t } = useTranslation();
   const { instanceId, phoneNumber } = useParams<{ instanceId: string; phoneNumber: string }>();
   const navigate = useNavigate();
   const updateProfileMutation = useUpdateCustomerProfile();
-  
+
   // Fetch the customer profile
   const { data: profile, isLoading, error } = useCustomerProfile(instanceId, phoneNumber);
+
+  // Translated constants
+  const CUSTOMER_STAGES_TRANSLATED = [
+    { value: 'new', label: t('customerProfileEdit.newCustomer') },
+    { value: 'interested', label: t('customerProfileEdit.interested') },
+    { value: 'customer', label: t('customerProfileEdit.customer') },
+    { value: 'loyal', label: t('customerProfileEdit.loyalCustomer') }
+  ] as const;
+
+  const CUSTOMER_INTENTS_TRANSLATED = [
+    { value: 'unset', label: t('customerProfileEdit.notSet') },
+    { value: 'purchase', label: t('customerProfileEdit.purchase') },
+    { value: 'inquiry', label: t('customerProfileEdit.inquiry') },
+    { value: 'support', label: t('customerProfileEdit.support') },
+    { value: 'complaint', label: t('customerProfileEdit.complaint') },
+    { value: 'comparison', label: t('customerProfileEdit.comparison') }
+  ] as const;
+
+  const CUSTOMER_MOODS_TRANSLATED = [
+    { value: 'unset', label: t('customerProfileEdit.notSet') },
+    { value: 'happy', label: t('customerProfileEdit.happy') },
+    { value: 'excited', label: t('customerProfileEdit.excited') },
+    { value: 'neutral', label: t('customerProfileEdit.neutral') },
+    { value: 'frustrated', label: t('customerProfileEdit.frustrated') },
+    { value: 'confused', label: t('customerProfileEdit.confused') }
+  ] as const;
+
+  const URGENCY_LEVELS_TRANSLATED = [
+    { value: 'unset', label: t('customerProfileEdit.notSet') },
+    { value: 'low', label: t('customerProfileEdit.low') },
+    { value: 'normal', label: t('customerProfileEdit.normal') },
+    { value: 'high', label: t('customerProfileEdit.high') },
+    { value: 'urgent', label: t('customerProfileEdit.urgent') }
+  ] as const;
+
+  const COMMUNICATION_STYLES_TRANSLATED = [
+    { value: 'unset', label: t('customerProfileEdit.notSet') },
+    { value: 'formal', label: t('customerProfileEdit.formal') },
+    { value: 'friendly', label: t('customerProfileEdit.friendly') },
+    { value: 'direct', label: t('customerProfileEdit.direct') },
+    { value: 'detailed', label: t('customerProfileEdit.detailed') }
+  ] as const;
+
+  const JOURNEY_STAGES_TRANSLATED = [
+    { value: 'unset', label: t('customerProfileEdit.notSet') },
+    { value: 'first_time', label: t('customerProfileEdit.firstTime') },
+    { value: 'researching', label: t('customerProfileEdit.researching') },
+    { value: 'ready_to_buy', label: t('customerProfileEdit.readyToBuy') },
+    { value: 'existing_customer', label: t('customerProfileEdit.existingCustomer') }
+  ] as const;
   
   const [formData, setFormData] = useState<EditFormData>({
     name: '',
@@ -153,15 +205,15 @@ export const CustomerProfileEdit = () => {
   // Validate form data
   const validateForm = useCallback((): string | null => {
     if (!formData.name.trim()) {
-      return 'Customer name is required';
+      return t('customerProfileEdit.nameRequired');
     }
-    
+
     if (formData.email && !formData.email.includes('@')) {
-      return 'Please enter a valid email address';
+      return t('customerProfileEdit.invalidEmail');
     }
 
     return null;
-  }, [formData]);
+  }, [formData, t]);
 
   // Handle save
   const handleSave = useCallback(async () => {
@@ -194,11 +246,11 @@ export const CustomerProfileEdit = () => {
         updates
       });
 
-      toast.success('Customer profile updated successfully');
+      toast.success(t('customerProfileEdit.updateSuccess'));
       navigate('/customer-profiles');
     } catch (error) {
       logger.error('Error updating customer profile:', error);
-      toast.error('Failed to update customer profile');
+      toast.error(t('customerProfileEdit.updateError'));
     }
   }, [
     profile,
@@ -220,7 +272,7 @@ export const CustomerProfileEdit = () => {
       <div className="w-full min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Loading customer profile...</p>
+          <p className="mt-2 text-muted-foreground">{t('customerProfileEdit.loadingProfile')}</p>
         </div>
       </div>
     );
@@ -231,14 +283,14 @@ export const CustomerProfileEdit = () => {
       <div className="w-full min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-            Customer Profile Not Found
+            {t('customerProfileEdit.profileNotFound')}
           </h1>
           <p className="text-muted-foreground mb-4">
-            The requested customer profile could not be found.
+            {t('customerProfileEdit.profileNotFoundDescription')}
           </p>
           <Button onClick={handleCancel}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Customer Profiles
+            {t('customerProfileEdit.backToProfiles')}
           </Button>
         </div>
       </div>
@@ -262,7 +314,7 @@ export const CustomerProfileEdit = () => {
               </Button>
               <div>
                 <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
-                  Edit Customer Profile
+                  {t('customerProfileEdit.title')}
                 </h1>
               </div>
             </div>
@@ -273,19 +325,19 @@ export const CustomerProfileEdit = () => {
                 onClick={() => openWhatsApp(profile.phone_number)}
               >
                 <ExternalLink className="h-4 w-4" />
-                WhatsApp
+                {t('customerProfileEdit.whatsapp')}
               </Button>
-              <Button 
+              <Button
                 variant="default"
-                onClick={handleCancel} 
+                onClick={handleCancel}
                 disabled={updateProfileMutation.isPending}
                 className="text-gray-800 bg-gray-100 hover:bg-gray-200 hover:text-gray-800 border-gray-300 border"
               >
                 <X className="h-4 w-4" />
-                Cancel
+                {t('customerProfileEdit.cancel')}
               </Button>
-              <Button 
-                onClick={handleSave} 
+              <Button
+                onClick={handleSave}
                 disabled={updateProfileMutation.isPending}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
@@ -294,7 +346,7 @@ export const CustomerProfileEdit = () => {
                 ) : (
                   <Save className="h-4 w-4" />
                 )}
-                Save Changes
+                {t('customerProfileEdit.saveChanges')}
               </Button>
             </div>
           </div>
@@ -308,56 +360,56 @@ export const CustomerProfileEdit = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
-                Basic Information
+                {t('customerProfileEdit.basicInformation')}
               </CardTitle>
               <CardDescription>
-                Update the customer's basic contact and company information
+                {t('customerProfileEdit.basicInformationDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Customer Name *</Label>
+                  <Label htmlFor="name">{t('customerProfileEdit.customerNameRequired')}</Label>
                   <Input
                     id="name"
                     value={formData.name}
                     onChange={(e) => updateField('name', e.target.value)}
-                    placeholder="Enter customer name"
+                    placeholder={t('customerProfileEdit.customerNamePlaceholder')}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
+                  <Label htmlFor="email">{t('customerProfileEdit.emailAddress')}</Label>
                   <Input
                     id="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => updateField('email', e.target.value)}
-                    placeholder="customer@example.com"
+                    placeholder={t('customerProfileEdit.emailPlaceholder')}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="company">Company</Label>
+                  <Label htmlFor="company">{t('customerProfileEdit.company')}</Label>
                   <Input
                     id="company"
                     value={formData.company}
                     onChange={(e) => updateField('company', e.target.value)}
-                    placeholder="Company name"
+                    placeholder={t('customerProfileEdit.companyPlaceholder')}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="customer_stage">Customer Stage</Label>
-                  <Select 
-                    value={formData.customer_stage} 
+                  <Label htmlFor="customer_stage">{t('customerProfileEdit.customerStage')}</Label>
+                  <Select
+                    value={formData.customer_stage}
                     onValueChange={(value) => updateField('customer_stage', value as 'new' | 'interested' | 'customer' | 'loyal')}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select stage" />
+                      <SelectValue placeholder={t('customerProfileEdit.selectStage')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {CUSTOMER_STAGES.map((stage) => (
+                      {CUSTOMER_STAGES_TRANSLATED.map((stage) => (
                         <SelectItem key={stage.value} value={stage.value}>
                           {stage.label}
                         </SelectItem>
@@ -368,15 +420,15 @@ export const CustomerProfileEdit = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="tags">Tags</Label>
+                <Label htmlFor="tags">{t('customerProfileEdit.tags')}</Label>
                 <TagInput
                   value={formData.tags}
                   onChange={(tags) => updateField('tags', tags)}
-                  placeholder="Add tags (press Enter to add)"
+                  placeholder={t('customerProfileEdit.tagsPlaceholder')}
                   maxTags={10}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Add relevant tags to categorize this customer (e.g., VIP, wholesale, etc.)
+                  {t('customerProfileEdit.tagsDescription')}
                 </p>
               </div>
             </CardContent>
@@ -387,25 +439,25 @@ export const CustomerProfileEdit = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="h-5 w-5" />
-                AI Insights
+                {t('customerProfileEdit.aiInsights')}
               </CardTitle>
               <CardDescription>
-                AI-generated insights about the customer's behavior and preferences
+                {t('customerProfileEdit.aiInsightsDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="customer_intent">Customer Intent</Label>
-                  <Select 
-                    value={formData.customer_intent} 
+                  <Label htmlFor="customer_intent">{t('customerProfileEdit.customerIntent')}</Label>
+                  <Select
+                    value={formData.customer_intent}
                     onValueChange={(value) => updateField('customer_intent', value as 'purchase' | 'inquiry' | 'support' | 'complaint' | 'comparison' | 'unset')}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select intent" />
+                      <SelectValue placeholder={t('customerProfileEdit.selectIntent')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {CUSTOMER_INTENTS.map((intent) => (
+                      {CUSTOMER_INTENTS_TRANSLATED.map((intent) => (
                         <SelectItem key={intent.value} value={intent.value}>
                           {intent.label}
                         </SelectItem>
@@ -415,16 +467,16 @@ export const CustomerProfileEdit = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="customer_mood">Customer Mood</Label>
-                  <Select 
-                    value={formData.customer_mood} 
+                  <Label htmlFor="customer_mood">{t('customerProfileEdit.customerMood')}</Label>
+                  <Select
+                    value={formData.customer_mood}
                     onValueChange={(value) => updateField('customer_mood', value as 'happy' | 'frustrated' | 'neutral' | 'excited' | 'confused' | 'unset')}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select mood" />
+                      <SelectValue placeholder={t('customerProfileEdit.selectMood')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {CUSTOMER_MOODS.map((mood) => (
+                      {CUSTOMER_MOODS_TRANSLATED.map((mood) => (
                         <SelectItem key={mood.value} value={mood.value}>
                           {mood.label}
                         </SelectItem>
@@ -434,16 +486,16 @@ export const CustomerProfileEdit = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="urgency_level">Urgency Level</Label>
-                  <Select 
-                    value={formData.urgency_level} 
+                  <Label htmlFor="urgency_level">{t('customerProfileEdit.urgencyLevel')}</Label>
+                  <Select
+                    value={formData.urgency_level}
                     onValueChange={(value) => updateField('urgency_level', value as 'urgent' | 'high' | 'normal' | 'low' | 'unset')}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select urgency" />
+                      <SelectValue placeholder={t('customerProfileEdit.selectUrgency')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {URGENCY_LEVELS.map((level) => (
+                      {URGENCY_LEVELS_TRANSLATED.map((level) => (
                         <SelectItem key={level.value} value={level.value}>
                           {level.label}
                         </SelectItem>
@@ -453,16 +505,16 @@ export const CustomerProfileEdit = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="communication_style">Communication Style</Label>
-                  <Select 
-                    value={formData.communication_style} 
+                  <Label htmlFor="communication_style">{t('customerProfileEdit.communicationStyle')}</Label>
+                  <Select
+                    value={formData.communication_style}
                     onValueChange={(value) => updateField('communication_style', value as 'formal' | 'friendly' | 'direct' | 'detailed' | 'unset')}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select style" />
+                      <SelectValue placeholder={t('customerProfileEdit.selectStyle')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {COMMUNICATION_STYLES.map((style) => (
+                      {COMMUNICATION_STYLES_TRANSLATED.map((style) => (
                         <SelectItem key={style.value} value={style.value}>
                           {style.label}
                         </SelectItem>
@@ -472,16 +524,16 @@ export const CustomerProfileEdit = () => {
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="journey_stage">Journey Stage</Label>
-                  <Select 
-                    value={formData.journey_stage} 
+                  <Label htmlFor="journey_stage">{t('customerProfileEdit.journeyStage')}</Label>
+                  <Select
+                    value={formData.journey_stage}
                     onValueChange={(value) => updateField('journey_stage', value as 'first_time' | 'researching' | 'ready_to_buy' | 'existing_customer' | 'unset')}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select journey stage" />
+                      <SelectValue placeholder={t('customerProfileEdit.selectJourneyStage')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {JOURNEY_STAGES.map((stage) => (
+                      {JOURNEY_STAGES_TRANSLATED.map((stage) => (
                         <SelectItem key={stage.value} value={stage.value}>
                           {stage.label}
                         </SelectItem>
@@ -498,24 +550,24 @@ export const CustomerProfileEdit = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="h-5 w-5" />
-                Conversation Summary
+                {t('customerProfileEdit.conversationSummary')}
               </CardTitle>
               <CardDescription>
-                Overview of conversations and interactions with this customer
+                {t('customerProfileEdit.conversationSummaryDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <Label htmlFor="conversation_summary">Summary</Label>
+                <Label htmlFor="conversation_summary">{t('customerProfileEdit.summary')}</Label>
                 <LanguageAwareTextarea
                   id="conversation_summary"
                   value={formData.conversation_summary}
                   onChange={(e) => updateField('conversation_summary', e.target.value)}
-                  placeholder="Enter a summary of conversations with this customer..."
+                  placeholder={t('customerProfileEdit.summaryPlaceholder')}
                   rows={4}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Provide a brief overview of the customer's interaction history and preferences
+                  {t('customerProfileEdit.summaryDescription')}
                 </p>
               </div>
             </CardContent>
@@ -526,10 +578,10 @@ export const CustomerProfileEdit = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
-                Statistics & Activity
+                {t('customerProfileEdit.statisticsAndActivity')}
               </CardTitle>
               <CardDescription>
-                Read-only statistics about this customer's activity
+                {t('customerProfileEdit.statisticsDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -538,47 +590,47 @@ export const CustomerProfileEdit = () => {
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="p-4">
                     <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <h4 className="text-sm font-medium">Total Messages</h4>
+                      <h4 className="text-sm font-medium">{t('customerProfileEdit.totalMessages')}</h4>
                       <MessageSquare className="h-4 w-4 text-orange-600" />
                     </div>
                     <div className="text-2xl font-bold">{profile.total_messages}</div>
-                    <p className="text-xs text-muted-foreground">Messages exchanged</p>
+                    <p className="text-xs text-muted-foreground">{t('customerProfileEdit.messagesExchanged')}</p>
                   </div>
                 </div>
-                
+
                 {/* AI Interactions */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="p-4">
                     <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <h4 className="text-sm font-medium">AI Interactions</h4>
+                      <h4 className="text-sm font-medium">{t('customerProfileEdit.aiInteractions')}</h4>
                       <Bot className="h-4 w-4 text-purple-600" />
                     </div>
                     <div className="text-2xl font-bold">{profile.ai_interactions}</div>
-                    <p className="text-xs text-muted-foreground">AI conversations</p>
+                    <p className="text-xs text-muted-foreground">{t('customerProfileEdit.aiConversations')}</p>
                   </div>
                 </div>
-                
+
                 {/* First Contact */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="p-4">
                     <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <h4 className="text-sm font-medium">First Contact</h4>
+                      <h4 className="text-sm font-medium">{t('customerProfileEdit.firstContact')}</h4>
                       <Calendar className="h-4 w-4 text-blue-600" />
                     </div>
                     <div className="text-lg font-bold">{new Date(profile.first_interaction).toLocaleDateString()}</div>
-                    <p className="text-xs text-muted-foreground">Initial interaction</p>
+                    <p className="text-xs text-muted-foreground">{t('customerProfileEdit.initialInteraction')}</p>
                   </div>
                 </div>
-                
+
                 {/* Last Contact */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="p-4">
                     <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <h4 className="text-sm font-medium">Last Contact</h4>
+                      <h4 className="text-sm font-medium">{t('customerProfileEdit.lastContact')}</h4>
                       <Clock className="h-4 w-4 text-green-600" />
                     </div>
                     <div className="text-lg font-bold">{lastInteraction}</div>
-                    <p className="text-xs text-muted-foreground">Recent activity</p>
+                    <p className="text-xs text-muted-foreground">{t('customerProfileEdit.recentActivity')}</p>
                   </div>
                 </div>
               </div>

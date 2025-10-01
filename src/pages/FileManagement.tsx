@@ -3,6 +3,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { FileUploader } from "@/components/FileUploader";
 import { FileList } from "@/components/FileList";
 import { useEffect, useState } from "react";
+import { useTranslation } from 'react-i18next';
 import { Files, Filter, MoreHorizontal, Search, FolderUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ export default function FileManagement() {
     user,
     loading: authLoading
   } = useAuth();
+  const { t } = useTranslation();
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState('');
   const [initialLoading, setInitialLoading] = useState(true);
@@ -49,10 +51,10 @@ export default function FileManagement() {
           {/* Loading text with animation */}
           <div className="loading-text-center space-y-2">
             <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Loading File Management
+              {t('fileManagement.loadingTitle')}
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Please wait while we prepare your documents...
+              {t('fileManagement.loadingDescription')}
             </p>
           </div>
           
@@ -75,11 +77,11 @@ export default function FileManagement() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div>
-                <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
-                  File Management
+                <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100">
+                  {t('fileManagement.title')}
                 </h1>
                 <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
-                  Upload, process, and manage your documents with AI-powered text analysis
+                  {t('fileManagement.description')}
                 </p>
               </div>
             </div>
@@ -96,7 +98,7 @@ export default function FileManagement() {
             <div className="flex items-center space-x-2 mb-4">
               <FolderUp className="w-5 h-5 text-slate-900 dark:text-slate-100" />
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                Upload Documents
+                {t('fileManagement.uploadDocuments')}
               </h2>
             </div>
             <FileUploader />
@@ -110,7 +112,7 @@ export default function FileManagement() {
               <div className="flex items-center space-x-2">
                 <Files className="w-5 h-5 text-slate-900 dark:text-slate-100" />
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                  Your Documents
+                  {t('fileManagement.yourDocuments')}
                 </h2>
               </div>
               
@@ -118,8 +120,8 @@ export default function FileManagement() {
               <div className="flex items-center space-x-3">
                 <div className="relative hidden sm:block">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    placeholder="Search files..." 
+                  <Input
+                    placeholder={t('fileManagement.searchFiles')}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 w-64 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -36,60 +37,48 @@ interface PromptGenerationData {
   description: string;
 }
 
-// Business types options
-const businessTypes = [
-  { value: 'ecommerce', label: 'E-commerce' },
-  { value: 'services', label: 'Services' },
-  { value: 'healthcare', label: 'Healthcare' },
-  { value: 'education', label: 'Education' },
-  { value: 'restaurant', label: 'Restaurant & Delivery' },
-  { value: 'realestate', label: 'Real Estate' },
-  { value: 'finance', label: 'Financial Services' },
-  { value: 'technology', label: 'Technology' },
-  { value: 'retail', label: 'Retail' },
-  { value: 'other', label: 'Other' }
+// These will be translated dynamically in the component
+const getBusinessTypes = (t: (key: string) => string) => [
+  { value: 'ecommerce', label: t('aiConfiguration.ecommerce') },
+  { value: 'services', label: t('aiConfiguration.services') },
+  { value: 'healthcare', label: t('aiConfiguration.healthcare') },
+  { value: 'education', label: t('aiConfiguration.education') },
+  { value: 'restaurant', label: t('aiConfiguration.restaurant') },
+  { value: 'realestate', label: t('aiConfiguration.realestate') },
+  { value: 'finance', label: t('aiConfiguration.finance') },
+  { value: 'technology', label: t('aiConfiguration.technology') },
+  { value: 'retail', label: t('aiConfiguration.retail') },
+  { value: 'other', label: t('aiConfiguration.other') }
 ];
 
-// Language options
-const languageOptions = [
-  { value: 'arabic', label: 'Arabic Only' },
-  { value: 'english', label: 'English Only' },
-  { value: 'both', label: 'Both Arabic & English' }
+const getLanguageOptions = (t: (key: string) => string) => [
+  { value: 'arabic', label: t('aiConfiguration.arabicOnly') },
+  { value: 'english', label: t('aiConfiguration.englishOnly') },
+  { value: 'both', label: t('aiConfiguration.bothLanguages') }
 ];
 
-// Arabic dialect options
-const arabicDialects = [
-  { value: 'standard', label: 'Modern Standard Arabic' },
-  { value: 'egyptian', label: 'Egyptian Arabic' },
-  { value: 'saudi', label: 'Saudi Arabic' },
-  { value: 'gulf', label: 'Gulf Arabic' },
-  { value: 'levantine', label: 'Levantine Arabic' },
-  { value: 'maghrebi', label: 'Maghrebi Arabic' }
+const getArabicDialects = (t: (key: string) => string) => [
+  { value: 'standard', label: t('aiConfiguration.modernStandardArabic') },
+  { value: 'egyptian', label: t('aiConfiguration.egyptianArabic') },
+  { value: 'saudi', label: t('aiConfiguration.saudiArabic') },
+  { value: 'gulf', label: t('aiConfiguration.gulfArabic') },
+  { value: 'levantine', label: t('aiConfiguration.levantineArabic') },
+  { value: 'maghrebi', label: t('aiConfiguration.maghrebiArabic') }
 ];
 
-// Tone options
-const toneOptions = [
-  { value: 'professional', label: 'Professional' },
-  { value: 'friendly', label: 'Friendly' },
-  { value: 'formal', label: 'Formal' },
-  { value: 'casual', label: 'Casual' },
-  { value: 'supportive', label: 'Supportive' }
+const getToneOptions = (t: (key: string) => string) => [
+  { value: 'professional', label: t('aiConfiguration.professional') },
+  { value: 'friendly', label: t('aiConfiguration.friendly') },
+  { value: 'formal', label: t('aiConfiguration.formal') },
+  { value: 'casual', label: t('aiConfiguration.casual') },
+  { value: 'supportive', label: t('aiConfiguration.supportive') }
 ];
 
-// Status configuration for badges
-const statusConfig = {
-  Connected: {
-    color: "text-green-700 bg-green-100 border border-green-200 dark:bg-green-950/50",
-    label: "Connected"
-  }
-};
-
-// Status Badge Component (without icon for the dropdown)
-const StatusBadge = ({ status }: { status: string }) => {
-  const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Connected;
+// Status Badge Component
+const StatusBadge = ({ status, t }: { status: string; t: (key: string) => string }) => {
   return (
-    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", config.color)}>
-      {config.label}
+    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-green-700 bg-green-100 border border-green-200 dark:bg-green-950/50")}>
+      {t('aiConfiguration.connected')}
     </span>
   );
 };
@@ -101,6 +90,7 @@ const WhatsAppAIConfig = () => {
     user,
     loading: authLoading
   } = useAuth();
+  const { t } = useTranslation();
   // Removed unused navigate variable
   // Removed unused isMobile variable
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
@@ -394,146 +384,156 @@ const WhatsAppAIConfig = () => {
   };
 
   // Step 1: Business Type
-  const renderStep1 = () => (
-    <div className="space-y-4">
-      <div>
-        <Label className="text-sm font-medium">What type of business do you have?</Label>
-        <p className="text-sm text-muted-foreground mb-3">Choose the type that best describes your business</p>
-      </div>
-      <Select 
-        value={promptData.businessType} 
-        onValueChange={(value) => {
-          setPromptData(prev => ({...prev, businessType: value}));
-          if (value !== 'other') {
-            setCustomBusinessType('');
-          }
-        }}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select your business type" />
-        </SelectTrigger>
-        <SelectContent>
-          {businessTypes.map((type) => (
-            <SelectItem key={type.value} value={type.value}>
-              {type.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      
-      {promptData.businessType === 'other' && (
+  const renderStep1 = () => {
+    const businessTypes = getBusinessTypes(t);
+    return (
+      <div className="space-y-4">
         <div>
-          <Label className="text-sm font-medium">Please specify your business type</Label>
-          <LanguageAwareInput
-            value={customBusinessType}
-            onChange={(e) => setCustomBusinessType(e.target.value)}
-            placeholder="e.g., Consulting, Manufacturing, Media, etc."
-            className="mt-2"
-          />
+          <Label className="text-sm font-medium">{t('aiConfiguration.businessTypeQuestion')}</Label>
+          <p className="text-sm text-muted-foreground mb-3">{t('aiConfiguration.businessTypeDescription')}</p>
         </div>
-      )}
-    </div>
-  );
+        <Select
+          value={promptData.businessType}
+          onValueChange={(value) => {
+            setPromptData(prev => ({...prev, businessType: value}));
+            if (value !== 'other') {
+              setCustomBusinessType('');
+            }
+          }}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder={t('aiConfiguration.selectBusinessType')} />
+          </SelectTrigger>
+          <SelectContent>
+            {businessTypes.map((type) => (
+              <SelectItem key={type.value} value={type.value}>
+                {type.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {promptData.businessType === 'other' && (
+          <div>
+            <Label className="text-sm font-medium">{t('aiConfiguration.specifyBusinessType')}</Label>
+            <LanguageAwareInput
+              value={customBusinessType}
+              onChange={(e) => setCustomBusinessType(e.target.value)}
+              placeholder={t('aiConfiguration.businessTypePlaceholder')}
+              className="mt-2"
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Step 2: Language Settings
-  const renderStep2 = () => (
-    <div className="space-y-4">
-      <div>
-        <Label className="text-sm font-medium">What languages should your AI support?</Label>
-        <p className="text-sm text-muted-foreground mb-3">Choose the languages your AI will interact with customers in</p>
-      </div>
-      <Select 
-        value={promptData.languages.length > 0 ? promptData.languages[0] : ''} 
-        onValueChange={(value) => setPromptData(prev => ({...prev, languages: [value]}))}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select preferred language" />
-        </SelectTrigger>
-        <SelectContent>
-          {languageOptions.map((lang) => (
-            <SelectItem key={lang.value} value={lang.value}>
-              {lang.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      
-      {(promptData.languages.includes('arabic') || promptData.languages.includes('both')) && (
+  const renderStep2 = () => {
+    const languageOptions = getLanguageOptions(t);
+    const arabicDialects = getArabicDialects(t);
+    return (
+      <div className="space-y-4">
         <div>
-          <Label className="text-sm font-medium">Which Arabic dialect do you prefer?</Label>
-          <Select 
-            value={promptData.arabicDialect} 
-            onValueChange={(value) => setPromptData(prev => ({...prev, arabicDialect: value}))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select Arabic dialect" />
-            </SelectTrigger>
-            <SelectContent>
-              {arabicDialects.map((dialect) => (
-                <SelectItem key={dialect.value} value={dialect.value}>
-                  {dialect.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label className="text-sm font-medium">{t('aiConfiguration.languagesQuestion')}</Label>
+          <p className="text-sm text-muted-foreground mb-3">{t('aiConfiguration.languagesDescription')}</p>
         </div>
-      )}
-    </div>
-  );
+        <Select
+          value={promptData.languages.length > 0 ? promptData.languages[0] : ''}
+          onValueChange={(value) => setPromptData(prev => ({...prev, languages: [value]}))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder={t('aiConfiguration.selectPreferredLanguage')} />
+          </SelectTrigger>
+          <SelectContent>
+            {languageOptions.map((lang) => (
+              <SelectItem key={lang.value} value={lang.value}>
+                {lang.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {(promptData.languages.includes('arabic') || promptData.languages.includes('both')) && (
+          <div>
+            <Label className="text-sm font-medium">{t('aiConfiguration.arabicDialectQuestion')}</Label>
+            <Select
+              value={promptData.arabicDialect}
+              onValueChange={(value) => setPromptData(prev => ({...prev, arabicDialect: value}))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t('aiConfiguration.selectArabicDialect')} />
+              </SelectTrigger>
+              <SelectContent>
+                {arabicDialects.map((dialect) => (
+                  <SelectItem key={dialect.value} value={dialect.value}>
+                    {dialect.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Step 3: Tone & Personality
-  const renderStep3 = () => (
-    <div className="space-y-4">
-      <div>
-        <Label className="text-sm font-medium">What tone should your AI use in responses?</Label>
-        <p className="text-sm text-muted-foreground mb-3">Choose the style that matches your brand personality</p>
+  const renderStep3 = () => {
+    const toneOptions = getToneOptions(t);
+    return (
+      <div className="space-y-4">
+        <div>
+          <Label className="text-sm font-medium">{t('aiConfiguration.toneQuestion')}</Label>
+          <p className="text-sm text-muted-foreground mb-3">{t('aiConfiguration.toneDescription')}</p>
+        </div>
+        <Select
+          value={promptData.tone}
+          onValueChange={(value) => setPromptData(prev => ({...prev, tone: value}))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder={t('aiConfiguration.selectTone')} />
+          </SelectTrigger>
+          <SelectContent>
+            {toneOptions.map((tone) => (
+              <SelectItem key={tone.value} value={tone.value}>
+                {tone.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-      <Select 
-        value={promptData.tone} 
-        onValueChange={(value) => setPromptData(prev => ({...prev, tone: value}))}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select response tone" />
-        </SelectTrigger>
-        <SelectContent>
-          {toneOptions.map((tone) => (
-            <SelectItem key={tone.value} value={tone.value}>
-              {tone.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
+    );
+  };
 
   // Step 4: Final Description (swapped from step 5)
   const renderStep4 = () => (
     <div className="space-y-4">
       <div>
-        <Label className="text-sm font-medium">Describe what you want your AI assistant to do</Label>
-        <p className="text-sm text-muted-foreground mb-3">Write a brief description of your AI assistant's main purpose and goals</p>
+        <Label className="text-sm font-medium">{t('aiConfiguration.descriptionQuestion')}</Label>
+        <p className="text-sm text-muted-foreground mb-3">{t('aiConfiguration.descriptionSubtext')}</p>
       </div>
       <LanguageAwareTextarea
         value={promptData.description}
         onChange={(e) => setPromptData(prev => ({...prev, description: e.target.value}))}
-        placeholder="Example: I want an AI assistant that answers customer inquiries about our products and helps them through the purchasing process"
+        placeholder={t('aiConfiguration.descriptionPlaceholder')}
         rows={4}
         className="resize-y"
       />
     </div>
   );
 
-  // Step 5: Special Instructions (swapped from step 4) 
+  // Step 5: Special Instructions (swapped from step 4)
   const renderStep5 = () => (
     <div className="space-y-4">
       <div>
-        <Label className="text-sm font-medium">Special Instructions (Optional)</Label>
-        <p className="text-sm text-muted-foreground mb-3">Add any specific rules or guidelines you want your AI to follow</p>
+        <Label className="text-sm font-medium">{t('aiConfiguration.specialInstructions')}</Label>
+        <p className="text-sm text-muted-foreground mb-3">{t('aiConfiguration.specialInstructionsDescription')}</p>
       </div>
       <LanguageAwareTextarea
         value={promptData.specialInstructions}
         onChange={(e) => setPromptData(prev => ({...prev, specialInstructions: e.target.value}))}
-        placeholder="Example: Ignore questions outside our business scope, ask for phone number before providing quotes, use customer's name in responses"
+        placeholder={t('aiConfiguration.specialInstructionsPlaceholder')}
         rows={4}
         className="resize-y"
       />
@@ -579,10 +579,10 @@ const WhatsAppAIConfig = () => {
           {/* Loading text with animation */}
           <div className="loading-text-center space-y-2">
             <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Loading AI Configuration
+              {t('aiConfiguration.loadingTitle')}
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Please wait while we prepare your AI settings...
+              {t('aiConfiguration.loadingDescription')}
             </p>
           </div>
           
@@ -604,11 +604,11 @@ const WhatsAppAIConfig = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div>
-                <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
-                AI Configuration
+                <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100">
+                {t('aiConfiguration.title')}
                 </h1>
                 <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
-                  Configure your AI assistant to respond to incoming WhatsApp messages
+                  {t('aiConfiguration.description')}
                 </p>
               </div>
 
@@ -625,7 +625,7 @@ const WhatsAppAIConfig = () => {
             <div className="mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Cog className="h-5 w-5" />
-                Choose WhatsApp Number
+                {t('aiConfiguration.chooseWhatsappNumber')}
               </h2>
             </div>
 
@@ -635,12 +635,12 @@ const WhatsAppAIConfig = () => {
               disabled={isLoading || instances.length === 0}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select WhatsApp number" />
+                <SelectValue placeholder={t('aiConfiguration.selectWhatsappNumber')} />
               </SelectTrigger>
               <SelectContent>
                 {instances.length === 0 ? (
                   <SelectItem value="none">
-                    No connected WhatsApp numbers available
+                    {t('aiConfiguration.noConnectedNumbers')}
                   </SelectItem>
                 ) : (
                   instances.map((instance) => (
@@ -648,7 +648,7 @@ const WhatsAppAIConfig = () => {
                       <div className="flex items-center justify-between w-full gap-x-2">
                         <span>{instance.instance_name}</span>
                         <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
-                          Connected
+                          {t('aiConfiguration.connected')}
                         </span>
                       </div>
                     </SelectItem>
@@ -672,33 +672,33 @@ const WhatsAppAIConfig = () => {
             {!selectedInstance ? (
               <div className="py-8">
                 <p className="text-center text-slate-600 dark:text-slate-400">
-                  Please select a WhatsApp instance to configure AI settings
+                  {t('aiConfiguration.pleaseSelect')}
                 </p>
               </div>
             ) : (
               <div className="w-full">
-              
+
                 <div className="space-y-6">
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
                   <div className="mb-4">
                     <h3 className="text-lg font-semibold mb-1 flex items-center gap-2">
                       <Bot className="h-5 w-5" />
-                      AI System Prompt
+                      {t('aiConfiguration.aiSystemPrompt')}
                     </h3>
                     <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Set instructions that guide how the AI responds to incoming WhatsApp messages.
+                      {t('aiConfiguration.promptInstructions')}
                     </p>
                   </div>
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <Label htmlFor="system-prompt">Prompt</Label>
+                        <Label htmlFor="system-prompt">{t('aiConfiguration.prompt')}</Label>
                         <Button variant="outline" size="sm" onClick={generateSystemPrompt} disabled={isLoading || !selectedInstance}>
                           <Lightbulb className="mr-2 h-4 w-4" />
-                          Auto-Generate Prompt
+                          {t('aiConfiguration.autoGeneratePrompt')}
                         </Button>
                       </div>
-                      <LanguageAwareTextarea id="system-prompt" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={8} placeholder="Provide instructions for how the AI should respond to messages..." className="resize-y" />
+                      <LanguageAwareTextarea id="system-prompt" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={8} placeholder={t('aiConfiguration.promptPlaceholder')} className="resize-y" />
                     </div>
                   </div>
                 </div>
@@ -708,10 +708,10 @@ const WhatsAppAIConfig = () => {
                   <div className="mb-4">
                     <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
                       <Users className="h-5 w-5" />
-                      AI Personality System
+                      {t('aiConfiguration.aiPersonalitySystem')}
                     </h3>
                     <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Enable intelligent personality switching based on customer inquiry types. This allows your AI to respond differently for sales, support, technical issues, etc.
+                      {t('aiConfiguration.personalitySystemDescription')}
                     </p>
                   </div>
                   <div className="space-y-6">
@@ -723,12 +723,12 @@ const WhatsAppAIConfig = () => {
                               </div>
                               <div className="flex-1 sm:flex-auto">
                                 <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                                  {personalityCount > 0 ? `${personalityCount} AI Personalities Configured` : 'No AI Personalities Configured Yet'}
+                                  {personalityCount > 0 ? `${personalityCount} ${t('aiConfiguration.personalitiesConfigured')}` : t('aiConfiguration.noPersonalitiesYet')}
                                 </p>
                                 <p className="text-xs text-blue-600 dark:text-blue-300 font-normal">
-                                  {personalityCount > 0 
-                                    ? 'Your AI will intelligently switch between personalities based on customer inquiry types'
-                                    : 'Create personalities to enable intelligent response switching'
+                                  {personalityCount > 0
+                                    ? t('aiConfiguration.intelligentSwitching')
+                                    : t('aiConfiguration.createPersonalities')
                                   }
                                 </p>
                               </div>
@@ -742,7 +742,7 @@ const WhatsAppAIConfig = () => {
                               >
                                 <Link to="/ai-personalities">
                                   <Cog className="h-4 w-4 mr-2" />
-                                  Manage Personalities
+                                  {t('aiConfiguration.managePersonalities')}
                                 </Link>
                               </Button>
                             </div>
@@ -757,10 +757,10 @@ const WhatsAppAIConfig = () => {
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
                           <AudioLines className="h-5 w-5" />
-                          Voice Message Settings
+                          {t('aiConfiguration.voiceMessageSettings')}
                         </h3>
                         <p className="text-sm text-slate-600 dark:text-slate-400">
-                          Set how your AI assistant handles incoming voice messages on WhatsApp
+                          {t('aiConfiguration.voiceMessageDescription')}
                         </p>
                       </div>
                       <div className="ml-6">
@@ -769,36 +769,36 @@ const WhatsAppAIConfig = () => {
                     </div>
                   </div>
                   <div className="space-y-6">
-                    
+
                     <div className="space-y-2">
-                      <Label htmlFor="voice-language">Voice Message Language</Label>
+                      <Label htmlFor="voice-language">{t('aiConfiguration.voiceMessageLanguage')}</Label>
                       <Select value={defaultVoiceLanguage} onValueChange={setDefaultVoiceLanguage}>
                         <SelectTrigger id="voice-language" className="w-full">
-                          <SelectValue placeholder="Select a language" />
+                          <SelectValue placeholder={t('aiConfiguration.selectLanguage')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="ar">Arabic</SelectItem>
-                          <SelectItem value="en">English</SelectItem>
-                          <SelectItem value="auto">Auto-detect</SelectItem>
+                          <SelectItem value="ar">{t('aiConfiguration.arabic')}</SelectItem>
+                          <SelectItem value="en">{t('aiConfiguration.english')}</SelectItem>
+                          <SelectItem value="auto">{t('aiConfiguration.autoDetect')}</SelectItem>
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Select the language spoken in the voice messages to improve transcription accuracy.
+                        {t('aiConfiguration.voiceLanguageDescription')}
                       </p>
                     </div>
-                    
+
                     {!processVoiceMessages && <div className="space-y-2">
                         <Label htmlFor="voice-default-response">
-                          Default Response for Voice Messages
+                          {t('aiConfiguration.defaultVoiceResponse')}
                         </Label>
-                        <LanguageAwareTextarea id="voice-default-response" value={voiceMessageDefaultResponse} onChange={e => setVoiceMessageDefaultResponse(e.target.value)} placeholder="Message to send when a voice message is received" rows={3} />
+                        <LanguageAwareTextarea id="voice-default-response" value={voiceMessageDefaultResponse} onChange={e => setVoiceMessageDefaultResponse(e.target.value)} placeholder={t('aiConfiguration.voiceResponsePlaceholder')} rows={3} />
                         <p className="text-xs text-muted-foreground">
-                          This reply will be automatically sent when a customer sends a voice message and voice processing is disabled.
+                          {t('aiConfiguration.voiceResponseDescription')}
                         </p>
                       </div>}
-                    
+
                     <Button onClick={saveAIConfig} disabled={isSaving || !systemPrompt.trim() || !selectedInstance || !processVoiceMessages && !voiceMessageDefaultResponse.trim()} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
-                      {isSaving ? 'Saving...' : 'Save Configuration'}
+                      {isSaving ? t('aiConfiguration.saving') : t('aiConfiguration.saveConfiguration')}
                     </Button>
                   </div>
                 </div>
@@ -812,22 +812,22 @@ const WhatsAppAIConfig = () => {
       <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
         <DialogContent className="w-full max-w-[90vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl py-6 px-6">
         <DialogHeader>
-          <DialogTitle className="text-left font-semibold">Smart Prompt Generator Wizard</DialogTitle>
+          <DialogTitle className="text-left font-semibold">{t('aiConfiguration.promptWizardTitle')}</DialogTitle>
           <DialogDescription className="text-left">
-            We'll help you create a customized prompt step by step to improve your AI assistant's performance
+            {t('aiConfiguration.promptWizardDescription')}
           </DialogDescription>
           {promptStats && (
             <div className="mt-2 text-sm">
               <div className="flex justify-between items-center">
                 <span>
-                  {promptStats.remaining} Generations Remaining
+                  {promptStats.remaining} {t('aiConfiguration.generationsRemaining')}
                 </span>
                 <span className="text-muted-foreground">
-                  ({promptStats.used}/{promptStats.limit} used)
+                  ({promptStats.used}/{promptStats.limit} {t('aiConfiguration.used')})
                 </span>
               </div>
               {promptStats.timeUntilReset && (
-                <PromptResetCountdown 
+                <PromptResetCountdown
                   timeUntilReset={promptStats.timeUntilReset}
                   className="mt-1"
                 />
@@ -873,53 +873,53 @@ const WhatsAppAIConfig = () => {
         <DialogFooter className="pt-4 border-t">
           <div className="flex flex-col sm:flex-row sm:justify-between w-full gap-2 sm:gap-3">
             <div className="flex gap-2 w-full sm:w-auto order-2 sm:order-1">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setPromptDialogOpen(false)}
                 className="flex-1 sm:flex-none text-xs sm:text-sm px-3 py-2"
               >
-                Cancel
+                {t('aiConfiguration.cancel')}
               </Button>
               {currentStep > 1 && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={prevStep}
                   className="flex items-center justify-center gap-1 flex-1 sm:flex-none text-xs sm:text-sm px-3 py-2"
                 >
                   <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                  <span className="hidden sm:inline">Previous</span>
-                  <span className="sm:hidden">Back</span>
+                  <span className="hidden sm:inline">{t('aiConfiguration.previous')}</span>
+                  <span className="sm:hidden">{t('aiConfiguration.back')}</span>
                 </Button>
               )}
             </div>
-            
+
             <div className="flex gap-2 w-full sm:w-auto order-1 sm:order-2">
               {currentStep < 5 ? (
-                <Button 
-                  onClick={nextStep} 
+                <Button
+                  onClick={nextStep}
                   disabled={!canProceedToNextStep()}
                   className="flex items-center justify-center gap-1 w-full sm:w-auto text-xs sm:text-sm px-3 py-2 bg-blue-600 hover:bg-blue-700"
                 >
-                  <span>Next</span>
+                  <span>{t('aiConfiguration.next')}</span>
                   <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                 </Button>
               ) : (
-                <Button 
-                  onClick={handleGenerateSystemPrompt} 
+                <Button
+                  onClick={handleGenerateSystemPrompt}
                   disabled={isGeneratingPrompt || !promptData.description.trim() || isLoadingStats || promptStats?.remaining === 0}
                   className="flex items-center justify-center gap-1 bg-green-600 hover:bg-green-700 w-full sm:w-auto text-xs sm:text-sm px-3 py-2"
                 >
                   {isGeneratingPrompt ? (
                     <>
-                      <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin flex-shrink-0" /> 
-                      <span>Generating...</span>
+                      <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin flex-shrink-0" />
+                      <span>{t('aiConfiguration.generating')}</span>
                     </>
                   ) : promptStats?.remaining === 0 ? (
-                    <span>Limit reached</span>
+                    <span>{t('aiConfiguration.limitReached')}</span>
                   ) : (
                     <>
                       <Lightbulb className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                      <span>Generate Prompt</span>
+                      <span>{t('aiConfiguration.generatePrompt')}</span>
                     </>
                   )}
                 </Button>

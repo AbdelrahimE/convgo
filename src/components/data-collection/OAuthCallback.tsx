@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -12,7 +12,6 @@ interface OAuthCallbackProps {
 
 const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
   const location = useLocation();
-  const { toast } = useToast();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState<string>('Processing Google authentication...');
   const isMounted = useRef(true);
@@ -174,8 +173,7 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
           safeSetMessage(`Successfully connected as ${emailText}!`);
 
           // Show success toast
-          toast({
-            title: "Google Account Connected",
+          toast.success("Google Account Connected", {
             description: `Successfully authenticated as ${emailText}`,
           });
         }
@@ -200,11 +198,9 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
           const errorMessage = error.message || 'Authentication failed';
           console.log('[OAuthCallback] Setting error message:', errorMessage);
           safeSetMessage(errorMessage);
-          
-          toast({
-            title: "Authentication Failed",
+
+          toast.error("Authentication Failed", {
             description: error.message || "Failed to connect Google account",
-            variant: "destructive",
           });
         }
 
@@ -216,7 +212,7 @@ const OAuthCallback: React.FC<OAuthCallbackProps> = () => {
     };
 
     processOAuthCallback();
-  }, [location.search, toast]);
+  }, [location.search]);
 
   const getStatusIcon = () => {
     switch (status) {

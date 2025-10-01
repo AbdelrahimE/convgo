@@ -3,16 +3,16 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "react-router-dom";
-import { 
-  FolderCog, 
-  LogOut, 
-  Link2, 
-  BrainCog, 
-  AlignJustify, 
-  UserCog, 
-  Gauge, 
-  ChevronUp, 
-  HelpCircle, 
+import {
+  FolderCog,
+  LogOut,
+  Link2,
+  BrainCog,
+  AlignJustify,
+  UserCog,
+  Gauge,
+  ChevronUp,
+  HelpCircle,
   Crown,
   X,
   Users,
@@ -20,15 +20,19 @@ import {
   Settings,
   Database,
   Zap,
-  UserCheck
+  UserCheck,
+  Languages,
+  Check
 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuPortal } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { LogoWithText } from "./Logo";
 import logger from '@/utils/logger';
 import { useEffect, useImperativeHandle, useState, forwardRef } from 'react';
+import { useTranslation } from 'react-i18next';
+
 export type SimpleSidebarHandle = {
   open: () => void;
   close: () => void;
@@ -36,45 +40,6 @@ export type SimpleSidebarHandle = {
 };
 
 const FULL_NAME_MAX_LENGTH = 25;
-
-const navigation = [{
-  name: 'WhatsApp Numbers',
-  href: '/whatsapp',
-  icon: Link2
-}, {
-  name: 'AI Knowledge Base',
-  href: '/knowledge-base',
-  icon: FolderCog
-}, {
-  name: 'AI Assistant Settings',
-  href: '/whatsapp-ai-config',
-  icon: BrainCog
-}, {
-  name: 'AI Personalities',
-  href: '/ai-personalities',
-  icon: Users
-}, {
-  name: 'Customer Profiles',
-  href: '/customer-profiles',
-  icon: UserCheck
-}, {
-  name: 'Data Collection',
-  href: '/data-collection',
-  icon: Database
-}, {
-  name: 'External Actions',
-  href: '/external-actions',
-  icon: Zap
-}, {
-  name: 'Smart Escalation',
-  href: '/escalation-management',
-  icon: Headset,
-  badge: 'escalated'
-}, {
-  name: 'Usage Insights',
-  href: '/ai-usage',
-  icon: Gauge
-}];
 
 function getInitials(name: string | null): string {
   if (!name) return '?';
@@ -88,6 +53,47 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrollLockY, setScrollLockY] = useState<number | null>(null);
   const [escalatedCount, setEscalatedCount] = useState(0);
+  const { t, i18n } = useTranslation();
+
+  // Navigation items with translation keys
+  const navigation = [{
+    nameKey: 'sidebar.whatsappNumbers',
+    href: '/whatsapp',
+    icon: Link2
+  }, {
+    nameKey: 'sidebar.knowledgeBase',
+    href: '/knowledge-base',
+    icon: FolderCog
+  }, {
+    nameKey: 'sidebar.aiSettings',
+    href: '/whatsapp-ai-config',
+    icon: BrainCog
+  }, {
+    nameKey: 'sidebar.aiPersonalities',
+    href: '/ai-personalities',
+    icon: Users
+  }, {
+    nameKey: 'sidebar.customerProfiles',
+    href: '/customer-profiles',
+    icon: UserCheck
+  }, {
+    nameKey: 'sidebar.dataCollection',
+    href: '/data-collection',
+    icon: Database
+  }, {
+    nameKey: 'sidebar.externalActions',
+    href: '/external-actions',
+    icon: Zap
+  }, {
+    nameKey: 'sidebar.smartEscalation',
+    href: '/escalation-management',
+    icon: Headset,
+    badge: 'escalated'
+  }, {
+    nameKey: 'sidebar.usageInsights',
+    href: '/ai-usage',
+    icon: Gauge
+  }];
 
   // Fetch escalated conversations count
   useEffect(() => {
@@ -109,7 +115,7 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
     };
 
     fetchEscalatedCount();
-    
+
     // Set up real-time subscription for escalated conversations
     const channel = supabase
       .channel('escalated-conversations-count')
@@ -147,13 +153,18 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
     }
   };
 
+  const handleLanguageChange = (language: string) => {
+    i18n.changeLanguage(language);
+    toast.success(language === 'ar' ? 'تم تغيير اللغة إلى العربية' : 'Language changed to English');
+  };
+
   const profile = user ? {
     name: user.user_metadata?.full_name || 'User',
     avatarUrl: user.user_metadata?.avatar_url
   } : null;
 
-  const truncatedName = profile?.name && profile.name.length > FULL_NAME_MAX_LENGTH 
-    ? `${profile.name.slice(0, FULL_NAME_MAX_LENGTH)}...` 
+  const truncatedName = profile?.name && profile.name.length > FULL_NAME_MAX_LENGTH
+    ? `${profile.name.slice(0, FULL_NAME_MAX_LENGTH)}...`
     : profile?.name;
 
   const closeMobile = () => setMobileOpen(false);
@@ -213,14 +224,14 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
               const isActive = location.pathname === item.href;
               return (
                 <Link
-                  key={item.name}
+                  key={item.nameKey}
                   to={item.href}
                   onClick={closeMobile}
                   className={cn(
                     "relative flex items-center gap-2 px-3.5 py-3 text-sm font-normal rounded-lg overflow-hidden transition-all duration-200",
                     "hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950/50 dark:hover:text-blue-300",
-                    isActive 
-                      ? "glass-active rounded-lg text-blue-700 font-normal dark:text-blue-300" 
+                    isActive
+                      ? "glass-active rounded-lg text-blue-700 font-normal dark:text-blue-300"
                       : "text-slate-900 font-normal dark:text-slate-100"
                   )}
                 >
@@ -229,7 +240,7 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
                     "group-hover:scale-110",
                     isActive ? "text-blue-600 dark:text-blue-300" : "text-slate-900 dark:text-slate-100"
                   )} />
-                  <span className="truncate">{item.name}</span>
+                  <span className="truncate">{t(item.nameKey)}</span>
                   {item.badge === 'escalated' && escalatedCount > 0 && (
                     <div className="relative ml-auto">
                       <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
@@ -266,39 +277,70 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
                     {truncatedName}
                   </span>
                   <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
-                    Manage account
+                    {t('sidebar.manageAccount')}
                   </span>
                 </div>
                 <ChevronUp className="h-4 w-4 text-gray-400 ml-2" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent 
-              side="top" 
-              align="end" 
+            <DropdownMenuContent
+              side="top"
+              align="end"
               className="w-56 mb-2"
               sideOffset={4}
             >
               <DropdownMenuItem asChild>
                 <Link to="/account-settings" className="flex items-center gap-2 cursor-pointer">
                   <UserCog className="h-4 w-4" />
-                  <span>Account Settings</span>
+                  <span>{t('sidebar.accountSettings')}</span>
                 </Link>
               </DropdownMenuItem>
+
+              {/* Language Submenu */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Languages className="h-4 w-4 mr-2" />
+                  <span>{t('sidebar.language')}</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem onClick={() => handleLanguageChange('en')}>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🇬🇧</span>
+                          <span>English</span>
+                        </div>
+                        {i18n.language === 'en' && <Check className="h-4 w-4 ml-2" />}
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleLanguageChange('ar')}>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🇸🇦</span>
+                          <span>العربية</span>
+                        </div>
+                        {i18n.language === 'ar' && <Check className="h-4 w-4 ml-2" />}
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+
               <DropdownMenuItem>
                 <HelpCircle className="h-4 w-4 mr-2" />
-                <span>Support</span>
+                <span>{t('sidebar.support')}</span>
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Crown className="h-4 w-4 mr-2" />
-                <span>Upgrade</span>
+                <span>{t('sidebar.upgrade')}</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={handleLogout}
                 className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/50"
               >
                 <LogOut className="h-4 w-4 mr-2" />
-                <span>Logout</span>
+                <span>{t('sidebar.logout')}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

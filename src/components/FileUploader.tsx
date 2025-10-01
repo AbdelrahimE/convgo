@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
 import { Upload, AlertCircle, ChevronDown, ChevronUp, RefreshCw, Cog } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useTranslation } from 'react-i18next';
 
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
@@ -27,6 +28,7 @@ interface ChunkingSettings {
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 export function FileUploader() {
+  const { t } = useTranslation();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
@@ -38,9 +40,6 @@ export function FileUploader() {
     chunkOverlap: 120
   });
   const inputRef = useRef<HTMLInputElement>(null);
-  const {
-    toast
-  } = useToast();
   const {
     user
   } = useAuth();
@@ -65,25 +64,20 @@ export function FileUploader() {
   };
   // Simplified retry mechanism - user can manually retry by uploading again
   const handleRetry = () => {
-    toast({
-      title: "Try Again",
+    toast.info("Try Again", {
       description: "Please try uploading your file again."
     });
     resetRetryState();
   };
   const validateFile = (file: File) => {
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-      toast({
-        variant: "destructive",
-        title: "Invalid file type",
+      toast.error("Invalid file type", {
         description: "Please upload a PDF, TXT, or CSV file"
       });
       return false;
     }
     if (file.size > MAX_FILE_SIZE) {
-      toast({
-        variant: "destructive",
-        title: "File too large",
+      toast.error("File too large", {
         description: "File size should be less than 10MB"
       });
       return false;
@@ -115,23 +109,19 @@ export function FileUploader() {
         await generateEmbeddings(fileId);
       } catch (embeddingError) {
         logger.error('Error generating embeddings:', embeddingError);
-        toast({
-          variant: "destructive",
-          title: "Embeddings Generation",
+        toast.error("Embeddings Generation", {
           description: "Text extraction completed, but embeddings generation encountered an issue."
         });
       }
       resetRetryState();
     } catch (error: any) {
       logger.error('Error in processing:', error);
-      toast({
-        variant: "destructive",
-        title: "Processing Error",
+      toast.error("Processing Error", {
         description: "Failed to process file. Click retry to attempt again.",
-        action: retryState.attempts < MAX_RETRY_ATTEMPTS ? <Button variant="outline" size="sm" onClick={handleRetry}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Retry ({MAX_RETRY_ATTEMPTS - retryState.attempts} left)
-          </Button> : undefined
+        action: retryState.attempts < MAX_RETRY_ATTEMPTS ? {
+          label: `Retry (${MAX_RETRY_ATTEMPTS - retryState.attempts} left)`,
+          onClick: handleRetry
+        } : undefined
       });
     }
   };
@@ -192,21 +182,18 @@ export function FileUploader() {
       // This acts as backup if real-time subscriptions fail
       queryClient.invalidateQueries({ queryKey: ['files', user.id] });
       queryClient.invalidateQueries({ queryKey: ['files-count', user.id] });
-      
+
       resetRetryState();
-      toast({
-        title: "Success",
+      toast.success("Success", {
         description: "File uploaded and processed successfully. Embeddings will be generated automatically."
       });
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
+      toast.error("Error", {
         description: error.message,
-        action: retryState.attempts < MAX_RETRY_ATTEMPTS ? <Button variant="outline" size="sm" onClick={handleRetry}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Retry ({MAX_RETRY_ATTEMPTS - retryState.attempts} left)
-          </Button> : undefined
+        action: retryState.attempts < MAX_RETRY_ATTEMPTS ? {
+          label: `Retry (${MAX_RETRY_ATTEMPTS - retryState.attempts} left)`,
+          onClick: handleRetry
+        } : undefined
       });
     } finally {
       setIsLoading(false);
@@ -297,14 +284,14 @@ export function FileUploader() {
               <Upload className={`w-6 h-6 ${isLoading ? 'text-blue-600 animate-pulse' : 'text-blue-500'}`} />
             </div>
             <p className="text-sm text-slate-600 dark:text-slate-400 text-center max-w-xs">
-              Drag and drop, or click to browse
+              {t('fileManagement.dragAndDrop')}
             </p>
             <div className="flex items-center gap-1 mt-2">
               <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
-                <span>PDF, TXT, CSV</span>
+                <span>{t('fileManagement.fileTypes')}</span>
               </div>
               <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
-                <span>Max 10 MB</span>
+                <span>{t('fileManagement.maxFileSize')}</span>
               </div>
             </div>
             {retryState.lastError && retryState.attempts > 0 && (
@@ -333,10 +320,10 @@ export function FileUploader() {
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                    Text Chunking Settings
+                    {t('fileManagement.textChunkingSettings')}
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Configure how your documents are processed
+                    {t('fileManagement.configureProcessing')}
                   </p>
                 </div>
               </div>
@@ -352,29 +339,29 @@ export function FileUploader() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <Label htmlFor="chunk-size" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Chunk Size: {chunkingSettings.chunkSize} tokens
+                    {t('fileManagement.chunkSize')}: {chunkingSettings.chunkSize} {t('fileManagement.tokens')}
                   </Label>
-                  <Input 
-                    type="number" 
-                    id="chunk-size-input" 
-                    className="w-20 h-8 text-xs" 
-                    value={chunkingSettings.chunkSize} 
-                    onChange={handleChunkSizeInputChange} 
-                    min={100} 
-                    max={2000} 
+                  <Input
+                    type="number"
+                    id="chunk-size-input"
+                    className="w-20 h-8 text-xs"
+                    value={chunkingSettings.chunkSize}
+                    onChange={handleChunkSizeInputChange}
+                    min={100}
+                    max={2000}
                   />
                 </div>
-                <Slider 
-                  id="chunk-size" 
-                  min={100} 
-                  max={2000} 
-                  step={16} 
-                  value={[chunkingSettings.chunkSize]} 
+                <Slider
+                  id="chunk-size"
+                  min={100}
+                  max={2000}
+                  step={16}
+                  value={[chunkingSettings.chunkSize]}
                   onValueChange={handleChunkSizeChange}
                   className="w-full"
                 />
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Controls how much text is included in each searchable part. Larger chunks provide more context.
+                  {t('fileManagement.chunkSizeDescription')}
                 </p>
               </div>
 
@@ -382,41 +369,41 @@ export function FileUploader() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <Label htmlFor="chunk-overlap" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Chunk Overlap: {chunkingSettings.chunkOverlap} tokens
+                    {t('fileManagement.chunkOverlap')}: {chunkingSettings.chunkOverlap} {t('fileManagement.tokens')}
                   </Label>
-                  <Input 
-                    type="number" 
-                    id="chunk-overlap-input" 
-                    className="w-20 h-8 text-xs" 
-                    value={chunkingSettings.chunkOverlap} 
-                    onChange={handleChunkOverlapInputChange} 
-                    min={0} 
-                    max={200} 
+                  <Input
+                    type="number"
+                    id="chunk-overlap-input"
+                    className="w-20 h-8 text-xs"
+                    value={chunkingSettings.chunkOverlap}
+                    onChange={handleChunkOverlapInputChange}
+                    min={0}
+                    max={200}
                   />
                 </div>
-                <Slider 
-                  id="chunk-overlap" 
-                  min={0} 
-                  max={200} 
-                  step={8} 
-                  value={[chunkingSettings.chunkOverlap]} 
+                <Slider
+                  id="chunk-overlap"
+                  min={0}
+                  max={200}
+                  step={8}
+                  value={[chunkingSettings.chunkOverlap]}
                   onValueChange={handleChunkOverlapChange}
                   className="w-full"
                 />
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Controls how much text is repeated between chunks. Higher overlap preserves context.
+                  {t('fileManagement.chunkOverlapDescription')}
                 </p>
               </div>
 
               {/* Recommendations */}
               <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
                 <h4 className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-2">
-                  Recommended Settings:
+                  {t('fileManagement.recommendedSettings')}
                 </h4>
                 <div className="space-y-1 text-xs text-blue-700 dark:text-blue-300">
-                  <div>Technical Documents: 512–768 chunk size, 40–60 overlap</div>
-                  <div>Narrative Content: 768–1024 chunk size, 80–100 overlap</div>
-                  <div>Short Form Content: 256–512 chunk size, 20–40 overlap</div>
+                  <div>{t('fileManagement.technicalDocuments')}</div>
+                  <div>{t('fileManagement.narrativeContent')}</div>
+                  <div>{t('fileManagement.shortFormContent')}</div>
                 </div>
               </div>
             </div>

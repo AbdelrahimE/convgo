@@ -21,12 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  Search, 
-  Download, 
-  RefreshCw, 
-  CheckCircle2, 
-  XCircle, 
+import {
+  Search,
+  Download,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
   Clock,
   ExternalLink,
   AlertCircle,
@@ -41,6 +41,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 
 interface CollectedDataViewProps {
   configId: string;
@@ -69,6 +70,7 @@ interface DataField {
 }
 
 const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'complete' | 'incomplete' | 'exported'>('all');
@@ -153,10 +155,10 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collected-data-sessions'] });
-      toast.success("Data exported to Google Sheets successfully");
+      toast.success(t('dataCollection.dataExportedSuccessfully'));
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to export data to Google Sheets");
+      toast.error(error.message || t('dataCollection.failedToExportData'));
     }
   });
 
@@ -164,9 +166,9 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
   const exportAll = useMutation({
     mutationFn: async () => {
       const completeSessions = sessions.filter(s => s.is_complete && !s.exported_to_sheets);
-      
+
       if (completeSessions.length === 0) {
-        throw new Error("No complete sessions to export");
+        throw new Error(t('dataCollection.noCompleteSessionsToExport'));
       }
 
       const { data, error } = await supabase.functions.invoke('sheets-exporter', {
@@ -181,10 +183,10 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['collected-data-sessions'] });
-      toast.success(`Successfully exported ${data.exported} sessions to Google Sheets`);
+      toast.success(t('dataCollection.successfullyExported', { count: data.exported }));
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to export data");
+      toast.error(error.message || t('dataCollection.failedToExport'));
     }
   });
 
@@ -200,21 +202,21 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collected-data-sessions'] });
-      toast.success("Session deleted successfully");
+      toast.success(t('dataCollection.sessionDeletedSuccessfully'));
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to delete session");
+      toast.error(error.message || t('dataCollection.failedToDeleteSession'));
     }
   });
 
   const getStatusBadge = (session: DataSession) => {
     if (session.exported_to_sheets) {
-      return <Badge variant="default"><CheckCircle2 className="h-3 w-3 mr-1" /> Exported</Badge>;
+      return <Badge variant="default"><CheckCircle2 className="h-3 w-3 mr-1" /> {t('dataCollection.exported')}</Badge>;
     }
     if (session.is_complete) {
-      return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" /> Ready to Export</Badge>;
+      return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" /> {t('dataCollection.readyToExport')}</Badge>;
     }
-    return <Badge variant="outline"><XCircle className="h-3 w-3 mr-1" /> Incomplete</Badge>;
+    return <Badge variant="outline"><XCircle className="h-3 w-3 mr-1" /> {t('dataCollection.incomplete')}</Badge>;
   };
 
   const viewDetails = (session: DataSession) => {
@@ -232,9 +234,9 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
         <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Total Sessions</p>
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">{t('dataCollection.totalSessions')}</p>
               <span className="text-2xl font-bold text-blue-700 dark:text-blue-300 block mt-1">{sessions.length}</span>
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">All Data Collections</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{t('dataCollection.allDataCollections')}</p>
             </div>
             <Database className="h-6 w-6 text-blue-600 dark:text-blue-400" />
           </div>
@@ -244,11 +246,11 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
         <div className="bg-green-50 dark:bg-green-950/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-green-900 dark:text-green-100">Complete</p>
+              <p className="text-sm font-medium text-green-900 dark:text-green-100">{t('dataCollection.complete')}</p>
               <span className="text-2xl font-bold text-green-700 dark:text-green-300 block mt-1">
                 {sessions.filter(s => s.is_complete).length}
               </span>
-              <p className="text-xs text-green-600 dark:text-green-400 mt-1">Ready for Export</p>
+              <p className="text-xs text-green-600 dark:text-green-400 mt-1">{t('dataCollection.readyForExport')}</p>
             </div>
             <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
           </div>
@@ -258,11 +260,11 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
         <div className="bg-orange-50 dark:bg-orange-950/20 rounded-lg p-4 border border-orange-200 dark:border-orange-800">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-orange-900 dark:text-orange-100">Incomplete</p>
+              <p className="text-sm font-medium text-orange-900 dark:text-orange-100">{t('dataCollection.incomplete')}</p>
               <span className="text-2xl font-bold text-orange-700 dark:text-orange-300 block mt-1">
                 {sessions.filter(s => !s.is_complete).length}
               </span>
-              <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">Missing Data Fields</p>
+              <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">{t('dataCollection.missingDataFields')}</p>
             </div>
             <Clock className="h-6 w-6 text-orange-600 dark:text-orange-400" />
           </div>
@@ -272,11 +274,11 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
         <div className="bg-purple-50 dark:bg-purple-950/20 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-purple-900 dark:text-purple-100">Exported</p>
+              <p className="text-sm font-medium text-purple-900 dark:text-purple-100">{t('dataCollection.exported')}</p>
               <span className="text-2xl font-bold text-purple-700 dark:text-purple-300 block mt-1">
                 {sessions.filter(s => s.exported_to_sheets).length}
               </span>
-              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Sent to Google Sheets</p>
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">{t('dataCollection.sentToGoogleSheets')}</p>
             </div>
             <FileSpreadsheet className="h-6 w-6 text-purple-600 dark:text-purple-400" />
           </div>
@@ -288,10 +290,10 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <ListCheck className="h-5 w-5 flex-shrink-0" />
-            Collected Data
+            {t('dataCollection.collectedData')}
           </CardTitle>
           <CardDescription className="text-sm">
-            View and manage data collected from WhatsApp conversations
+            {t('dataCollection.viewAndManageData')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -300,23 +302,23 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by phone or conversation ID..."
+                  placeholder={t('dataCollection.searchByPhoneOrConversation')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
               </div>
             </div>
-            
+
             <Select value={filterStatus} onValueChange={(value: any) => setFilterStatus(value)}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by status" />
+                <SelectValue placeholder={t('dataCollection.status')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Sessions</SelectItem>
-                <SelectItem value="complete">Complete</SelectItem>
-                <SelectItem value="incomplete">Incomplete</SelectItem>
-                <SelectItem value="exported">Exported</SelectItem>
+                <SelectItem value="all">{t('dataCollection.allSessions')}</SelectItem>
+                <SelectItem value="complete">{t('dataCollection.complete')}</SelectItem>
+                <SelectItem value="incomplete">{t('dataCollection.incomplete')}</SelectItem>
+                <SelectItem value="exported">{t('dataCollection.exported')}</SelectItem>
               </SelectContent>
             </Select>
 
@@ -337,7 +339,7 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 )}
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Export All ({completeSessions.length})
+                {t('dataCollection.exportAll', { count: completeSessions.length })}
               </Button>
             </div>
           </div>
@@ -350,7 +352,7 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
           ) : sessions.length === 0 ? (
             <Alert>
               <AlertDescription>
-                No data collected yet. Data will appear here when customers interact with your WhatsApp bot.
+                {t('dataCollection.noDataCollected')}
               </AlertDescription>
             </Alert>
           ) : (
@@ -358,12 +360,12 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Phone Number</TableHead>
-                    <TableHead>Conversation ID</TableHead>
-                    <TableHead>Fields Collected</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t('dataCollection.phoneNumber')}</TableHead>
+                    <TableHead>{t('dataCollection.conversationId')}</TableHead>
+                    <TableHead>{t('dataCollection.fieldsCollected')}</TableHead>
+                    <TableHead>{t('dataCollection.status')}</TableHead>
+                    <TableHead>{t('dataCollection.created')}</TableHead>
+                    <TableHead className="text-right">{t('dataCollection.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -378,10 +380,10 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
                         </code>
                       </TableCell>
                       <TableCell>
-                        {Object.keys(session.collected_data || {}).length} fields
+                        {t('dataCollection.fieldsCount', { count: Object.keys(session.collected_data || {}).length })}
                         {session.missing_fields.length > 0 && (
                           <span className="text-xs text-muted-foreground ml-1">
-                            ({session.missing_fields.length} missing)
+                            {t('dataCollection.missingCount', { count: session.missing_fields.length })}
                           </span>
                         )}
                       </TableCell>
@@ -430,29 +432,29 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Session Details</DialogTitle>
+            <DialogTitle>{t('dataCollection.sessionDetails')}</DialogTitle>
           </DialogHeader>
           
           {selectedSession && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Phone Number</Label>
+                  <Label>{t('dataCollection.phoneNumber')}</Label>
                   <p className="text-sm font-medium">{selectedSession.phone_number}</p>
                 </div>
                 <div>
-                  <Label>Status</Label>
+                  <Label>{t('dataCollection.status')}</Label>
                   <div className="mt-1">{getStatusBadge(selectedSession)}</div>
                 </div>
                 <div>
-                  <Label>Created At</Label>
+                  <Label>{t('dataCollection.created')}</Label>
                   <p className="text-sm">
                     {format(new Date(selectedSession.created_at), 'PPP HH:mm')}
                   </p>
                 </div>
                 {selectedSession.exported_at && (
                   <div>
-                    <Label>Exported At</Label>
+                    <Label>{t('dataCollection.exported')}</Label>
                     <p className="text-sm">
                       {format(new Date(selectedSession.exported_at), 'PPP HH:mm')}
                     </p>
@@ -461,7 +463,7 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
               </div>
 
               <div>
-                <Label>Collected Data</Label>
+                <Label>{t('dataCollection.collectedDataDetails')}</Label>
                 <div className="mt-2 p-3 bg-muted rounded-lg">
                   <pre className="text-sm overflow-x-auto">
                     {JSON.stringify(transformCollectedData(selectedSession.collected_data), null, 2)}
@@ -471,7 +473,7 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
 
               {selectedSession.missing_fields.length > 0 && (
                 <div>
-                  <Label>Missing Fields</Label>
+                  <Label>{t('dataCollection.missingFields')}</Label>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {transformMissingFields(selectedSession.missing_fields).map((fieldDisplayName, index) => (
                       <Badge key={selectedSession.missing_fields[index]} variant="outline">
@@ -486,7 +488,7 @@ const CollectedDataView: React.FC<CollectedDataViewProps> = ({ configId }) => {
                 <Alert>
                   <CheckCircle2 className="h-4 w-4" />
                   <AlertDescription>
-                    Exported to Google Sheets - Row #{selectedSession.sheet_row_number}
+                    {t('dataCollection.exportedToSheets', { row: selectedSession.sheet_row_number })}
                   </AlertDescription>
                 </Alert>
               )}

@@ -8,6 +8,7 @@ import { Loader2, Save, ExternalLink, Info } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 interface SheetSelectorProps {
   configId: string;
@@ -15,11 +16,12 @@ interface SheetSelectorProps {
   sheetName?: string;
 }
 
-const SheetSelector: React.FC<SheetSelectorProps> = ({ 
-  configId, 
-  currentSheetId, 
-  sheetName 
+const SheetSelector: React.FC<SheetSelectorProps> = ({
+  configId,
+  currentSheetId,
+  sheetName
 }) => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [sheetId, setSheetId] = useState(currentSheetId || '');
   const [newSheetName, setNewSheetName] = useState(sheetName || 'Sheet1');
@@ -38,10 +40,10 @@ const SheetSelector: React.FC<SheetSelectorProps> = ({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['google-sheets-config'] });
-      toast.success("Google Sheet settings updated successfully");
+      toast.success(t('dataCollection.dataExportedSuccessfully'));
     },
     onError: (error: any) => {
-      toast.error(error.message || "Failed to update settings");
+      toast.error(error.message || t('dataCollection.failedToExportData'));
     }
   });
 
@@ -66,7 +68,7 @@ const SheetSelector: React.FC<SheetSelectorProps> = ({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="sheet-id">Google Sheet URL or ID</Label>
+        <Label htmlFor="sheet-id">{t('dataCollection.googleSheetUrlOrId')}</Label>
         <Input
           id="sheet-id"
           placeholder="https://docs.google.com/spreadsheets/d/1abc... or 1abc..."
@@ -74,12 +76,12 @@ const SheetSelector: React.FC<SheetSelectorProps> = ({
           onChange={(e) => setSheetId(e.target.value)}
         />
         <p className="text-sm text-muted-foreground">
-          Paste the full Google Sheets URL or just the Sheet ID
+          {t('dataCollection.pasteGoogleSheetUrl')}
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="sheet-name">Sheet Tab Name</Label>
+        <Label htmlFor="sheet-name">{t('dataCollection.sheetTabName')}</Label>
         <Input
           id="sheet-name"
           placeholder="Sheet1"
@@ -87,12 +89,12 @@ const SheetSelector: React.FC<SheetSelectorProps> = ({
           onChange={(e) => setNewSheetName(e.target.value)}
         />
         <p className="text-sm text-muted-foreground">
-          The name of the specific tab in your Google Sheet (default: Sheet1)
+          {t('dataCollection.sheetTabNameDescription')}
         </p>
       </div>
 
       <div className="flex gap-2">
-        <Button 
+        <Button
           onClick={handleSave}
           disabled={!sheetId || updateSheet.isPending}
           className="flex-1"
@@ -101,16 +103,16 @@ const SheetSelector: React.FC<SheetSelectorProps> = ({
             <Loader2 className="h-4 w-4 animate-spin" />
           )}
           <Save className="h-4 w-4" />
-          Save Settings
+          {t('dataCollection.saveSettings')}
         </Button>
-        
+
         {currentSheetId && (
-          <Button 
+          <Button
             onClick={openSheet}
             variant="outline"
           >
             <ExternalLink className="h-4 w-4" />
-            Open Sheet
+            {t('dataCollection.openSheet')}
           </Button>
         )}
       </div>
@@ -119,7 +121,7 @@ const SheetSelector: React.FC<SheetSelectorProps> = ({
         <Card className="bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800 shadow-sm">
           <CardContent className="pt-3 pb-3 px-3">
             <CardDescription className="text-sm text-blue-900">
-              Current Sheet ID: {currentSheetId}
+              {t('dataCollection.currentSheetId', { id: currentSheetId })}
             </CardDescription>
           </CardContent>
         </Card>

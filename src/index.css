@@ -142,14 +142,18 @@
     font-family: 'Poppins', 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   }
 
-  /* Language-based font selection using attributes - HIGH SPECIFICITY */
-  body *[dir="rtl"],
-  body *[lang="ar"] {
+  /* Language-based font selection - Target based on html[lang] attribute */
+  html[lang="ar"] body,
+  html[lang="ar"] body *,
+  body.lang-ar,
+  body.lang-ar * {
     font-family: 'IBM Plex Sans Arabic', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
   }
 
-  body *[dir="ltr"],
-  body *[lang="en"] {
+  html[lang="en"] body,
+  html[lang="en"] body *,
+  body.lang-en,
+  body.lang-en * {
     font-family: 'Poppins', 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
   }
 }

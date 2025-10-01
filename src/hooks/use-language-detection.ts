@@ -1,7 +1,7 @@
 
 import { useCallback } from 'react';
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import logger from '@/utils/logger';
 
 interface DetectLanguageResponse {
@@ -16,8 +16,6 @@ interface DetectLanguageResponse {
 }
 
 export function useLanguageDetection() {
-  const { toast } = useToast();
-
   const detectLanguage = useCallback(async (
     fileId: string,
     text: string,
@@ -37,9 +35,7 @@ export function useLanguageDetection() {
 
       if (error) {
         logger.error('Language detection error:', error);
-        toast({
-          variant: "destructive",
-          title: "Error detecting language",
+        toast.error("Error detecting language", {
           description: error.message
         });
         return null;
@@ -48,14 +44,12 @@ export function useLanguageDetection() {
       return data;
     } catch (error: any) {
       logger.error('Language detection error:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
+      toast.error("Error", {
         description: "Failed to detect language. Please try again."
       });
       return null;
     }
-  }, [toast]);
+  }, []);
 
   return { detectLanguage };
 }

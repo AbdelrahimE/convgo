@@ -9,11 +9,13 @@ import { PasswordInput } from '@/components/PasswordInput';
 import { toast } from 'sonner';
 import { Loader2, Building, User, Shield, Mail } from 'lucide-react';
 import logger from '@/utils/logger';
+import { useTranslation } from 'react-i18next';
 
 export default function AccountSettings() {
   const {
     user
   } = useAuth();
+  const { t } = useTranslation();
   const [fullName, setFullName] = useState(user?.user_metadata?.full_name || '');
   const [businessName, setBusinessName] = useState(user?.user_metadata?.business_name || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -68,7 +70,7 @@ export default function AccountSettings() {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (file.size > 2 * 1024 * 1024) {
-        toast.error('Image size should not exceed 2MB');
+        toast.error(t('accountSettings.imageSizeError'));
         return;
       }
       setAvatarFile(file);
@@ -106,7 +108,7 @@ export default function AccountSettings() {
         error: uploadError
       } = await supabase.storage.from('avatars').upload(filePath, avatarFile);
       if (uploadError) {
-        toast.error('Avatar upload failed');
+        toast.error(t('accountSettings.avatarUploadFailed'));
         logger.error('Error uploading avatar:', uploadError);
         return null;
       }
@@ -157,9 +159,9 @@ export default function AccountSettings() {
       if (profileUpdateError) {
         throw profileUpdateError;
       }
-      toast.success('Profile updated successfully');
+      toast.success(t('accountSettings.profileUpdatedSuccess'));
     } catch (error: any) {
-      toast.error(`Error updating profile: ${error.message}`);
+      toast.error(`${t('accountSettings.errorUpdatingProfile')}: ${error.message}`);
       logger.error('Error updating profile:', error);
     } finally {
       setIsLoading(false);
@@ -176,17 +178,17 @@ export default function AccountSettings() {
   const handleEmailChange = async () => {
     // Validation
     if (!newEmail.trim()) {
-      toast.error('Please enter a new email address');
+      toast.error(t('accountSettings.pleaseEnterNewEmail'));
       return;
     }
-    
+
     if (!isValidEmail(newEmail)) {
-      toast.error('Please enter a valid email address');
+      toast.error(t('accountSettings.pleaseEnterValidEmail'));
       return;
     }
-    
+
     if (newEmail === user!.email) {
-      toast.error('This is your current email address');
+      toast.error(t('accountSettings.thisIsCurrentEmail'));
       return;
     }
 
@@ -200,21 +202,21 @@ export default function AccountSettings() {
       
       if (error) {
         if (error.message.includes('email_address_already_in_use')) {
-          toast.error('This email address is already in use');
+          toast.error(t('accountSettings.emailAlreadyInUse'));
         } else {
           throw error;
         }
         return;
       }
-      
+
       // Success
       setEmailUpdateSent(true);
-      toast.success('A confirmation email has been sent to your new email address');
-      toast.info('Please check your email and click the confirmation link');
-      
+      toast.success(t('accountSettings.confirmationEmailSent'));
+      toast.info(t('accountSettings.checkEmailConfirmation'));
+
     } catch (error: any) {
       logger.error('Error updating email:', error);
-      toast.error(`Error updating email: ${error.message}`);
+      toast.error(`${t('accountSettings.errorUpdatingEmail')}: ${error.message}`);
     } finally {
       setIsUpdatingEmail(false);
     }
@@ -223,12 +225,12 @@ export default function AccountSettings() {
   const handlePasswordChange = async () => {
     // Validation
     if (!newPassword.trim()) {
-      toast.error('Please enter your new password');
+      toast.error(t('accountSettings.pleaseEnterNewPassword'));
       return;
     }
-    
+
     if (newPassword !== confirmPassword) {
-      toast.error('Passwords do not match');
+      toast.error(t('accountSettings.passwordsDoNotMatch'));
       return;
     }
 
@@ -247,12 +249,12 @@ export default function AccountSettings() {
       // Clear form
       setNewPassword('');
       setConfirmPassword('');
-      
-      toast.success('Password changed successfully');
-      
+
+      toast.success(t('accountSettings.passwordChangedSuccess'));
+
     } catch (error: any) {
       logger.error('Error changing password:', error);
-      toast.error(`Error changing password: ${error.message}`);
+      toast.error(`${t('accountSettings.errorChangingPassword')}: ${error.message}`);
     } finally {
       setIsChangingPassword(false);
     }
@@ -279,10 +281,10 @@ export default function AccountSettings() {
           </div>
           <div className="text-center space-y-2">
             <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Loading Account Settings
+              {t('accountSettings.loadingAccountSettings')}
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Please wait while we prepare your account information...
+              {t('accountSettings.pleaseWait')}
             </p>
           </div>
         </div>
@@ -299,10 +301,10 @@ export default function AccountSettings() {
             <div className="flex items-center space-x-3">
               <div>
                 <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
-                  Account Settings
+                  {t('accountSettings.title')}
                 </h1>
                 <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
-                  Manage your account profile and security settings
+                  {t('accountSettings.description')}
                 </p>
               </div>
             </div>
@@ -318,10 +320,10 @@ export default function AccountSettings() {
             <div className="mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <User className="h-5 w-5" />
-                Profile Information
+                {t('accountSettings.profileInfo')}
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Update your account profile details
+                {t('accountSettings.profileInfoDescription')}
               </p>
             </div>
 
@@ -341,14 +343,14 @@ export default function AccountSettings() {
                       htmlFor="avatar" 
                       className="cursor-pointer inline-flex items-center px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
                     >
-                      Change Avatar
+                      {t('accountSettings.changeAvatar')}
                     </Label>
-                    <Input 
-                      id="avatar" 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleAvatarChange} 
-                      className="hidden" 
+                    <Input
+                      id="avatar"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      className="hidden"
                     />
                   </div>
                 </div>
@@ -356,37 +358,37 @@ export default function AccountSettings() {
                 {/* Right Section - Form Fields (Vertical Layout) */}
                 <div className="lg:col-span-2 space-y-4">
                   <div className="space-y-0">
-                    <Label htmlFor="fullName">Full Name</Label>
-                    <Input 
-                      id="fullName" 
-                      value={fullName} 
-                      onChange={e => setFullName(e.target.value)} 
-                      placeholder="Enter your full name"
+                    <Label htmlFor="fullName">{t('accountSettings.fullName')}</Label>
+                    <Input
+                      id="fullName"
+                      value={fullName}
+                      onChange={e => setFullName(e.target.value)}
+                      placeholder={t('accountSettings.fullNamePlaceholder')}
                       className="w-full text-sm"
                     />
                   </div>
 
                   <div className="space-y-0">
-                    <Label htmlFor="businessName">Business Name</Label>
+                    <Label htmlFor="businessName">{t('accountSettings.businessName')}</Label>
                     <div className="relative">
                       <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
-                      <Input 
-                        id="businessName" 
-                        value={businessName} 
-                        onChange={e => setBusinessName(e.target.value)} 
-                        placeholder="Enter your business name" 
+                      <Input
+                        id="businessName"
+                        value={businessName}
+                        onChange={e => setBusinessName(e.target.value)}
+                        placeholder={t('accountSettings.businessNamePlaceholder')}
                         className="pl-10 w-full text-sm"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-0">
-                    <Label htmlFor="phoneNumber">Phone Number</Label>
-                    <Input 
-                      id="phoneNumber" 
-                      value={phoneNumber} 
-                      onChange={e => setPhoneNumber(e.target.value)} 
-                      placeholder="Enter your phone number"
+                    <Label htmlFor="phoneNumber">{t('accountSettings.phoneNumber')}</Label>
+                    <Input
+                      id="phoneNumber"
+                      value={phoneNumber}
+                      onChange={e => setPhoneNumber(e.target.value)}
+                      placeholder={t('accountSettings.phoneNumberPlaceholder')}
                       className="w-full text-sm"
                     />
                   </div>
@@ -403,10 +405,10 @@ export default function AccountSettings() {
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
+                      {t('accountSettings.saving')}
                     </>
                   ) : (
-                    'Save Changes'
+                    t('accountSettings.saveChanges')
                   )}
                 </Button>
               </div>
@@ -420,14 +422,14 @@ export default function AccountSettings() {
             <div className="mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Mail className="h-5 w-5" />
-                Email Settings
+                {t('accountSettings.emailSettings')}
               </h2>
             </div>
 
             <div className="space-y-4">
               {/* Current Email Display */}
               <div className="space-y-0">
-                <Label>Current Email</Label>
+                <Label>{t('accountSettings.currentEmail')}</Label>
                 <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-400 text-sm">
                   {user?.email}
                 </div>
@@ -444,11 +446,11 @@ export default function AccountSettings() {
                     </div>
                     <div>
                       <h3 className="text-sm font-medium text-green-800 dark:text-green-200">
-                        Email confirmation sent
+                        {t('accountSettings.emailConfirmationSent')}
                       </h3>
                       <div className="mt-2 text-sm text-green-700 dark:text-green-300">
-                        <p>Confirmation email sent to: <strong>{newEmail}</strong></p>
-                        <p className="mt-1">Please check your email and click the confirmation link to complete the change.</p>
+                        <p>{t('accountSettings.emailConfirmationDescription')} <strong>{newEmail}</strong></p>
+                        <p className="mt-1">{t('accountSettings.emailConfirmationInstructions')}</p>
                       </div>
                     </div>
                   </div>
@@ -457,38 +459,37 @@ export default function AccountSettings() {
                 /* Email Change Form */
                 <>
                   <div className="space-y-0">
-                    <Label htmlFor="newEmail">New Email Address</Label>
+                    <Label htmlFor="newEmail">{t('accountSettings.newEmail')}</Label>
                     <Input
                       id="newEmail"
                       type="email"
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
-                      placeholder="Enter your new email address"
+                      placeholder={t('accountSettings.newEmailPlaceholder')}
                       className="w-full text-sm"
                     />
                   </div>
 
                   <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
                     <p className="text-sm text-blue-800 dark:text-blue-200">
-                      <strong>Note:</strong> A confirmation email will be sent to your new email address. 
-                      Your current email will remain active until you confirm the change.
+                      <strong>{t('accountSettings.emailNote')}</strong> {t('accountSettings.emailNoteDescription')}
                     </p>
                   </div>
 
                   {/* Update Email Button */}
                   <div className="flex justify-end">
-                    <Button 
-                      onClick={handleEmailChange} 
+                    <Button
+                      onClick={handleEmailChange}
                       disabled={isUpdatingEmail || !newEmail.trim()}
                       className="bg-blue-600 hover:bg-blue-700"
                     >
                       {isUpdatingEmail ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Updating Email...
+                          {t('accountSettings.updatingEmail')}
                         </>
                       ) : (
-                        'Update Email'
+                        t('accountSettings.updateEmail')
                       )}
                     </Button>
                   </div>
@@ -504,10 +505,10 @@ export default function AccountSettings() {
             <div className="mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Shield className="h-5 w-5" />
-                Change Password
+                {t('accountSettings.changePassword')}
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                Enter your new password below. Your current session provides sufficient authentication.
+                {t('accountSettings.changePasswordDescription')}
               </p>
             </div>
 
@@ -515,7 +516,7 @@ export default function AccountSettings() {
               {/* New Password */}
               <PasswordInput
                 id="newPassword"
-                label="New Password"
+                label={t('accountSettings.newPassword')}
                 value={newPassword}
                 onChange={setNewPassword}
                 required
@@ -524,7 +525,7 @@ export default function AccountSettings() {
               {/* Confirm Password */}
               <PasswordInput
                 id="confirmPassword"
-                label="Confirm New Password"
+                label={t('accountSettings.confirmNewPassword')}
                 value={confirmPassword}
                 onChange={setConfirmPassword}
                 isConfirm={true}
@@ -542,10 +543,10 @@ export default function AccountSettings() {
                   {isChangingPassword ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Changing Password...
+                      {t('accountSettings.changingPassword')}
                     </>
                   ) : (
-                    'Change Password'
+                    t('accountSettings.changePasswordButton')
                   )}
                 </Button>
               </div>

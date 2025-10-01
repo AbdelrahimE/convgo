@@ -5,6 +5,7 @@ import { Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/utils/logger';
+import { useTranslation } from 'react-i18next';
 
 interface WhatsAppAIToggleProps {
   instanceId: string;
@@ -19,6 +20,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
   instanceStatus,
   variant = 'simple' // Default to simple variant for backward compatibility
 }) => {
+  const { t } = useTranslation();
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -45,7 +47,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
       }
     } catch (error) {
       logger.error('Error fetching AI status:', error);
-      toast.error('Failed to load AI status');
+      toast.error(t('aiConfiguration.failedToLoadStatus'));
     } finally {
       setIsLoading(false);
     }
@@ -83,10 +85,10 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
         if (error) throw error;
       }
       setIsEnabled(newStatus);
-      toast.success(`AI responses ${newStatus ? 'enabled' : 'disabled'} for ${instanceName}`);
+      toast.success(`${newStatus ? t('aiConfiguration.aiResponsesEnabled') : t('aiConfiguration.aiResponsesDisabled')} ${instanceName}`);
     } catch (error) {
       logger.error('Error toggling AI status:', error);
-      toast.error('Failed to update AI status');
+      toast.error(t('aiConfiguration.failedToUpdateStatus'));
     } finally {
       setIsUpdating(false);
     }
@@ -117,7 +119,7 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
         <div className="flex justify-between items-center">
           <div className="flex items-center">
             <Zap className="h-5 w-5 mr-2 text-amber-500" />
-            <h3 className="text-lg font-semibold">AI Auto-Response Status</h3>
+            <h3 className="text-lg font-semibold">{t('aiConfiguration.aiAutoResponseStatus')}</h3>
           </div>
           <Switch
             id={`ai-toggle-${instanceId}`}
@@ -132,34 +134,34 @@ const WhatsAppAIToggle: React.FC<WhatsAppAIToggleProps> = ({
         {isLoading ? (
           <div className="flex items-center py-2">
             <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            <span className="text-sm text-muted-foreground">Loading status...</span>
+            <span className="text-sm text-muted-foreground">{t('aiConfiguration.loadingStatus')}</span>
           </div>
         ) : isEnabled ? (
           <div className="bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-200 dark:border-green-900 p-3">
             <p className="text-sm font-medium text-green-700 dark:text-green-400">
-              AI Assistant is Enabled
+              {t('aiConfiguration.aiAssistantEnabled')}
             </p>
             <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-              This WhatsApp number will automatically respond to incoming messages using AI
+              {t('aiConfiguration.willAutoRespond')}
             </p>
           </div>
         ) : (
           <div className="bg-gray-50 dark:bg-gray-900/20 rounded-xl border border-gray-200 dark:border-gray-800 p-3">
             <p className="text-sm font-medium text-gray-700 dark:text-gray-400">
-              AI Assistant is Disabled
+              {t('aiConfiguration.aiAssistantDisabled')}
             </p>
             <p className="text-xs text-gray-600 dark:text-gray-500 mt-1">
-              This WhatsApp number will not automatically respond to messages
+              {t('aiConfiguration.willNotAutoRespond')}
             </p>
           </div>
         )}
         {instanceStatus && !isInstanceConnected && (
           <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-900 p-3 mt-3">
             <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-              WhatsApp connection required
+              {t('aiConfiguration.whatsappConnectionRequired')}
             </p>
             <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-              Connect your WhatsApp instance to enable AI responses
+              {t('aiConfiguration.connectInstanceToEnable')}
             </p>
           </div>
         )}

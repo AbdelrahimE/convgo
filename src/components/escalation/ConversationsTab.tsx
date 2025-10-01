@@ -7,6 +7,7 @@ import { useResolveEscalationDialog } from '@/hooks/use-resolve-escalation-dialo
 import { StatsCards } from './StatsCards';
 import { ConversationItem } from './ConversationItem';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 interface Stats {
   total: number;
@@ -28,6 +29,7 @@ export const ConversationsTab = React.memo(({
   onFilterChange,
   onViewContext
 }: ConversationsTabProps) => {
+  const { t } = useTranslation();
   const { data: conversations = [], isLoading, refetch } = useEscalatedConversations(selectedInstance, filter);
   const { handleResolve, isLoading: resolveLoading } = useResolveEscalationDialog();
 
@@ -64,13 +66,13 @@ export const ConversationsTab = React.memo(({
   const getReasonBadge = useCallback((reason: string) => {
     switch (reason) {
       case 'ai_detected_intent':
-        return <Badge className="bg-purple-100 hover:bg-purple-200 text-purple-800 font-medium">Smart AI Detection</Badge>;
+        return <Badge className="bg-purple-100 hover:bg-purple-200 text-purple-800 font-medium">{t('escalation.smartAiDetectionBadge')}</Badge>;
       case 'user_request':
-        return <Badge className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-medium">Keyword Triggered</Badge>;
+        return <Badge className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-medium">{t('escalation.keywordTriggeredBadge')}</Badge>;
       default:
-        return <Badge className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium">Unknown Reason</Badge>;
+        return <Badge className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium">{t('escalation.unknownReasonBadge')}</Badge>;
     }
-  }, []);
+  }, [t]);
 
   // Handle resolve escalation - now using unified hook
   const handleResolveEscalation = useCallback((conversationId: string, whatsappNumber: string, instanceId: string) => {
@@ -86,21 +88,21 @@ export const ConversationsTab = React.memo(({
             onClick={() => onFilterChange('active')}
             size="sm"
           >
-            Active
+            {t('escalation.active')}
           </Button>
           <Button
             variant={filter === 'resolved' ? 'default' : 'outline'}
             onClick={() => onFilterChange('resolved')}
             size="sm"
           >
-            Resolved
+            {t('escalation.resolved')}
           </Button>
           <Button
             variant={filter === 'all' ? 'default' : 'outline'}
             onClick={() => onFilterChange('all')}
             size="sm"
           >
-            All
+            {t('escalation.all')}
           </Button>
         </div>
       </div>
@@ -112,23 +114,23 @@ export const ConversationsTab = React.memo(({
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="p-4">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold">Escalated Conversations List</h2>
+            <h2 className="text-lg font-semibold">{t('escalation.escalatedConversationsList')}</h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              Manage and track conversations that have been escalated to human support
+              {t('escalation.escalatedConversationsDescription')}
             </p>
           </div>
-          
+
           <div>
             {isLoading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="mt-2 text-slate-600 dark:text-slate-400">Loading...</p>
+                <p className="mt-2 text-slate-600 dark:text-slate-400">{t('escalation.loading')}</p>
               </div>
             ) : conversations.length === 0 ? (
               <div className="text-center py-8">
                 <AlertTriangle className="h-12 w-12 mx-auto mb-2 text-slate-500 dark:text-slate-600" />
                 <p className="text-slate-600 dark:text-slate-400">
-                  No Escalated Conversations {filter !== 'all' ? `(${filter === 'active' ? 'active' : 'resolved'})` : ''}
+                  {t('escalation.noEscalatedConversations')} {filter !== 'all' ? `(${filter === t('escalation.active') ? t('escalation.active') : t('escalation.resolved')})` : ''}
                 </p>
               </div>
             ) : (

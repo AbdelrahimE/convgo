@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Trash2, FileText, FileImage, FileIcon, Languages, AlertCircle, CheckCircle2, Sparkles, Download, Clock, MoreHorizontal, File, Loader2, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useDocumentEmbeddings, EmbeddingStatus, EmbeddingStatusDetails } from "@/hooks/use-document-embeddings";
 import { Progress } from "@/components/ui/progress";
@@ -29,19 +30,17 @@ interface FileListProps {
 }
 
 export function FileList({ searchTerm = '' }: FileListProps) {
+  const { t } = useTranslation();
   // Pagination state
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize] = useState(20); // Fixed page size for now
   const isMobile = useIsMobile();
-  
+
   // Use React Query for optimized data fetching and caching with pagination
   const { data: files = [], isLoading, error, refetch } = useFilesQuery(currentPage, pageSize);
   const { data: totalCount = 0 } = useFilesCountQuery();
   const deleteFileMutation = useDeleteFileMutation();
   const queryClient = useQueryClient();
-  const {
-    toast
-  } = useToast();
   const {
     generateEmbeddings,
     isGenerating,
@@ -115,9 +114,8 @@ export function FileList({ searchTerm = '' }: FileListProps) {
         
         // Invalidate count query to get updated total
         queryClient.invalidateQueries({ queryKey: ['files-count', user.id] });
-        
-        toast({
-          title: "File Added",
+
+        toast.success("File Added", {
           description: `${newFile.filename} has been uploaded successfully.`
         });
       })
@@ -192,19 +190,16 @@ export function FileList({ searchTerm = '' }: FileListProps) {
       logger.log('Cleaning up files real-time subscription');
       supabase.removeChannel(channel);
     };
-  }, [user, toast, currentPage, pageSize, queryClient]);
+  }, [user, currentPage, pageSize, queryClient]);
   // Optimized delete function using React Query mutation
   const deleteFile = async (fileId: string) => {
     try {
       await deleteFileMutation.mutateAsync(fileId);
-      toast({
-        title: "Success",
+      toast.success("Success", {
         description: "File deleted successfully."
       });
     } catch (error) {
-      toast({
-        variant: "destructive", 
-        title: "Error",
+      toast.error("Error", {
         description: "Failed to delete file. Please try again."
       });
     }
@@ -238,9 +233,7 @@ export function FileList({ searchTerm = '' }: FileListProps) {
         .createSignedUrl(file.path, 60); // 60 seconds expiry
 
       if (error) {
-        toast({
-          variant: "destructive",
-          title: "Error",
+        toast.error("Error", {
           description: "Failed to generate download link"
         });
         return;
@@ -254,15 +247,12 @@ export function FileList({ searchTerm = '' }: FileListProps) {
       link.click();
       document.body.removeChild(link);
 
-      toast({
-        title: "Download Started",
+      toast.success("Download Started", {
         description: `${file.original_name} is being downloaded`
       });
     } catch (error) {
       logger.error('Error downloading file:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
+      toast.error("Error", {
         description: "Failed to download file"
       });
     }
@@ -338,10 +328,10 @@ export function FileList({ searchTerm = '' }: FileListProps) {
         if (insErr) throw insErr;
       }
       setFileIdToInstanceId(prev => ({ ...prev, [fileId]: instanceId }));
-      toast({ title: 'Updated', description: instanceId ? 'File linked to WhatsApp instance' : 'Link removed' });
+      toast.success('Updated', { description: instanceId ? 'File linked to WhatsApp instance' : 'Link removed' });
     } catch (err) {
       logger.error('Failed to update mapping', err);
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to update WhatsApp link' });
+      toast.error('Error', { description: 'Failed to update WhatsApp link' });
     } finally {
       setIsLinking(prev => ({ ...prev, [fileId]: false }));
     }
@@ -356,11 +346,11 @@ export function FileList({ searchTerm = '' }: FileListProps) {
     const diff = now.getTime() - date.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
-    
-    if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
-    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    return 'Just now';
-  }, []);
+
+    if (days > 0) return `${days} ${days > 1 ? t('fileManagement.daysAgo') : t('fileManagement.dayAgo')} ${t('fileManagement.ago')}`;
+    if (hours > 0) return `${hours} ${hours > 1 ? t('fileManagement.hoursAgo') : t('fileManagement.hourAgo')} ${t('fileManagement.ago')}`;
+    return t('fileManagement.justNow');
+  }, [t]);
 
   const formatFileSize = useCallback((sizeInBytes: number) => {
     if (sizeInBytes < 1024) {
@@ -376,39 +366,39 @@ export function FileList({ searchTerm = '' }: FileListProps) {
     if (!file.embedding_status) {
       return <Badge variant="outline" className="flex items-center gap-1 text-xs">
           <Sparkles className="h-3 w-3" />
-          <span>Generate</span>
+          <span>{t('fileManagement.generate')}</span>
         </Badge>;
     }
     const status = file.embedding_status.status;
     if (status === 'processing' || isGenerating && processingFileId === file.id) {
       return <Badge variant="secondary" className="flex items-center gap-1 text-xs">
           <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-          <span>Processing</span>
+          <span>{t('fileManagement.processing')}</span>
         </Badge>;
     }
     if (status === 'complete') {
       return <Badge variant="outline" className="font-normal bg-blue-600 hover:bg-blue-700 text-white border-blue-600 flex items-center gap-1 text-xs">
           <CheckCircle2 className="h-3 w-3" />
-          <span>Ready</span>
+          <span>{t('fileManagement.ready')}</span>
         </Badge>;
     }
     if (status === 'partial') {
       return <Badge variant="outline" className="bg-amber-100 text-amber-800 flex items-center gap-1 text-xs border-amber-200">
           <AlertCircle className="h-3 w-3" />
-          <span>Partial</span>
+          <span>{t('fileManagement.partial')}</span>
         </Badge>;
     }
     if (status === 'error') {
       return <Badge variant="destructive" className="flex items-center gap-1 text-xs">
           <AlertCircle className="h-3 w-3" />
-          <span>Error</span>
+          <span>{t('fileManagement.error')}</span>
         </Badge>;
     }
     return <Badge variant="outline" className="flex items-center gap-1 text-xs">
         <Sparkles className="h-3 w-3" />
-        <span>Generate</span>
+        <span>{t('fileManagement.generate')}</span>
       </Badge>;
-  }, [isGenerating, processingFileId]);
+  }, [isGenerating, processingFileId, t]);
 
   const renderLanguageInfo = useCallback((file: FileWithMetadata) => {
     if (!file.detected_languages || file.detected_languages.length === 0) {
@@ -482,15 +472,15 @@ export function FileList({ searchTerm = '' }: FileListProps) {
                 <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuItem onClick={() => handleDownloadFile(file)}>
                     <Download className="h-4 w-4 mr-2" />
-                    Download File
+                    {t('fileManagement.downloadFile')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleGenerateEmbeddings(file.id)} disabled={isGenerating && processingFileId === file.id}>
                     <Sparkles className="h-4 w-4 mr-2" />
-                    {file.embedding_status?.status === 'complete' ? 'Regenerate' : 'Generate'} Embeddings
+                    {file.embedding_status?.status === 'complete' ? t('fileManagement.regenerate') : t('fileManagement.generate')} {t('fileManagement.generateEmbeddings')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => deleteFile(file.id)} className="text-destructive">
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Delete File
+                    {t('fileManagement.deleteFile')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -499,7 +489,7 @@ export function FileList({ searchTerm = '' }: FileListProps) {
           <CardContent className="space-y-3 pt-0">
             {/* Status Row */}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Status</span>
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{t('fileManagement.status')}</span>
               <div className="flex items-center space-x-2">
                 {renderEmbeddingStatus(file)}
                 {(file.embedding_status?.status === 'processing' || isGenerating && processingFileId === file.id) && (
@@ -513,11 +503,11 @@ export function FileList({ searchTerm = '' }: FileListProps) {
             
             {/* WhatsApp Instance Row */}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">WhatsApp Instance</span>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                disabled={!!isLinking[file.id]} 
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{t('fileManagement.whatsappNumber')}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!!isLinking[file.id]}
                 onClick={() => {
                   const currentId = fileIdToInstanceId[file.id] ?? null;
                   const idx = currentId ? instances.findIndex(i => i.id === currentId) : -1;
@@ -528,17 +518,17 @@ export function FileList({ searchTerm = '' }: FileListProps) {
               >
                 {isLinking[file.id] ? (
                   <>
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />Saving
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />{t('fileManagement.saving')}
                   </>
                 ) : (
-                  fileIdToInstanceId[file.id] ? (instances.find(i => i.id === fileIdToInstanceId[file.id])?.instance_name || 'Linked') : 'Unlinked'
+                  fileIdToInstanceId[file.id] ? (instances.find(i => i.id === fileIdToInstanceId[file.id])?.instance_name || t('fileManagement.linked')) : t('fileManagement.unlinked')
                 )}
               </Button>
             </div>
-            
+
             {/* Upload Date Row */}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Uploaded</span>
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{t('fileManagement.uploadDate')}</span>
               <div className="flex items-center space-x-1 text-xs text-slate-600 dark:text-slate-400">
                 <Clock className="h-3 w-3" />
                 <span>{getRelativeTime(file.created_at)}</span>
@@ -575,7 +565,7 @@ export function FileList({ searchTerm = '' }: FileListProps) {
           <TableHeader>
             <TableRow className="border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
               <TableHead className="pl-6 text-left font-medium text-slate-700 dark:text-slate-300">
-                File Name
+                {t('fileManagement.fileName')}
               </TableHead>
               {SHOW_SIZE_COLUMN && (
                 <TableHead className="text-left font-medium text-slate-700 dark:text-slate-300">
@@ -588,16 +578,16 @@ export function FileList({ searchTerm = '' }: FileListProps) {
                 </TableHead>
               )}
               <TableHead className="text-left font-medium text-slate-700 dark:text-slate-300">
-                Status
+                {t('fileManagement.status')}
               </TableHead>
               <TableHead className="text-left font-medium text-slate-700 dark:text-slate-300">
-                WhatsApp Number
+                {t('fileManagement.whatsappNumber')}
               </TableHead>
               <TableHead className="text-left font-medium text-slate-700 dark:text-slate-300">
-                Upload date
+                {t('fileManagement.uploadDate')}
               </TableHead>
               <TableHead className="text-center font-medium text-slate-700 dark:text-slate-300 pr-6">
-                Actions
+                {t('fileManagement.actions')}
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -663,10 +653,10 @@ export function FileList({ searchTerm = '' }: FileListProps) {
                     onValueChange={(val) => handleLinkChange(file.id, val === '__unlinked__' ? null : val)}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder={isLinking[file.id] ? 'Saving...' : (fileIdToInstanceId[file.id] ? (instances.find(i => i.id === fileIdToInstanceId[file.id])?.instance_name || 'Linked') : 'Unlinked')} />
+                      <SelectValue placeholder={isLinking[file.id] ? t('fileManagement.saving') : (fileIdToInstanceId[file.id] ? (instances.find(i => i.id === fileIdToInstanceId[file.id])?.instance_name || t('fileManagement.linked')) : t('fileManagement.unlinked'))} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__unlinked__">Unlinked</SelectItem>
+                      <SelectItem value="__unlinked__">{t('fileManagement.unlinked')}</SelectItem>
                       {instances.map(inst => (
                         <SelectItem key={inst.id} value={inst.id}>{inst.instance_name}</SelectItem>
                       ))}
@@ -682,10 +672,10 @@ export function FileList({ searchTerm = '' }: FileListProps) {
                   }}>
                     {isLinking[file.id] ? (
                       <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />{t('fileManagement.saving')}
                       </>
                     ) : (
-                      fileIdToInstanceId[file.id] ? (instances.find(i => i.id === fileIdToInstanceId[file.id])?.instance_name || 'Linked') : 'Unlinked'
+                      fileIdToInstanceId[file.id] ? (instances.find(i => i.id === fileIdToInstanceId[file.id])?.instance_name || t('fileManagement.linked')) : t('fileManagement.unlinked')
                     )}
                   </Button>
                 </div>
@@ -715,15 +705,15 @@ export function FileList({ searchTerm = '' }: FileListProps) {
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem onClick={() => handleDownloadFile(file)}>
                       <Download className="h-4 w-4 mr-2" />
-                      Download File
+                      {t('fileManagement.downloadFile')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleGenerateEmbeddings(file.id)} disabled={isGenerating && processingFileId === file.id}>
                       <Sparkles className="h-4 w-4 mr-2" />
-                      {file.embedding_status?.status === 'complete' ? 'Regenerate' : 'Generate'} Embeddings
+                      {file.embedding_status?.status === 'complete' ? t('fileManagement.regenerate') : t('fileManagement.generate')} {t('fileManagement.generateEmbeddings')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => deleteFile(file.id)} className="text-destructive">
                       <Trash2 className="h-4 w-4 mr-2" />
-                      Delete File
+                      {t('fileManagement.deleteFile')}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -754,7 +744,7 @@ export function FileList({ searchTerm = '' }: FileListProps) {
               </div>
             </div>
             {/* Loading text */}
-            <p className="text-sm text-slate-600 dark:text-slate-400">Loading your files...</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400">{t('fileManagement.loadingFiles')}</p>
           </div>
         </div>
       ) : filteredFiles.length === 0 && searchTerm.trim() ? (
@@ -763,9 +753,9 @@ export function FileList({ searchTerm = '' }: FileListProps) {
           <div className="mx-auto w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
             <Search className="w-8 h-8 text-slate-400" />
           </div>
-          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">No files found</h3>
+          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">{t('fileManagement.noFilesFound')}</h3>
           <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-            No files match your search for "{searchTerm}". Try adjusting your search terms.
+            {t('fileManagement.noFilesMatch')} "{searchTerm}". {t('fileManagement.tryAdjusting')}
           </p>
         </div>
       ) : files.length === 0 ? (
@@ -774,9 +764,9 @@ export function FileList({ searchTerm = '' }: FileListProps) {
           <div className="mx-auto w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
             <File className="w-8 h-8 text-slate-400" />
           </div>
-          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">No files uploaded yet</h3>
+          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">{t('fileManagement.noFilesYet')}</h3>
           <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-            Upload your first document to get started.
+            {t('fileManagement.uploadFirst')}
           </p>
         </div>
       ) : (
@@ -791,13 +781,13 @@ export function FileList({ searchTerm = '' }: FileListProps) {
             <div className="flex items-center justify-between px-2 py-3 border-t border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                 <span>
-                  {searchTerm.trim() ? 
-                    `Showing ${filteredFiles.length} of ${totalCount} files (filtered)` :
-                    `Showing ${currentPage * pageSize + 1} to ${Math.min((currentPage + 1) * pageSize, totalCount)} of ${totalCount} files`
+                  {searchTerm.trim() ?
+                    `${t('fileManagement.showing')} ${filteredFiles.length} ${t('fileManagement.of')} ${totalCount} ${t('fileManagement.files')} ${t('fileManagement.filtered')}` :
+                    `${t('fileManagement.showing')} ${currentPage * pageSize + 1} ${t('fileManagement.to')} ${Math.min((currentPage + 1) * pageSize, totalCount)} ${t('fileManagement.of')} ${totalCount} ${t('fileManagement.files')}`
                   }
                 </span>
               </div>
-              
+
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -807,9 +797,9 @@ export function FileList({ searchTerm = '' }: FileListProps) {
                   className="flex items-center gap-1"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                  Previous
+                  {t('fileManagement.previous')}
                 </Button>
-                
+
                 <div className="flex items-center gap-1">
                   {Array.from({ length: Math.ceil(totalCount / pageSize) }, (_, i) => (
                     <Button
@@ -827,7 +817,7 @@ export function FileList({ searchTerm = '' }: FileListProps) {
                     </Button>
                   ))}
                 </div>
-                
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -835,7 +825,7 @@ export function FileList({ searchTerm = '' }: FileListProps) {
                   disabled={currentPage >= Math.ceil(totalCount / pageSize) - 1}
                   className="flex items-center gap-1"
                 >
-                  Next
+                  {t('fileManagement.next')}
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>

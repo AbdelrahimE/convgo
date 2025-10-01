@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { 
-  User, 
-  Building2, 
-  Mail, 
-  Phone, 
-  Calendar, 
+import {
+  User,
+  Building2,
+  Mail,
+  Phone,
+  Calendar,
   MessageSquare,
   Bot,
   ExternalLink,
@@ -48,16 +49,16 @@ const getStageColor = (stage: string) => {
   }
 };
 
-const getStageLabel = (stage: string) => {
+const getStageLabel = (stage: string, t: any) => {
   switch (stage) {
     case 'new':
-      return 'New';
+      return t('customerProfiles.new');
     case 'interested':
-      return 'Interested';
+      return t('customerProfiles.interested');
     case 'customer':
-      return 'Customer';
+      return t('customerProfiles.customer');
     case 'loyal':
-      return 'Loyal';
+      return t('customerProfiles.loyal');
     default:
       return stage;
   }
@@ -123,6 +124,7 @@ export const CustomerProfileRow: React.FC<CustomerProfileRowProps> = React.memo(
   onOpenChat,
   showActions = true
 }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -139,9 +141,9 @@ export const CustomerProfileRow: React.FC<CustomerProfileRowProps> = React.memo(
   };
 
   const displayName = profile.name || `Customer ${profile.phone_number.slice(-4)}`;
-  const lastInteraction = profile.last_interaction ? 
-    formatDistanceToNow(new Date(profile.last_interaction), { addSuffix: true }) : 
-    'Never';
+  const lastInteraction = profile.last_interaction ?
+    formatDistanceToNow(new Date(profile.last_interaction), { addSuffix: true }) :
+    t('customerProfiles.never');
   
   const handleEditClick = () => {
     const encodedPhoneNumber = encodeURIComponent(profile.phone_number);
@@ -183,7 +185,7 @@ export const CustomerProfileRow: React.FC<CustomerProfileRowProps> = React.memo(
             {/* Stage Badge - Hidden on mobile */}
             <div className="hidden sm:block flex-shrink-0">
               <Badge className={getStageColor(profile.customer_stage)}>
-                {getStageLabel(profile.customer_stage)}
+                {getStageLabel(profile.customer_stage, t)}
               </Badge>
             </div>
 
@@ -244,7 +246,7 @@ export const CustomerProfileRow: React.FC<CustomerProfileRowProps> = React.memo(
         {/* Mobile Stage Badge */}
         <div className="sm:hidden px-4 pb-3">
           <Badge className={getStageColor(profile.customer_stage)}>
-            {getStageLabel(profile.customer_stage)}
+            {getStageLabel(profile.customer_stage, t)}
           </Badge>
         </div>
       </div>
@@ -256,7 +258,7 @@ export const CustomerProfileRow: React.FC<CustomerProfileRowProps> = React.memo(
             {/* Contact Information & Company */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-3">
-                <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100">Contact Information</h4>
+                <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100">{t('customerProfiles.contactInformation')}</h4>
                 <div className="space-y-2">
                   {profile.email && (
                     <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
@@ -272,27 +274,27 @@ export const CustomerProfileRow: React.FC<CustomerProfileRowProps> = React.memo(
                   )}
                   <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                     <Calendar className="h-4 w-4 flex-shrink-0" />
-                    <span>Last interaction: {lastInteraction}</span>
+                    <span>{t('customerProfiles.lastInteraction', { time: lastInteraction })}</span>
                   </div>
                 </div>
               </div>
 
               {/* Statistics */}
               <div className="space-y-3">
-                <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100">Engagement Stats</h4>
+                <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100">{t('customerProfiles.engagementStats')}</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center gap-2 text-sm">
                     <MessageSquare className="h-4 w-4 text-slate-500" />
                     <div>
                       <div className="font-medium text-slate-900 dark:text-slate-100">{profile.total_messages}</div>
-                      <div className="text-xs text-slate-500">Messages</div>
+                      <div className="text-xs text-slate-500">{t('customerProfiles.messages')}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <Bot className="h-4 w-4 text-slate-500" />
                     <div>
                       <div className="font-medium text-slate-900 dark:text-slate-100">{profile.ai_interactions}</div>
-                      <div className="text-xs text-slate-500">AI Chats</div>
+                      <div className="text-xs text-slate-500">{t('customerProfiles.aiChats')}</div>
                     </div>
                   </div>
                 </div>
@@ -302,7 +304,7 @@ export const CustomerProfileRow: React.FC<CustomerProfileRowProps> = React.memo(
             {/* Tags */}
             {profile.tags && profile.tags.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100">Tags</h4>
+                <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100">{t('customerProfiles.tags')}</h4>
                 <div className="flex flex-wrap gap-1">
                   {profile.tags.map((tag, index) => (
                     <Badge key={index} variant="secondary" className="text-xs">
@@ -318,7 +320,7 @@ export const CustomerProfileRow: React.FC<CustomerProfileRowProps> = React.memo(
               <div className="space-y-2">
                 <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-1">
                   <Bot className="h-4 w-4" />
-                  AI Insights
+                  {t('customerProfiles.aiInsights')}
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {profile.customer_intent && (
@@ -360,7 +362,7 @@ export const CustomerProfileRow: React.FC<CustomerProfileRowProps> = React.memo(
             {/* Conversation Summary */}
             {profile.conversation_summary && (
               <div className="space-y-2">
-                <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100">Conversation Summary</h4>
+                <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100">{t('customerProfiles.conversationSummary')}</h4>
                 <p className="text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 p-3 rounded-md border border-slate-200 dark:border-slate-700">
                   {profile.conversation_summary}
                 </p>
@@ -370,7 +372,7 @@ export const CustomerProfileRow: React.FC<CustomerProfileRowProps> = React.memo(
             {/* Key Points */}
             {profile.key_points && profile.key_points.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100">Key Points</h4>
+                <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100">{t('customerProfiles.keyPoints')}</h4>
                 <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
                   {profile.key_points.map((point, index) => (
                     <li key={index} className="flex items-start gap-2">
@@ -394,7 +396,7 @@ export const CustomerProfileRow: React.FC<CustomerProfileRowProps> = React.memo(
                     className="flex-1"
                   >
                     <ExternalLink className="h-4 w-4 mr-1" />
-                    WhatsApp
+                    {t('customerProfiles.whatsapp')}
                   </Button>
                   <Button
                     size="sm"

@@ -1,14 +1,15 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
+import {
   Users,
   Cog,
-  Search, 
+  Search,
   Filter,
   TrendingUp,
   MessageSquare,
@@ -22,9 +23,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWhatsAppInstances } from '@/hooks/use-whatsapp-instances';
-import { 
+import {
   useCustomerProfilesWithAdvancedSearch,
-  type AdvancedSearchFilters 
+  type AdvancedSearchFilters
 } from '@/hooks/use-customer-profiles';
 import { useDebounce } from '@/hooks/use-debounce';
 import { CustomerProfileCard, CustomerProfile } from '@/components/customer/CustomerProfileCard';
@@ -32,6 +33,7 @@ import { CustomerProfileRow } from '@/components/customer/CustomerProfileRow';
 import { VirtualRowContainer } from '@/components/customer/VirtualRowContainer';
 
 export const CustomerProfiles = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -135,10 +137,10 @@ export const CustomerProfiles = () => {
           {/* Loading text with animation */}
           <div className="loading-text-center space-y-2">
             <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Loading Customer Profiles
+              {t('customerProfiles.loadingTitle')}
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Please wait while we prepare your customer data...
+              {t('customerProfiles.loadingDescription')}
             </p>
           </div>
           
@@ -161,11 +163,11 @@ export const CustomerProfiles = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div>
-                <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
-                  Customer Profiles
+                <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100">
+                  {t('customerProfiles.title')}
                 </h1>
                 <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
-                  Manage and view detailed customer information and conversation history
+                  {t('customerProfiles.description')}
                 </p>
               </div>
             </div>
@@ -181,13 +183,13 @@ export const CustomerProfiles = () => {
             <div className="mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Cog className="h-5 w-5" />
-                Choose WhatsApp Number
+                {t('customerProfiles.chooseWhatsappNumber')}
               </h2>
             </div>
 
             <Select value={selectedInstance} onValueChange={setSelectedInstance}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Choose WhatsApp Number" />
+                <SelectValue placeholder={t('customerProfiles.chooseWhatsappNumber')} />
               </SelectTrigger>
               <SelectContent>
                 {instances.map((instance) => (
@@ -195,7 +197,7 @@ export const CustomerProfiles = () => {
                     <div className="flex items-center justify-between w-full gap-x-2">
                       <span>{instance.instance_name}</span>
                       <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
-                        Connected
+                        {t('customerProfiles.connected')}
                       </span>
                     </div>
                   </SelectItem>
@@ -211,30 +213,30 @@ export const CustomerProfiles = () => {
             {stats && (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <StatCard
-                  title="Total Customers"
+                  title={t('customerProfiles.totalCustomers')}
                   value={stats.total}
-                  description="All registered customers"
+                  description={t('customerProfiles.allRegisteredCustomers')}
                   icon={Users}
                   color="text-blue-600"
                 />
                 <StatCard
-                  title="New Customers"
+                  title={t('customerProfiles.newCustomers')}
                   value={stats.stages.new}
-                  description="Recently added customers"
+                  description={t('customerProfiles.recentlyAddedCustomers')}
                   icon={UserPlus}
                   color="text-green-600"
                 />
                 <StatCard
-                  title="Total Messages"
+                  title={t('customerProfiles.totalMessages')}
                   value={stats.totalMessages}
-                  description={`Avg ${stats.avgMessagesPerCustomer} per customer`}
+                  description={t('customerProfiles.avgPerCustomer', { count: stats.avgMessagesPerCustomer })}
                   icon={MessageSquare}
                   color="text-orange-600"
                 />
                 <StatCard
-                  title="AI Interactions"
+                  title={t('customerProfiles.aiInteractions')}
                   value={stats.totalInteractions}
-                  description={`Avg ${stats.avgInteractionsPerCustomer} per customer`}
+                  description={t('customerProfiles.avgPerCustomer', { count: stats.avgInteractionsPerCustomer })}
                   icon={Bot}
                   color="text-purple-600"
                 />
@@ -243,8 +245,8 @@ export const CustomerProfiles = () => {
 
             <Tabs defaultValue="profiles" className="space-y-4">
               <TabsList>
-                <TabsTrigger value="profiles">Customer Profiles</TabsTrigger>
-                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                <TabsTrigger value="profiles">{t('customerProfiles.profiles')}</TabsTrigger>
+                <TabsTrigger value="analytics">{t('customerProfiles.analytics')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="profiles" className="space-y-4">
@@ -254,7 +256,7 @@ export const CustomerProfiles = () => {
                     <div className="mb-4">
                       <h3 className="text-lg font-semibold flex items-center gap-2">
                         <Filter className="h-5 w-5" />
-                        Filters
+                        {t('customerProfiles.filters')}
                       </h3>
                     </div>
                     <div className="space-y-4">
@@ -263,7 +265,7 @@ export const CustomerProfiles = () => {
                           <div className="relative">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                             <Input
-                              placeholder="Search by name, phone, email, or company..."
+                              placeholder={t('customerProfiles.searchPlaceholder')}
                               value={searchTerm}
                               onChange={(e) => setSearchTerm(e.target.value)}
                               className="pl-9"
@@ -272,14 +274,14 @@ export const CustomerProfiles = () => {
                         </div>
                         <Select value={stageFilter} onValueChange={setStageFilter}>
                           <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="All Stages" />
+                            <SelectValue placeholder={t('customerProfiles.allStages')} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="all">All Stages</SelectItem>
-                            <SelectItem value="new">New</SelectItem>
-                            <SelectItem value="interested">Interested</SelectItem>
-                            <SelectItem value="customer">Customer</SelectItem>
-                            <SelectItem value="loyal">Loyal</SelectItem>
+                            <SelectItem value="all">{t('customerProfiles.allStages')}</SelectItem>
+                            <SelectItem value="new">{t('customerProfiles.new')}</SelectItem>
+                            <SelectItem value="interested">{t('customerProfiles.interested')}</SelectItem>
+                            <SelectItem value="customer">{t('customerProfiles.customer')}</SelectItem>
+                            <SelectItem value="loyal">{t('customerProfiles.loyal')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -287,12 +289,21 @@ export const CustomerProfiles = () => {
                         <span>
                           {pagination ? (
                             filters.searchTerm || filters.stageFilter ? (
-                              `Showing ${((currentPage - 1) * pageSize) + 1}-${Math.min(currentPage * pageSize, pagination.filtered)} of ${pagination.filtered} filtered customers (${pagination.total} total)`
+                              t('customerProfiles.showingFiltered', {
+                                start: ((currentPage - 1) * pageSize) + 1,
+                                end: Math.min(currentPage * pageSize, pagination.filtered),
+                                filtered: pagination.filtered,
+                                total: pagination.total
+                              })
                             ) : (
-                              `Showing ${((currentPage - 1) * pageSize) + 1}-${Math.min(currentPage * pageSize, pagination.total)} of ${pagination.total} customers`
+                              t('customerProfiles.showingRange', {
+                                start: ((currentPage - 1) * pageSize) + 1,
+                                end: Math.min(currentPage * pageSize, pagination.total),
+                                total: pagination.total
+                              })
                             )
                           ) : (
-                            `Showing ${filteredProfiles.length} customers`
+                            `${t('customerProfiles.showing')} ${filteredProfiles.length} ${t('customerProfiles.customers')}`
                           )}
                         </span>
                       </div>
@@ -305,18 +316,18 @@ export const CustomerProfiles = () => {
                   <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <div className="text-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                      <p className="mt-2 text-muted-foreground">Loading customer profiles...</p>
+                      <p className="mt-2 text-muted-foreground">{t('customerProfiles.loadingProfiles')}</p>
                     </div>
                   </div>
                 ) : filteredProfiles.length === 0 ? (
                   <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <div className="text-center py-8">
                       <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <h3 className="text-lg font-semibold mb-2">No Customer Profiles Found</h3>
+                      <h3 className="text-lg font-semibold mb-2">{t('customerProfiles.noProfilesFound')}</h3>
                       <p className="text-muted-foreground">
-                        {searchTerm || stageFilter !== 'all' 
-                          ? 'Try adjusting your search or filters'
-                          : 'Customer profiles will appear here as customers interact with your WhatsApp AI'
+                        {searchTerm || stageFilter !== 'all'
+                          ? t('customerProfiles.tryAdjustingFilters')
+                          : t('customerProfiles.profilesWillAppear')
                         }
                       </p>
                     </div>
@@ -340,17 +351,18 @@ export const CustomerProfiles = () => {
                     <div className="px-4 py-3 flex items-center justify-between">
                       <div className="text-sm text-slate-600 dark:text-slate-400">
                         {filters.searchTerm || filters.stageFilter ? (
-                          <>
-                            Showing {((currentPage - 1) * pageSize) + 1} to{' '}
-                            {Math.min(currentPage * pageSize, pagination.filtered)} of{' '}
-                            {pagination.filtered} filtered customers ({pagination.total} total)
-                          </>
+                          t('customerProfiles.showingFiltered', {
+                            start: ((currentPage - 1) * pageSize) + 1,
+                            end: Math.min(currentPage * pageSize, pagination.filtered),
+                            filtered: pagination.filtered,
+                            total: pagination.total
+                          })
                         ) : (
-                          <>
-                            Showing {((currentPage - 1) * pageSize) + 1} to{' '}
-                            {Math.min(currentPage * pageSize, pagination.total)} of{' '}
-                            {pagination.total} customers
-                          </>
+                          t('customerProfiles.showingRange', {
+                            start: ((currentPage - 1) * pageSize) + 1,
+                            end: Math.min(currentPage * pageSize, pagination.total),
+                            total: pagination.total
+                          })
                         )}
                       </div>
                       <div className="flex items-center gap-2">
@@ -361,7 +373,7 @@ export const CustomerProfiles = () => {
                           disabled={currentPage === 1}
                         >
                           <ChevronLeft className="h-4 w-4" />
-                          Previous
+                          {t('customerProfiles.previous')}
                         </Button>
                         <div className="flex items-center gap-1">
                           {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => {
@@ -395,7 +407,7 @@ export const CustomerProfiles = () => {
                           onClick={() => setCurrentPage(currentPage + 1)}
                           disabled={currentPage === pagination.totalPages}
                         >
-                          Next
+                          {t('customerProfiles.next')}
                           <ChevronRight className="h-4 w-4" />
                         </Button>
                       </div>
@@ -410,63 +422,63 @@ export const CustomerProfiles = () => {
                     <div className="mb-4">
                       <h3 className="text-lg font-semibold flex items-center gap-2">
                         <TrendingUp className="h-5 w-5" />
-                        Customer Analytics
+                        {t('customerProfiles.customerAnalytics')}
                       </h3>
                       <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                        Insights about your customer base and engagement
+                        {t('customerProfiles.insightsDescription')}
                       </p>
                     </div>
                     {stats ? (
                       <div className="space-y-6">
                         {/* Stage Distribution */}
                         <div>
-                          <h4 className="text-sm font-medium mb-3">Customer Stage Distribution</h4>
+                          <h4 className="text-sm font-medium mb-3">{t('customerProfiles.stageDistribution')}</h4>
                           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                             {/* New Customers */}
                             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                               <div className="p-4">
                                 <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                  <h4 className="text-sm font-medium">New</h4>
+                                  <h4 className="text-sm font-medium">{t('customerProfiles.new')}</h4>
                                   <UserPlus className="h-4 w-4 text-blue-600" />
                                 </div>
                                 <div className="text-2xl font-bold text-blue-600">{stats.stages.new}</div>
-                                <p className="text-xs text-muted-foreground">New customers</p>
+                                <p className="text-xs text-muted-foreground">{t('customerProfiles.newCustomersLabel')}</p>
                               </div>
                             </div>
-                            
+
                             {/* Interested Customers */}
                             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                               <div className="p-4">
                                 <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                  <h4 className="text-sm font-medium">Interested</h4>
+                                  <h4 className="text-sm font-medium">{t('customerProfiles.interested')}</h4>
                                   <Star className="h-4 w-4 text-orange-600" />
                                 </div>
                                 <div className="text-2xl font-bold text-orange-600">{stats.stages.interested}</div>
-                                <p className="text-xs text-muted-foreground">Interested prospects</p>
+                                <p className="text-xs text-muted-foreground">{t('customerProfiles.interestedProspects')}</p>
                               </div>
                             </div>
-                            
+
                             {/* Customers */}
                             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                               <div className="p-4">
                                 <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                  <h4 className="text-sm font-medium">Customer</h4>
+                                  <h4 className="text-sm font-medium">{t('customerProfiles.customer')}</h4>
                                   <ShoppingBag className="h-4 w-4 text-green-600" />
                                 </div>
                                 <div className="text-2xl font-bold text-green-600">{stats.stages.customer}</div>
-                                <p className="text-xs text-muted-foreground">Active customers</p>
+                                <p className="text-xs text-muted-foreground">{t('customerProfiles.activeCustomers')}</p>
                               </div>
                             </div>
-                            
+
                             {/* Loyal Customers */}
                             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                               <div className="p-4">
                                 <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                  <h4 className="text-sm font-medium">Loyal</h4>
+                                  <h4 className="text-sm font-medium">{t('customerProfiles.loyal')}</h4>
                                   <Heart className="h-4 w-4 text-purple-600" />
                                 </div>
                                 <div className="text-2xl font-bold text-purple-600">{stats.stages.loyal}</div>
-                                <p className="text-xs text-muted-foreground">Loyal customers</p>
+                                <p className="text-xs text-muted-foreground">{t('customerProfiles.loyalCustomers')}</p>
                               </div>
                             </div>
                           </div>
@@ -474,29 +486,29 @@ export const CustomerProfiles = () => {
 
                         {/* Engagement Metrics */}
                         <div>
-                          <h4 className="text-sm font-medium mb-3">Engagement Metrics</h4>
+                          <h4 className="text-sm font-medium mb-3">{t('customerProfiles.engagementMetrics')}</h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Average Messages */}
                             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                               <div className="p-4">
                                 <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                  <h4 className="text-sm font-medium">Avg Messages</h4>
+                                  <h4 className="text-sm font-medium">{t('customerProfiles.avgMessages')}</h4>
                                   <MessageSquare className="h-4 w-4 text-orange-600" />
                                 </div>
                                 <div className="text-2xl font-bold text-orange-600">{stats.avgMessagesPerCustomer}</div>
-                                <p className="text-xs text-muted-foreground">Per customer</p>
+                                <p className="text-xs text-muted-foreground">{t('customerProfiles.perCustomer')}</p>
                               </div>
                             </div>
-                            
+
                             {/* Average AI Interactions */}
                             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                               <div className="p-4">
                                 <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                  <h4 className="text-sm font-medium">Avg AI Interactions</h4>
+                                  <h4 className="text-sm font-medium">{t('customerProfiles.avgAiInteractions')}</h4>
                                   <Bot className="h-4 w-4 text-purple-600" />
                                 </div>
                                 <div className="text-2xl font-bold text-purple-600">{stats.avgInteractionsPerCustomer}</div>
-                                <p className="text-xs text-muted-foreground">Per customer</p>
+                                <p className="text-xs text-muted-foreground">{t('customerProfiles.perCustomer')}</p>
                               </div>
                             </div>
                           </div>
@@ -505,7 +517,7 @@ export const CustomerProfiles = () => {
                     ) : (
                       <div className="text-center py-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                        <p className="mt-2 text-muted-foreground">Loading analytics...</p>
+                        <p className="mt-2 text-muted-foreground">{t('customerProfiles.loadingAnalytics')}</p>
                       </div>
                     )}
                   </div>

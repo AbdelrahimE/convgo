@@ -7,6 +7,7 @@ import { LanguageAwareTextarea } from '@/components/ui/language-aware-textarea';
 import { TagInput } from '@/components/ui/tag-input';
 import { Plus, Trash2, Headset, User, Cog } from 'lucide-react';
 import { handlePhoneNumberInput, isValidPhoneNumberLength } from '@/utils/phoneNumber';
+import { useTranslation } from 'react-i18next';
 import {
   useSupportNumbers,
   useAddSupportNumber,
@@ -25,6 +26,7 @@ interface SettingsTabProps {
 
 export const SettingsTab = React.memo(({ selectedInstance, instances }: SettingsTabProps) => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [newNumber, setNewNumber] = useState('');
   const [phoneValidationError, setPhoneValidationError] = useState('');
   const [localSettings, setLocalSettings] = useState<{
@@ -79,11 +81,11 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
     if (!isValidPhoneNumberLength(newNumber)) {
       const cleanedLength = newNumber.replace(/[^\d]/g, '').length;
       if (cleanedLength === 0) {
-        setPhoneValidationError('Please enter a phone number');
+        setPhoneValidationError(t('escalation.phoneValidationEmpty'));
       } else if (cleanedLength < 11) {
-        setPhoneValidationError('Phone number must be at least 11 digits');
+        setPhoneValidationError(t('escalation.phoneValidationTooShort'));
       } else if (cleanedLength > 15) {
-        setPhoneValidationError('Phone number cannot exceed 15 digits');
+        setPhoneValidationError(t('escalation.phoneValidationTooLong'));
       }
       return;
     }
@@ -97,7 +99,7 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
         setPhoneValidationError('');
       }
     });
-  }, [newNumber, user?.id, addSupportNumberMutation]);
+  }, [newNumber, user?.id, addSupportNumberMutation, t]);
 
   // Handle toggle number status
   const handleToggleNumberStatus = useCallback((id: string, currentStatus: boolean) => {
@@ -159,30 +161,30 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
           <div className="mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Headset className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              Support Team Numbers
+              {t('escalation.supportTeamNumbers')}
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              Add WhatsApp numbers for support team to receive notifications when conversations are escalated
+              {t('escalation.supportTeamDescription')}
             </p>
           </div>
-          
+
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Enter WhatsApp Number With Country Code"
+                  placeholder={t('escalation.enterWhatsappNumber')}
                   value={newNumber}
                   onChange={handlePhoneNumberChange}
                   className={`flex-1 text-xs ${phoneValidationError ? 'border-red-500 focus:ring-red-500' : ''}`}
                   type="text"
                   inputMode="tel"
                 />
-                <Button 
-                  onClick={handleAddSupportNumber} 
+                <Button
+                  onClick={handleAddSupportNumber}
                   disabled={loading || !newNumber.trim() || !isValidPhoneNumberLength(newNumber)}
                 >
                   <Plus className="h-4 w-4 mr-1" />
-                  Add
+                  {t('escalation.add')}
                 </Button>
               </div>
               {phoneValidationError && (
@@ -195,8 +197,8 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
             {supportNumbers.length === 0 ? (
               <div className="text-center py-8 text-slate-600 dark:text-slate-400">
                 <Headset className="h-12 w-12 mx-auto mb-2 opacity-50 text-slate-400 dark:text-slate-500" />
-                <p className="text-slate-600 dark:text-slate-400">No support numbers added</p>
-                <p className="text-sm mt-1 text-slate-500 dark:text-slate-500">Add support team numbers to receive escalation notifications</p>
+                <p className="text-slate-600 dark:text-slate-400">{t('escalation.noSupportNumbers')}</p>
+                <p className="text-sm mt-1 text-slate-500 dark:text-slate-500">{t('escalation.addSupportNumbersPrompt')}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -210,7 +212,7 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
                       <span className="text-base font-semibold text-blue-900 dark:text-blue-100">{number.whatsapp_number}</span>
                       {!number.is_active && (
                         <span className="text-xs font-medium bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded-lg">
-                          Disabled
+                          {t('escalation.disabled')}
                         </span>
                       )}
                     </div>
@@ -243,19 +245,19 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
             <div className="mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Cog className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                Escalation Settings
+                {t('escalation.escalationSettings')}
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                Customize escalation messages and criteria for each WhatsApp account
+                {t('escalation.escalationSettingsDescription')}
               </p>
             </div>
-            
+
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label className="text-base font-semibold">Enable Escalation System</Label>
+                  <Label className="text-base font-semibold">{t('escalation.enableEscalationSystem')}</Label>
                   <p className="text-sm text-gray-500">
-                    Enable or disable automatic escalation to human support
+                    {t('escalation.enableEscalationDescription')}
                   </p>
                 </div>
                 <Switch
@@ -268,40 +270,40 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
               {currentInstance.escalation_enabled && (
                 <div className="space-y-4 border border-blue-300 rounded-lg p-4 bg-blue-50">
                   <div className="space-y-0.5">
-                    <Label className="text-base text-blue-900 font-semibold">Choose Detection Method</Label>
+                    <Label className="text-base text-blue-900 font-semibold">{t('escalation.chooseDetectionMethod')}</Label>
                   </div>
-                  
+
                   {/* Smart AI Detection */}
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label className="flex items-center gap-2 text-blue-900">
-                        Smart AI Detection
+                        {t('escalation.smartAiDetection')}
                       </Label>
                       <p className="text-xs text-blue-600">
-                        Automatically detect when customers need human support using AI intent analysis
+                        {t('escalation.smartAiDetectionDescription')}
                       </p>
                     </div>
                     <Switch
                       checked={currentInstance.smart_escalation_enabled}
-                      onCheckedChange={(checked) => 
+                      onCheckedChange={(checked) =>
                         updateInstanceSettings('smart_escalation_enabled', checked)
                       }
                     />
                   </div>
-                  
+
                   {/* Keyword Detection */}
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label className="flex items-center gap-2 text-blue-900">
-                        Keyword Detection
+                        {t('escalation.keywordDetection')}
                       </Label>
                       <p className="text-xs text-blue-600">
-                        Trigger escalation based on specific keywords in customer messages
+                        {t('escalation.keywordDetectionDescription')}
                       </p>
                     </div>
                     <Switch
                       checked={currentInstance.keyword_escalation_enabled}
-                      onCheckedChange={(checked) => 
+                      onCheckedChange={(checked) =>
                         updateInstanceSettings('keyword_escalation_enabled', checked)
                       }
                     />
@@ -312,59 +314,59 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
               {/* Escalation Keywords - only show if keyword escalation is enabled */}
               {currentInstance.keyword_escalation_enabled && (
                 <div>
-                  <Label>Escalation Keywords</Label>
+                  <Label>{t('escalation.escalationKeywords')}</Label>
                   <TagInput
                     value={localSettings?.escalation_keywords || currentInstance.escalation_keywords || []}
                     onChange={(keywords) => updateLocalSettings('escalation_keywords', keywords)}
-                    placeholder="Type a keyword and press Enter to add"
+                    placeholder={t('escalation.typeKeywordPlaceholder')}
                     className="mt-1"
                     disabled={loading}
                     maxTags={30}
                   />
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    Keywords that trigger immediate escalation to human support. Press Enter to add each keyword as a tag.
+                    {t('escalation.escalationKeywordsDescription')}
                   </p>
                 </div>
               )}
 
               <div>
-                <Label>Escalation Message</Label>
+                <Label>{t('escalation.escalationMessage')}</Label>
                 <LanguageAwareTextarea
                   value={localSettings?.escalation_message || currentInstance.escalation_message}
                   onChange={(e) => updateLocalSettings('escalation_message', e.target.value)}
                   className="mt-1"
                   rows={3}
                   autoExpand={false}
-                  placeholder="Message sent to customer when conversation is escalated"
+                  placeholder={t('escalation.escalationMessagePlaceholder')}
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  This message is sent to the customer when their conversation is escalated to human support
+                  {t('escalation.escalationMessageDescription')}
                 </p>
               </div>
 
               <div>
-                <Label>Escalated Conversation Message</Label>
+                <Label>{t('escalation.escalatedConversationMessage')}</Label>
                 <LanguageAwareTextarea
                   value={localSettings?.escalated_conversation_message || currentInstance.escalated_conversation_message}
                   onChange={(e) => updateLocalSettings('escalated_conversation_message', e.target.value)}
                   className="mt-1"
                   rows={3}
                   autoExpand={false}
-                  placeholder="Message sent to customer when they try to communicate during escalation"
+                  placeholder={t('escalation.escalatedConversationMessagePlaceholder')}
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  This message is sent to customer when they try to send messages while conversation is escalated
+                  {t('escalation.escalatedConversationMessageDescription')}
                 </p>
               </div>
 
               {/* Save Settings Button */}
               <div className="flex justify-end pt-0">
-                <Button 
+                <Button
                   onClick={saveInstanceSettings}
                   disabled={loading || !hasUnsavedChanges}
                   className="min-w-32"
                 >
-                  {loading ? 'Saving...' : 'Save Settings'}
+                  {loading ? t('escalation.saving') : t('escalation.saveSettings')}
                 </Button>
               </div>
             </div>

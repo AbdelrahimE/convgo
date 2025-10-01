@@ -14,6 +14,7 @@ import SheetSelector from "@/components/data-collection/SheetSelector";
 import FieldsBuilder from "@/components/data-collection/FieldsBuilder";
 import CollectedDataView from "@/components/data-collection/CollectedDataView";
 import WhatsAppInstanceSelector from "@/components/data-collection/WhatsAppInstanceSelector";
+import { useTranslation } from 'react-i18next';
 
 interface GoogleSheetsConfig {
   id: string;
@@ -28,6 +29,7 @@ interface GoogleSheetsConfig {
 }
 
 const DataCollection = () => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
@@ -85,10 +87,10 @@ const DataCollection = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-ai-config', selectedInstance] });
-      toast.success("Data collection settings updated");
+      toast.success(t('dataCollection.dataExportedSuccessfully'));
     },
     onError: (error: any) => {
-      toast.error(error.message || "Failed to update settings");
+      toast.error(error.message || t('dataCollection.failedToExportData'));
     }
   });
 
@@ -130,7 +132,7 @@ const DataCollection = () => {
         window.location.href = data.authUrl;
       }
     } catch (error: any) {
-      toast.error(error.message || "Failed to initiate Google authentication");
+      toast.error(error.message || t('dataCollection.failedToExportData'));
     }
   };
 
@@ -229,9 +231,9 @@ const DataCollection = () => {
       // Invalidate all related queries to refresh UI
       queryClient.invalidateQueries({ queryKey: ['google-sheets-config'] });
       queryClient.invalidateQueries({ queryKey: ['whatsapp-ai-config'] });
-      
-      toast.success(`Disconnected from ${result.disconnectedEmail || 'Google account'} successfully`);
-      
+
+      toast.success(t('dataCollection.sessionDeletedSuccessfully'));
+
       // Reset connection state
       setIsConnected(false);
     },
@@ -241,8 +243,8 @@ const DataCollection = () => {
         selectedInstance,
         timestamp: new Date().toISOString()
       });
-      
-      toast.error(error.message || "Failed to disconnect Google Sheets. Please try again.");
+
+      toast.error(error.message || t('dataCollection.failedToDeleteSession'));
     }
   });
 
@@ -287,10 +289,10 @@ const DataCollection = () => {
           {/* Loading text with animation */}
           <div className="loading-text-center space-y-2">
             <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Loading Data Collection
+              {t('dataCollection.loadingTitle')}
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Please wait while we prepare your data collection settings...
+              {t('dataCollection.loadingDescription')}
             </p>
           </div>
           
@@ -313,11 +315,11 @@ const DataCollection = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div>
-                <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
-                  Data Collection
+                <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100">
+                  {t('dataCollection.title')}
                 </h1>
                 <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
-                  Automatically collect and export customer data from WhatsApp conversations to Google Sheets
+                  {t('dataCollection.description')}
                 </p>
               </div>
             </div>
@@ -334,7 +336,7 @@ const DataCollection = () => {
             <div className="mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Cog className="h-5 w-5" />
-                Choose WhatsApp Number
+                {t('dataCollection.chooseWhatsappNumber')}
               </h2>
             </div>
             <WhatsAppInstanceSelector 
@@ -349,15 +351,15 @@ const DataCollection = () => {
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="setup">
                 <Cog className="h-4 w-4 mr-2" />
-                Setup
+                {t('dataCollection.setup')}
               </TabsTrigger>
               <TabsTrigger value="fields" disabled={!isConnected || disconnectMutation.isPending}>
                 <Database className="h-4 w-4 mr-2" />
-                Fields
+                {t('dataCollection.fields')}
               </TabsTrigger>
               <TabsTrigger value="data" disabled={!isConnected || disconnectMutation.isPending}>
                 <FolderOpen className="h-4 w-4 mr-2" />
-                Collected Data
+                {t('dataCollection.collectedData')}
               </TabsTrigger>
             </TabsList>
 
@@ -366,16 +368,16 @@ const DataCollection = () => {
               <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div className="p-4">
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold mb-1">Google Sheets Connection</h3>
+                    <h3 className="text-lg font-semibold mb-1">{t('dataCollection.googleSheetsConnection')}</h3>
                     <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Connect your Google account to export data to Google Sheets
+                      {t('dataCollection.connectGoogleAccount')}
                     </p>
                   </div>
                   <div className="space-y-4">
                 {configLoading ? (
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading configuration...
+                    {t('common.loading')}
                   </div>
                 ) : isConnected ? (
                   <>
@@ -384,9 +386,9 @@ const DataCollection = () => {
                         <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                         <p className="text-sm font-medium text-green-900 dark:text-green-100">
                           {disconnectMutation.isPending ? (
-                            <>Disconnecting from {sheetsConfig?.google_email}...</>
+                            <>{t('dataCollection.disconnectingFrom', { email: sheetsConfig?.google_email })}</>
                           ) : (
-                            <>Connected as {sheetsConfig?.google_email}</>
+                            <>{t('dataCollection.connectedAs', { email: sheetsConfig?.google_email })}</>
                           )}
                         </p>
                       </div>
@@ -397,12 +399,12 @@ const DataCollection = () => {
                         <div className="flex items-start gap-3">
                           <Loader2 className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0 animate-spin mt-0.5" />
                           <div className="text-sm text-orange-900 dark:text-orange-100">
-                            <strong>Disconnecting Google Sheets...</strong><br />
-                            • Stopping data collection<br />
-                            • Removing integration settings<br />
-                            • Cleaning up configuration<br />
+                            <strong>{t('dataCollection.disconnectingGoogleSheets')}</strong><br />
+                            • {t('dataCollection.stoppingDataCollection')}<br />
+                            • {t('dataCollection.removingIntegrationSettings')}<br />
+                            • {t('dataCollection.cleaningUpConfiguration')}<br />
                             <span className="text-sm text-orange-700 dark:text-orange-300 mt-2 block">
-                              Please wait, do not refresh the page.
+                              {t('dataCollection.pleaseWaitDoNotRefresh')}
                             </span>
                           </div>
                         </div>
@@ -417,7 +419,7 @@ const DataCollection = () => {
                           sheetName={sheetsConfig?.sheet_name}
                         />
                       </div>
-                      <Button 
+                      <Button
                         onClick={handleDisconnect}
                         className="w-full border border-red-200 bg-red-50 text-red-900 hover:bg-red-500 hover:text-white"
                         disabled={disconnectMutation.isPending}
@@ -425,12 +427,12 @@ const DataCollection = () => {
                         {disconnectMutation.isPending ? (
                           <>
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            Disconnecting...
+                            {t('dataCollection.disconnecting')}
                           </>
                         ) : (
                           <>
                             <Unlink className="h-4 w-4" />
-                            Disconnect Google Account
+                            {t('dataCollection.disconnectGoogleAccount')}
                           </>
                         )}
                       </Button>
@@ -442,7 +444,7 @@ const DataCollection = () => {
                       <div className="flex items-center gap-3">
                         <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
                         <p className="text-sm text-yellow-900 dark:text-yellow-100">
-                          No Google account connected. Connect your account to start collecting data.
+                          {t('dataCollection.noGoogleAccountConnected')}
                         </p>
                       </div>
                     </div>
@@ -461,7 +463,7 @@ const DataCollection = () => {
                       <div className="flex justify-between items-center">
                         <div className="flex items-center">
                           <Database className="h-5 w-5 mr-2 text-amber-500" />
-                          <h3 className="text-lg font-semibold">Data Collection Status</h3>
+                          <h3 className="text-lg font-semibold">{t('dataCollection.dataCollectionStatus')}</h3>
                         </div>
                         <div className="flex items-center gap-3">
                           {toggleDataCollection.isPending && (
@@ -480,19 +482,19 @@ const DataCollection = () => {
                       {aiConfig?.enable_data_collection ? (
                         <div className="bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-200 dark:border-green-900 p-3">
                           <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                            Data Collection is Active
+                            {t('dataCollection.dataCollectionActive')}
                           </p>
                           <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-                            This WhatsApp number will automatically collect data from conversations
+                            {t('dataCollection.dataCollectionActiveDescription')}
                           </p>
                         </div>
                       ) : (
                         <div className="bg-gray-50 dark:bg-gray-900/20 rounded-xl border border-gray-200 dark:border-gray-800 p-3">
                           <p className="text-sm font-medium text-gray-700 dark:text-gray-400">
-                            Data Collection is Disabled
+                            {t('dataCollection.dataCollectionDisabled')}
                           </p>
                           <p className="text-xs text-gray-600 dark:text-gray-500 mt-1">
-                            This WhatsApp number will not collect any data from conversations
+                            {t('dataCollection.dataCollectionDisabledDescription')}
                           </p>
                         </div>
                       )}
@@ -521,7 +523,7 @@ const DataCollection = () => {
             <div className="flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
               <p className="text-sm text-blue-900 dark:text-blue-100">
-                Please select a WhatsApp number to configure data collection
+                {t('dataCollection.pleaseSelectWhatsapp')}
               </p>
             </div>
           </div>
