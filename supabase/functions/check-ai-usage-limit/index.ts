@@ -45,7 +45,17 @@ serve(async (req) => {
 
     const { data: profile, error } = await supabaseAdmin
       .from('profiles')
-      .select('monthly_ai_response_limit, monthly_ai_responses_used, last_responses_reset_date')
+      .select(`
+        monthly_ai_response_limit,
+        monthly_ai_responses_used,
+        last_responses_reset_date,
+        storage_limit_mb,
+        instance_limit,
+        subscription_start_date,
+        subscription_end_date,
+        plan_type,
+        subscription_period
+      `)
       .eq('id', userId)
       .maybeSingle();
 
@@ -95,9 +105,15 @@ serve(async (req) => {
         limit,
         used,
         resetsOn: lastReset,  // Send the original last reset date, not the calculated next reset
+        storageLimitMb: profile.storage_limit_mb || 50,
+        instanceLimit: profile.instance_limit || 1,
+        subscriptionStartDate: profile.subscription_start_date,
+        subscriptionEndDate: profile.subscription_end_date,
+        planType: profile.plan_type,
+        subscriptionPeriod: profile.subscription_period,
         errorMessage: !allowed ? `Monthly AI response limit reached (${used}/${limit})` : undefined
       }),
-      { 
+      {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );

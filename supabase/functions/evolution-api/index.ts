@@ -114,7 +114,7 @@ serve(async (req) => {
     });
 
     // Process response data
-    let responseData = await response.json();
+    const responseData = await response.json();
     logger.info(`Evolution API response for ${operation}:`, responseData);
 
     // Special processing for certain operation types
@@ -151,7 +151,7 @@ serve(async (req) => {
     if (operation === 'CHECK_STATUS') {
       // Map Evolution API connection state to our expected states
       let state = 'close';
-      let statusReason = responseData.instance?.state || 'Unknown';
+      const statusReason = responseData.instance?.state || 'Unknown';
 
       if (responseData.instance?.state === 'open') {
         state = 'open';

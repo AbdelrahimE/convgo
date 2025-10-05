@@ -19,17 +19,25 @@ export interface WhatsAppInstance {
   keyword_escalation_enabled: boolean | null;
 }
 
-export const useWhatsAppInstances = (userId?: string) => {
+export const useWhatsAppInstances = (userId?: string, onlyConnected: boolean = false) => {
   return useQuery({
-    queryKey: ['whatsapp-instances', userId],
+    queryKey: ['whatsapp-instances', userId, onlyConnected],
     queryFn: async () => {
       if (!userId) return [];
-      
-      const { data, error } = await supabase
+
+      let query = supabase
         .from('whatsapp_instances')
         .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .eq('user_id', userId);
+
+      // Filter only connected instances if requested
+      if (onlyConnected) {
+        query = query.eq('status', 'Connected');
+      }
+
+      query = query.order('created_at', { ascending: false });
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching WhatsApp instances:', error);

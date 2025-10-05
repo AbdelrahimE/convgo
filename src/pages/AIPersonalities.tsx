@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -940,7 +941,33 @@ const AIPersonalities = React.memo(() => {
           </div>
         </div>
 
-        {selectedInstance && (
+        {!selectedInstance ? (
+          <div className="bg-blue-50 dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-slate-800 shadow-sm">
+            <div className="py-12 text-center">
+              <div className="flex flex-col items-center space-y-4 max-w-md mx-auto">
+                <div className="h-16 w-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <Users className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {t('aiPersonalities.noInstanceSelected')}
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    {t('aiPersonalities.noInstanceDescription')}
+                  </p>
+                </div>
+                <Button
+                  asChild
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Link to="/whatsapp">
+                    {t('aiPersonalities.connectWhatsApp')}
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="p-4">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

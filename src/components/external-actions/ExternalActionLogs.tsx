@@ -144,7 +144,7 @@ const ExternalActionLogs: React.FC<ExternalActionLogsProps> = ({
       // Apply date filter
       if (dateFilter !== 'all') {
         const now = new Date();
-        let startDate = new Date(now);
+        const startDate = new Date(now);
         
         switch (dateFilter) {
           case '1d':

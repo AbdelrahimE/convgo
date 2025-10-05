@@ -8,7 +8,7 @@
     "dataCollection": "Data Collection",
     "externalActions": "External Actions",
     "smartEscalation": "Smart Escalation",
-    "usageInsights": "Usage Insights",
+    "dashboard": "Dashboard",
     "accountSettings": "Account Settings",
     "support": "Support",
     "upgrade": "Upgrade",
@@ -54,6 +54,10 @@
     "offlineMessage": "You're offline. Please check your internet connection.",
     "slowConnectionMessage": "Slow connection detected. Operations may take longer.",
     "suggestions": "Suggestions:"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "description": "Monitor your account overview, subscription details, and usage statistics"
   },
   "accountSettings": {
     "title": "Account Settings",
@@ -264,6 +268,9 @@
     "saveConfiguration": "Save Configuration",
     "saving": "Saving...",
     "pleaseSelect": "Please select a WhatsApp instance to configure AI settings",
+    "noInstanceSelected": "No WhatsApp Number Connected",
+    "noInstanceDescription": "To configure AI settings, you need to connect a WhatsApp number first. Go to WhatsApp Numbers section to link your WhatsApp account.",
+    "connectWhatsApp": "Connect WhatsApp Number",
     "promptWizardTitle": "Smart Prompt Generator Wizard",
     "promptWizardDescription": "We'll help you create a customized prompt step by step to improve your AI assistant's performance",
     "generationsRemaining": "Generations Remaining",
@@ -340,6 +347,9 @@
     "selectWhatsappNumber": "Select WhatsApp number",
     "noConnectedNumbers": "No connected WhatsApp numbers available",
     "connected": "Connected",
+    "noInstanceSelected": "No WhatsApp Number Connected",
+    "noInstanceDescription": "To configure AI Personalities, you need to connect a WhatsApp number first. Go to WhatsApp Numbers section to link your WhatsApp account.",
+    "connectWhatsApp": "Connect WhatsApp Number",
     "myPersonalities": "My Personalities",
     "addFromTemplates": "Add From Templates",
     "manageAiPersonalities": "Manage AI Personalities",
@@ -506,7 +516,10 @@
     "never": "Never",
     "showingRange": "Showing {{start}} to {{end}} of {{total}} customers",
     "showingFiltered": "Showing {{start}} to {{end}} of {{filtered}} filtered customers ({{total}} total)",
-    "existingCustomer": "existing customer"
+    "existingCustomer": "existing customer",
+    "noInstanceSelected": "No WhatsApp Number Connected",
+    "noInstanceDescription": "To view customer profiles, you need to connect a WhatsApp number first. Go to WhatsApp Numbers section to link your WhatsApp account.",
+    "connectWhatsApp": "Connect WhatsApp Number"
   },
   "customerProfileEdit": {
     "title": "Edit Customer Profile",
@@ -687,7 +700,10 @@
     "sessionDeletedSuccessfully": "Session deleted successfully",
     "failedToDeleteSession": "Failed to delete session",
     "connectWithGoogle": "Connect with Google",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "noWhatsAppNumberConnected": "No WhatsApp Number Connected",
+    "connectWhatsAppToUseDataCollection": "To configure data collection, you need to connect a WhatsApp number first. Go to WhatsApp Numbers section to link your WhatsApp account.",
+    "connectWhatsAppNumber": "Connect WhatsApp Number"
   },
   "escalation": {
     "title": "Escalation Management",
@@ -766,7 +782,12 @@
     "markResolved": "Mark Resolved",
     "phoneValidationEmpty": "Please enter a phone number",
     "phoneValidationTooShort": "Phone number must be at least 11 digits",
-    "phoneValidationTooLong": "Phone number cannot exceed 15 digits"
+    "phoneValidationTooLong": "Phone number cannot exceed 15 digits",
+    "selectInstanceFirst": "Please Select a WhatsApp Number First",
+    "selectInstanceDescription": "Select a WhatsApp number from the dropdown above to manage support team numbers and escalation settings",
+    "noWhatsAppNumberConnected": "No WhatsApp Number Connected",
+    "connectWhatsAppToUseEscalation": "To configure escalation management, you need to connect a WhatsApp number first. Go to WhatsApp Numbers section to link your WhatsApp account.",
+    "connectWhatsAppNumber": "Connect WhatsApp Number"
   },
   "common": {
     "loading": "Loading...",

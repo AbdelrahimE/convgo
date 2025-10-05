@@ -8,7 +8,7 @@
     "dataCollection": "جمع البيانات",
     "externalActions": "الإجراءات الخارجية",
     "smartEscalation": "التصعيد الذكي",
-    "usageInsights": "إحصائيات الاستخدام",
+    "dashboard": "لوحة التحكم",
     "accountSettings": "إعدادات الحساب",
     "support": "الدعم الفني",
     "upgrade": "الترقية",
@@ -54,6 +54,10 @@
     "offlineMessage": "أنت غير متصل. يرجى التحقق من اتصالك بالإنترنت.",
     "slowConnectionMessage": "تم اكتشاف اتصال بطيء. قد تستغرق العمليات وقتاً أطول.",
     "suggestions": "اقتراحات:"
+  },
+  "dashboard": {
+    "title": "لوحة التحكم",
+    "description": "مراقبة نظرة عامة على حسابك وتفاصيل الاشتراك وإحصائيات الاستخدام"
   },
   "accountSettings": {
     "title": "إعدادات الحساب",
@@ -264,6 +268,9 @@
     "saveConfiguration": "حفظ الإعدادات",
     "saving": "جاري الحفظ...",
     "pleaseSelect": "يرجى اختيار رقم واتساب لتكوين إعدادات الذكاء الاصطناعي",
+    "noInstanceSelected": "لا يوجد رقم واتساب متصل",
+    "noInstanceDescription": "لتكوين إعدادات الذكاء الاصطناعي، تحتاج إلى ربط رقم واتساب أولاً. انتقل إلى قسم أرقام الواتساب لربط حسابك.",
+    "connectWhatsApp": "ربط رقم واتساب",
     "promptWizardTitle": "معالج إنشاء التعليمات الذكية",
     "promptWizardDescription": "سنساعدك في إنشاء تعليمات مخصصة خطوة بخطوة لتحسين أداء مساعد الذكاء الاصطناعي",
     "generationsRemaining": "عمليات إنشاء متبقية",
@@ -340,6 +347,9 @@
     "selectWhatsappNumber": "اختر رقم الواتساب",
     "noConnectedNumbers": "لا توجد أرقام واتساب متصلة متاحة",
     "connected": "متصل",
+    "noInstanceSelected": "لا يوجد رقم واتساب متصل",
+    "noInstanceDescription": "لتكوين شخصيات الذكاء الاصطناعي، تحتاج إلى ربط رقم واتساب أولاً. انتقل إلى قسم أرقام الواتساب لربط حسابك.",
+    "connectWhatsApp": "ربط رقم واتساب",
     "myPersonalities": "شخصياتي",
     "addFromTemplates": "إضافة من القوالب",
     "manageAiPersonalities": "إدارة شخصيات الذكاء الاصطناعي",
@@ -506,7 +516,10 @@
     "never": "أبداً",
     "showingRange": "عرض {{start}} إلى {{end}} من {{total}} عملاء",
     "showingFiltered": "عرض {{start}} إلى {{end}} من {{filtered}} عملاء مفلترين ({{total}} إجمالي)",
-    "existingCustomer": "عميل حالي"
+    "existingCustomer": "عميل حالي",
+    "noInstanceSelected": "لا يوجد رقم واتساب متصل",
+    "noInstanceDescription": "لعرض ملفات العملاء، تحتاج إلى ربط رقم واتساب أولاً. انتقل إلى قسم أرقام الواتساب لربط حسابك.",
+    "connectWhatsApp": "ربط رقم واتساب"
   },
   "customerProfileEdit": {
     "title": "تعديل ملف العميل",
@@ -687,7 +700,10 @@
     "sessionDeletedSuccessfully": "تم حذف الجلسة بنجاح",
     "failedToDeleteSession": "فشل حذف الجلسة",
     "connectWithGoogle": "الاتصال باستخدام Google",
-    "cancel": "إلغاء"
+    "cancel": "إلغاء",
+    "noWhatsAppNumberConnected": "لا يوجد رقم واتساب متصل",
+    "connectWhatsAppToUseDataCollection": "لتكوين جمع البيانات، تحتاج إلى ربط رقم واتساب أولاً. انتقل إلى قسم أرقام الواتساب لربط حسابك.",
+    "connectWhatsAppNumber": "ربط رقم واتساب"
   },
   "escalation": {
     "title": "إدارة التصعيد",
@@ -766,7 +782,12 @@
     "markResolved": "وضع علامة محلول",
     "phoneValidationEmpty": "يرجى إدخال رقم الهاتف",
     "phoneValidationTooShort": "رقم الهاتف يجب أن يكون 11 رقماً على الأقل",
-    "phoneValidationTooLong": "رقم الهاتف لا يمكن أن يتجاوز 15 رقماً"
+    "phoneValidationTooLong": "رقم الهاتف لا يمكن أن يتجاوز 15 رقماً",
+    "selectInstanceFirst": "يرجى اختيار رقم واتساب أولاً",
+    "selectInstanceDescription": "اختر رقم واتساب من القائمة المنسدلة أعلاه لإدارة أرقام فريق الدعم وإعدادات التصعيد",
+    "noWhatsAppNumberConnected": "لا يوجد رقم واتساب مرتبط",
+    "connectWhatsAppToUseEscalation": "لإعداد إدارة التصعيد، تحتاج إلى ربط رقم واتساب أولاً. انتقل إلى قسم أرقام الواتساب لربط حساب الواتساب الخاص بك.",
+    "connectWhatsAppNumber": "ربط رقم واتساب"
   },
   "common": {
     "loading": "جاري التحميل...",

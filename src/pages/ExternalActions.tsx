@@ -9,13 +9,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Play, 
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Play,
   Pause,
-  Activity, 
+  Activity,
   ExternalLink,
   Zap,
   Loader2,
@@ -25,15 +25,10 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useWhatsAppInstances, WhatsAppInstance } from '@/hooks/use-whatsapp-instances';
 import logger from '@/utils/logger';
 import ExternalActionTester from '@/components/external-actions/ExternalActionTester';
 import ExternalActionLogs from '@/components/external-actions/ExternalActionLogs';
-
-interface WhatsAppInstance {
-  id: string;
-  instance_name: string;
-  status: string;
-}
 
 interface ExternalAction {
   id: string;
@@ -68,24 +63,26 @@ const ExternalActions: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  
-  const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
+
+  // Fetch WhatsApp instances - only show connected instances
+  const { data: instances = [], isLoading: loadingInstances } = useWhatsAppInstances(user?.id, true);
+
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [externalActions, setExternalActions] = useState<ExternalAction[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedAction, setSelectedAction] = useState<ExternalAction | null>(null);
-  
+
   // Dialog states
   const [showTester, setShowTester] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  
-  // Load WhatsApp instances
+
+  // Set initial instance when instances are loaded
   useEffect(() => {
-    if (user) {
-      loadWhatsAppInstances();
+    if (instances && instances.length > 0 && !selectedInstanceId) {
+      setSelectedInstanceId(instances[0].id);
     }
-  }, [user]);
+  }, [instances, selectedInstanceId]);
 
   // Load external actions when instance is selected
   useEffect(() => {
@@ -93,26 +90,6 @@ const ExternalActions: React.FC = () => {
       loadExternalActions();
     }
   }, [selectedInstanceId]);
-
-  const loadWhatsAppInstances = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('whatsapp_instances')
-        .select('id, instance_name, status')
-        .eq('user_id', user?.id)
-        .order('instance_name');
-
-      if (error) throw error;
-      
-      setInstances(data || []);
-      if (data && data.length > 0 && !selectedInstanceId) {
-        setSelectedInstanceId(data[0].id);
-      }
-    } catch (error) {
-      logger.error('Error loading WhatsApp instances:', error);
-      toast.error('Failed to load WhatsApp instances');
-    }
-  };
 
   const loadExternalActions = async () => {
     if (!selectedInstanceId) return;
@@ -243,36 +220,11 @@ const ExternalActions: React.FC = () => {
     const diff = now.getTime() - date.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
-    
+
     if (days > 0) return `${days}d ago`;
     if (hours > 0) return `${hours}h ago`;
     return 'Just now';
   };
-
-  if (instances.length === 0) {
-    return (
-      <div className="w-full min-h-screen bg-white dark:bg-slate-900">
-        <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6">
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="p-4">
-              <div className="py-12 text-center">
-                <div className="text-muted-foreground mb-4">
-                  <Zap className="w-12 h-12 mx-auto mb-2" />
-                  No WhatsApp instances found
-                </div>
-                <p className="text-sm text-muted-foreground mb-4">
-                  You need to connect a WhatsApp instance before creating external actions.
-                </p>
-                <Button asChild>
-                  <a href="/whatsapp">Connect WhatsApp</a>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="w-full min-h-screen bg-white dark:bg-slate-900">
@@ -304,25 +256,32 @@ const ExternalActions: React.FC = () => {
                 <Select
                   value={selectedInstanceId || ''}
                   onValueChange={(value) => setSelectedInstanceId(value)}
+                  disabled={instances.length === 0}
                 >
                   <SelectTrigger className="w-full max-w-xs">
                     <SelectValue placeholder="Select WhatsApp number" />
                   </SelectTrigger>
                   <SelectContent>
-                    {instances.map(instance => (
-                      <SelectItem key={instance.id} value={instance.id}>
-                        <div className="flex items-center justify-between w-full gap-x-2">
-                          <span>{instance.instance_name}</span>
-                          <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
-                            Connected
-                          </span>
-                        </div>
+                    {instances.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        No connected instances
                       </SelectItem>
-                    ))}
+                    ) : (
+                      instances.map(instance => (
+                        <SelectItem key={instance.id} value={instance.id}>
+                          <div className="flex items-center justify-between w-full gap-x-2">
+                            <span>{instance.instance_name}</span>
+                            <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
+                              Connected
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
-              <Button 
+              <Button
                 onClick={() => {
                   if (selectedInstanceId) {
                     navigate(`/external-actions/create?instance=${selectedInstanceId}`);
@@ -350,6 +309,25 @@ const ExternalActions: React.FC = () => {
               </div>
             </div>
           </div>
+        ) : instances.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="p-4">
+              <div className="py-12 text-center">
+                <div className="text-muted-foreground mb-4">
+                  <Zap className="w-12 h-12 mx-auto mb-2" />
+                  No connected WhatsApp instances
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">
+                  You need to connect a WhatsApp instance before creating external actions.
+                </p>
+                <Button asChild className="gap-2">
+                  <a href="/whatsapp">
+                    Connect WhatsApp
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </div>
         ) : externalActions.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="p-4">
@@ -361,7 +339,7 @@ const ExternalActions: React.FC = () => {
                 <p className="text-sm text-muted-foreground mb-4">
                   Create your first external action to start automating workflows with webhooks.
                 </p>
-                <Button 
+                <Button
                   onClick={() => {
                     if (selectedInstanceId) {
                       navigate(`/external-actions/create?instance=${selectedInstanceId}`);

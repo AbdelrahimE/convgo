@@ -36,8 +36,8 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
   } | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  // Queries and mutations
-  const { data: supportNumbers = [] } = useSupportNumbers();
+  // Queries and mutations (instance-based)
+  const { data: supportNumbers = [] } = useSupportNumbers(selectedInstance);
   const addSupportNumberMutation = useAddSupportNumber();
   const toggleNumberStatusMutation = useToggleNumberStatus();
   const deleteSupportNumberMutation = useDeleteSupportNumber();
@@ -75,7 +75,7 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
 
   // Handle adding support number
   const handleAddSupportNumber = useCallback(async () => {
-    if (!newNumber.trim() || !user?.id) return;
+    if (!newNumber.trim() || !selectedInstance) return;
 
     // Validate phone number length (11-15 digits)
     if (!isValidPhoneNumberLength(newNumber)) {
@@ -91,7 +91,7 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
     }
 
     addSupportNumberMutation.mutate({
-      userId: user.id,
+      instanceId: selectedInstance,
       whatsappNumber: newNumber.trim()
     }, {
       onSuccess: () => {
@@ -99,7 +99,7 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
         setPhoneValidationError('');
       }
     });
-  }, [newNumber, user?.id, addSupportNumberMutation, t]);
+  }, [newNumber, selectedInstance, addSupportNumberMutation, t]);
 
   // Handle toggle number status
   const handleToggleNumberStatus = useCallback((id: string, currentStatus: boolean) => {
@@ -152,6 +152,17 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
                  deleteSupportNumberMutation.isPending ||
                  updateInstanceSettingsMutation.isPending ||
                  saveInstanceSettingsMutation.isPending;
+
+  // Don't render Support Team Numbers section if no instance is selected
+  if (!selectedInstance) {
+    return (
+      <div className="text-center py-12 text-slate-600 dark:text-slate-400">
+        <Headset className="h-16 w-16 mx-auto mb-4 opacity-30" />
+        <p className="text-lg font-medium">{t('escalation.selectInstanceFirst')}</p>
+        <p className="text-sm mt-2">{t('escalation.selectInstanceDescription')}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 mt-6">

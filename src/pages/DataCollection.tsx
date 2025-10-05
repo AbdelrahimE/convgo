@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 // Card components removed - using div with consistent styling instead
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 // Badge import removed as it's not used in current implementation
-import { FolderOpen, Database, AlertCircle, CheckCircle2, Loader2, Cog, Unlink } from "lucide-react";
+import { FolderOpen, Table, AlertCircle, CheckCircle2, Loader2, Cog, Unlink } from "lucide-react";
 import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from '@/contexts/AuthContext';
 import GoogleAuthButton from "@/components/data-collection/GoogleAuthButton";
 import SheetSelector from "@/components/data-collection/SheetSelector";
 import FieldsBuilder from "@/components/data-collection/FieldsBuilder";
@@ -30,11 +32,30 @@ interface GoogleSheetsConfig {
 
 const DataCollection = () => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
   const [activeTab, setActiveTab] = useState("setup");
   const [initialPageLoading, setInitialPageLoading] = useState(true);
+
+  // Fetch connected WhatsApp instances
+  const { data: connectedInstances, isLoading: instancesLoading } = useQuery({
+    queryKey: ['connected-whatsapp-instances'],
+    queryFn: async () => {
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('whatsapp_instances')
+        .select('id, instance_name, status')
+        .eq('user_id', user.id)
+        .eq('status', 'Connected');
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user
+  });
 
   // Fetch Google Sheets configuration
   const { data: sheetsConfig, isLoading: configLoading } = useQuery({
@@ -282,7 +303,7 @@ const DataCollection = () => {
               <div className="h-20 w-20 animate-spin rounded-full border-4 border-transparent border-t-blue-600 dark:border-t-blue-400"></div>
             </div>
             <div className="absolute inset-0 flex items-center justify-center">
-              <Database className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+              <Table className="h-8 w-8 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
           
@@ -354,7 +375,7 @@ const DataCollection = () => {
                 {t('dataCollection.setup')}
               </TabsTrigger>
               <TabsTrigger value="fields" disabled={!isConnected || disconnectMutation.isPending}>
-                <Database className="h-4 w-4 mr-2" />
+                <Table className="h-4 w-4 mr-2" />
                 {t('dataCollection.fields')}
               </TabsTrigger>
               <TabsTrigger value="data" disabled={!isConnected || disconnectMutation.isPending}>
@@ -462,7 +483,7 @@ const DataCollection = () => {
                     <div className="pb-3">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center">
-                          <Database className="h-5 w-5 mr-2 text-amber-500" />
+                          <Table className="h-5 w-5 mr-2 text-amber-500" />
                           <h3 className="text-lg font-semibold">{t('dataCollection.dataCollectionStatus')}</h3>
                         </div>
                         <div className="flex items-center gap-3">
@@ -518,13 +539,32 @@ const DataCollection = () => {
           </Tabs>
         )}
 
-        {!selectedInstance && (
-          <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-              <p className="text-sm text-blue-900 dark:text-blue-100">
-                {t('dataCollection.pleaseSelectWhatsapp')}
-              </p>
+        {!selectedInstance && connectedInstances && connectedInstances.length === 0 && (
+          <div className="bg-blue-50 dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-slate-800 shadow-sm">
+            <div className="px-4">
+              <div className="py-12 text-center">
+                <div className="flex flex-col items-center space-y-4 max-w-md mx-auto">
+                  <div className="h-16 w-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <Table className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      {t('dataCollection.noWhatsAppNumberConnected')}
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      {t('dataCollection.connectWhatsAppToUseDataCollection')}
+                    </p>
+                  </div>
+                  <Button
+                    asChild
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <Link to="/whatsapp">
+                      {t('dataCollection.connectWhatsAppNumber')}
+                    </Link>
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         )}

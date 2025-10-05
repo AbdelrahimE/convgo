@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, Check, X, LogOut, Trash2, MessageSquare, ArrowRight, Bot, RotateCcw, Wifi, QrCode, CirclePlus, Cog, PhoneMissed } from "lucide-react";
+import { Loader2, X, LogOut, Trash2, MessageSquare, ArrowRight, Bot, Signal, Wifi, QrCode, CirclePlus, Cog, PhoneMissed } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logger from '@/utils/logger';
 import WhatsAppAIToggle from '@/components/WhatsAppAIToggle';
@@ -99,7 +99,7 @@ const InstanceActions = React.memo(({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="outline" size="sm" onClick={onCheckStatus} disabled={isLoading} className="h-8 w-8 p-0 md:h-8 md:w-8">
-              <RotateCcw className="h-3 w-3 md:h-3 md:w-3" />
+              <Signal className="h-3 w-3 md:h-3 md:w-3" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -130,7 +130,7 @@ const InstanceActions = React.memo(({
 
         {instance.status === 'Disconnected' && <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="sm" onClick={onReconnect} disabled={isLoading} className="h-8 px-2 text-green-600 hover:text-green-700 hover:bg-green-50">
+              <Button variant="outline" size="sm" onClick={onReconnect} disabled={isLoading} className="h-8 px-2 bg-green-50 hover:bg-green-100 text-green-600 hover:text-green-600 border-green-200">
                 <Wifi className="h-3 w-3" />
               </Button>
             </TooltipTrigger>
@@ -143,7 +143,7 @@ const InstanceActions = React.memo(({
           <Tooltip>
             <TooltipTrigger asChild>
               <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" disabled={isLoading} className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50">
+                <Button variant="outline" size="sm" disabled={isLoading} className="h-8 px-2 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-600 border-red-200">
                   <Trash2 className="h-3 w-3" />
                 </Button>
               </AlertDialogTrigger>

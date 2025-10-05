@@ -37,7 +37,7 @@ const AuthCallback: React.FC = () => {
 
           // Redirect to the main application
           setTimeout(() => {
-            navigate('/whatsapp');
+            navigate('/dashboard');
           }, 1500);
         } else {
           // Check for error in URL params

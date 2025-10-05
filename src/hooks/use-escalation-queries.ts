@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 // Interfaces
 export interface SupportNumber {
   id: string;
+  whatsapp_instance_id: string;
   whatsapp_number: string;
   is_active: boolean;
   created_at: string;
@@ -39,32 +40,45 @@ export interface EscalatedConversation {
   };
 }
 
-// Custom hook for support numbers
-export function useSupportNumbers() {
+// Custom hook for support numbers (instance-based)
+export function useSupportNumbers(instanceId?: string) {
   return useQuery({
-    queryKey: ['supportNumbers'],
+    queryKey: ['supportNumbers', instanceId],
     queryFn: async () => {
+      if (!instanceId) {
+        return [];
+      }
+
       const { data, error } = await supabase
         .from('support_team_numbers')
         .select('*')
+        .eq('whatsapp_instance_id', instanceId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return (data || []) as SupportNumber[];
     },
+    enabled: !!instanceId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 
 // Custom hook for WhatsApp instances
-export function useWhatsAppInstances(userId?: string) {
+export function useWhatsAppInstances(userId?: string, onlyConnected: boolean = false) {
   return useQuery({
-    queryKey: ['whatsappInstances', userId],
+    queryKey: ['whatsappInstances', userId, onlyConnected],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('whatsapp_instances')
         .select('id, instance_name, escalation_enabled, escalation_message, escalated_conversation_message, escalation_keywords, smart_escalation_enabled, keyword_escalation_enabled')
         .eq('user_id', userId);
+
+      // Filter only connected instances if requested
+      if (onlyConnected) {
+        query = query.eq('status', 'Connected');
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return (data || []) as InstanceSettings[];
@@ -104,23 +118,31 @@ export function useEscalatedConversations(instanceId: string, filter: 'all' | 'a
   });
 }
 
-// Mutation for adding support number
+// Mutation for adding support number (instance-based)
 export function useAddSupportNumber() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, whatsappNumber }: { userId: string; whatsappNumber: string }) => {
+    mutationFn: async ({
+      instanceId,
+      whatsappNumber
+    }: {
+      instanceId: string;
+      whatsappNumber: string;
+    }) => {
       const { error } = await supabase
         .from('support_team_numbers')
         .insert({
-          user_id: userId,
+          whatsapp_instance_id: instanceId,
           whatsapp_number: whatsappNumber.trim()
         });
 
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['supportNumbers'] });
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['supportNumbers', variables.instanceId]
+      });
       toast.success('Support number added successfully');
     },
     onError: (error: any) => {
@@ -143,6 +165,7 @@ export function useToggleNumberStatus() {
       if (error) throw error;
     },
     onSuccess: () => {
+      // Invalidate all supportNumbers queries (all instances)
       queryClient.invalidateQueries({ queryKey: ['supportNumbers'] });
     },
     onError: () => {
@@ -165,6 +188,7 @@ export function useDeleteSupportNumber() {
       if (error) throw error;
     },
     onSuccess: () => {
+      // Invalidate all supportNumbers queries (all instances)
       queryClient.invalidateQueries({ queryKey: ['supportNumbers'] });
       toast.success('Support number deleted');
     },

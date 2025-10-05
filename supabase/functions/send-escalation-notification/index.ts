@@ -37,39 +37,16 @@ serve(async (req) => {
       timestamp: new Date().toISOString()
     })
 
-    // First, get the user_id for this instance
-    console.log('Step 1: Fetching instance data for instanceId:', instanceId)
-    
-    const { data: instanceData, error: instanceError } = await supabase
-      .from('whatsapp_instances')
-      .select('user_id')
-      .eq('id', instanceId)
-      .single()
+    // Get support team numbers for this instance (direct query - no need for user_id)
+    console.log('Step 1: Fetching support team numbers for instanceId:', instanceId)
 
-    console.log('Step 1 Result:', {
-      instanceData: instanceData,
-      instanceError: instanceError,
-      instanceDataType: typeof instanceData,
-      instanceDataKeys: instanceData ? Object.keys(instanceData) : 'null'
-    })
-
-    if (instanceError || !instanceData) {
-      console.error('ERROR: Instance not found', { instanceError, instanceData })
-      throw new Error('Instance not found')
-    }
-
-    console.log('Step 1 Success: Found user_id:', instanceData.user_id)
-
-    // Then get support team numbers for this user
-    console.log('Step 2: Fetching support team numbers for user_id:', instanceData.user_id)
-    
     const { data: supportNumbers, error: supportError } = await supabase
       .from('support_team_numbers')
       .select('whatsapp_number')
       .eq('is_active', true)
-      .eq('user_id', instanceData.user_id)
+      .eq('whatsapp_instance_id', instanceId)
 
-    console.log('Step 2 Result:', {
+    console.log('Step 1 Result:', {
       supportNumbers: supportNumbers,
       supportError: supportError,
       supportNumbersType: typeof supportNumbers,
@@ -93,17 +70,17 @@ serve(async (req) => {
     }
 
     if (supportNumbers.length === 0) {
-      console.log('WARNING: No active support team numbers found for user_id:', instanceData.user_id)
+      console.log('WARNING: No active support team numbers found for instanceId:', instanceId)
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: 'No support team numbers configured' 
+        JSON.stringify({
+          success: false,
+          message: 'No support team numbers configured for this instance'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log(`Step 2 Success: Found ${supportNumbers.length} support team numbers`)
+    console.log(`Step 1 Success: Found ${supportNumbers.length} support team numbers for instance ${instanceId}`)
 
     // Create WhatsApp link for direct communication
     const customerWhatsAppLink = `https://wa.me/${customerNumber.replace(/[^0-9]/g, '')}`
@@ -119,15 +96,15 @@ Time: ${new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' })}
 Please handle this conversation as soon as possible.`
 
     // Get instance name for Evolution API
-    console.log('Step 3: Fetching instance name for instanceId:', instanceId)
-    
+    console.log('Step 2: Fetching instance name for instanceId:', instanceId)
+
     const { data: instanceInfo, error: instanceInfoError } = await supabase
       .from('whatsapp_instances')
       .select('instance_name')
       .eq('id', instanceId)
       .single()
 
-    console.log('Step 3 Result:', {
+    console.log('Step 2 Result:', {
       instanceInfo,
       instanceInfoError,
       instanceName: instanceInfo?.instance_name
@@ -139,10 +116,10 @@ Please handle this conversation as soon as possible.`
     }
 
     const instanceName = instanceInfo.instance_name
-    console.log('Step 3 Success: Found instance name:', instanceName)
+    console.log('Step 2 Success: Found instance name:', instanceName)
 
     // Send notifications to all support team members using Evolution API
-    console.log('Step 4: Starting to send notifications to support team members')
+    console.log('Step 3: Starting to send notifications to support team members')
     console.log('Support numbers to process:', supportNumbers.map(s => ({ 
       whatsapp_number: s.whatsapp_number,
       type: typeof s.whatsapp_number 
@@ -191,11 +168,11 @@ Please handle this conversation as soon as possible.`
       }
     })
 
-    console.log('Step 4: Waiting for all notification promises to complete...')
+    console.log('Step 3: Waiting for all notification promises to complete...')
     const results = await Promise.all(notificationPromises)
     const successCount = results.filter(r => r.success).length
-    
-    console.log('Step 4 Complete: Notification results:', {
+
+    console.log('Step 3 Complete: Notification results:', {
       totalAttempts: results.length,
       successCount,
       failureCount: results.length - successCount,
@@ -203,7 +180,7 @@ Please handle this conversation as soon as possible.`
     })
 
     // Create escalation record with detailed logging
-    console.log('Step 5: Creating escalation record in database', {
+    console.log('Step 4: Creating escalation record in database', {
       customerNumber,
       instanceId,
       escalationReason,
@@ -221,7 +198,7 @@ Please handle this conversation as soon as possible.`
       .select()
       .single()
 
-    console.log('Step 5 Result:', {
+    console.log('Step 4 Result:', {
       escalation,
       escalationError,
       hasEscalation: !!escalation,
@@ -247,7 +224,7 @@ Please handle this conversation as soon as possible.`
       throw escalationError
     }
 
-    console.log('✅ Step 5 Success: Escalation record created with ID:', escalation.id)
+    console.log('✅ Step 4 Success: Escalation record created with ID:', escalation.id)
 
     console.log('=== ESCALATION NOTIFICATION DEBUG END ===', {
       finalSuccess: true,

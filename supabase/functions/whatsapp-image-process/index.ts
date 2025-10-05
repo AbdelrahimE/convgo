@@ -68,7 +68,7 @@ serve(async (req) => {
       mediaType: ''
     };
     
-    let actualMimeType = mimeType || 'image/jpeg';
+    const actualMimeType = mimeType || 'image/jpeg';
     
     try {
       // Handle WhatsApp encrypted image with mediaKey

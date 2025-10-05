@@ -1,4 +1,5 @@
 import { getRedisClient, safeRedisCommand } from './upstash-client.ts';
+import { extractMessageText } from './message-text-extractor.ts';
 
 // Logger for debugging
 const logger = {
@@ -114,14 +115,8 @@ export async function addToQueue(
     const queueKey = getQueueKey(instanceName, userPhone);
     const now = new Date().toISOString();
     
-    // Extract message text from messageData - enhanced to support voice/image messages
-    const messageText = messageData.transcribedText ||                    // Voice messages (transcribed)
-                       messageData.message?.conversation ||               // Regular text messages
-                       messageData.message?.extendedTextMessage?.text ||  // Extended text messages  
-                       messageData.message?.imageMessage?.caption ||      // Images with captions
-                       messageData.message?.videoMessage?.caption ||      // Videos with captions
-                       messageData.message?.documentMessage?.caption ||   // Documents with captions
-                       '[Media Message]';                                 // Fallback for media without text
+    // Extract message text using centralized extractor (supports quoted messages/replies)
+    const messageText = extractMessageText(messageData);
 
     // Create queue message object
     const queueMessage: QueueMessage = {

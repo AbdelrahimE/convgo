@@ -8,17 +8,15 @@ import {
   LogOut,
   Link2,
   BrainCog,
-  AlignJustify,
   UserCog,
-  Gauge,
+  LayoutDashboard,
   ChevronUp,
   HelpCircle,
   Crown,
   X,
   Users,
   Headset,
-  Settings,
-  Database,
+  Table,
   Zap,
   UserCheck,
   Languages,
@@ -57,6 +55,10 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
 
   // Navigation items with translation keys
   const navigation = [{
+    nameKey: 'sidebar.dashboard',
+    href: '/dashboard',
+    icon: LayoutDashboard
+  }, {
     nameKey: 'sidebar.whatsappNumbers',
     href: '/whatsapp',
     icon: Link2
@@ -79,7 +81,7 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
   }, {
     nameKey: 'sidebar.dataCollection',
     href: '/data-collection',
-    icon: Database
+    icon: Table
   }, {
     nameKey: 'sidebar.externalActions',
     href: '/external-actions',
@@ -89,10 +91,6 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
     href: '/escalation-management',
     icon: Headset,
     badge: 'escalated'
-  }, {
-    nameKey: 'sidebar.usageInsights',
-    href: '/ai-usage',
-    icon: Gauge
   }];
 
   // Fetch escalated conversations count

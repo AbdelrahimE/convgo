@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -45,8 +46,8 @@ export const CustomerProfiles = () => {
   // Debounce search term to improve performance during typing
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  // Fetch WhatsApp instances
-  const { data: instances = [], isLoading: loadingInstances } = useWhatsAppInstances(user?.id);
+  // Fetch WhatsApp instances - only show connected instances
+  const { data: instances = [], isLoading: loadingInstances } = useWhatsAppInstances(user?.id, true);
 
   // Create filters object for server-side filtering
   const filters: AdvancedSearchFilters = useMemo(() => ({
@@ -187,27 +188,59 @@ export const CustomerProfiles = () => {
               </h2>
             </div>
 
-            <Select value={selectedInstance} onValueChange={setSelectedInstance}>
+            <Select value={selectedInstance} onValueChange={setSelectedInstance} disabled={loadingInstances || instances.length === 0}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={t('customerProfiles.chooseWhatsappNumber')} />
+                <SelectValue placeholder={t('customerProfiles.selectWhatsappNumber')} />
               </SelectTrigger>
               <SelectContent>
-                {instances.map((instance) => (
-                  <SelectItem key={instance.id} value={instance.id}>
-                    <div className="flex items-center justify-between w-full gap-x-2">
-                      <span>{instance.instance_name}</span>
-                      <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
-                        {t('customerProfiles.connected')}
-                      </span>
-                    </div>
+                {instances.length === 0 ? (
+                  <SelectItem value="none">
+                    {t('aiConfiguration.noConnectedNumbers')}
                   </SelectItem>
-                ))}
+                ) : (
+                  instances.map((instance) => (
+                    <SelectItem key={instance.id} value={instance.id}>
+                      <div className="flex items-center justify-between w-full gap-x-2">
+                        <span>{instance.instance_name}</span>
+                        <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
+                          {t('customerProfiles.connected')}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
         </div>
 
-        {selectedInstance && (
+        {!selectedInstance ? (
+          <div className="bg-blue-50 dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-slate-800 shadow-sm">
+            <div className="py-12 text-center">
+              <div className="flex flex-col items-center space-y-4 max-w-md mx-auto">
+                <div className="h-16 w-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <ShoppingBag className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {t('customerProfiles.noInstanceSelected')}
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    {t('customerProfiles.noInstanceDescription')}
+                  </p>
+                </div>
+                <Button
+                  asChild
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Link to="/whatsapp">
+                    {t('customerProfiles.connectWhatsApp')}
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
           <>
             {/* Statistics */}
             {stats && (

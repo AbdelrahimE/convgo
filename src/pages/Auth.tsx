@@ -327,8 +327,8 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
         if (error) throw error;
         return data;
       }, 'signin');
-      
-      navigate('/whatsapp');
+
+      navigate('/dashboard');
     } catch (error: any) {
       logAuthError(error, 'Sign In');
       

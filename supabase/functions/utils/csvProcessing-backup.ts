@@ -452,7 +452,7 @@ export function createCSVChunkMetadata(
       const fields = parseCSVLine(row);
       if (fields.length > productNameColIdx) {
         // Clean product name (remove quotes, trim)
-        let productName = fields[productNameColIdx].trim();
+        const productName = fields[productNameColIdx].trim();
         
         // Remove size/color variations to get base product name
         const baseProductName = productName.replace(/\s+-\s+(?:Small|Medium|Large|XL|XXL|\d+x\d+|Blue|Red|Green|Yellow|Black|White)/i, '').trim();

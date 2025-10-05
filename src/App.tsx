@@ -9,7 +9,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import FileManagement from '@/pages/FileManagement';
 import { SimpleSidebar, type SimpleSidebarHandle } from '@/components/SimpleSidebar';
 import { Button } from '@/components/ui/button';
-import { AlignJustify } from 'lucide-react';
+import { PanelRight } from 'lucide-react';
 import { LogoWithText } from '@/components/Logo';
 import { useRef, useEffect } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -17,7 +17,7 @@ import { useLocation } from 'react-router-dom';
 import WhatsAppLink from '@/pages/WhatsAppLink';
 import WhatsAppAIConfig from '@/pages/WhatsAppAIConfig';
 import AccountSettings from '@/pages/AccountSettings';
-import AIUsageMonitoring from '@/pages/AIUsageMonitoring';
+import Dashboard from '@/pages/Dashboard';
 import AIPersonalities from '@/pages/AIPersonalities';
 import EscalationManagement from '@/pages/EscalationManagement';
 import DataCollection from '@/pages/DataCollection';
@@ -66,9 +66,9 @@ function AppContent() {
                 className="md:hidden"
                 onClick={() => sidebarRef.current?.open()}
               >
-                <AlignJustify className="h-6 w-6" />
+                <PanelRight className="h-8 w-8" />
               </Button>
-              <LogoWithText className="h-6" />
+              <LogoWithText className="h-8" />
             </div>
           </div>
         )}
@@ -83,7 +83,7 @@ function AppContent() {
                     path="/"
                     element={
                       <ProtectedRoute>
-                        <Navigate to="/whatsapp" replace />
+                        <Navigate to="/dashboard" replace />
                       </ProtectedRoute>
                     }
                   />
@@ -128,10 +128,10 @@ function AppContent() {
                     }
                   />
                   <Route
-                    path="/ai-usage"
+                    path="/dashboard"
                     element={
                       <ProtectedRoute>
-                        <AIUsageMonitoring />
+                        <Dashboard />
                       </ProtectedRoute>
                     }
                   />

@@ -175,7 +175,7 @@ function balanceContextTokens(
 
     const lines = conversationHistory.split('\n\n');
     let currentTokens = 0;
-    let includedLines = [];
+    const includedLines = [];
 
     for (let i = lines.length - 1; i >= 0; i--) {
       const lineTokens = estimateTokens(lines[i]);
@@ -202,7 +202,7 @@ function balanceContextTokens(
 
     const sections = ragContent.split('\n\n---\n\n');
     let currentTokens = 0;
-    let includedSections = [];
+    const includedSections = [];
 
     for (let i = 0; i < sections.length; i++) {
       const sectionTokens = estimateTokens(sections[i]);

@@ -32,53 +32,36 @@ const WhatsAppInstanceSelector: React.FC<WhatsAppInstanceSelectorProps> = ({ val
       const { data, error } = await supabase
         .from('whatsapp_instances')
         .select('id, instance_name, status')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('status', 'Connected');
 
       if (error) throw error;
       return data as WhatsAppInstance[];
     }
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading WhatsApp instances...
-      </div>
-    );
-  }
-
-  if (!instances || instances.length === 0) {
-    return (
-      <div className="text-sm text-muted-foreground">
-        No WhatsApp instances found. Please add a WhatsApp number first.
-      </div>
-    );
-  }
-
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={value} onValueChange={onChange} disabled={isLoading || !instances || instances.length === 0}>
       <SelectTrigger className="w-full">
-        <SelectValue placeholder="Select a WhatsApp number" />
+        <SelectValue placeholder="Select WhatsApp number" />
       </SelectTrigger>
       <SelectContent>
-        {instances.map((instance) => (
-          <SelectItem key={instance.id} value={instance.id}>
-            <div className="flex items-center justify-between w-full">
-              <span>{instance.instance_name}</span>
-              <Badge 
-                variant="secondary"
-                className={`ml-2 ${
-                  instance.status === 'Connected' || instance.status === 'connected' 
-                    ? 'bg-green-500 hover:bg-green-500 text-white px-2 py-0.5 text-xs font-medium dark:bg-green-950/50 dark:text-white'
-                    : ''
-                }`}
-              >
-                {instance.status === 'connected' ? 'Connected' : instance.status}
-              </Badge>
-            </div>
+        {instances && instances.length === 0 ? (
+          <SelectItem value="none">
+            No connected numbers
           </SelectItem>
-        ))}
+        ) : (
+          instances?.map((instance) => (
+            <SelectItem key={instance.id} value={instance.id}>
+              <div className="flex items-center justify-between w-full gap-x-2">
+                <span>{instance.instance_name}</span>
+                <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
+                  Connected
+                </span>
+              </div>
+            </SelectItem>
+          ))
+        )}
       </SelectContent>
     </Select>
   );

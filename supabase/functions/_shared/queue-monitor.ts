@@ -320,7 +320,7 @@ export async function getQueueDepthStats(): Promise<QueueStats> {
       return stats;
     }
 
-    let allMessageAges: number[] = [];
+    const allMessageAges: number[] = [];
     let queuesWithMessages = 0;
 
     for (const queueKey of activeQueues) {

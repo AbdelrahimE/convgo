@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
+import { Link } from 'react-router-dom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Cog, MessageCircle, Settings } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Cog, MessageCircle, Settings, Headset } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWhatsAppInstances, EscalatedConversation } from '@/hooks/use-escalation-queries'
 import { useResolveEscalationDialog } from '@/hooks/use-resolve-escalation-dialog'
@@ -31,8 +33,8 @@ export default function EscalationManagement() {
   const [showContext, setShowContext] = useState(false)
   const [initialPageLoading, setInitialPageLoading] = useState(true)
 
-  // Use TanStack Query hook for instances
-  const { data: instances = [] } = useWhatsAppInstances(user?.id)
+  // Use TanStack Query hook for instances - only show connected instances
+  const { data: instances = [] } = useWhatsAppInstances(user?.id, true)
 
   // Use unified resolve escalation hook
   const { handleResolve, isLoading: resolveLoading } = useResolveEscalationDialog({
@@ -181,40 +183,70 @@ export default function EscalationManagement() {
           </div>
         </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-          <TabsTrigger value="settings">
-            <Cog className="h-5 w-5 mr-2" />
-            {t('escalation.settings')}
-          </TabsTrigger>
-          <TabsTrigger value="conversations">
-            <MessageCircle className="h-5 w-5 mr-2"/>
-            {t('escalation.conversations')}
-          </TabsTrigger>
-        </TabsList>
+      {instances && instances.length > 0 ? (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+            <TabsTrigger value="settings">
+              <Cog className="h-5 w-5 mr-2" />
+              {t('escalation.settings')}
+            </TabsTrigger>
+            <TabsTrigger value="conversations">
+              <MessageCircle className="h-5 w-5 mr-2"/>
+              {t('escalation.conversations')}
+            </TabsTrigger>
+          </TabsList>
 
-        <Suspense fallback={<LoadingSpinner />}>
-          <TabsContent value="conversations" className="space-y-6 mt-6">
-            {activeTab === 'conversations' && (
-              <ConversationsTab
-                selectedInstance={selectedInstance}
-                filter={filter}
-                onFilterChange={setFilter}
-                onViewContext={handleViewContext}
-              />
-            )}
-          </TabsContent>
+          <Suspense fallback={<LoadingSpinner />}>
+            <TabsContent value="conversations" className="space-y-6 mt-6">
+              {activeTab === 'conversations' && (
+                <ConversationsTab
+                  selectedInstance={selectedInstance}
+                  filter={filter}
+                  onFilterChange={setFilter}
+                  onViewContext={handleViewContext}
+                />
+              )}
+            </TabsContent>
 
-          <TabsContent value="settings" className="space-y-6 mt-6">
-            {activeTab === 'settings' && (
-              <SettingsTab
-                selectedInstance={selectedInstance}
-                instances={instances}
-              />
-            )}
-          </TabsContent>
-        </Suspense>
-      </Tabs>
+            <TabsContent value="settings" className="space-y-6 mt-6">
+              {activeTab === 'settings' && (
+                <SettingsTab
+                  selectedInstance={selectedInstance}
+                  instances={instances}
+                />
+              )}
+            </TabsContent>
+          </Suspense>
+        </Tabs>
+      ) : (
+        <div className="bg-blue-50 dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-slate-800 shadow-sm">
+          <div className="px-4">
+            <div className="py-12 text-center">
+              <div className="flex flex-col items-center space-y-4 max-w-md mx-auto">
+                <div className="h-16 w-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <Headset className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {t('escalation.noWhatsAppNumberConnected')}
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    {t('escalation.connectWhatsAppToUseEscalation')}
+                  </p>
+                </div>
+                <Button
+                  asChild
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Link to="/whatsapp">
+                    {t('escalation.connectWhatsAppNumber')}
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Context Dialog */}

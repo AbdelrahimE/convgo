@@ -3,12 +3,13 @@ import { generateAndSendAIResponse } from './ai-response-generator.ts';
 import { storeMessageInConversation } from './conversation-storage.ts';
 import { checkForDuplicateMessage } from './duplicate-message-detector.ts';
 import { getRecentConversationHistory } from './conversation-history.ts';
-import { 
-  isDataCollectionEnabled, 
+import {
+  isDataCollectionEnabled,
   processDataExtraction
 } from './data-collection-integration.ts';
 import { measureTime } from './parallel-queries.ts';
 import { CustomerProfileManager } from './customer-profile-manager.ts';
+import { extractMessageText } from './message-text-extractor.ts';
 
 // Logger for debugging
 const logger = {
@@ -325,10 +326,8 @@ export async function processMessageDirectly(
       messageId: messageData.key?.id
     });
 
-    // Extract message text
-    const messageText = messageData.message?.conversation || 
-                       messageData.message?.extendedTextMessage?.text ||
-                       '[Media Message]';
+    // Extract message text using centralized extractor (supports quoted messages/replies)
+    const messageText = extractMessageText(messageData);
 
     if (!messageText || messageText.trim().length === 0) {
       logger.warn('⚠️ Message has no text content, skipping processing');

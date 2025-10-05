@@ -667,13 +667,31 @@ const WhatsAppAIConfig = () => {
           </div>
         )}
         
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="p-4">
+        <div className="bg-blue-50 dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-slate-800 shadow-sm">
+          <div className="px-4">
             {!selectedInstance ? (
-              <div className="py-8">
-                <p className="text-center text-slate-600 dark:text-slate-400">
-                  {t('aiConfiguration.pleaseSelect')}
-                </p>
+              <div className="py-12 text-center">
+                <div className="flex flex-col items-center space-y-4 max-w-md mx-auto">
+                  <div className="h-16 w-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <Bot className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      {t('aiConfiguration.noInstanceSelected')}
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      {t('aiConfiguration.noInstanceDescription')}
+                    </p>
+                  </div>
+                  <Button
+                    asChild
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <Link to="/whatsapp">
+                      {t('aiConfiguration.connectWhatsApp')}
+                    </Link>
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="w-full">
