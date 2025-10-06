@@ -343,7 +343,7 @@ export default function Dashboard() {
                   <Button
                     className="w-full bg-green-400 hover:bg-green-500 text-green-950 hover:text-white"
                     onClick={() => {
-                      window.open('https://www.youtube.com/watch?v=F6TzZDHOCBU&list=RDfkeO8shNkf0&index=3', '_blank');
+                      window.open('https://bit.ly/convgo-upgrade', '_blank');
                     }}
                   >
                     <Crown className="h-4 w-4" />

@@ -324,13 +324,27 @@ export const SimpleSidebar = forwardRef<SimpleSidebarHandle, Record<string, neve
                 </DropdownMenuPortal>
               </DropdownMenuSub>
 
-              <DropdownMenuItem>
-                <HelpCircle className="h-4 w-4 mr-2" />
-                <span>{t('sidebar.support')}</span>
+              <DropdownMenuItem asChild>
+                <a
+                  href="https://wa.me/201019081957"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  <span>{t('sidebar.support')}</span>
+                </a>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Crown className="h-4 w-4 mr-2" />
-                <span>{t('sidebar.upgrade')}</span>
+              <DropdownMenuItem asChild>
+                <a
+                  href="https://bit.ly/convgo-upgrade"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <Crown className="h-4 w-4" />
+                  <span>{t('sidebar.upgrade')}</span>
+                </a>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
