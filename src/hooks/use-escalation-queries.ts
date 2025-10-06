@@ -100,7 +100,7 @@ export function useEscalatedConversations(instanceId: string, filter: 'all' | 'a
           instance:whatsapp_instances(instance_name)
         `)
         .eq('instance_id', instanceId)
-        .order('escalated_at', { ascending: false });
+        .order('escalated_at', { ascending: false});
 
       if (filter === 'active') {
         query = query.is('resolved_at', null);
@@ -113,8 +113,9 @@ export function useEscalatedConversations(instanceId: string, filter: 'all' | 'a
       return (data || []) as EscalatedConversation[];
     },
     enabled: !!instanceId,
-    staleTime: 30 * 1000, // 30 seconds
-    refetchInterval: 60 * 1000, // Auto-refresh every minute
+    staleTime: 2 * 60 * 1000, // 2 minutes - increased for better performance
+    gcTime: 5 * 60 * 1000, // 5 minutes cache
+    // Removed refetchInterval - use manual refresh instead for better control and reduced API calls
   });
 }
 

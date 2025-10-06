@@ -43,14 +43,51 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(false);
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      logger.log('Auth state changed:', session);
-      
+    // Listen for auth changes with comprehensive event handling
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      logger.log('Auth state changed - Event:', event, 'Session:', session);
+
+      // Handle different authentication events
+      switch (event) {
+        case 'SIGNED_IN':
+          logger.log('User signed in successfully:', session?.user?.email);
+          // Clear any pending password reset flags
+          localStorage.removeItem('pendingPasswordReset');
+          setIsPendingPasswordReset(false);
+          break;
+
+        case 'SIGNED_OUT':
+          logger.log('User signed out - cleaning up state');
+          // Clear all auth-related data from localStorage
+          localStorage.removeItem('pendingPasswordReset');
+          // Clear any cached query data if needed
+          // Note: QueryClient invalidation should be handled at the App level
+          setIsPendingPasswordReset(false);
+          break;
+
+        case 'TOKEN_REFRESHED':
+          logger.log('Session token refreshed successfully');
+          // Token refresh is automatic, just log for monitoring
+          break;
+
+        case 'USER_UPDATED':
+          logger.log('User data updated:', session?.user?.email);
+          break;
+
+        case 'PASSWORD_RECOVERY':
+          logger.log('Password recovery initiated');
+          localStorage.setItem('pendingPasswordReset', 'true');
+          setIsPendingPasswordReset(true);
+          break;
+
+        default:
+          logger.log('Unhandled auth event:', event);
+      }
+
       // Check pending password reset state on auth changes
       const pendingReset = localStorage.getItem('pendingPasswordReset') === 'true';
       setIsPendingPasswordReset(pendingReset);
-      
+
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);

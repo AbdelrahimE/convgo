@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Gauge, AlertCircle, HardDrive, Server, Crown, HeartHandshake, CirclePlus, LayoutDashboard } from "lucide-react";
+import { Gauge, AlertCircle, HardDrive, Server, Crown, HeartHandshake, CirclePlus, LayoutDashboard, RefreshCw } from "lucide-react";
 import { format, addDays, differenceInDays } from 'date-fns';
 import { useAIResponse } from "@/hooks/use-ai-response";
 import { useWhatsAppInstances } from "@/hooks/use-whatsapp-instances";
@@ -59,8 +59,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) {
-      fetchUsageData();
-      fetchProfileData();
+      // Fetch both data in parallel for better performance and reduced API calls
+      Promise.all([
+        fetchUsageData(),
+        fetchProfileData()
+      ]).catch(err => {
+        logger.error("Error loading dashboard data:", err);
+        setErrorMessage("Failed to load dashboard data");
+      });
     } else {
       setIsLoading(false);
       setErrorMessage("User authentication required");
@@ -158,11 +164,27 @@ export default function Dashboard() {
       {/* Header Section */}
       <div className="bg-white dark:bg-slate-900">
         <div className="px-4 sm:px-6 lg:px-8 pt-4 pb-2">
-          <div className="flex-1">
-            <h1 className="flex items-center gap-2 text-3xl font-bold text-slate-900 dark:text-slate-100">
-              <LayoutDashboard className="h-8 w-8 text-slate-900" />
-              {t('dashboard.title')}
-            </h1>
+          <div className="flex justify-between items-center">
+            <div className="flex-1">
+              <h1 className="flex items-center gap-2 text-3xl font-bold text-slate-900 dark:text-slate-100">
+                <LayoutDashboard className="h-8 w-8 text-slate-900" />
+                {t('dashboard.title')}
+              </h1>
+            </div>
+            {/* Manual Refresh Button - better control than auto-refresh */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                fetchUsageData();
+                fetchProfileData();
+              }}
+              disabled={isLoading}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              {isLoading ? t('dashboard.refreshing', 'Refreshing...') : t('dashboard.refresh', 'Refresh')}
+            </Button>
           </div>
         </div>
       </div>

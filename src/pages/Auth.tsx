@@ -30,6 +30,7 @@ import AuthDivider from '@/components/auth/AuthDivider';
 import TermsAndPrivacy from '@/components/auth/TermsAndPrivacy';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
+import convgoIconAuthPage from '@/assets/convgo-icon-auth-page.png';
 
 interface AuthProps {
   isResetPasswordMode?: boolean;
@@ -477,7 +478,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
         <Card className="w-full max-w-md shadow-2xl border-1 backdrop-blur-sm bg-white relative z-10">
           <CardHeader className="text-center pb-4">
             <div className="flex items-center justify-center mb-2">
-              <img src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon/convgo-icon-auth-page.png" alt="ConvGo icon" className="h-14 w-auto" />
+              <img src={convgoIconAuthPage} alt="ConvGo icon" className="h-14 w-auto" />
             </div>
             <CardTitle className="font-semibold">{t('auth.setNewPasswordTitle')}</CardTitle>
             <CardDescription className="text-sm">{t('auth.setNewPasswordDescription')}</CardDescription>
@@ -528,7 +529,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
         <Card className="w-full max-w-md shadow-2xl border-1 backdrop-blur-sm bg-white relative z-10">
           <CardHeader className="text-center pb-4">
             <div className="flex items-center justify-center mb-2">
-              <img src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon/convgo-icon-auth-page.png" alt="ConvGo Logo" className="h-14 w-auto" />
+              <img src={convgoIconAuthPage} alt="ConvGo Logo" className="h-14 w-auto" />
             </div>
             <CardTitle className="font-semibold">{t('auth.resetPasswordTitle')}</CardTitle>
             <CardDescription>{t('auth.resetPasswordDescription')}</CardDescription>
@@ -559,7 +560,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
       <Card className="w-full max-w-md shadow-2xl border-1 backdrop-blur-sm bg-white relative z-10">
         <CardHeader className="text-center pb-4">
           <div className="flex items-center justify-center mb-3">
-            <img src="https://okoaoguvtjauiecfajri.supabase.co/storage/v1/object/public/logo-and-icon/convgo-icon-auth-page.png" alt="ConvGo Logo" className="h-14 w-auto" />
+            <img src={convgoIconAuthPage} alt="ConvGo Logo" className="h-14 w-auto" />
           </div>
           <CardTitle className="text-xl font-semibold text-center mb-2">{title}</CardTitle>
           <CardDescription className="text-sm text-gray-600">{description}</CardDescription>

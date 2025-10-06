@@ -446,11 +446,10 @@ export const useCustomerProfilesWithAdvancedSearch = (
       };
     },
     enabled: !!instanceId,
-    staleTime: 2 * 60 * 1000, // 2 minutes (faster refresh for search results)
+    staleTime: 3 * 60 * 1000, // 3 minutes - increased for better performance
     gcTime: 10 * 60 * 1000, // 10 minutes
-    // Background refetch for real-time updates
-    refetchInterval: 5 * 60 * 1000, // 5 minutes
-    refetchIntervalInBackground: true,
+    // Removed refetchInterval - use manual refresh instead for better control and reduced API calls
+    // This prevents unnecessary background polling and reduces server load
   });
 };
 

@@ -1,7 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { useEscalatedConversations, EscalatedConversation } from '@/hooks/use-escalation-queries';
 import { useResolveEscalationDialog } from '@/hooks/use-resolve-escalation-dialog';
 import { StatsCards } from './StatsCards';
@@ -105,6 +105,18 @@ export const ConversationsTab = React.memo(({
             {t('escalation.all')}
           </Button>
         </div>
+
+        {/* Manual Refresh Button - replaces auto-refresh for better control */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => refetch()}
+          disabled={isLoading}
+          className="gap-2"
+        >
+          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          {isLoading ? t('escalation.refreshing', 'Refreshing...') : t('escalation.refresh', 'Refresh')}
+        </Button>
       </div>
 
       {/* Statistics Cards */}

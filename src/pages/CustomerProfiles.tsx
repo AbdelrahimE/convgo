@@ -20,7 +20,8 @@ import {
   ShoppingBag,
   Heart,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWhatsAppInstances } from '@/hooks/use-whatsapp-instances';
@@ -56,9 +57,10 @@ export const CustomerProfiles = () => {
   }), [debouncedSearchTerm, stageFilter]);
 
   // Fetch customer profiles with advanced server-side search
-  const { 
+  const {
     data: profilesData,
-    isLoading: loadingProfiles 
+    isLoading: loadingProfiles,
+    refetch: refetchProfiles
   } = useCustomerProfilesWithAdvancedSearch(selectedInstance, currentPage, pageSize, filters);
 
   // Extract data from combined response
@@ -242,6 +244,20 @@ export const CustomerProfiles = () => {
           </div>
         ) : (
           <>
+            {/* Header with Refresh Button */}
+            <div className="flex justify-end items-center mb-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchProfiles()}
+                disabled={loadingProfiles}
+                className="gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${loadingProfiles ? 'animate-spin' : ''}`} />
+                {loadingProfiles ? t('customerProfiles.refreshing', 'Refreshing...') : t('customerProfiles.refresh', 'Refresh')}
+              </Button>
+            </div>
+
             {/* Statistics */}
             {stats && (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

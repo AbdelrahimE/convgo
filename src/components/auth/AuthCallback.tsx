@@ -32,7 +32,7 @@ const AuthCallback: React.FC = () => {
           setMessage(`Welcome ${data.session.user.email}!`);
           
           toast.success("Sign In Successful", {
-            description: `Welcome back, ${data.session.user.email}!`
+            description: `Welcome to ConvGo, ${data.session.user.email}!`
           });
 
           // Redirect to the main application

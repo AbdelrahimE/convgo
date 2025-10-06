@@ -30,19 +30,73 @@ import { CustomerProfiles } from '@/pages/CustomerProfiles';
 import { CustomerProfileEdit } from '@/pages/CustomerProfileEdit';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkErrorBoundary } from '@/components/NetworkErrorBoundary';
+import { SessionExpiryNotification } from '@/components/SessionExpiryNotification';
 // Disabled languageDetector - now using unified i18n system for language management
 // import { initLanguageDetection } from '@/utils/languageDetector';
 
 import './App.css';
 
-// Create QueryClient instance with optimized settings
+// Create QueryClient instance with optimized settings and global error handling
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      cacheTime: 10 * 60 * 1000, // 10 minutes
+      staleTime: 10 * 60 * 1000, // 10 minutes - increased from 5 to reduce unnecessary refetches
+      gcTime: 15 * 60 * 1000, // 15 minutes - increased from 10 (gcTime replaces cacheTime in newer versions)
       refetchOnWindowFocus: false,
-      retry: 1,
+      refetchOnReconnect: false, // Prevent automatic refetch on reconnect to reduce API calls
+
+      // Smart retry logic - don't retry authentication errors
+      retry: (failureCount, error: any) => {
+        // Don't retry on authentication/authorization errors
+        if (error?.status === 401 || error?.status === 403) {
+          return false;
+        }
+
+        // Don't retry on rate limit errors (429) - wait for rate limit to reset
+        if (error?.status === 429) {
+          return false;
+        }
+
+        // Don't retry on client errors (4xx) except specific ones
+        if (error?.status >= 400 && error?.status < 500) {
+          // Only retry on specific client errors like 408 (timeout)
+          const retryableClientErrors = [408];
+          if (!retryableClientErrors.includes(error?.status)) {
+            return false;
+          }
+        }
+
+        // Retry server errors (5xx) and network errors up to 2 times
+        return failureCount < 2;
+      },
+
+      // Global error handler for all queries
+      onError: (error: any) => {
+        console.error('React Query Error:', error);
+
+        // Handle authentication errors (expired or invalid JWT)
+        if (error?.status === 401) {
+          console.warn('Authentication error detected - JWT may be expired');
+          // The AuthContext will handle session refresh automatically
+          // If refresh fails, user will be redirected to /auth by ProtectedRoute
+        }
+
+        // Handle authorization errors (insufficient permissions)
+        if (error?.status === 403) {
+          console.warn('Authorization error detected - insufficient permissions');
+        }
+      },
+    },
+    mutations: {
+      // Global error handler for all mutations
+      onError: (error: any) => {
+        console.error('React Query Mutation Error:', error);
+
+        // Handle authentication errors in mutations
+        if (error?.status === 401) {
+          console.warn('Authentication error in mutation - JWT may be expired');
+        }
+      },
     },
   },
 });
@@ -57,6 +111,10 @@ function AppContent() {
     <div className="h-screen flex w-full overflow-hidden">
       {!isAuthPage && <SimpleSidebar ref={sidebarRef} />}
       <main className={`flex-1 ${isAuthPage ? 'overflow-hidden' : 'overflow-auto'} relative w-full`}>
+        {/* Session Expiry Notification - Only show on protected pages */}
+        {/* autoRefresh is disabled to rely on centralized sessionManager and prevent concurrent refreshes */}
+        {!isAuthPage && <SessionExpiryNotification warningMinutes={15} autoRefresh={false} />}
+
         {!isAuthPage && isMobile && (
           <div className="sticky top-0 z-30 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
             <div className="px-4 py-3 flex items-center gap-3">

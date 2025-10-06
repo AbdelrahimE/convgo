@@ -8,4 +8,28 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+// Enhanced Supabase client with optimized auth configuration
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: {
+    // Automatically refresh the session when the access token expires
+    // This prevents users from being logged out unexpectedly
+    autoRefreshToken: true,
+
+    // Persist the session in localStorage so users stay logged in
+    // even after closing the browser
+    persistSession: true,
+
+    // Detect session from URL hash for OAuth callbacks (Google Sign-In, etc.)
+    detectSessionInUrl: true,
+
+    // Custom storage key for better organization
+    storageKey: 'convgo-auth-token',
+
+    // Use localStorage for session persistence
+    storage: window.localStorage,
+
+    // Use PKCE flow for enhanced security
+    // PKCE (Proof Key for Code Exchange) is recommended for SPAs
+    flowType: 'pkce',
+  },
+});

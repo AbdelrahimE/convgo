@@ -101,6 +101,8 @@ const WhatsAppAIConfig = () => {
   const [defaultVoiceLanguage, setDefaultVoiceLanguage] = useState('ar');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [initialPageLoading, setInitialPageLoading] = useState(true);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const [userDescription, setUserDescription] = useState('');
@@ -291,6 +293,119 @@ const WhatsAppAIConfig = () => {
       toast.error('Failed to save AI configuration');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Save System Prompt Configuration only
+  const saveSystemPromptConfig = async () => {
+    if (!selectedInstance || !systemPrompt.trim()) {
+      toast.error('Please select a WhatsApp instance and provide a system prompt');
+      return;
+    }
+    try {
+      setIsSavingPrompt(true);
+      const {
+        data: existingConfig,
+        error: checkError
+      } = await supabase.from('whatsapp_ai_config').select('id').eq('whatsapp_instance_id', selectedInstance).eq('user_id', user?.id).single();
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
+      if (existingConfig) {
+        const {
+          error
+        } = await supabase.from('whatsapp_ai_config').update({
+          system_prompt: systemPrompt,
+          temperature: 1.0,
+          // Keep personality system fields - always enabled
+          use_personality_system: true,
+          intent_recognition_enabled: true,
+          intent_confidence_threshold: 0.7,
+          updated_at: new Date().toISOString()
+        }).eq('id', existingConfig.id);
+        if (error) throw error;
+      } else {
+        // If no config exists, create one with default voice settings
+        const {
+          error
+        } = await supabase.from('whatsapp_ai_config').insert({
+          whatsapp_instance_id: selectedInstance,
+          user_id: user?.id,
+          system_prompt: systemPrompt,
+          temperature: 1.0,
+          is_active: true,
+          process_voice_messages: processVoiceMessages,
+          voice_message_default_response: voiceMessageDefaultResponse,
+          default_voice_language: defaultVoiceLanguage,
+          use_personality_system: true,
+          intent_recognition_enabled: true,
+          intent_confidence_threshold: 0.7
+        });
+        if (error) throw error;
+      }
+      toast.success('System prompt saved successfully');
+    } catch (error) {
+      logger.error('Error saving system prompt:', error);
+      toast.error('Failed to save system prompt');
+    } finally {
+      setIsSavingPrompt(false);
+    }
+  };
+
+  // Save Voice Message Configuration only
+  const saveVoiceMessageConfig = async () => {
+    if (!selectedInstance) {
+      toast.error('Please select a WhatsApp instance');
+      return;
+    }
+    if (!processVoiceMessages && !voiceMessageDefaultResponse.trim()) {
+      toast.error('Please provide a default response for voice messages');
+      return;
+    }
+    try {
+      setIsSavingVoice(true);
+      const {
+        data: existingConfig,
+        error: checkError
+      } = await supabase.from('whatsapp_ai_config').select('id').eq('whatsapp_instance_id', selectedInstance).eq('user_id', user?.id).single();
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
+      if (existingConfig) {
+        const {
+          error
+        } = await supabase.from('whatsapp_ai_config').update({
+          process_voice_messages: processVoiceMessages,
+          voice_message_default_response: voiceMessageDefaultResponse,
+          default_voice_language: defaultVoiceLanguage,
+          updated_at: new Date().toISOString()
+        }).eq('id', existingConfig.id);
+        if (error) throw error;
+      } else {
+        // If no config exists, create one with default system prompt
+        const {
+          error
+        } = await supabase.from('whatsapp_ai_config').insert({
+          whatsapp_instance_id: selectedInstance,
+          user_id: user?.id,
+          system_prompt: systemPrompt || 'You are a helpful AI assistant. Answer questions based on the context provided.',
+          temperature: 1.0,
+          is_active: true,
+          process_voice_messages: processVoiceMessages,
+          voice_message_default_response: voiceMessageDefaultResponse,
+          default_voice_language: defaultVoiceLanguage,
+          use_personality_system: true,
+          intent_recognition_enabled: true,
+          intent_confidence_threshold: 0.7
+        });
+        if (error) throw error;
+      }
+      toast.success('Voice message settings saved successfully');
+    } catch (error) {
+      logger.error('Error saving voice message settings:', error);
+      toast.error('Failed to save voice message settings');
+    } finally {
+      setIsSavingVoice(false);
     }
   };
 
@@ -667,10 +782,11 @@ const WhatsAppAIConfig = () => {
           </div>
         )}
         
-        <div className="bg-blue-50 dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-slate-800 shadow-sm">
-          <div className="px-4">
-            {!selectedInstance ? (
-              <div className="py-12 text-center">
+        {/* No WhatsApp Number Connected - Separate Container */}
+        {!selectedInstance && (
+          <div className="bg-blue-50 dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-slate-800 shadow-sm">
+            <div className="p-4">
+              <div className="py-8 text-center">
                 <div className="flex flex-col items-center space-y-4 max-w-md mx-auto">
                   <div className="h-16 w-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                     <Bot className="h-8 w-8 text-blue-600 dark:text-blue-400" />
@@ -693,138 +809,149 @@ const WhatsAppAIConfig = () => {
                   </Button>
                 </div>
               </div>
-            ) : (
-              <div className="w-full">
+            </div>
+          </div>
+        )}
 
-                <div className="space-y-6">
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold mb-1 flex items-center gap-2">
-                      <Bot className="h-5 w-5" />
-                      {t('aiConfiguration.aiSystemPrompt')}
-                    </h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      {t('aiConfiguration.promptInstructions')}
-                    </p>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <Label htmlFor="system-prompt">{t('aiConfiguration.prompt')}</Label>
-                        <Button variant="outline" size="sm" onClick={generateSystemPrompt} disabled={isLoading || !selectedInstance}>
-                          <Lightbulb className="mr-2 h-4 w-4" />
-                          {t('aiConfiguration.autoGeneratePrompt')}
-                        </Button>
-                      </div>
-                      <LanguageAwareTextarea id="system-prompt" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={8} placeholder={t('aiConfiguration.promptPlaceholder')} className="resize-y" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Personality System Configuration */}
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
-                      <Users className="h-5 w-5" />
-                      {t('aiConfiguration.aiPersonalitySystem')}
-                    </h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      {t('aiConfiguration.personalitySystemDescription')}
-                    </p>
-                  </div>
-                  <div className="space-y-6">
-                    <div className="bg-blue-50 dark:bg-blue-950/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
-                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0">
-                                <Users className="h-4 w-4 text-blue-900 dark:text-blue-400" />
-                              </div>
-                              <div className="flex-1 sm:flex-auto">
-                                <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                                  {personalityCount > 0 ? `${personalityCount} ${t('aiConfiguration.personalitiesConfigured')}` : t('aiConfiguration.noPersonalitiesYet')}
-                                </p>
-                                <p className="text-xs text-blue-600 dark:text-blue-300 font-normal">
-                                  {personalityCount > 0
-                                    ? t('aiConfiguration.intelligentSwitching')
-                                    : t('aiConfiguration.createPersonalities')
-                                  }
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex gap-2 w-full sm:w-auto">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                asChild
-                                className="border-blue-300 text-blue-700 hover:bg-blue-100 hover:text-blue-700 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900 rounded-lg w-full sm:w-auto"
-                              >
-                                <Link to="/ai-personalities">
-                                  <Cog className="h-4 w-4 mr-2" />
-                                  {t('aiConfiguration.managePersonalities')}
-                                </Link>
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                  </div>
-                </div>
-                
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
-                          <AudioLines className="h-5 w-5" />
-                          {t('aiConfiguration.voiceMessageSettings')}
-                        </h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          {t('aiConfiguration.voiceMessageDescription')}
-                        </p>
-                      </div>
-                      <div className="ml-6">
-                        <Switch id="process-voice" checked={processVoiceMessages} onCheckedChange={setProcessVoiceMessages} className="data-[state=checked]:bg-green-500 data-[state=checked]:hover:bg-green-400" />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-6">
-
-                    <div className="space-y-2">
-                      <Label htmlFor="voice-language">{t('aiConfiguration.voiceMessageLanguage')}</Label>
-                      <Select value={defaultVoiceLanguage} onValueChange={setDefaultVoiceLanguage}>
-                        <SelectTrigger id="voice-language" className="w-full">
-                          <SelectValue placeholder={t('aiConfiguration.selectLanguage')} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ar">{t('aiConfiguration.arabic')}</SelectItem>
-                          <SelectItem value="en">{t('aiConfiguration.english')}</SelectItem>
-                          <SelectItem value="auto">{t('aiConfiguration.autoDetect')}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        {t('aiConfiguration.voiceLanguageDescription')}
-                      </p>
-                    </div>
-
-                    {!processVoiceMessages && <div className="space-y-2">
-                        <Label htmlFor="voice-default-response">
-                          {t('aiConfiguration.defaultVoiceResponse')}
-                        </Label>
-                        <LanguageAwareTextarea id="voice-default-response" value={voiceMessageDefaultResponse} onChange={e => setVoiceMessageDefaultResponse(e.target.value)} placeholder={t('aiConfiguration.voiceResponsePlaceholder')} rows={3} />
-                        <p className="text-xs text-muted-foreground">
-                          {t('aiConfiguration.voiceResponseDescription')}
-                        </p>
-                      </div>}
-
-                    <Button onClick={saveAIConfig} disabled={isSaving || !systemPrompt.trim() || !selectedInstance || !processVoiceMessages && !voiceMessageDefaultResponse.trim()} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
-                      {isSaving ? t('aiConfiguration.saving') : t('aiConfiguration.saveConfiguration')}
+        {/* AI System Prompt - Separate Container */}
+        {selectedInstance && (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="p-4">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold mb-1 flex items-center gap-2">
+                  <Bot className="h-5 w-5" />
+                  {t('aiConfiguration.aiSystemPrompt')}
+                </h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {t('aiConfiguration.promptInstructions')}
+                </p>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="system-prompt">{t('aiConfiguration.prompt')}</Label>
+                    <Button variant="outline" size="sm" onClick={generateSystemPrompt} disabled={isLoading || !selectedInstance}>
+                      <Lightbulb className="mr-2 h-4 w-4" />
+                      {t('aiConfiguration.autoGeneratePrompt')}
                     </Button>
                   </div>
+                  <LanguageAwareTextarea id="system-prompt" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={8} placeholder={t('aiConfiguration.promptPlaceholder')} className="resize-y" />
                 </div>
+                <Button onClick={saveSystemPromptConfig} disabled={isSavingPrompt || !systemPrompt.trim() || !selectedInstance} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
+                  {isSavingPrompt ? t('aiConfiguration.saving') : t('aiConfiguration.saveConfiguration')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AI Personality System - Separate Container */}
+        {selectedInstance && (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="p-4">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  {t('aiConfiguration.aiPersonalitySystem')}
+                </h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {t('aiConfiguration.personalitySystemDescription')}
+                </p>
+              </div>
+              <div className="space-y-6">
+                <div className="bg-blue-50 dark:bg-blue-950/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0">
+                        <Users className="h-4 w-4 text-blue-900 dark:text-blue-400" />
+                      </div>
+                      <div className="flex-1 sm:flex-auto">
+                        <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                          {personalityCount > 0 ? `${personalityCount} ${t('aiConfiguration.personalitiesConfigured')}` : t('aiConfiguration.noPersonalitiesYet')}
+                        </p>
+                        <p className="text-xs text-blue-600 dark:text-blue-300 font-normal">
+                          {personalityCount > 0
+                            ? t('aiConfiguration.intelligentSwitching')
+                            : t('aiConfiguration.createPersonalities')
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="border-blue-300 text-blue-700 hover:bg-blue-100 hover:text-blue-700 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900 rounded-lg w-full sm:w-auto"
+                      >
+                        <Link to="/ai-personalities">
+                          <Cog className="h-4 w-4 mr-2" />
+                          {t('aiConfiguration.managePersonalities')}
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Voice Message Settings - Separate Container */}
+        {selectedInstance && (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="p-4">
+              <div className="mb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
+                      <AudioLines className="h-5 w-5" />
+                      {t('aiConfiguration.voiceMessageSettings')}
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      {t('aiConfiguration.voiceMessageDescription')}
+                    </p>
+                  </div>
+                  <div className="ml-6">
+                    <Switch id="process-voice" checked={processVoiceMessages} onCheckedChange={setProcessVoiceMessages} className="data-[state=checked]:bg-green-500 data-[state=checked]:hover:bg-green-400" />
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="voice-language">{t('aiConfiguration.voiceMessageLanguage')}</Label>
+                  <Select value={defaultVoiceLanguage} onValueChange={setDefaultVoiceLanguage}>
+                    <SelectTrigger id="voice-language" className="w-full">
+                      <SelectValue placeholder={t('aiConfiguration.selectLanguage')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ar">{t('aiConfiguration.arabic')}</SelectItem>
+                      <SelectItem value="en">{t('aiConfiguration.english')}</SelectItem>
+                      <SelectItem value="auto">{t('aiConfiguration.autoDetect')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {t('aiConfiguration.voiceLanguageDescription')}
+                  </p>
+                </div>
+
+                {!processVoiceMessages && <div className="space-y-2">
+                    <Label htmlFor="voice-default-response">
+                      {t('aiConfiguration.defaultVoiceResponse')}
+                    </Label>
+                    <LanguageAwareTextarea id="voice-default-response" value={voiceMessageDefaultResponse} onChange={e => setVoiceMessageDefaultResponse(e.target.value)} placeholder={t('aiConfiguration.voiceResponsePlaceholder')} rows={3} />
+                    <p className="text-xs text-muted-foreground">
+                      {t('aiConfiguration.voiceResponseDescription')}
+                    </p>
+                  </div>}
+
+                <Button onClick={saveVoiceMessageConfig} disabled={isSavingVoice || !selectedInstance || !processVoiceMessages && !voiceMessageDefaultResponse.trim()} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
+                  {isSavingVoice ? t('aiConfiguration.saving') : t('aiConfiguration.saveConfiguration')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
