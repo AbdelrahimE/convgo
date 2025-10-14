@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -74,12 +75,12 @@ interface ExternalActionFormProps {
 }
 
 const STEPS = [
-  { id: 'basic', title: 'Basic Info', icon: MessageSquare },
-  { id: 'training', title: 'Training Examples', icon: Globe },
-  { id: 'webhook', title: 'Webhook Config', icon: Zap },
-  { id: 'payload', title: 'Payload & Variables', icon: Code },
-  { id: 'settings', title: 'Settings', icon: Settings },
-  { id: 'response', title: 'Response Configuration', icon: Reply }
+  { id: 'basic', titleKey: 'externalActions.steps.basicInfo', icon: MessageSquare },
+  { id: 'training', titleKey: 'externalActions.steps.trainingExamples', icon: Globe },
+  { id: 'webhook', titleKey: 'externalActions.steps.webhookConfig', icon: Zap },
+  { id: 'payload', titleKey: 'externalActions.steps.payloadVariables', icon: Code },
+  { id: 'settings', titleKey: 'externalActions.steps.settings', icon: Settings },
+  { id: 'response', titleKey: 'externalActions.steps.responseConfig', icon: Reply }
 ];
 
 const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
@@ -87,6 +88,7 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
   whatsappInstanceId,
   existingAction
 }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
@@ -312,20 +314,20 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
           .eq('id', existingAction.id);
 
         if (error) throw error;
-        toast.success('External action updated successfully');
+        toast.success(t('externalActions.messages.actionUpdated'));
       } else {
         const { error } = await supabase
           .from('external_actions')
           .insert([actionData]);
 
         if (error) throw error;
-        toast.success('External action created successfully');
+        toast.success(t('externalActions.messages.actionCreated'));
       }
 
       navigate('/external-actions');
     } catch (error) {
       logger.error('Error saving external action:', error);
-      toast.error('Failed to save external action');
+      toast.error(t('externalActions.messages.failedToSave'));
     } finally {
       setLoading(false);
     }
@@ -942,12 +944,12 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
             </Button>
             <div>
               <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
-                {mode === 'create' ? 'Create External Action' : 'Edit External Action'}
+                {mode === 'create' ? t('externalActions.createExternalAction') : t('externalActions.editExternalAction')}
               </h1>
               <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
-                {mode === 'create' 
-                  ? 'Create a new custom action that triggers webhooks based on customer messages'
-                  : `Modify the settings for "${formData.display_name || 'this external action'}"`
+                {mode === 'create'
+                  ? t('externalActions.createActionDescription')
+                  : t('externalActions.editActionDescription', { name: formData.display_name || 'this external action' })
                 }
               </p>
             </div>
@@ -971,27 +973,27 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
             <div className="flex justify-between pt-4">
               <div className="flex gap-2">
                 <Button variant="outline" onClick={handleCancel}>
-                  Cancel
+                  {t('externalActions.buttons.cancel')}
                 </Button>
                 {currentStep > 0 && (
                   <Button variant="outline" onClick={prevStep}>
                     <ChevronLeft className="w-4 h-4 mr-1" />
-                    Previous
+                    {t('externalActions.buttons.previous')}
                   </Button>
                 )}
               </div>
 
               <div className="flex gap-2">
                 {currentStep < STEPS.length - 1 ? (
-                  <Button 
+                  <Button
                     onClick={nextStep}
                     className="gap-2"
                   >
-                    Next
+                    {t('externalActions.buttons.next')}
                     <ChevronRight className="w-4 h-4" />
                   </Button>
                 ) : (
-                  <Button 
+                  <Button
                     onClick={handleSave}
                     disabled={loading}
                     className="gap-2"
@@ -999,12 +1001,12 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
                     {loading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Saving...
+                        {t('externalActions.buttons.saving')}
                       </>
                     ) : (
                       <>
                         <Save className="w-4 h-4" />
-                        {mode === 'create' ? 'Create Action' : 'Update Action'}
+                        {mode === 'create' ? t('externalActions.buttons.createAction') : t('externalActions.buttons.updateAction')}
                       </>
                     )}
                   </Button>

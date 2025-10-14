@@ -18,6 +18,7 @@ create table public.profiles (
   subscription_end_date timestamp with time zone null default (now() + '30 days'::interval),
   plan_type public.plan_type null default 'Launch'::plan_type,
   subscription_period public.subscription_period null default 'Monthly'::subscription_period,
+  storage_used_mb numeric(10, 2) not null default 0,
   constraint profiles_pkey primary key (id),
   constraint profiles_id_fkey foreign KEY (id) references auth.users (id) on delete CASCADE,
   constraint username_length check ((char_length(full_name) >= 3))
@@ -27,5 +28,7 @@ create index IF not exists idx_profiles_ai_limits on public.profiles using btree
   monthly_ai_responses_used,
   monthly_ai_response_limit
 ) TABLESPACE pg_default;
+
+create index IF not exists idx_profiles_storage_usage on public.profiles using btree (storage_used_mb, storage_limit_mb) TABLESPACE pg_default;
 
 create index IF not exists idx_profiles_subscription_dates on public.profiles using btree (subscription_start_date, subscription_end_date) TABLESPACE pg_default;

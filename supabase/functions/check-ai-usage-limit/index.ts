@@ -50,6 +50,7 @@ serve(async (req) => {
         monthly_ai_responses_used,
         last_responses_reset_date,
         storage_limit_mb,
+        storage_used_mb,
         instance_limit,
         subscription_start_date,
         subscription_end_date,
@@ -106,6 +107,7 @@ serve(async (req) => {
         used,
         resetsOn: lastReset,  // Send the original last reset date, not the calculated next reset
         storageLimitMb: profile.storage_limit_mb || 50,
+        storageUsedMb: profile.storage_used_mb || 0,
         instanceLimit: profile.instance_limit || 1,
         subscriptionStartDate: profile.subscription_start_date,
         subscriptionEndDate: profile.subscription_end_date,

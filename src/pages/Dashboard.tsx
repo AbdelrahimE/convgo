@@ -20,6 +20,7 @@ interface UsageData {
   used: number;
   resetsOn: string | null;
   storageLimitMb?: number;
+  storageUsedMb?: number;
   instanceLimit?: number;
   subscriptionStartDate?: string | null;
   subscriptionEndDate?: string | null;
@@ -380,10 +381,15 @@ export default function Dashboard() {
                     <HardDrive className="h-5 w-5 text-amber-600" />
                   </div>
                   <div className="text-xl font-semibold text-amber-600 mb-3">
-                    {usageData.storageLimitMb || 50} MB
+                    {(usageData.storageUsedMb || 0).toFixed(2)}/{usageData.storageLimitMb || 50} MB
                   </div>
-                  <Progress value={50} className="h-2.5 mb-2 [&>div]:bg-amber-500" />
-                  <p className="text-xs text-amber-600">Available</p>
+                  <Progress
+                    value={((usageData.storageUsedMb || 0) / (usageData.storageLimitMb || 50)) * 100}
+                    className="h-2.5 mb-2 [&>div]:bg-amber-500"
+                  />
+                  <p className="text-xs text-amber-600">
+                    {((usageData.storageLimitMb || 50) - (usageData.storageUsedMb || 0)).toFixed(2)} MB remaining
+                  </p>
                 </CardContent>
               </Card>
 

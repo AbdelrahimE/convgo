@@ -219,6 +219,62 @@ async function handleEscalation(
   }
 }
 
+// Helper function to send typing indicator (composing presence) to user
+async function sendTypingIndicator(
+  instanceName: string,
+  userPhone: string,
+  evolutionApiKey: string
+): Promise<boolean> {
+  try {
+    const baseUrl = 'https://api.convgo.com';
+    const url = `${baseUrl}/chat/sendPresence/${instanceName}`;
+
+    logger.info('📝 Sending typing indicator to customer', {
+      instanceName,
+      userPhone: userPhone.substring(0, 5) + '***', // Partial phone for privacy
+      url
+    });
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': evolutionApiKey
+      },
+      body: JSON.stringify({
+        number: userPhone,
+        delay: 12200,
+        presence: 'composing'
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.warn('⚠️ Failed to send typing indicator (non-blocking)', {
+        status: response.status,
+        error: errorText,
+        instanceName,
+        userPhone: userPhone.substring(0, 5) + '***'
+      });
+      return false;
+    }
+
+    logger.info('✅ Typing indicator sent successfully', {
+      instanceName,
+      userPhone: userPhone.substring(0, 5) + '***'
+    });
+
+    return true;
+  } catch (error) {
+    logger.warn('⚠️ Exception sending typing indicator (non-blocking)', {
+      error: error instanceof Error ? error.message : String(error),
+      instanceName,
+      userPhone: userPhone.substring(0, 5) + '***'
+    });
+    return false;
+  }
+}
+
 // Helper function to find or create a conversation with improved timeout management and handling of unique constraint
 async function findOrCreateConversation(instanceId: string, userPhone: string) {
   try {
@@ -708,7 +764,44 @@ serve(async (req) => {
             }
           });
         }
-        
+
+        // 📝 TYPING INDICATOR: Send "composing" presence to user immediately
+        // This makes the user feel that someone is responding and improves UX
+        // The delay of 8200ms covers the Redis queue wait time + AI processing time
+        try {
+          if (userPhone) {
+            const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || normalizedData.apikey;
+
+            if (evolutionApiKey) {
+              // Send typing indicator (non-blocking - don't wait for response)
+              sendTypingIndicator(instanceName, userPhone, evolutionApiKey)
+                .catch(error => {
+                  logger.warn('Typing indicator failed but continuing message processing', {
+                    error: error instanceof Error ? error.message : String(error),
+                    instanceName,
+                    userPhone: userPhone.substring(0, 5) + '***'
+                  });
+                });
+
+              logger.debug('🚀 Typing indicator request sent (non-blocking)', {
+                instanceName,
+                userPhone: userPhone.substring(0, 5) + '***'
+              });
+            } else {
+              logger.warn('⚠️ Evolution API key not available for typing indicator', {
+                instanceName,
+                userPhone: userPhone.substring(0, 5) + '***'
+              });
+            }
+          }
+        } catch (error) {
+          // Typing indicator is non-critical - log and continue
+          logger.warn('Exception in typing indicator (non-blocking)', {
+            error: error instanceof Error ? error.message : String(error),
+            instanceName
+          });
+        }
+
         // QUEUE SYSTEM: Process message with Queue (automatic direct fallback)
         let processingResult: any = { success: false, reason: 'unknown' };
         

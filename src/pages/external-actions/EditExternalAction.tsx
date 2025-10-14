@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -37,10 +38,11 @@ interface ExternalAction {
 }
 
 const EditExternalAction: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  
+
   const [action, setAction] = useState<ExternalAction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,15 +66,15 @@ const EditExternalAction: React.FC = () => {
       if (error) throw error;
       
       if (!data) {
-        setError('External action not found');
+        setError(t('externalActions.failedToLoadAction'));
         return;
       }
 
       setAction(data);
     } catch (error) {
       console.error('Error loading external action:', error);
-      setError('Failed to load external action');
-      toast.error('Failed to load external action');
+      setError(t('externalActions.failedToLoadAction'));
+      toast.error(t('externalActions.failedToLoadAction'));
     } finally {
       setLoading(false);
     }
@@ -89,7 +91,7 @@ const EditExternalAction: React.FC = () => {
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
-              <p className="text-slate-600 dark:text-slate-400">Loading external action...</p>
+              <p className="text-slate-600 dark:text-slate-400">{t('externalActions.loadingAction')}</p>
             </div>
           </div>
         </div>
@@ -109,20 +111,20 @@ const EditExternalAction: React.FC = () => {
               className="gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back
+              {t('externalActions.back')}
             </Button>
           </div>
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="p-4">
               <div className="text-center py-8">
                 <h3 className="text-lg font-medium text-red-600 mb-2">
-                  Error Loading Action
+                  {t('externalActions.errorLoadingAction')}
                 </h3>
                 <p className="text-slate-600 dark:text-slate-400 mb-4">
                   {error}
                 </p>
                 <Button onClick={handleBack}>
-                  Return to External Actions
+                  {t('externalActions.returnToActions')}
                 </Button>
               </div>
             </div>
@@ -133,8 +135,8 @@ const EditExternalAction: React.FC = () => {
   }
 
   return (
-    <ExternalActionForm 
-      mode="edit" 
+    <ExternalActionForm
+      mode="edit"
       whatsappInstanceId={action.whatsapp_instance_id}
       existingAction={action}
     />

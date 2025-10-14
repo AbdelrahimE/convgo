@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -60,6 +61,7 @@ interface ExternalAction {
 }
 
 const ExternalActions: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -143,7 +145,7 @@ const ExternalActions: React.FC = () => {
       setExternalActions(actionsWithStats);
     } catch (error) {
       logger.error('Error loading external actions:', error);
-      toast.error('Failed to load external actions');
+      toast.error(t('externalActions.failedToLoad'));
     } finally {
       setLoading(false);
     }
@@ -166,10 +168,10 @@ const ExternalActions: React.FC = () => {
         )
       );
 
-      toast.success(`Action ${isActive ? 'enabled' : 'disabled'} successfully`);
+      toast.success(isActive ? t('externalActions.actionEnabled') : t('externalActions.actionDisabled'));
     } catch (error) {
       logger.error('Error toggling action status:', error);
-      toast.error('Failed to update action status');
+      toast.error(t('externalActions.failedToUpdateStatus'));
     }
   };
 
@@ -187,34 +189,34 @@ const ExternalActions: React.FC = () => {
       setExternalActions(prev => prev.filter(action => action.id !== selectedAction.id));
       setShowDeleteDialog(false);
       setSelectedAction(null);
-      toast.success('Action deleted successfully');
+      toast.success(t('externalActions.actionDeleted'));
     } catch (error) {
       logger.error('Error deleting action:', error);
-      toast.error('Failed to delete action');
+      toast.error(t('externalActions.failedToDelete'));
     }
   };
 
   const getStatusBadge = (action: ExternalAction) => {
     if (!action.is_active) {
-      return <Badge variant="secondary" className="gap-1"><Pause className="w-3 h-3" />Disabled</Badge>;
+      return <Badge variant="secondary" className="gap-1"><Pause className="w-3 h-3" />{t('externalActions.disabled')}</Badge>;
     }
-    
+
     if (action.execution_count === 0) {
-      return <Badge variant="outline" className="gap-1"><Clock className="w-3 h-3" />Never Used</Badge>;
+      return <Badge variant="outline" className="gap-1"><Clock className="w-3 h-3" />{t('externalActions.neverUsed')}</Badge>;
     }
-    
+
     const successRate = action.success_count! / action.execution_count! * 100;
     if (successRate >= 90) {
-      return <Badge variant="default" className="gap-1 bg-green-500"><CheckCircle className="w-3 h-3" />Healthy</Badge>;
+      return <Badge variant="default" className="gap-1 bg-green-500"><CheckCircle className="w-3 h-3" />{t('externalActions.healthy')}</Badge>;
     } else if (successRate >= 70) {
-      return <Badge variant="default" className="gap-1 bg-yellow-500"><AlertTriangle className="w-3 h-3" />Warning</Badge>;
+      return <Badge variant="default" className="gap-1 bg-yellow-500"><AlertTriangle className="w-3 h-3" />{t('externalActions.warning')}</Badge>;
     } else {
-      return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" />Issues</Badge>;
+      return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" />{t('externalActions.issues')}</Badge>;
     }
   };
 
   const formatLastExecuted = (timestamp: string | null) => {
-    if (!timestamp) return 'Never';
+    if (!timestamp) return t('externalActions.never');
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -223,7 +225,7 @@ const ExternalActions: React.FC = () => {
 
     if (days > 0) return `${days}d ago`;
     if (hours > 0) return `${hours}h ago`;
-    return 'Just now';
+    return t('externalActions.justNow');
   };
 
   return (
@@ -235,10 +237,10 @@ const ExternalActions: React.FC = () => {
             <div className="flex items-center space-x-3">
               <div>
                 <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
-                  External Actions
+                  {t('externalActions.title')}
                 </h1>
                 <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
-                  Create custom actions that trigger webhooks based on customer messages
+                  {t('externalActions.description')}
                 </p>
               </div>
             </div>
@@ -259,12 +261,12 @@ const ExternalActions: React.FC = () => {
                   disabled={instances.length === 0}
                 >
                   <SelectTrigger className="w-full max-w-xs">
-                    <SelectValue placeholder="Select WhatsApp number" />
+                    <SelectValue placeholder={t('externalActions.selectWhatsappNumber')} />
                   </SelectTrigger>
                   <SelectContent>
                     {instances.length === 0 ? (
                       <SelectItem value="none" disabled>
-                        No connected instances
+                        {t('externalActions.noConnectedInstances')}
                       </SelectItem>
                     ) : (
                       instances.map(instance => (
@@ -272,7 +274,7 @@ const ExternalActions: React.FC = () => {
                           <div className="flex items-center justify-between w-full gap-x-2">
                             <span>{instance.instance_name}</span>
                             <span className="inline-flex items-center justify-center rounded-full bg-green-500 px-2 py-0.5 text-xs font-medium text-white">
-                              Connected
+                              {t('externalActions.connected')}
                             </span>
                           </div>
                         </SelectItem>
@@ -286,14 +288,14 @@ const ExternalActions: React.FC = () => {
                   if (selectedInstanceId) {
                     navigate(`/external-actions/create?instance=${selectedInstanceId}`);
                   } else {
-                    toast.error('Please select a WhatsApp instance first');
+                    toast.error(t('externalActions.pleaseSelectInstance'));
                   }
                 }}
                 className="gap-2"
                 disabled={!selectedInstanceId}
               >
                 <Plus className="w-4 h-4" />
-                Create Action
+                {t('externalActions.createAction')}
               </Button>
             </div>
           </div>
@@ -305,7 +307,7 @@ const ExternalActions: React.FC = () => {
             <div className="p-4">
               <div className="text-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
-                <p className="text-muted-foreground">Loading external actions...</p>
+                <p className="text-muted-foreground">{t('externalActions.loadingActions')}</p>
               </div>
             </div>
           </div>
@@ -315,14 +317,14 @@ const ExternalActions: React.FC = () => {
               <div className="py-12 text-center">
                 <div className="text-muted-foreground mb-4">
                   <Zap className="w-12 h-12 mx-auto mb-2" />
-                  No connected WhatsApp instances
+                  {t('externalActions.noWhatsAppInstances')}
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">
-                  You need to connect a WhatsApp instance before creating external actions.
+                  {t('externalActions.needInstanceMessage')}
                 </p>
                 <Button asChild className="gap-2">
                   <a href="/whatsapp">
-                    Connect WhatsApp
+                    {t('externalActions.connectWhatsApp')}
                   </a>
                 </Button>
               </div>
@@ -334,24 +336,24 @@ const ExternalActions: React.FC = () => {
               <div className="py-12 text-center">
                 <div className="text-muted-foreground mb-4">
                   <Zap className="w-12 h-12 mx-auto mb-2" />
-                  No external actions yet
+                  {t('externalActions.noActionsYet')}
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Create your first external action to start automating workflows with webhooks.
+                  {t('externalActions.createFirstActionMessage')}
                 </p>
                 <Button
                   onClick={() => {
                     if (selectedInstanceId) {
                       navigate(`/external-actions/create?instance=${selectedInstanceId}`);
                     } else {
-                      toast.error('Please select a WhatsApp instance first');
+                      toast.error(t('externalActions.pleaseSelectInstance'));
                     }
                   }}
                   className="gap-2"
                   disabled={!selectedInstanceId}
                 >
                   <Plus className="w-4 h-4" />
-                  Create First Action
+                  {t('externalActions.createFirstAction')}
                 </Button>
               </div>
             </div>
@@ -365,7 +367,7 @@ const ExternalActions: React.FC = () => {
                     <div className="space-y-1 flex-1 min-w-0">
                       <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">{action.display_name}</h3>
                       <p className="text-sm text-slate-600 dark:text-slate-400">
-                        {action.training_examples.length} training examples
+                        {action.training_examples.length} {t('externalActions.trainingExamples')}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 ml-2">
@@ -381,25 +383,25 @@ const ExternalActions: React.FC = () => {
                   {/* Statistics */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mb-4">
                     <div>
-                      <div className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">Executions</div>
+                      <div className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">{t('externalActions.executions')}</div>
                       <div className="font-medium text-slate-900 dark:text-slate-100 text-sm sm:text-base">{action.execution_count || 0}</div>
                     </div>
                     <div>
-                      <div className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">Success Rate</div>
+                      <div className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">{t('externalActions.successRate')}</div>
                       <div className="font-medium text-slate-900 dark:text-slate-100 text-sm sm:text-base">
-                        {action.execution_count ? 
+                        {action.execution_count ?
                           Math.round((action.success_count! / action.execution_count!) * 100) : 0
                         }%
                       </div>
                     </div>
                     <div>
-                      <div className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">Avg Response</div>
+                      <div className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">{t('externalActions.avgResponse')}</div>
                       <div className="font-medium text-slate-900 dark:text-slate-100 text-sm sm:text-base">
                         {action.average_response_time_ms || 0}ms
                       </div>
                     </div>
                     <div>
-                      <div className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">Last Used</div>
+                      <div className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">{t('externalActions.lastUsed')}</div>
                       <div className="font-medium text-slate-900 dark:text-slate-100 text-sm sm:text-base">
                         {formatLastExecuted(action.last_executed_at || null)}
                       </div>
@@ -408,7 +410,7 @@ const ExternalActions: React.FC = () => {
 
                   {/* Webhook URL */}
                   <div className="mb-4">
-                    <div className="text-slate-500 dark:text-slate-400 text-sm mb-1">Webhook</div>
+                    <div className="text-slate-500 dark:text-slate-400 text-sm mb-1">{t('externalActions.webhook')}</div>
                     <div className="font-mono text-xs bg-slate-50 dark:bg-slate-800 p-2 rounded-lg truncate flex items-center gap-2">
                       <span className="truncate flex-1">{action.webhook_url}</span>
                       <ExternalLink className="w-3 h-3 text-slate-500" />
@@ -426,7 +428,7 @@ const ExternalActions: React.FC = () => {
                       className="flex-1 gap-1 text-xs sm:text-sm"
                     >
                       <Edit className="w-3 h-3" />
-                      Edit
+                      {t('externalActions.edit')}
                     </Button>
                     <Button
                       variant="outline"
@@ -438,7 +440,7 @@ const ExternalActions: React.FC = () => {
                       className="flex-1 gap-1 text-xs sm:text-sm"
                     >
                       <Play className="w-3 h-3" />
-                      Test
+                      {t('externalActions.test')}
                     </Button>
                     <Button
                       variant="outline"
@@ -450,10 +452,10 @@ const ExternalActions: React.FC = () => {
                       className="flex-1 gap-1 text-xs sm:text-sm"
                     >
                       <Activity className="w-3 h-3" />
-                      Logs
+                      {t('externalActions.logs')}
                     </Button>
                   </div>
-                  
+
                   {/* Delete button */}
                   <Button
                     variant="ghost"
@@ -465,7 +467,7 @@ const ExternalActions: React.FC = () => {
                     className="w-full gap-1 text-red-600 hover:text-red-700 hover:bg-red-50 text-xs sm:text-sm"
                   >
                     <Trash2 className="w-3 h-3" />
-                    Delete Action
+                    {t('externalActions.deleteAction')}
                   </Button>
                 </div>
               </div>
@@ -498,18 +500,17 @@ const ExternalActions: React.FC = () => {
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete External Action</DialogTitle>
+            <DialogTitle>{t('externalActions.deleteConfirmTitle')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{selectedAction?.display_name}"? This action cannot be undone.
-              All execution logs will also be deleted.
+              {t('externalActions.deleteConfirmMessage', { name: selectedAction?.display_name })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-              Cancel
+              {t('externalActions.cancel')}
             </Button>
             <Button variant="destructive" onClick={deleteAction}>
-              Delete Action
+              {t('externalActions.deleteAction')}
             </Button>
           </DialogFooter>
         </DialogContent>

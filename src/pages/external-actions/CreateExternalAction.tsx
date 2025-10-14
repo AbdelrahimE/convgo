@@ -1,8 +1,10 @@
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import ExternalActionForm from '@/components/external-actions/ExternalActionForm';
 
 const CreateExternalAction: React.FC = () => {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const instanceId = searchParams.get('instance');
 
@@ -14,10 +16,10 @@ const CreateExternalAction: React.FC = () => {
             <div className="p-4">
               <div className="text-center py-8">
                 <h3 className="text-lg font-medium text-red-600 mb-2">
-                  Missing WhatsApp Instance
+                  {t('externalActions.missingInstance')}
                 </h3>
                 <p className="text-slate-600 dark:text-slate-400 mb-4">
-                  No WhatsApp instance specified. Please return to External Actions and try again.
+                  {t('externalActions.missingInstanceMessage')}
                 </p>
               </div>
             </div>
@@ -28,8 +30,8 @@ const CreateExternalAction: React.FC = () => {
   }
 
   return (
-    <ExternalActionForm 
-      mode="create" 
+    <ExternalActionForm
+      mode="create"
       whatsappInstanceId={instanceId}
     />
   );

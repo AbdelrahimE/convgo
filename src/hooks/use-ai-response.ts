@@ -82,6 +82,7 @@ interface AIUsageLimitResult {
   used: number;
   resetsOn: string | null;
   storageLimitMb?: number;
+  storageUsedMb?: number;
   instanceLimit?: number;
   subscriptionStartDate?: string | null;
   subscriptionEndDate?: string | null;
@@ -201,6 +202,7 @@ export function useAIResponse() {
         used: data.used,
         resetsOn: data.resetsOn,
         storageLimitMb: data.storageLimitMb,
+        storageUsedMb: data.storageUsedMb,
         instanceLimit: data.instanceLimit,
         subscriptionStartDate: data.subscriptionStartDate,
         subscriptionEndDate: data.subscriptionEndDate,
