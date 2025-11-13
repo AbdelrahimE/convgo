@@ -299,7 +299,7 @@ async function logExecution(
     }
     
     const logData = {
-      id: executionLogId, // Custom ID for tracking
+      id: executionLogId, // UUID for tracking and foreign key compatibility
       external_action_id: actionId,
       whatsapp_conversation_id: request.whatsappConversationId,
       whatsapp_message_id: correctMessageId, // Use the correct UUID or null
@@ -402,8 +402,8 @@ serve(async (req) => {
       hasCustomHeaders: Object.keys(actionConfig.headers || {}).length > 0
     });
     
-    // Generate execution log ID for response tracking
-    const executionLogId = `exec_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    // Generate execution log ID for response tracking - using UUID for database compatibility
+    const executionLogId = crypto.randomUUID();
     
     // Interpolate payload template with extracted variables
     const interpolatedPayload = interpolateTemplate(

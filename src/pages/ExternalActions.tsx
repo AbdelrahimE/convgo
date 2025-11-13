@@ -198,20 +198,20 @@ const ExternalActions: React.FC = () => {
 
   const getStatusBadge = (action: ExternalAction) => {
     if (!action.is_active) {
-      return <Badge variant="secondary" className="gap-1"><Pause className="w-3 h-3" />{t('externalActions.disabled')}</Badge>;
+      return <Badge variant="secondary" className="gap-1 font-normal"><Pause className="w-3 h-3" />{t('externalActions.disabled')}</Badge>;
     }
 
     if (action.execution_count === 0) {
-      return <Badge variant="outline" className="gap-1"><Clock className="w-3 h-3" />{t('externalActions.neverUsed')}</Badge>;
+      return <Badge variant="outline" className="gap-1 font-normal"><Clock className="w-3 h-3" />{t('externalActions.neverUsed')}</Badge>;
     }
 
     const successRate = action.success_count! / action.execution_count! * 100;
     if (successRate >= 90) {
-      return <Badge variant="default" className="gap-1 bg-green-500"><CheckCircle className="w-3 h-3" />{t('externalActions.healthy')}</Badge>;
+      return <Badge variant="default" className="gap-1 bg-green-500 font-normal"><CheckCircle className="w-3 h-3" />{t('externalActions.healthy')}</Badge>;
     } else if (successRate >= 70) {
-      return <Badge variant="default" className="gap-1 bg-yellow-500"><AlertTriangle className="w-3 h-3" />{t('externalActions.warning')}</Badge>;
+      return <Badge variant="default" className="gap-1 bg-yellow-500 font-normal"><AlertTriangle className="w-3 h-3" />{t('externalActions.warning')}</Badge>;
     } else {
-      return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" />{t('externalActions.issues')}</Badge>;
+      return <Badge variant="destructive" className="gap-1 font-normal"><AlertTriangle className="w-3 h-3" />{t('externalActions.issues')}</Badge>;
     }
   };
 

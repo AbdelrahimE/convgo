@@ -166,10 +166,9 @@ export async function storeTimeoutMessageInConversation(
       .from('whatsapp_conversation_messages')
       .insert({
         conversation_id: conversationId,
-        sender_type: 'assistant',
+        role: 'assistant',
         content: timeoutMessage,
-        message_id: `timeout_${Date.now()}`,
-        created_at: new Date().toISOString()
+        message_id: `timeout_${Date.now()}`
       });
 
     if (error) {

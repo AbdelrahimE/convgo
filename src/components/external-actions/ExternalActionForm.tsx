@@ -250,36 +250,36 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
     switch (stepIndex) {
       case 0: // Basic Info
         if (!formData.display_name.trim()) {
-          errors.display_name = 'Display name is required';
+          errors.display_name = t('externalActions.basicInfo.displayNameRequired');
         }
         if (!formData.action_name.trim()) {
-          errors.action_name = 'Action name is required';
+          errors.action_name = t('externalActions.basicInfo.actionNameRequired');
         } else if (!/^[a-z0-9_]+$/.test(formData.action_name)) {
-          errors.action_name = 'Action name must contain only lowercase letters, numbers, and underscores';
+          errors.action_name = t('externalActions.basicInfo.actionNameInvalid');
         }
         break;
 
       case 1: // Training Examples
         if (formData.training_examples.length < 3) {
-          errors.training_examples = 'At least 3 training examples are required';
+          errors.training_examples = t('externalActions.training.atLeastThree');
         }
         break;
 
       case 2: // Webhook Config
         if (!formData.webhook_url.trim()) {
-          errors.webhook_url = 'Webhook URL is required';
+          errors.webhook_url = t('externalActions.webhook.webhookUrlRequired');
         } else {
           try {
             new URL(formData.webhook_url);
           } catch {
-            errors.webhook_url = 'Invalid URL format';
+            errors.webhook_url = t('externalActions.webhook.invalidUrl');
           }
         }
         break;
 
       case 3: // Payload & Variables
         if (Object.keys(formData.payload_template).length === 0) {
-          errors.payload_template = 'Payload template cannot be empty';
+          errors.payload_template = t('externalActions.payload.payloadEmpty');
         }
         break;
     }
@@ -295,6 +295,27 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
 
     setLoading(true);
     try {
+      // Check if action_name already exists (for both create and edit modes)
+      const { data: existingActionWithSameName, error: checkError } = await supabase
+        .from('external_actions')
+        .select('id')
+        .eq('user_id', user?.id)
+        .eq('whatsapp_instance_id', whatsappInstanceId)
+        .eq('action_name', formData.action_name)
+        .maybeSingle();
+
+      if (checkError) {
+        logger.error('Error checking action name uniqueness:', checkError);
+        throw checkError;
+      }
+
+      // If action with same name exists and it's not the current action being edited
+      if (existingActionWithSameName && existingActionWithSameName.id !== existingAction?.id) {
+        toast.error(t('externalActions.basicInfo.actionNameAlreadyExists'));
+        setLoading(false);
+        return;
+      }
+
       // Convert variables to legacy format for database compatibility
       const { variable_prompts, payload_template } = convertVariablesToLegacyFormat(variables);
 
@@ -325,9 +346,16 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
       }
 
       navigate('/external-actions');
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error saving external action:', error);
-      toast.error(t('externalActions.messages.failedToSave'));
+
+      // Handle specific database errors
+      if (error?.code === '23505') {
+        // Unique constraint violation
+        toast.error(t('externalActions.basicInfo.actionNameAlreadyExists'));
+      } else {
+        toast.error(t('externalActions.messages.failedToSave'));
+      }
     } finally {
       setLoading(false);
     }
@@ -422,36 +450,36 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
         </p>
       </div>
       <div>
-        <Label htmlFor="display-name">Display Name *</Label>
+        <Label htmlFor="display-name">{t('externalActions.basicInfo.displayName')} *</Label>
         <Input
           id="display-name"
           value={formData.display_name}
           onChange={(e) => setFormData(prev => ({...prev, display_name: e.target.value}))}
-          placeholder="e.g., Create Shopify Order"
+          placeholder={t('externalActions.basicInfo.displayNamePlaceholder')}
           className={`mt-2 ${validationErrors.display_name ? 'border-red-500' : ''}`}
         />
         {validationErrors.display_name && (
           <p className="text-sm text-red-500 mt-1">{validationErrors.display_name}</p>
         )}
         <p className="text-xs text-muted-foreground mt-1">
-          Human-readable name shown in the interface
+          {t('externalActions.basicInfo.displayNameHelper')}
         </p>
       </div>
 
       <div>
-        <Label htmlFor="action-name">Action Name *</Label>
+        <Label htmlFor="action-name">{t('externalActions.basicInfo.actionName')} *</Label>
         <Input
           id="action-name"
           value={formData.action_name}
           onChange={(e) => setFormData(prev => ({...prev, action_name: e.target.value}))}
-          placeholder="e.g., create_shopify_order"
+          placeholder={t('externalActions.basicInfo.actionNamePlaceholder')}
           className={`mt-2 ${validationErrors.action_name ? 'border-red-500' : ''}`}
         />
         {validationErrors.action_name && (
           <p className="text-sm text-red-500 mt-1">{validationErrors.action_name}</p>
         )}
         <p className="text-xs text-muted-foreground mt-1">
-          Internal identifier (lowercase letters, numbers, and underscores only)
+          {t('externalActions.basicInfo.actionNameHelper')}
         </p>
       </div>
     </div>
@@ -804,8 +832,8 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="wait_for_webhook" id="webhook" />
             <Label htmlFor="webhook" className="flex-1">
-              <div className="font-medium">Wait for Automation Response</div>
-              <div className="text-sm text-muted-foreground">Wait for the automation platform to send a dynamic response</div>
+              <div className="font-medium text-sm">Wait for Automation Response</div>
+              <div className="text-xs text-muted-foreground font-light">Wait for the automation platform to send a dynamic response</div>
             </Label>
           </div>
         </RadioGroup>
@@ -841,7 +869,7 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Use {'{variable_name}'} in your message to insert dynamic values
+                Use {'{{variable_name}}'} in your message to insert dynamic values
               </p>
             </div>
           )}
@@ -946,12 +974,6 @@ const ExternalActionForm: React.FC<ExternalActionFormProps> = ({
               <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100">
                 {mode === 'create' ? t('externalActions.createExternalAction') : t('externalActions.editExternalAction')}
               </h1>
-              <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1">
-                {mode === 'create'
-                  ? t('externalActions.createActionDescription')
-                  : t('externalActions.editActionDescription', { name: formData.display_name || 'this external action' })
-                }
-              </p>
             </div>
           </div>
         </div>

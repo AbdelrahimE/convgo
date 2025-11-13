@@ -3,18 +3,6 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getNextOpenAIKey } from "../_shared/openai-key-rotation.ts";
 
-/**
- * GPT-4o-mini Model Configuration:
- * 
- * Temperature values (for controlling response creativity):
- * - 0.0: Deterministic responses - best for factual/logical tasks
- * - 0.3-0.7: Balanced creativity and accuracy - good for most tasks (current)
- * - 1.0: More creative responses - good for creative writing
- * - 2.0: Maximum creativity - experimental responses
- * 
- * Note: GPT-4o-mini offers better performance per cost compared to GPT-4
- */
-
 const logger = {
   log: (...args: any[]) => console.log(...args),
   error: (...args: any[]) => console.error(...args),
@@ -725,7 +713,10 @@ async function smartIntentAnalysisOptimized(
         displayName: externalActionResult.matchedAction.display_name,
         extractedVariables: externalActionResult.extractedVariables,
         webhookUrl: externalActionResult.matchedAction.webhook_url,
-        payloadTemplate: externalActionResult.matchedAction.payload_template
+        payloadTemplate: externalActionResult.matchedAction.payload_template,
+        responseType: externalActionResult.matchedAction.response_type || 'simple_confirmation',
+        confirmationMessage: externalActionResult.matchedAction.confirmation_message || 'تم تنفيذ طلبك بنجاح ✅',
+        responseTimeoutSeconds: externalActionResult.matchedAction.response_timeout_seconds || 30
       }
     };
   }

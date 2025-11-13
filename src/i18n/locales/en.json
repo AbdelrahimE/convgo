@@ -843,7 +843,6 @@
     "createExternalAction": "Create External Action",
     "editExternalAction": "Edit External Action",
     "createActionDescription": "Create a new custom action that triggers webhooks based on customer messages",
-    "editActionDescription": "Modify the settings for \"{{name}}\"",
     "steps": {
       "basicInfo": "Basic Info",
       "trainingExamples": "Training Examples",
@@ -861,9 +860,11 @@
       "displayNameRequired": "Display name is required",
       "actionName": "Action Name",
       "actionNamePlaceholder": "e.g., create_shopify_order",
-      "actionNameHelper": "Internal identifier (lowercase letters, numbers, and underscores only)",
+      "actionNameHelper": "Internal unique identifier (lowercase letters, numbers, and underscores only)",
       "actionNameRequired": "Action name is required",
-      "actionNameInvalid": "Action name must contain only lowercase letters, numbers, and underscores"
+      "actionNameInvalid": "Action name must contain only lowercase letters, numbers, and underscores",
+      "actionNameAlreadyExists": "This action name already exists. Please choose a different name.",
+      "actionNameMustBeUnique": "Action name must be unique for this WhatsApp instance"
     },
     "training": {
       "title": "Training Examples",
@@ -922,7 +923,7 @@
       "confirmationMessage": "Confirmation Message",
       "confirmationPlaceholder": "✅ Data received and sent successfully!\nThank you.",
       "customPlaceholder": "Hello {name}, your order {order_id} has been received successfully!",
-      "variablesInfo": "Use {variable_name} in your message to insert dynamic values",
+      "variablesInfo": "Use {{variable_name}} in your message to insert dynamic values",
       "fallbackMessage": "This message will only be sent if the automation platform fails to respond within the timeout period.",
       "responseTimeout": "Response Timeout",
       "timeoutHelper": "How long to wait for a response before timing out",

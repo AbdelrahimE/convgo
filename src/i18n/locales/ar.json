@@ -843,7 +843,6 @@
     "createExternalAction": "إنشاء إجراء خارجي",
     "editExternalAction": "تعديل إجراء خارجي",
     "createActionDescription": "إنشاء إجراء مخصص جديد يؤدي إلى تشغيل Webhooks بناءً على رسائل العملاء",
-    "editActionDescription": "تعديل إعدادات \"{{name}}\"",
     "steps": {
       "basicInfo": "المعلومات الأساسية",
       "trainingExamples": "أمثلة التدريب",
@@ -861,9 +860,11 @@
       "displayNameRequired": "الاسم المعروض مطلوب",
       "actionName": "اسم الإجراء",
       "actionNamePlaceholder": "مثال: create_shopify_order",
-      "actionNameHelper": "المعرف الداخلي (أحرف صغيرة وأرقام وشرطات سفلية فقط)",
+      "actionNameHelper": "المعرف الداخلي الفريد (أحرف صغيرة وأرقام وشرطات سفلية فقط)",
       "actionNameRequired": "اسم الإجراء مطلوب",
-      "actionNameInvalid": "اسم الإجراء يجب أن يحتوي على أحرف صغيرة وأرقام وشرطات سفلية فقط"
+      "actionNameInvalid": "اسم الإجراء يجب أن يحتوي على أحرف صغيرة وأرقام وشرطات سفلية فقط",
+      "actionNameAlreadyExists": "اسم الإجراء هذا موجود بالفعل. يرجى اختيار اسم مختلف.",
+      "actionNameMustBeUnique": "اسم الإجراء يجب أن يكون فريداً لرقم الواتساب هذا"
     },
     "training": {
       "title": "أمثلة التدريب",
@@ -922,7 +923,7 @@
       "confirmationMessage": "رسالة التأكيد",
       "confirmationPlaceholder": "✅ تم استلام البيانات وإرسالها بنجاح!\nشكراً لك.",
       "customPlaceholder": "مرحباً {name}، تم استلام طلبك {order_id} بنجاح!",
-      "variablesInfo": "استخدم {variable_name} في رسالتك لإدراج قيم ديناميكية",
+      "variablesInfo": "استخدم {{variable_name}} في رسالتك لإدراج قيم ديناميكية",
       "fallbackMessage": "سيتم إرسال هذه الرسالة فقط إذا فشلت منصة الأتمتة في الرد خلال فترة المهلة.",
       "responseTimeout": "مهلة الرد",
       "timeoutHelper": "المدة الزمنية للانتظار قبل انتهاء المهلة",

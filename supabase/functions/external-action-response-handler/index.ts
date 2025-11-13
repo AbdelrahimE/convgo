@@ -86,8 +86,8 @@ async function updateResponseRecord(executionLogId: string, updateData: {
  * Store message in conversation
  */
 async function storeMessageInConversation(
-  conversationId: string, 
-  senderType: string, 
+  conversationId: string,
+  role: string,
   content: string
 ) {
   try {
@@ -95,10 +95,9 @@ async function storeMessageInConversation(
       .from('whatsapp_conversation_messages')
       .insert({
         conversation_id: conversationId,
-        sender_type: senderType,
+        role: role,
         content: content,
-        message_id: `webhook_response_${Date.now()}`,
-        created_at: new Date().toISOString()
+        message_id: `webhook_response_${Date.now()}`
       });
 
     if (error) {

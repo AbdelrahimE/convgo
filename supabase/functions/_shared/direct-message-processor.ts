@@ -497,9 +497,190 @@ export async function processMessageDirectly(
           hasIntentAnalysis: !!intentAnalysis,
           needsHumanSupport: intentAnalysis?.needsHumanSupport || false,
           hasSelectedPersonality: !!intentAnalysis?.selectedPersonality,
-          selectedPersonalityName: intentAnalysis?.selectedPersonality?.name || 'none'
+          selectedPersonalityName: intentAnalysis?.selectedPersonality?.name || 'none',
+          intent: intentAnalysis?.intent || 'unknown',
+          hasExternalAction: !!intentAnalysis?.externalAction
         });
-        
+
+        // 🎯 EXTERNAL ACTIONS EXECUTION - Check and execute external actions first
+        if (intentAnalysis?.intent === 'external_action' && intentAnalysis?.externalAction) {
+          logger.info('🚀 External action detected, executing webhook:', {
+            actionId: intentAnalysis.externalAction.id,
+            actionName: intentAnalysis.externalAction.name,
+            displayName: intentAnalysis.externalAction.displayName,
+            confidence: intentAnalysis.confidence,
+            extractedVariables: intentAnalysis.externalAction.extractedVariables,
+            webhookUrl: intentAnalysis.externalAction.webhookUrl?.substring(0, 50) + '...'
+          });
+
+          try {
+            // Call external-action-executor
+            const executorResponse = await fetch(`${supabaseUrl}/functions/v1/external-action-executor`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({
+                externalActionId: intentAnalysis.externalAction.id,
+                extractedVariables: intentAnalysis.externalAction.extractedVariables,
+                whatsappConversationId: conversationId,
+                whatsappMessageId: messageData.key?.id,
+                intentConfidence: intentAnalysis.confidence
+              })
+            });
+
+            if (executorResponse.ok) {
+              const executorResult = await executorResponse.json();
+              logger.info('✅ External action executed successfully:', {
+                actionName: executorResult.actionName,
+                success: executorResult.success,
+                httpStatusCode: executorResult.httpStatusCode,
+                executionTimeMs: executorResult.executionTimeMs,
+                retryCount: executorResult.retryCount,
+                executionLogId: executorResult.executionLogId
+              });
+
+              // 📨 Send confirmation message based on response_type
+              if (intentAnalysis.externalAction.responseType === 'simple_confirmation' ||
+                  intentAnalysis.externalAction.responseType === 'custom_message') {
+
+                let confirmationMessage = intentAnalysis.externalAction.confirmationMessage ||
+                                          'تم تنفيذ طلبك بنجاح ✅';
+
+                // 🔄 Replace variables for custom_message
+                if (intentAnalysis.externalAction.responseType === 'custom_message') {
+                  const extractedVars = intentAnalysis.externalAction.extractedVariables || {};
+
+                  // Replace {{variable}} with actual values
+                  confirmationMessage = confirmationMessage.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+                    return extractedVars[varName] !== undefined ? extractedVars[varName] : match;
+                  });
+
+                  logger.info('🔄 Variables replaced in custom message:', {
+                    originalMessage: intentAnalysis.externalAction.confirmationMessage,
+                    finalMessage: confirmationMessage,
+                    variablesUsed: Object.keys(extractedVars),
+                    responseType: intentAnalysis.externalAction.responseType
+                  });
+                }
+
+                logger.info('📨 Sending confirmation message to user:', {
+                  userPhone,
+                  responseType: intentAnalysis.externalAction.responseType,
+                  messageLength: confirmationMessage.length
+                });
+
+                try {
+                  // Store confirmation message in conversation
+                  await storeMessageInConversation(
+                    conversationId,
+                    'assistant',
+                    confirmationMessage,
+                    `external_action_confirmation_${Date.now()}`,
+                    supabaseAdmin
+                  );
+
+                  // Send confirmation message via WhatsApp API
+                  const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || messageData?.apikey;
+
+                  if (!evolutionApiKey) {
+                    logger.error('❌ EVOLUTION_API_KEY not available for confirmation message');
+                  } else {
+                    const sendResponse = await fetch(`${instanceBaseUrl}/message/sendText/${instanceName}`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': evolutionApiKey
+                      },
+                      body: JSON.stringify({
+                        number: userPhone,
+                        text: confirmationMessage
+                      })
+                    });
+
+                    if (sendResponse.ok) {
+                      logger.info('✅ Confirmation message sent successfully via WhatsApp');
+                    } else {
+                      logger.error('❌ Failed to send confirmation message via WhatsApp:', {
+                        status: sendResponse.status,
+                        statusText: sendResponse.statusText
+                      });
+                    }
+                  }
+                } catch (confirmationError) {
+                  logger.error('❌ Error sending confirmation message:', {
+                    error: confirmationError.message,
+                    stack: confirmationError.stack
+                  });
+                  // Don't fail the whole process because of confirmation message error
+                }
+              } else if (intentAnalysis.externalAction.responseType === 'wait_for_webhook') {
+                // ⏳ Create pending response record for wait_for_webhook
+                try {
+                  const timeoutSeconds = intentAnalysis.externalAction.responseTimeoutSeconds || 30;
+                  const expiresAt = new Date(Date.now() + (timeoutSeconds * 1000));
+
+                  const { error: insertError } = await supabaseAdmin
+                    .from('external_action_responses')
+                    .insert({
+                      execution_log_id: executorResult.executionLogId,
+                      conversation_id: conversationId,
+                      user_phone: userPhone,
+                      instance_name: instanceName,
+                      response_received: false,
+                      expires_at: expiresAt.toISOString()
+                    });
+
+                  if (insertError) {
+                    logger.error('❌ Failed to create pending response record:', {
+                      error: insertError.message,
+                      executionLogId: executorResult.executionLogId
+                    });
+                  } else {
+                    logger.info('⏳ Pending response record created successfully (direct):', {
+                      executionLogId: executorResult.executionLogId,
+                      userPhone,
+                      instanceName,
+                      timeoutSeconds,
+                      expiresAt: expiresAt.toISOString(),
+                      note: 'Waiting for automation to send response via callback URL'
+                    });
+                  }
+                } catch (pendingError) {
+                  logger.error('❌ Exception creating pending response record:', {
+                    error: pendingError.message,
+                    stack: pendingError.stack
+                  });
+                }
+              } else {
+                // response_type === 'none' or unknown
+                logger.info('ℹ️ Response type does not require immediate message send:', {
+                  responseType: intentAnalysis.externalAction.responseType
+                });
+              }
+
+              // External action executed successfully and confirmation sent
+              return true;
+
+            } else {
+              const errorText = await executorResponse.text();
+              logger.error('❌ External action executor returned error:', {
+                status: executorResponse.status,
+                statusText: executorResponse.statusText,
+                errorText: errorText.substring(0, 200)
+              });
+              // Continue with normal processing as fallback
+            }
+          } catch (executorError) {
+            logger.error('❌ Exception calling external-action-executor:', {
+              error: executorError.message,
+              stack: executorError.stack
+            });
+            // Continue with normal processing as fallback
+          }
+        }
+
         // ✅ UPDATE aiConfig with smart intent analysis results
         if (intentAnalysis?.selectedPersonality) {
           logger.info('🎯 Using smart personality from intent analysis', {
