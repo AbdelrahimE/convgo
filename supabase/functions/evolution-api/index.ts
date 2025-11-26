@@ -27,7 +27,7 @@ serve(async (req) => {
     logger.info(`Evolution API request: ${operation}`, params);
 
     // Base URL for Evolution API
-    const baseUrl = 'https://api.convgo.com';
+    const baseUrl = Deno.env.get('EVOLUTION_API_URL') || '';
     let url, method, body;
 
     // Route based on operation

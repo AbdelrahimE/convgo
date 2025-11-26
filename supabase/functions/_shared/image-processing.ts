@@ -79,7 +79,7 @@ export async function processImageMessage(
   userPhone: string,
   evolutionApiKey: string
 ): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
-  
+
   // Create a simple logger since we can't use @/utils/logger in edge functions
   const logger = {
     log: (...args: any[]) => console.log(...args),
@@ -90,6 +90,9 @@ export async function processImageMessage(
   };
 
   try {
+    // Get Evolution API hostname for URL detection
+    const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL') || '';
+    const evolutionHostname = evolutionApiUrl ? new URL(evolutionApiUrl).hostname : '';
     if (!imageDetails.url) {
       logger.error('No image URL provided');
       return { success: false, error: 'No image URL provided' };
@@ -165,7 +168,7 @@ export async function processImageMessage(
         imageUrl: imageProcessResult.mediaUrl
       };
     } 
-    else if (imageDetails.url.includes('api.convgo.com') || imageDetails.url.includes('botifiy.com')) {
+    else if (evolutionHostname && imageDetails.url.includes(evolutionHostname)) {
       // Evolution API URLs are already accessible
       logger.info('Using Evolution API image URL directly');
       return {

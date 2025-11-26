@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 // Evolution API configuration
-const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL') || 'https://api.convgo.com'
+const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL') || ''
 const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY') || ''
 
 interface EscalationNotificationRequest {

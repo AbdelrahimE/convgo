@@ -26,7 +26,11 @@ serve(async (req) => {
 
   try {
     logger.log("$$$$$ DEPLOYMENT VERIFICATION: Starting image processing - NEW VERIFICATION $$$$$");
-    
+
+    // Get Evolution API hostname for URL detection
+    const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL') || '';
+    const evolutionHostname = evolutionApiUrl ? new URL(evolutionApiUrl).hostname : '';
+
     // Parse the request body
     const requestData = await req.json();
     logger.log("$$$$$ DEPLOYMENT VERIFICATION: Request data received $$$$$", JSON.stringify({
@@ -124,10 +128,10 @@ serve(async (req) => {
         logger.log('$$$$$ DEPLOYMENT VERIFICATION: ERROR - WhatsApp image URL without mediaKey $$$$$');
         throw new Error('WhatsApp images require a mediaKey for processing. Please update your client to include the mediaKey parameter.');
       } 
-      else if (imageUrl.includes('api.convgo.com')) {
+      else if (evolutionHostname && imageUrl.includes(evolutionHostname)) {
         // Evolution API URLs require the apikey header
         logger.log('Detected Evolution API URL, using provided API key');
-        
+
         // For Evolution API URLs, we just pass through the URL as it's already accessible
         imageResult = {
           success: true,

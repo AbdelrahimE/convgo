@@ -441,12 +441,12 @@ export async function processMessageDirectly(
           const url = new URL(webhookConfig.data.webhook_url);
           instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
         } else {
-          instanceBaseUrl = 'https://api.convgo.com';
+          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || '';
         }
 
         const sendResponse = await fetch(`${instanceBaseUrl}/message/sendText/${instanceName}`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'apikey': evolutionApiKey
           },
@@ -769,12 +769,12 @@ export async function processMessageDirectly(
           const url = new URL(webhookConfig.data.webhook_url);
           instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
         } else {
-          instanceBaseUrl = 'https://api.convgo.com';
+          instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || '';
         }
 
         const sendResponse = await fetch(`${instanceBaseUrl}/message/sendText/${instanceName}`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'apikey': evolutionApiKey
           },
@@ -819,7 +819,7 @@ export async function processMessageDirectly(
       const url = new URL(webhookConfig.webhook_url);
       instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
     } else {
-      instanceBaseUrl = 'https://api.convgo.com'; // Default
+      instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || '';
     }
 
     // Get files for RAG

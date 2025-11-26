@@ -226,7 +226,7 @@ async function sendTypingIndicator(
   evolutionApiKey: string
 ): Promise<boolean> {
   try {
-    const baseUrl = 'https://api.convgo.com';
+    const baseUrl = Deno.env.get('EVOLUTION_API_URL') || '';
     const url = `${baseUrl}/chat/sendPresence/${instanceName}`;
 
     logger.info('📝 Sending typing indicator to customer', {
@@ -424,10 +424,6 @@ async function findOrCreateConversation(instanceId: string, userPhone: string) {
     throw error;
   }
 }
-
-
-// Default API URL - Set to the correct Evolution API URL
-const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
 
 // Helper function to save webhook message
 async function saveWebhookMessage(instance: string, event: string, data: any) {

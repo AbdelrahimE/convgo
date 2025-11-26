@@ -26,7 +26,7 @@ serve(async (req) => {
 
   try {
     logger.log("$$$$$ DEPLOYMENT VERIFICATION: Starting voice transcription process - NEW VERIFICATION $$$$$");
-    
+
     // Check for API key
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
@@ -34,6 +34,10 @@ serve(async (req) => {
       throw new Error('Missing OpenAI API key');
     }
     logger.log("API key validation: OpenAI API key is present");
+
+    // Get Evolution API hostname for URL detection
+    const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL') || '';
+    const evolutionHostname = evolutionApiUrl ? new URL(evolutionApiUrl).hostname : '';
 
     // Parse the request body
     const requestData = await req.json();
@@ -138,7 +142,7 @@ serve(async (req) => {
         logger.log('$$$$$ DEPLOYMENT VERIFICATION: ERROR - WhatsApp audio URL without mediaKey $$$$$');
         throw new Error('WhatsApp voice messages require a mediaKey for processing. Please update your client to include the mediaKey parameter.');
       } 
-      else if (audioUrl.includes('api.convgo.com')) {
+      else if (evolutionHostname && audioUrl.includes(evolutionHostname)) {
         // Evolution API URLs require the apikey header
         logger.log('Detected Evolution API URL, using provided API key');
         const audioResponse = await fetch(audioUrl, { headers });

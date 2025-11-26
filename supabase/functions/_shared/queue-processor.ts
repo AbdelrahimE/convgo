@@ -613,12 +613,12 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
             const url = new URL(webhookConfig.data.webhook_url);
             instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
           } else {
-            instanceBaseUrl = 'https://api.convgo.com';
+            instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || '';
           }
 
           const sendResponse = await fetch(`${instanceBaseUrl}/message/sendText/${instanceName}`, {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'apikey': evolutionApiKey
             },
@@ -639,7 +639,7 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
         } catch (sendError) {
           logger.error('❌ Error sending escalated message', { error: sendError.message });
         }
-        
+
         // Mark messages as completed and return
         await markMessagesAsCompleted(messagesToProcess);
         return;
@@ -777,7 +777,7 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
                         const url = new URL(webhookConfig.data.webhook_url);
                         instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
                       } else {
-                        instanceBaseUrl = 'https://api.convgo.com';
+                        instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || '';
                       }
 
                       const sendResponse = await fetch(`${instanceBaseUrl}/message/sendText/${instanceName}`, {
@@ -963,12 +963,12 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
             const url = new URL(webhookConfig.data.webhook_url);
             instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
           } else {
-            instanceBaseUrl = 'https://api.convgo.com';
+            instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || '';
           }
 
           const sendResponse = await fetch(`${instanceBaseUrl}/message/sendText/${instanceName}`, {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'apikey': evolutionApiKey
             },
@@ -989,7 +989,7 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
         } catch (sendError) {
           logger.error('❌ Error sending escalation message', { error: sendError.message });
         }
-        
+
         // Mark messages as completed and return
         await markMessagesAsCompleted(messagesToProcess);
         return;
@@ -1014,7 +1014,7 @@ async function processSingleQueue(instanceName: string, userPhone: string): Prom
         const url = new URL(webhookConfig.webhook_url);
         instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
       } else {
-        instanceBaseUrl = 'https://api.convgo.com'; // Default
+        instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || '';
       }
 
       // Get files for RAG

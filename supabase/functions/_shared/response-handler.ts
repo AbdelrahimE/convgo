@@ -9,9 +9,6 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// Default API URL for WhatsApp API
-const DEFAULT_EVOLUTION_API_URL = 'https://api.convgo.com';
-
 // Logger for debugging
 const logger = {
   log: (...args: any[]) => console.log(...args),
@@ -104,8 +101,8 @@ export async function sendTimeoutMessage(
       .eq('whatsapp_instance_id', instance.id)
       .maybeSingle();
 
-    let instanceBaseUrl = DEFAULT_EVOLUTION_API_URL;
-    
+    let instanceBaseUrl = Deno.env.get('EVOLUTION_API_URL') || '';
+
     if (!webhookError && webhookConfig?.webhook_url) {
       const url = new URL(webhookConfig.webhook_url);
       instanceBaseUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
