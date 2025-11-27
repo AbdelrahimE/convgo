@@ -30,7 +30,7 @@ import AuthDivider from '@/components/auth/AuthDivider';
 import TermsAndPrivacy from '@/components/auth/TermsAndPrivacy';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import convgoIconAuthPage from '@/assets/convgo-icon-auth-page.png';
+import convgoIconAuthPage from '@/assets/convgo-icon.png';
 
 interface AuthProps {
   isResetPasswordMode?: boolean;
