@@ -9,7 +9,7 @@ import {
 } from './data-collection-integration.ts';
 import { measureTime } from './parallel-queries.ts';
 import { CustomerProfileManager } from './customer-profile-manager.ts';
-import { extractMessageText } from './message-text-extractor.ts';
+import { extractMessageText, extractRealUserPhone, isGroupMessage } from './message-text-extractor.ts';
 
 // Logger for debugging
 const logger = {
@@ -313,10 +313,30 @@ export async function processMessageDirectly(
   supabaseServiceKey: string
 ): Promise<boolean> {
   try {
-    const userPhone = messageData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
-    
+    // 🛡️ DEFENSE IN DEPTH: Double-check that this is not a group message
+    // This should have been filtered earlier in the webhook, but we check again for safety
+    if (isGroupMessage(messageData)) {
+      logger.warn('⚠️ Group message reached direct processor (should have been filtered earlier)', {
+        instanceName,
+        messageId: messageData.key?.id,
+        groupId: messageData.key?.remoteJid,
+        participant: messageData.key?.participant || messageData.key?.participantAlt,
+        addressingMode: messageData.key?.addressingMode
+      });
+      return false;
+    }
+
+    // Extract real user phone (handles both PN and LID addressing modes)
+    const userPhone = extractRealUserPhone(messageData);
+
     if (!userPhone) {
-      logger.error('❌ Cannot process message: missing user phone');
+      logger.error('❌ Cannot process message: missing user phone', {
+        instanceName,
+        messageId: messageData.key?.id,
+        addressingMode: messageData.key?.addressingMode,
+        remoteJid: messageData.key?.remoteJid,
+        remoteJidAlt: messageData.key?.remoteJidAlt
+      });
       return false;
     }
 
@@ -918,9 +938,10 @@ export async function processMessageDirectly(
       dataCollectionFields = fields || [];
     }
 
-    // Extract processed image URL from message data if available
-    const imageUrl = messageData.processedImageUrl || null;
-    
+    // ✨ NEW: Extract processed media URL from message data if available
+    // Support both processedMediaUrl (new) and processedImageUrl (legacy)
+    const mediaUrl = messageData.processedMediaUrl || messageData.processedImageUrl || null;
+
     // Generate and send AI response
     const aiResponseSuccess = await generateAndSendAIResponse(
       messageText,
@@ -933,7 +954,7 @@ export async function processMessageDirectly(
       conversationId,
       supabaseUrl,
       supabaseServiceKey,
-      imageUrl, // Pass processed image URL
+      mediaUrl, // Pass processed media URL (supports images, videos, etc.)
       dataCollectionFields
     );
 
@@ -975,7 +996,8 @@ export async function processMessageDirectly(
     logger.error('💥 Exception in direct message processing', {
       error: error.message || error,
       instanceName,
-      userPhone: messageData.key?.remoteJid?.replace('@s.whatsapp.net', ''),
+      userPhone: extractRealUserPhone(messageData),
+      addressingMode: messageData.key?.addressingMode,
       stack: error.stack
     });
     return false;

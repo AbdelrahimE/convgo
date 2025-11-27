@@ -162,3 +162,156 @@ export function isReplyMessage(messageData: any): boolean {
   const quotedText = extractQuotedMessageText(messageData);
   return quotedText !== null && quotedText.length > 0;
 }
+
+/**
+ * Extracts the real user phone number from WhatsApp message data
+ *
+ * This function handles two different addressing modes used by WhatsApp:
+ * 1. Primary Number (PN): The user's main WhatsApp number
+ * 2. Linked Device (LID): A secondary device linked to the main account
+ *
+ * In LID mode, the actual phone number is stored in remoteJidAlt instead of remoteJid.
+ * This function intelligently detects the addressing mode and extracts the correct number.
+ *
+ * @param messageData - The complete WhatsApp message data object
+ * @returns The extracted real phone number or null if not found
+ *
+ * @example
+ * // Primary Number case (addressingMode: "pn")
+ * extractRealUserPhone({
+ *   key: {
+ *     remoteJid: "201234567890@s.whatsapp.net",
+ *     remoteJidAlt: "78477810262143@lid",
+ *     addressingMode: "pn"
+ *   }
+ * })
+ * // Returns: "201234567890"
+ *
+ * @example
+ * // Linked Device case (addressingMode: "lid")
+ * extractRealUserPhone({
+ *   key: {
+ *     remoteJid: "76931588431993@lid",
+ *     remoteJidAlt: "201065662288@s.whatsapp.net",
+ *     addressingMode: "lid"
+ *   }
+ * })
+ * // Returns: "201065662288"
+ */
+export function extractRealUserPhone(messageData: any): string | null {
+  try {
+    const key = messageData?.key;
+
+    if (!key) {
+      return null;
+    }
+
+    const addressingMode = key.addressingMode;
+    const remoteJid = key.remoteJid;
+    const remoteJidAlt = key.remoteJidAlt;
+
+    // 🔑 CRITICAL LOGIC: Handle Linked Device (LID) mode
+    // In LID mode, the real phone number is in remoteJidAlt, not remoteJid
+    if (addressingMode === 'lid' && remoteJidAlt) {
+      const phoneNumber = remoteJidAlt
+        .replace('@s.whatsapp.net', '')
+        .replace('@lid', '')
+        .trim();
+
+      if (phoneNumber) {
+        return phoneNumber;
+      }
+    }
+
+    // 🔑 FALLBACK: Handle Primary Number (PN) mode or when addressingMode is undefined
+    // In PN mode or legacy messages, the real phone number is in remoteJid
+    if (remoteJid) {
+      const phoneNumber = remoteJid
+        .replace('@s.whatsapp.net', '')
+        .replace('@lid', '')
+        .trim();
+
+      if (phoneNumber) {
+        return phoneNumber;
+      }
+    }
+
+    // 🔑 LAST RESORT: If remoteJid failed, try remoteJidAlt as final fallback
+    if (remoteJidAlt) {
+      const phoneNumber = remoteJidAlt
+        .replace('@s.whatsapp.net', '')
+        .replace('@lid', '')
+        .trim();
+
+      if (phoneNumber) {
+        return phoneNumber;
+      }
+    }
+
+    // No valid phone number found
+    return null;
+  } catch (error) {
+    // Safely handle any parsing errors
+    console.error('Error extracting real user phone:', error);
+    return null;
+  }
+}
+
+/**
+ * Checks if a message is from a WhatsApp group
+ *
+ * WhatsApp uses different JID suffixes to identify message types:
+ * - Individual messages: remoteJid ends with @s.whatsapp.net or @lid
+ * - Group messages: remoteJid ends with @g.us
+ *
+ * This function helps filter out group messages when the bot should only
+ * respond to individual/direct messages.
+ *
+ * @param messageData - The WhatsApp message data object
+ * @returns True if message is from a group, false if from an individual
+ *
+ * @example
+ * // Individual message (PN mode)
+ * isGroupMessage({
+ *   key: {
+ *     remoteJid: "201234567890@s.whatsapp.net"
+ *   }
+ * })
+ * // Returns: false
+ *
+ * @example
+ * // Individual message (LID mode)
+ * isGroupMessage({
+ *   key: {
+ *     remoteJid: "76931588431993@lid"
+ *   }
+ * })
+ * // Returns: false
+ *
+ * @example
+ * // Group message
+ * isGroupMessage({
+ *   key: {
+ *     remoteJid: "120363424526194005@g.us"
+ *   }
+ * })
+ * // Returns: true
+ */
+export function isGroupMessage(messageData: any): boolean {
+  try {
+    const remoteJid = messageData?.key?.remoteJid;
+
+    // Validate remoteJid exists and is a string
+    if (!remoteJid || typeof remoteJid !== 'string') {
+      return false;
+    }
+
+    // Group messages have remoteJid ending with @g.us
+    // Individual messages end with @s.whatsapp.net or @lid
+    return remoteJid.endsWith('@g.us');
+  } catch (error) {
+    // Safely handle any parsing errors
+    console.error('Error checking if message is from group:', error);
+    return false; // Default to treating as individual message if error occurs
+  }
+}

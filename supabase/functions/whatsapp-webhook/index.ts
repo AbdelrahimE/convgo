@@ -1,11 +1,13 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { extractAudioDetails, hasAudioContent } from "../_shared/audio-processing.ts";
-import { extractImageDetails, hasImageContent, processImageMessage } from "../_shared/image-processing.ts";
 import { processConnectionStatus } from "../_shared/connection-status.ts";
 import { isConnectionStatusEvent } from "../_shared/connection-event-detector.ts";
-import { processAudioMessage } from "../_shared/audio-processor.ts";
 import { measureTime } from "../_shared/parallel-queries.ts";
+import { extractRealUserPhone, isGroupMessage } from "../_shared/message-text-extractor.ts";
+
+// ✨ NEW: Import media detection and CDN processing
+import { hasMediaContent, extractMediaInfo } from "../_shared/media-detector.ts";
+import { processMediaToCDN } from "../_shared/media-to-cdn.ts";
 
 // QUEUE SYSTEM: Import Redis Queue and Direct Processing
 import { addToQueue } from "../_shared/redis-queue.ts";
@@ -480,11 +482,11 @@ serve(async (req) => {
       data = await req.json();
       logger.info('Webhook payload received', { data });
       
-      // Check if message contains audio
-      if (data && hasAudioContent(data)) {
-        logger.info('Audio content detected in webhook payload', {
+      // Check if message contains media (audio, image, video, document, sticker)
+      if (data && hasMediaContent(data)) {
+        logger.info('Media content detected in webhook payload', {
           messageType: data.messageType,
-          hasAudioMessage: !!data.message?.audioMessage
+          hasMediaMessage: !!data.message
         });
       }
     } catch (error) {
@@ -615,96 +617,194 @@ serve(async (req) => {
       let foundInstanceId = null;
       let transcribedText: string | null = null; // Add variable to store transcribed text for voice messages
       let processedImageUrl: string | null = null; // Add variable to store processed image URL for image messages
-      
+      let processedMediaUrl: string | null = null; // ✨ NEW: Add variable to store processed media URL from CDN
+      let aiStatus: { enabled: boolean; instanceId?: string } = { enabled: false }; // ✨ AI status check result
+
       // Look up the instance ID if this is a message event
       if (event === 'messages.upsert') {
         try {
+          // 🚫 CRITICAL: Ignore group messages - bot only responds to individuals
+          // Check this FIRST before any processing to save resources
+          if (isGroupMessage(normalizedData)) {
+            logger.info('📵 Ignoring group message (bot only responds to individuals)', {
+              instanceName,
+              messageId: normalizedData.key?.id,
+              groupId: normalizedData.key?.remoteJid,
+              participant: normalizedData.key?.participant || normalizedData.key?.participantAlt,
+              addressingMode: normalizedData.key?.addressingMode
+            });
+
+            return new Response(JSON.stringify({
+              success: true,
+              message: 'Group message ignored - bot only responds to individual messages',
+              skipped: true
+            }), {
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json'
+              }
+            });
+          }
+
           // Get instance ID from instance name before checking for escalation
           const { data: instanceData, error: instanceError } = await supabaseAdmin
             .from('whatsapp_instances')
             .select('id')
             .eq('instance_name', instanceName)
             .maybeSingle();
-            
+
           if (instanceData) {
             foundInstanceId = instanceData.id;
-            logger.info('Found instance ID for escalation check', { 
-              instanceName, 
-              instanceId: foundInstanceId 
+            logger.info('Found instance ID for escalation check', {
+              instanceName,
+              instanceId: foundInstanceId
             });
           } else {
             // Handle case where instance isn't found without throwing errors
-            logger.warn('Instance not found but continuing processing', { 
-              instanceName, 
-              error: instanceError 
+            logger.warn('Instance not found but continuing processing', {
+              instanceName,
+              error: instanceError
             });
             // Allow processing to continue without the instance ID
           }
 
-          // Modified flow: First check if this is a voice message that needs transcription
-          const needsTranscription = false;
-          
-          if (hasAudioContent(normalizedData)) {
-            logger.info('Detected voice message, will transcribe before escalation check');
-            
-            // Extract audio details
-            const audioDetails = extractAudioDetails(normalizedData);
-            
-            // Get API keys for transcription
-            const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || normalizedData.apikey;
-            
-            // Process the audio for transcription first
-            const transcriptionResult = await processAudioMessage(audioDetails, instanceName, 
-              normalizedData.key?.remoteJid?.split('@')[0] || '', evolutionApiKey);
-            
-            if (transcriptionResult.success && transcriptionResult.transcription) {
-              transcribedText = transcriptionResult.transcription as string;
-              logger.info('Successfully transcribed voice message for escalation check', {
-                transcription: transcribedText
-              });
-            } else {
-              logger.error('Failed to transcribe voice message for escalation check', {
-                error: transcriptionResult.error
-              });
-            }
-          }
+          // 🤖 EARLY AI CHECK: Check if AI is enabled BEFORE processing media
+          // This prevents unnecessary resource consumption for instances with AI disabled
+          aiStatus = await isAIEnabledForInstance(instanceName);
 
-          // Process image messages - similar to voice message processing
-          if (hasImageContent(normalizedData)) {
-            logger.info('Detected image message, will process for AI analysis');
-            
-            // Extract image details
-            const imageDetails = extractImageDetails(normalizedData);
-            
-            // Get API keys for image processing
-            const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || normalizedData.apikey;
-            
-            // Process the image to get a usable URL
-            const imageProcessingResult = await processImageMessage(imageDetails, instanceName, 
-              normalizedData.key?.remoteJid?.split('@')[0] || '', evolutionApiKey);
-            
-            if (imageProcessingResult.success && imageProcessingResult.imageUrl) {
-              processedImageUrl = imageProcessingResult.imageUrl;
-              logger.info('Successfully processed image message', {
-                imageUrl: processedImageUrl.substring(0, 50) + '...'
+          if (!aiStatus.enabled) {
+            logger.info('🚫 AI not enabled for instance, skipping media processing', {
+              instanceName,
+              messageId: normalizedData.key?.id
+            });
+            // Skip media processing entirely - no CDN upload, no transcription
+          } else {
+            logger.info('✅ AI is enabled for instance, proceeding with media processing if needed', {
+              instanceName,
+              instanceId: aiStatus.instanceId
+            });
+
+            // ✨ NEW UNIFIED MEDIA PROCESSING: Process ALL media types through CDN
+            // Check if message contains any media content
+            if (hasMediaContent(normalizedData)) {
+              logger.info('🎬 Detected media content in message, processing via unified CDN flow');
+
+            // Extract media information
+            const mediaInfo = extractMediaInfo(normalizedData);
+
+            if (mediaInfo) {
+              logger.info('📋 Media info extracted', {
+                messageKeyId: mediaInfo.messageKeyId.substring(0, 10) + '...',
+                mediaType: mediaInfo.mediaType,
+                fileName: mediaInfo.fileName,
+                mimeType: mediaInfo.mimeType,
+                hasCaption: !!mediaInfo.caption
               });
+
+              // Process media to CDN (handles ALL types: image, video, audio, document, sticker)
+              const cdnResult = await processMediaToCDN(
+                mediaInfo.messageKeyId,
+                instanceName,
+                mediaInfo.mediaType,
+                mediaInfo.fileName
+              );
+
+              if (cdnResult.success && cdnResult.cdnUrl) {
+                processedMediaUrl = cdnResult.cdnUrl;
+
+                logger.info('✅ Media processed and uploaded to CDN successfully', {
+                  mediaType: mediaInfo.mediaType,
+                  cdnUrl: processedMediaUrl,
+                  fileName: cdnResult.metadata?.fileName,
+                  fileSize: cdnResult.metadata?.fileSize,
+                  processingTime: cdnResult.metadata?.processingTime + 'ms'
+                });
+
+                // For audio messages, transcribe using Whisper API
+                if (mediaInfo.mediaType === 'audio') {
+                  logger.info('🎤 Audio message detected, starting transcription process');
+
+                  try {
+                    // Call whatsapp-voice-transcribe to convert audio to text
+                    const transcribeResponse = await fetch(
+                      `${supabaseUrl}/functions/v1/whatsapp-voice-transcribe`,
+                      {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${supabaseServiceKey}`
+                        },
+                        body: JSON.stringify({
+                          audioUrl: processedMediaUrl, // Use CDN URL
+                          mimeType: mediaInfo.mimeType || 'audio/ogg; codecs=opus',
+                          instanceName: instanceName,
+                          preferredLanguage: 'auto' // Auto-detect language
+                        })
+                      }
+                    );
+
+                    if (transcribeResponse.ok) {
+                      const transcribeResult = await transcribeResponse.json();
+
+                      if (transcribeResult.success && transcribeResult.transcription) {
+                        transcribedText = transcribeResult.transcription;
+
+                        logger.info('✅ Audio transcribed successfully', {
+                          transcription: (transcribedText || '').substring(0, 100) + '...',
+                          language: transcribeResult.language,
+                          duration: transcribeResult.duration
+                        });
+                      } else {
+                        logger.error('❌ Transcription failed', {
+                          error: transcribeResult.error
+                        });
+                        transcribedText = '[Audio message - transcription failed]';
+                      }
+                    } else {
+                      const errorText = await transcribeResponse.text();
+                      logger.error('❌ Transcription API failed', {
+                        status: transcribeResponse.status,
+                        error: errorText.substring(0, 200)
+                      });
+                      transcribedText = '[Audio message - transcription service unavailable]';
+                    }
+                  } catch (transcriptionError) {
+                    logger.error('❌ Exception during transcription', {
+                      error: transcriptionError instanceof Error ? transcriptionError.message : String(transcriptionError)
+                    });
+                    transcribedText = '[Audio message - transcription error]';
+                  }
+                }
+
+                // For images/videos, store the CDN URL for vision AI
+                if (mediaInfo.mediaType === 'image' || mediaInfo.mediaType === 'video') {
+                  processedImageUrl = processedMediaUrl;
+                  logger.info('🖼️ Visual media ready for AI vision analysis from CDN URL');
+                }
+
+              } else {
+                logger.error('❌ Failed to process media to CDN', {
+                  error: cdnResult.error,
+                  mediaType: mediaInfo.mediaType
+                });
+
+                // Continue processing even if media upload fails
+                logger.warn('⚠️ Continuing message processing without media CDN URL');
+              }
             } else {
-              logger.error('Failed to process image message', {
-                error: imageProcessingResult.error
-              });
+              logger.warn('⚠️ Could not extract media info from message');
             }
-          }
-          
-          // REMOVED: Webhook data preparation (no longer needed)
-          
-          logger.info('Media message processing completed', { 
-            instance: instanceName,
-            hasTranscribedText: !!transcribedText,
-            hasProcessedImageUrl: !!processedImageUrl
-          });
-          
-          // ✅ Voice message transcribed and ready for processing
-          // ✅ Escalation analysis will be performed by Queue/Direct processors
+            } // End of: if (hasMediaContent)
+
+            logger.info('Media processing completed', {
+              instance: instanceName,
+              hasProcessedMediaUrl: !!processedMediaUrl,
+              hasTranscribedText: !!transcribedText,
+              hasProcessedImageUrl: !!processedImageUrl
+            });
+          } // End of: else (AI is enabled)
+
+          // ✅ Media processed and ready for AI (if enabled)
           // Continue with normal AI processing via queue system
         } catch (error) {
           // Log error but continue with AI processing
@@ -726,9 +826,17 @@ serve(async (req) => {
             transcription: transcribedText
           });
         }
-        
+
+        // ✨ NEW: Pass processed media URL to AI processing
+        if (processedMediaUrl) {
+          normalizedData.processedMediaUrl = processedMediaUrl;
+          logger.info('Using processed media URL for AI processing', {
+            mediaUrl: processedMediaUrl.substring(0, 50) + '...'
+          });
+        }
+
+        // Keep legacy support for processedImageUrl (backward compatibility)
         if (processedImageUrl) {
-          // If we already processed the image, pass it to AI processing
           normalizedData.processedImageUrl = processedImageUrl;
           logger.info('Using already processed image URL for AI processing', {
             imageUrl: processedImageUrl.substring(0, 50) + '...'
@@ -736,20 +844,50 @@ serve(async (req) => {
         }
 
         // Extract user phone for processing
-        const userPhone = normalizedData.key?.remoteJid?.replace('@s.whatsapp.net', '') || null;
-        
-        // 🤖 EARLY AI CHECK: Verify AI is enabled before storing in Redis
-        const aiStatus = await isAIEnabledForInstance(instanceName);
-        
+        // 🔑 CRITICAL: Use extractRealUserPhone to handle both PN and LID addressing modes
+        const userPhone = extractRealUserPhone(normalizedData);
+
+        // Validate that we successfully extracted a phone number
+        if (!userPhone) {
+          logger.error('❌ Failed to extract user phone number from message', {
+            instanceName,
+            messageId: normalizedData.key?.id,
+            addressingMode: normalizedData.key?.addressingMode,
+            remoteJid: normalizedData.key?.remoteJid,
+            remoteJidAlt: normalizedData.key?.remoteJidAlt
+          });
+
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'Could not extract user phone number from message'
+          }), {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+
+        // Log successful phone extraction with addressing mode info
+        logger.info('📱 User phone extracted successfully', {
+          instanceName,
+          userPhone: userPhone.substring(0, 5) + '***',
+          addressingMode: normalizedData.key?.addressingMode || 'unknown',
+          messageId: normalizedData.key?.id
+        });
+
+        // 🤖 Note: AI status already checked earlier (before media processing)
+        // If we reached this point and AI is disabled, we skip processing
         if (!aiStatus.enabled) {
-          logger.info('🚫 AI not enabled for instance, skipping Redis storage and processing', {
+          logger.info('🚫 AI not enabled for instance (rechecked), skipping Redis storage and processing', {
             instanceName,
             userPhone,
             messageId: normalizedData.key?.id
           });
-          
+
           // Return success without processing - this prevents unnecessary Redis storage
-          return new Response(JSON.stringify({ 
+          return new Response(JSON.stringify({
             success: true,
             message: `AI not enabled for instance ${instanceName}`,
             skipped: true
