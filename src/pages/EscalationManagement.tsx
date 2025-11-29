@@ -69,6 +69,8 @@ export default function EscalationManagement() {
         return <Badge className="bg-purple-100 hover:bg-purple-200 text-purple-800 font-medium">{t('escalation.smartAiDetectionBadge')}</Badge>
       case 'user_request':
         return <Badge className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-medium">{t('escalation.keywordTriggeredBadge')}</Badge>
+      case 'custom_ai_instructions':
+        return <Badge className="bg-green-100 hover:bg-green-200 text-green-800 font-medium">{t('escalation.customAiDetectionBadge')}</Badge>
       default:
         return <Badge className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium">{t('escalation.unknownReasonBadge')}</Badge>
     }

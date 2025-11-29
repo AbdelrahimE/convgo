@@ -33,6 +33,7 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
     escalation_message: string;
     escalated_conversation_message: string;
     escalation_keywords: string[];
+    custom_escalation_instructions: string;
   } | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -56,7 +57,8 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
       setLocalSettings({
         escalation_message: currentInstance.escalation_message,
         escalated_conversation_message: currentInstance.escalated_conversation_message,
-        escalation_keywords: currentInstance.escalation_keywords || []
+        escalation_keywords: currentInstance.escalation_keywords || [],
+        custom_escalation_instructions: currentInstance.custom_escalation_instructions || ''
       });
       setHasUnsavedChanges(false);
     }
@@ -319,6 +321,24 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
                       }
                     />
                   </div>
+
+                  {/* Custom AI Instructions */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="flex items-center gap-2 text-blue-900">
+                        {t('escalation.customAiDetection')}
+                      </Label>
+                      <p className="text-xs text-blue-600">
+                        {t('escalation.customAiDetectionDescription')}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={currentInstance.custom_escalation_enabled}
+                      onCheckedChange={(checked) =>
+                        updateInstanceSettings('custom_escalation_enabled', checked)
+                      }
+                    />
+                  </div>
                 </div>
               )}
 
@@ -336,6 +356,25 @@ export const SettingsTab = React.memo(({ selectedInstance, instances }: Settings
                   />
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                     {t('escalation.escalationKeywordsDescription')}
+                  </p>
+                </div>
+              )}
+
+              {/* Custom Escalation Instructions - only show if custom escalation is enabled */}
+              {currentInstance.custom_escalation_enabled && (
+                <div>
+                  <Label>{t('escalation.customEscalationInstructions')}</Label>
+                  <LanguageAwareTextarea
+                    value={localSettings?.custom_escalation_instructions || currentInstance.custom_escalation_instructions || ''}
+                    onChange={(e) => updateLocalSettings('custom_escalation_instructions', e.target.value)}
+                    className="mt-1"
+                    rows={5}
+                    autoExpand={false}
+                    placeholder={t('escalation.customEscalationPlaceholder')}
+                    disabled={loading}
+                  />
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    {t('escalation.customEscalationInstructionsDescription')}
                   </p>
                 </div>
               )}

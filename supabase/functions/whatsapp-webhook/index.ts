@@ -68,7 +68,7 @@ async function checkEscalationNeeded(
     // Get instance escalation configuration including separate controls
     const { data: instance, error: instanceError } = await supabaseAdmin
       .from('whatsapp_instances')
-      .select('escalation_enabled, escalation_keywords, smart_escalation_enabled, keyword_escalation_enabled')
+      .select('escalation_enabled, escalation_keywords, smart_escalation_enabled, keyword_escalation_enabled, custom_escalation_enabled, custom_escalation_instructions')
       .eq('id', instanceId)
       .single();
     
@@ -94,16 +94,16 @@ async function checkEscalationNeeded(
     // 🔑 KEYWORD ESCALATION: Check escalation keywords (if enabled)
     if (instance.keyword_escalation_enabled) {
       const keywords = instance.escalation_keywords || [];
-      
+
       if (keywords && keywords.length > 0) {
         const lowerMessage = message.toLowerCase();
-        const hasEscalationKeyword = keywords.some(keyword => 
+        const hasEscalationKeyword = keywords.some(keyword =>
           lowerMessage.includes(keyword.toLowerCase())
         );
-        
+
         if (hasEscalationKeyword) {
           const matchedKeyword = keywords.find(k => lowerMessage.includes(k.toLowerCase()));
-          logger.info('Escalation needed: User requested human support via keyword', { 
+          logger.info('Escalation needed: User requested human support via keyword', {
             phoneNumber,
             matchedKeyword,
             configuredKeywords: keywords
@@ -113,13 +113,83 @@ async function checkEscalationNeeded(
       }
     }
 
-    // No escalation needed from either method
+    // 🎯 CUSTOM AI INSTRUCTIONS ESCALATION: Check custom escalation rules (if enabled)
+    if (instance.custom_escalation_enabled && instance.custom_escalation_instructions) {
+      try {
+        logger.info('🎯 Checking custom escalation instructions', {
+          phoneNumber,
+          conversationId,
+          instructionsLength: instance.custom_escalation_instructions.length
+        });
+
+        // Get last 5 user messages from conversation
+        const { data: recentMessages, error: messagesError } = await supabaseAdmin
+          .from('whatsapp_conversation_messages')
+          .select('content, role')
+          .eq('conversation_id', conversationId)
+          .eq('role', 'user')
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        const lastUserMessages = recentMessages
+          ? recentMessages.reverse().map(m => m.content)
+          : [];
+
+        // Call custom-escalation-checker Edge Function
+        const customCheckResponse = await fetch(`${supabaseUrl}/functions/v1/custom-escalation-checker`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`
+          },
+          body: JSON.stringify({
+            lastUserMessages,
+            currentMessage: message,
+            customInstructions: instance.custom_escalation_instructions
+          })
+        });
+
+        if (customCheckResponse.ok) {
+          const customCheckResult = await customCheckResponse.json();
+
+          if (customCheckResult.success && customCheckResult.needsEscalation) {
+            logger.info('🚨 Custom escalation triggered:', {
+              phoneNumber,
+              reason: customCheckResult.reason,
+              confidence: customCheckResult.confidence
+            });
+            return { needsEscalation: true, reason: 'custom_ai_instructions' };
+          }
+
+          logger.debug('Custom escalation check completed - no escalation needed', {
+            phoneNumber,
+            confidence: customCheckResult.confidence,
+            reason: customCheckResult.reason
+          });
+        } else {
+          logger.warn('Custom escalation check failed:', {
+            status: customCheckResponse.status,
+            statusText: customCheckResponse.statusText
+          });
+        }
+      } catch (customError) {
+        logger.error('Error in custom escalation check:', {
+          error: customError.message,
+          phoneNumber
+        });
+        // Continue without custom escalation if there's an error
+      }
+    }
+
+    // No escalation needed from any method
     logger.debug('No escalation needed', {
       phoneNumber,
       smartEscalationEnabled: instance.smart_escalation_enabled,
       keywordEscalationEnabled: instance.keyword_escalation_enabled,
+      customEscalationEnabled: instance.custom_escalation_enabled,
       smartAnalysisResult: intentAnalysis?.needsHumanSupport || false,
       keywordMatches: false,
+      customEscalationChecked: instance.custom_escalation_enabled && !!instance.custom_escalation_instructions,
       configuredKeywords: instance.escalation_keywords?.length || 0
     });
     

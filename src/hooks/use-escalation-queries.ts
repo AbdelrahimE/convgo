@@ -20,6 +20,8 @@ export interface InstanceSettings {
   escalation_keywords: string[];
   smart_escalation_enabled: boolean;
   keyword_escalation_enabled: boolean;
+  custom_escalation_enabled: boolean;
+  custom_escalation_instructions: string;
 }
 
 export interface EscalatedConversation {
@@ -70,7 +72,7 @@ export function useWhatsAppInstances(userId?: string, onlyConnected: boolean = f
     queryFn: async () => {
       let query = supabase
         .from('whatsapp_instances')
-        .select('id, instance_name, escalation_enabled, escalation_message, escalated_conversation_message, escalation_keywords, smart_escalation_enabled, keyword_escalation_enabled')
+        .select('id, instance_name, escalation_enabled, escalation_message, escalated_conversation_message, escalation_keywords, smart_escalation_enabled, keyword_escalation_enabled, custom_escalation_enabled, custom_escalation_instructions')
         .eq('user_id', userId);
 
       // Filter only connected instances if requested
@@ -227,15 +229,16 @@ export function useSaveInstanceSettings() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ 
-      instanceId, 
-      settings 
-    }: { 
-      instanceId: string; 
+    mutationFn: async ({
+      instanceId,
+      settings
+    }: {
+      instanceId: string;
       settings: {
         escalation_message: string;
         escalated_conversation_message: string;
         escalation_keywords: string[];
+        custom_escalation_instructions?: string;
       }
     }) => {
       const { error } = await supabase

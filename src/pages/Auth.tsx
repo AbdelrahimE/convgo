@@ -493,17 +493,19 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
                   placeholder={t('auth.newPasswordPlaceholder')}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
+                  autoComplete="new-password"
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="confirm-password" className="text-left block py-1">{t('auth.confirmPassword')}</Label>
+                <Label htmlFor="confirm-password-reset" className="text-left block py-1">{t('auth.confirmPassword')}</Label>
                 <Input
-                  id="confirm-password"
+                  id="confirm-password-reset"
                   type="password"
                   placeholder={t('auth.confirmPasswordPlaceholder')}
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
                   required
                 />
               </div>
@@ -538,7 +540,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
                 <Label htmlFor="reset-email" className="text-left block py-1">{t('auth.email')}</Label>
-                <Input id="reset-email" type="email" placeholder={t('auth.emailPlaceholder')} value={email} onChange={e => setEmail(e.target.value)} required />
+                <Input id="reset-email" type="email" placeholder={t('auth.emailPlaceholder')} value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required />
               </div>
               <div className="flex gap-4">
                 <Button type="submit" disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700">
@@ -604,6 +606,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
                     value={email}
                     onChange={e => handleEmailChange(e.target.value)}
                     onBlur={() => markFieldTouched('email')}
+                    autoComplete="email"
                     className={formErrors.email ? 'border-red-500 focus:border-red-500' : ''}
                     required
                   />
@@ -620,6 +623,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
                     value={password}
                     onChange={e => handlePasswordChange(e.target.value)}
                     onBlur={() => markFieldTouched('password')}
+                    autoComplete="current-password"
                     className={formErrors.password ? 'border-red-500 focus:border-red-500' : ''}
                     required
                   />
@@ -666,6 +670,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
                     value={fullName}
                     onChange={e => handleFullNameChange(e.target.value)}
                     onBlur={() => markFieldTouched('fullName')}
+                    autoComplete="name"
                     className={formErrors.fullName ? 'border-red-500 focus:border-red-500' : ''}
                     required
                   />
@@ -682,6 +687,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
                     value={email}
                     onChange={e => handleEmailChange(e.target.value)}
                     onBlur={() => markFieldTouched('email')}
+                    autoComplete="email"
                     className={formErrors.email ? 'border-red-500 focus:border-red-500' : ''}
                     required
                   />
@@ -733,6 +739,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
                     value={password}
                     onChange={handlePasswordChange}
                     onBlur={() => markFieldTouched('password')}
+                    autoComplete="new-password"
                     required
                   />
                   {formErrors.password && (
@@ -748,6 +755,7 @@ export default function Auth({ isResetPasswordMode = false }: AuthProps) {
                     onBlur={() => markFieldTouched('confirmPassword')}
                     isConfirm
                     originalPassword={password}
+                    autoComplete="new-password"
                     required
                   />
                   {formErrors.confirmPassword && (

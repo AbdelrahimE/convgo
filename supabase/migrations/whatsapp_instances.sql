@@ -14,11 +14,17 @@ create table public.whatsapp_instances (
   escalation_keywords text[] null,
   smart_escalation_enabled boolean null default true,
   keyword_escalation_enabled boolean null default true,
+  custom_escalation_enabled boolean null default false,
+  custom_escalation_instructions text null,
   constraint whatsapp_instances_pkey primary key (id),
   constraint unique_instance_name unique (instance_name),
   constraint whatsapp_instances_user_id_instance_name_key unique (user_id, instance_name),
   constraint valid_instance_name check (((instance_name)::text ~ '^[a-zA-Z0-9]+$'::text))
 ) TABLESPACE pg_default;
+
+create index IF not exists idx_whatsapp_instances_custom_escalation on public.whatsapp_instances using btree (custom_escalation_enabled) TABLESPACE pg_default
+where
+  (custom_escalation_enabled = true);
 
 create index IF not exists idx_whatsapp_instances_active on public.whatsapp_instances using btree (id) TABLESPACE pg_default
 where

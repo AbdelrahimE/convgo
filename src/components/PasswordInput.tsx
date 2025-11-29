@@ -28,6 +28,7 @@ interface PasswordInputProps {
   originalPassword?: string;
   required?: boolean;
   onBlur?: () => void;
+  autoComplete?: string;
 }
 
 export const PasswordInput: React.FC<PasswordInputProps> = ({
@@ -39,6 +40,7 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
   originalPassword = '',
   required = false,
   onBlur,
+  autoComplete,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [strength, setStrength] = useState(0);
@@ -104,6 +106,7 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
             onBlur?.();
           }}
           required={required}
+          autoComplete={autoComplete}
           className="pr-20 text-sm"
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
